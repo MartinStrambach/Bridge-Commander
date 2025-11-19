@@ -19,7 +19,7 @@ struct ClaudeCodeLauncher {
 		let appleScript = """
 		tell application "Terminal"
 			activate
-			do script "cd '\(path)' && claude code ."
+			do script "cd '\(path)' && claude"
 		end tell
 		"""
 

@@ -69,7 +69,14 @@ struct GitDetector {
         if isRepo {
             let repoName = url.lastPathComponent
             let branchName = GitBranchDetector.getCurrentBranch(at: url.path)
-            let repo = Repository(name: repoName, path: url.path, isWorktree: isWorktree, branchName: branchName)
+            let mergeInProgress = GitMergeDetector.isGitOperationInProgress(at: url.path)
+            let repo = Repository(
+                name: repoName,
+                path: url.path,
+                isWorktree: isWorktree,
+                branchName: branchName,
+                isMergeInProgress: mergeInProgress
+            )
             repositories.append(repo)
 
             // Don't scan inside repositories unless looking for nested worktrees

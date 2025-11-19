@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var scanner = RepositoryScanner()
+    @StateObject private var abbreviationMode = AbbreviationMode()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,6 +28,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 600, minHeight: 400)
+        .environmentObject(abbreviationMode)
     }
 
     // MARK: - Header View
@@ -50,29 +52,47 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                 }
             }
+			HStack(spacing: 0) {
+				Button(action: { abbreviationMode.isAbbreviated.toggle() }) {
+					Image(systemName: abbreviationMode.isAbbreviated ? "arrow.left.and.right.righttriangle.left.righttriangle.right" : "arrow.left.and.right")
+						.foregroundColor(.gray)
+				}
+				.buttonStyle(.plain)
+				.help(abbreviationMode.isAbbreviated ? "Show full text" : "Abbreviate text")
 
-            Spacer()
+				Spacer()
 
-            HStack(spacing: 12) {
-                if !scanner.repositories.isEmpty {
-                    Text("\(scanner.repositories.count) repositories")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+				HStack(spacing: 12) {
+					if !scanner.repositories.isEmpty {
+						Text("\(scanner.repositories.count) repositories")
+							.font(.subheadline)
+							.foregroundColor(.secondary)
 
-                    Button(action: scanner.clearResults) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear results")
-                }
+						Button(action: refreshRepositories) {
+							Image(systemName: "arrow.clockwise")
+								.foregroundColor(.blue)
+						}
+						.buttonStyle(.plain)
+						.help("Refresh repository status")
+						.disabled(scanner.isScanning)
 
-                Button(action: scanner.selectAndScanDirectory) {
-                    Label("Select Directory", systemImage: "folder")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(scanner.isScanning)
-            }
+						Button(action: scanner.clearResults) {
+							Image(systemName: "xmark.circle.fill")
+								.foregroundColor(.red)
+						}
+						.buttonStyle(.plain)
+						.help("Clear results")
+					}
+
+					Button(action: scanner.selectAndScanDirectory) {
+						Label("Select Directory", systemImage: "folder")
+					}
+					.buttonStyle(.borderedProminent)
+					.disabled(scanner.isScanning)
+				}
+			}
+			.padding(10)
+			.background(.gray.opacity(0.1))
         }
         .padding()
     }
@@ -127,11 +147,30 @@ struct ContentView: View {
         ScrollView {
             LazyVStack(spacing: 1) {
                 ForEach(scanner.repositories) { repository in
-                    RepositoryRowView(repository: repository)
+                    RepositoryRowView(
+                        repository: repository,
+                        onRemove: {
+                            removeRepository(repository)
+                        }
+                    )
                     Divider()
                 }
             }
         }
+    }
+
+    // MARK: - Helper Methods
+
+    private func refreshRepositories() {
+        if let directory = scanner.selectedDirectory {
+            Task {
+                await scanner.scanDirectory(at: URL(fileURLWithPath: directory))
+            }
+        }
+    }
+
+    private func removeRepository(_ repository: Repository) {
+        scanner.repositories.removeAll { $0.id == repository.id }
     }
 }
 

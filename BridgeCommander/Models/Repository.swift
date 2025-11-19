@@ -13,13 +13,15 @@ struct Repository: Identifiable, Hashable {
     let path: String
     let isWorktree: Bool
     let branchName: String?
+    let isMergeInProgress: Bool
 
-    init(name: String, path: String, isWorktree: Bool = false, branchName: String? = nil) {
+    init(name: String, path: String, isWorktree: Bool = false, branchName: String? = nil, isMergeInProgress: Bool = false) {
         self.id = UUID()
         self.name = name
         self.path = path
         self.isWorktree = isWorktree
         self.branchName = branchName
+        self.isMergeInProgress = isMergeInProgress
     }
 
     /// Returns the URL representation of the repository path

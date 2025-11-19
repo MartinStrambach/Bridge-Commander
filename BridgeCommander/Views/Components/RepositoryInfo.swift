@@ -22,12 +22,22 @@ struct RepositoryInfo: View {
 						.font(.headline)
 				}
 
+                if repository.isMergeInProgress {
+                    BadgeView(text: "MERGING", color: .red)
+                }
+
                 if repository.isWorktree {
                     BadgeView(text: "WORKTREE", color: .blue)
                 }
 
                 if let ticketId = repository.ticketId {
-                    BadgeView(text: ticketId, color: .orange)
+                    Button(action: {
+                        openTicket(ticketId)
+                    }) {
+                        BadgeView(text: ticketId, color: .orange)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open YouTrack ticket \(ticketId)")
                 }
             }
 
@@ -40,6 +50,15 @@ struct RepositoryInfo: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+        }
+    }
+
+    // MARK: - Helper Methods
+
+    private func openTicket(_ ticketId: String) {
+        let urlString = "https://youtrack.livesport.eu/issue/\(ticketId)"
+        if let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
         }
     }
 

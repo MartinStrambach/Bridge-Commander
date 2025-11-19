@@ -9,13 +9,22 @@ import SwiftUI
 
 struct RepositoryRowView: View {
     let repository: Repository
+    let onRemove: (() -> Void)?
+
+    init(repository: Repository, onRemove: (() -> Void)? = nil) {
+        self.repository = repository
+        self.onRemove = onRemove
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            RepositoryIcon(isWorktree: repository.isWorktree)
+            RepositoryIcon(
+                isWorktree: repository.isWorktree,
+                isMergeInProgress: repository.isMergeInProgress
+            )
             RepositoryInfo(repository: repository)
             Spacer()
-            RepositoryActions(repository: repository)
+            RepositoryActions(repository: repository, onRemoveWorktree: onRemove)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
