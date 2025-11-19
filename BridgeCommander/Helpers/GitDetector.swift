@@ -42,12 +42,12 @@ struct GitDetector {
 
     /// Recursively scans a directory for Git repositories
     /// - Parameter rootURL: The root directory to scan
-    /// - Returns: An array of discovered repositories
+    /// - Returns: An array of discovered repositories (without status counts)
     static func scanForRepositories(at rootURL: URL) async -> [Repository] {
         var repositories: [Repository] = []
         var visitedPaths: Set<String> = []
 
-        await scanDirectory(url: rootURL, repositories: &repositories, visitedPaths: &visitedPaths)
+        await scanDirectory(url: rootURL, repositories: &repositories, visitedPaths: &visitedPaths, skipStatusCheck: true)
 
         return repositories.sorted { $0.path < $1.path }
     }
@@ -56,7 +56,8 @@ struct GitDetector {
     private static func scanDirectory(
         url: URL,
         repositories: inout [Repository],
-        visitedPaths: inout Set<String>
+        visitedPaths: inout Set<String>,
+        skipStatusCheck: Bool = false
     ) async {
         // Avoid scanning the same path twice (handles symlinks)
         let canonicalPath = (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) ?? url.path
@@ -70,12 +71,23 @@ struct GitDetector {
             let repoName = url.lastPathComponent
             let branchName = GitBranchDetector.getCurrentBranch(at: url.path)
             let mergeInProgress = GitMergeDetector.isGitOperationInProgress(at: url.path)
+
+            // Skip expensive status checks during initial scan for performance
+            let changes: GitChanges
+            if skipStatusCheck {
+                changes = GitChanges(unstagedCount: 0, stagedCount: 0)
+            } else {
+                changes = GitStatusDetector.getChangesCount(at: url.path)
+            }
+
             let repo = Repository(
                 name: repoName,
                 path: url.path,
                 isWorktree: isWorktree,
                 branchName: branchName,
-                isMergeInProgress: mergeInProgress
+                isMergeInProgress: mergeInProgress,
+                unstagedChangesCount: changes.unstagedCount,
+                stagedChangesCount: changes.stagedCount
             )
             repositories.append(repo)
 
@@ -131,7 +143,7 @@ struct GitDetector {
 
         // Recursively scan subdirectories
         for subdir in subdirectories {
-            await scanDirectory(url: subdir, repositories: &repositories, visitedPaths: &visitedPaths)
+            await scanDirectory(url: subdir, repositories: &repositories, visitedPaths: &visitedPaths, skipStatusCheck: skipStatusCheck)
         }
     }
 }

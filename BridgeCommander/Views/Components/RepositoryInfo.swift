@@ -39,6 +39,16 @@ struct RepositoryInfo: View {
                     .buttonStyle(.plain)
                     .help("Open YouTrack ticket \(ticketId)")
                 }
+
+                // Unstaged changes badge
+                if repository.unstagedChangesCount > 0 {
+                    BadgeView(text: "\(repository.unstagedChangesCount) changes", color: .yellow)
+                }
+
+                // Staged changes badge
+                if repository.stagedChangesCount > 0 {
+                    BadgeView(text: "\(repository.stagedChangesCount) staged", color: .green)
+                }
             }
 
             // Branch name

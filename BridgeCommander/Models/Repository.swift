@@ -14,14 +14,18 @@ struct Repository: Identifiable, Hashable {
     let isWorktree: Bool
     let branchName: String?
     let isMergeInProgress: Bool
+    let unstagedChangesCount: Int
+    let stagedChangesCount: Int
 
-    init(name: String, path: String, isWorktree: Bool = false, branchName: String? = nil, isMergeInProgress: Bool = false) {
+    init(name: String, path: String, isWorktree: Bool = false, branchName: String? = nil, isMergeInProgress: Bool = false, unstagedChangesCount: Int = 0, stagedChangesCount: Int = 0) {
         self.id = UUID()
         self.name = name
         self.path = path
         self.isWorktree = isWorktree
         self.branchName = branchName
         self.isMergeInProgress = isMergeInProgress
+        self.unstagedChangesCount = unstagedChangesCount
+        self.stagedChangesCount = stagedChangesCount
     }
 
     /// Returns the URL representation of the repository path

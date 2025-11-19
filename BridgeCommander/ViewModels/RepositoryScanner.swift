@@ -51,6 +51,9 @@ class RepositoryScanner: ObservableObject {
         }
 
         isScanning = false
+
+        // Fetch status information asynchronously in the background
+        fetchStatusForRepositories()
     }
 
     /// Clears the current scan results
@@ -58,5 +61,35 @@ class RepositoryScanner: ObservableObject {
         repositories = []
         selectedDirectory = nil
         errorMessage = nil
+    }
+
+    /// Fetches status (changed files count) for all repositories asynchronously in the background
+    private func fetchStatusForRepositories() {
+        // Create a background task to fetch status for each repository
+        Task {
+            for (index, repository) in repositories.enumerated() {
+                // Skip if already has status info
+                if repository.unstagedChangesCount > 0 || repository.stagedChangesCount > 0 {
+                    continue
+                }
+
+                // Fetch both counts with a single git status call
+                let changes = GitStatusDetector.getChangesCount(at: repository.path)
+
+                // Update repository on main thread
+                await MainActor.run {
+                    guard index < repositories.count else { return }
+                    repositories[index] = Repository(
+                        name: repositories[index].name,
+                        path: repositories[index].path,
+                        isWorktree: repositories[index].isWorktree,
+                        branchName: repositories[index].branchName,
+                        isMergeInProgress: repositories[index].isMergeInProgress,
+                        unstagedChangesCount: changes.unstagedCount,
+                        stagedChangesCount: changes.stagedCount
+                    )
+                }
+            }
+        }
     }
 }
