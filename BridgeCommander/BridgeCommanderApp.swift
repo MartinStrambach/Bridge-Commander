@@ -1,8 +1,8 @@
 //
 //  BridgeCommanderApp.swift
-//  BridgeCommander
+//  Bridge Commander
 //
-//  Created by Martin Štrambach on 19.11.2025.
+//  Main application entry point for Bridge Commander
 //
 
 import SwiftUI
@@ -13,5 +13,7 @@ struct BridgeCommanderApp: App {
         WindowGroup {
             ContentView()
         }
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
     }
 }

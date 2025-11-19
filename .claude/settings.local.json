@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x /Users/martin.strambach/Documents/bridge_commander/create_xcode_project.sh)",
+      "Bash(tee build_output.log)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

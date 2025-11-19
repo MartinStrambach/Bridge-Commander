@@ -1,0 +1,72 @@
+//
+//  AndroidStudioLauncher.swift
+//  Bridge Commander
+//
+//  Helper for launching Android Studio with a repository path
+//
+
+import Foundation
+import AppKit
+
+struct AndroidStudioLauncher {
+
+    /// Opens Android Studio with the specified repository path
+    /// - Parameter path: The directory path to open in Android Studio
+    static func openInAndroidStudio(at path: String) {
+        // Use the macOS 'open' command to launch Android Studio
+        let process = Process()
+        process.launchPath = "/usr/bin/open"
+        process.arguments = ["-a", "Android Studio", path]
+
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+
+        do {
+            process.launch()
+            process.waitUntilExit()
+
+            // Check if the process failed
+            if process.terminationStatus != 0 {
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorMessage = String(data: errorData, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown error"
+
+                // Show error to user
+                showError(message: errorMessage, path: path)
+            }
+        } catch {
+            // Process launch failed
+            showError(message: error.localizedDescription, path: path)
+        }
+    }
+
+    /// Shows an error alert to the user
+    private static func showError(message: String, path: String) {
+        let alert = NSAlert()
+        alert.messageText = "Failed to Open Android Studio"
+
+        // Provide helpful error message
+        if message.contains("does not exist") || message.contains("Unable to find application") {
+            alert.informativeText = """
+            Android Studio is not installed or cannot be found.
+
+            Please install Android Studio from:
+            https://developer.android.com/studio
+
+            Path: \(path)
+            """
+        } else {
+            alert.informativeText = """
+            Error: \(message)
+
+            Path: \(path)
+
+            Make sure Android Studio is properly installed and you have permission to open it.
+            """
+        }
+
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+}
