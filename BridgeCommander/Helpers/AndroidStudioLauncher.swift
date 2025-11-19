@@ -11,8 +11,16 @@ import AppKit
 struct AndroidStudioLauncher {
 
     /// Opens Android Studio with the specified repository path
+    /// If the project is already open, focuses the existing window instead
     /// - Parameter path: The directory path to open in Android Studio
     static func openInAndroidStudio(at path: String) {
+        // Check if the project is already open in Android Studio
+        if AndroidStudioDetector.isProjectAlreadyOpen(at: path) {
+            // Project is already open, just focus the window
+            _ = AndroidStudioDetector.focusProjectWindow(at: path)
+            return
+        }
+
         // Use the macOS 'open' command to launch Android Studio
         let process = Process()
         process.launchPath = "/usr/bin/open"
