@@ -69,11 +69,12 @@ struct XcodeProjectGenerator {
             process.currentDirectoryPath = path
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
 
-            // Source user's shell profile files to load environment and functions
-            // Expand ~ to home directory and try zsh profile first, then bash profile
+            // Replace 'mise exec' with full path to mise for compatibility in sandbox
             let homeDir = NSHomeDirectory()
-            let sourceCommand = "\(command)"
-            process.arguments = ["-c", sourceCommand]
+            let misePath = homeDir + "/.local/bin/mise"
+            let expandedCommand = command.replacingOccurrences(of: "mise exec", with: "\(misePath) exec")
+
+            process.arguments = ["-c", expandedCommand]
 
             let pipe = Pipe()
             let errorPipe = Pipe()
