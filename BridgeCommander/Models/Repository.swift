@@ -85,4 +85,20 @@ struct Repository: Identifiable, Hashable {
         // Return nil if the result is empty
         return formatted.isEmpty ? nil : formatted
     }
+
+    /// Returns the sort key by ticket number (or name if no ticket)
+    var sortKeyByTicket: String {
+        if let ticketId = ticketId {
+            return ticketId
+        }
+        return name
+    }
+
+    /// Returns the sort key by branch name
+    var sortKeyByBranch: String {
+        if let branchName = branchName {
+            return branchName
+        }
+        return name
+    }
 }

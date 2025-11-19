@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var scanner = RepositoryScanner()
     @StateObject private var abbreviationMode = AbbreviationMode()
+    @State private var sortByTicket = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,6 +60,13 @@ struct ContentView: View {
 				}
 				.buttonStyle(.plain)
 				.help(abbreviationMode.isAbbreviated ? "Show full text" : "Abbreviate text")
+
+				Button(action: { sortByTicket.toggle() }) {
+					Image(systemName: sortByTicket ? "ticket.fill" : "line.horizontal.3")
+						.foregroundColor(.gray)
+				}
+				.buttonStyle(.plain)
+				.help(sortByTicket ? "Sort by branch name" : "Sort by ticket number")
 
 				Spacer()
 
@@ -146,7 +154,7 @@ struct ContentView: View {
     private var repositoryListView: some View {
         ScrollView {
             LazyVStack(spacing: 1) {
-                ForEach(scanner.repositories) { repository in
+                ForEach(sortedRepositories) { repository in
                     RepositoryRowView(
                         repository: repository,
                         onRemove: {
@@ -156,6 +164,14 @@ struct ContentView: View {
                     Divider()
                 }
             }
+        }
+    }
+
+    private var sortedRepositories: [Repository] {
+        if sortByTicket {
+            return scanner.repositories.sorted { $0.sortKeyByTicket.lowercased() < $1.sortKeyByTicket.lowercased() }
+        } else {
+            return scanner.repositories.sorted { $0.sortKeyByBranch.lowercased() < $1.sortKeyByBranch.lowercased() }
         }
     }
 
