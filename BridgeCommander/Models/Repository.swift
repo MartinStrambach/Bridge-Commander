@@ -16,6 +16,7 @@ struct Repository: Identifiable, Hashable {
     let isMergeInProgress: Bool
     let unstagedChangesCount: Int
     let stagedChangesCount: Int
+    let ticketId: String?
 
     init(name: String, path: String, isWorktree: Bool = false, branchName: String? = nil, isMergeInProgress: Bool = false, unstagedChangesCount: Int = 0, stagedChangesCount: Int = 0) {
         self.id = UUID()
@@ -26,6 +27,7 @@ struct Repository: Identifiable, Hashable {
         self.isMergeInProgress = isMergeInProgress
         self.unstagedChangesCount = unstagedChangesCount
         self.stagedChangesCount = stagedChangesCount
+		self.ticketId = GitBranchDetector.extractTicketId(from: branchName ?? "")
     }
 
     /// Returns the URL representation of the repository path
@@ -36,12 +38,6 @@ struct Repository: Identifiable, Hashable {
     /// Returns a display-friendly description of the repository type
     var typeDescription: String {
         isWorktree ? "Worktree" : "Repository"
-    }
-
-    /// Extracts and returns the YouTrack ticket ID from the branch name
-    var ticketId: String? {
-        guard let branchName = branchName else { return nil }
-        return GitBranchDetector.extractTicketId(from: branchName)
     }
 
     /// Returns a formatted, human-readable version of the branch name
