@@ -20,14 +20,14 @@ struct XcodeProjectButton: View {
             if projectExists == false {
                 Button(action: handleButtonClick) {
                     Label(buttonLabel, systemImage: buttonIcon)
-                        .frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
+                        .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.orange)
             } else {
                 Button(action: handleButtonClick) {
                     Label(buttonLabel, systemImage: buttonIcon)
-                        .frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
+                        .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
                 }
                 .buttonStyle(.bordered)
             }

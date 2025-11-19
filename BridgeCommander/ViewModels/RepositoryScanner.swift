@@ -54,6 +54,9 @@ class RepositoryScanner: ObservableObject {
 
         // Fetch status information asynchronously in the background
         fetchStatusForRepositories()
+
+        // Fetch PR URLs asynchronously in the background
+        fetchPRUrlsForRepositories()
     }
 
     /// Clears the current scan results
@@ -88,6 +91,51 @@ class RepositoryScanner: ObservableObject {
                         unstagedChangesCount: changes.unstagedCount,
                         stagedChangesCount: changes.stagedCount
                     )
+                }
+            }
+        }
+    }
+
+    /// Fetches YouTrack issue details (PR URLs and code review fields) for all repositories
+    private func fetchPRUrlsForRepositories() {
+        Task {
+            // Check if valid token is available
+            let authToken = UserDefaults.standard.string(forKey: "youtrackAuthToken") ?? ""
+            guard !authToken.isEmpty else {
+                print("RepositoryScanner: Skipping YouTrack fetch (no valid auth token configured)")
+                return
+            }
+
+            for (index, repository) in repositories.enumerated() {
+                // Skip if no ticket ID
+                guard let ticketId = repository.ticketId else {
+                    print("RepositoryScanner: Skipping YouTrack fetch for \(repository.name) (no ticket ID)")
+                    continue
+                }
+
+                // Fetch all issue details from YouTrack
+                let (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName) = await YouTrackService.fetchIssueDetails(for: ticketId)
+
+                // Update repository on main thread if any details were found
+                if prUrl != nil || androidCR != nil || iosCR != nil || androidReviewerName != nil || iosReviewerName != nil {
+                    await MainActor.run {
+                        guard index < repositories.count else { return }
+                        if let prUrl = prUrl {
+                            repositories[index].prUrl = prUrl
+                        }
+                        if let androidCR = androidCR {
+                            repositories[index].androidCR = androidCR
+                        }
+                        if let iosCR = iosCR {
+                            repositories[index].iosCR = iosCR
+                        }
+                        if let androidReviewerName = androidReviewerName {
+                            repositories[index].androidReviewerName = androidReviewerName
+                        }
+                        if let iosReviewerName = iosReviewerName {
+                            repositories[index].iosReviewerName = iosReviewerName
+                        }
+                    }
                 }
             }
         }

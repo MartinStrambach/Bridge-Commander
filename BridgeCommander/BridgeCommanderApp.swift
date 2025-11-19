@@ -9,11 +9,18 @@ import SwiftUI
 
 @main
 struct BridgeCommanderApp: App {
+    @StateObject private var appSettings = AppSettings()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(appSettings)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+
+        Settings {
+            SettingsView(settings: appSettings)
+        }
     }
 }

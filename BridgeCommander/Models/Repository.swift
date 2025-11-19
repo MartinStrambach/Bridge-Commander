@@ -17,6 +17,11 @@ struct Repository: Identifiable, Hashable {
     let unstagedChangesCount: Int
     let stagedChangesCount: Int
     let ticketId: String?
+    var prUrl: String?
+    var androidCR: String?
+    var iosCR: String?
+    var androidReviewerName: String?
+    var iosReviewerName: String?
 
     init(name: String, path: String, isWorktree: Bool = false, branchName: String? = nil, isMergeInProgress: Bool = false, unstagedChangesCount: Int = 0, stagedChangesCount: Int = 0) {
         self.id = UUID()
@@ -27,6 +32,11 @@ struct Repository: Identifiable, Hashable {
         self.isMergeInProgress = isMergeInProgress
         self.unstagedChangesCount = unstagedChangesCount
         self.stagedChangesCount = stagedChangesCount
+        self.prUrl = nil
+        self.androidCR = nil
+        self.iosCR = nil
+        self.androidReviewerName = nil
+        self.iosReviewerName = nil
 		self.ticketId = GitBranchDetector.extractTicketId(from: branchName ?? "")
     }
 

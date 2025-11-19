@@ -54,6 +54,9 @@ struct RepositoryInfo: View {
             // Branch name
             branchView
 
+            // Code review fields
+            codeReviewView
+
             // Path
             Text(repository.path)
                 .font(.caption)
@@ -90,6 +93,100 @@ struct RepositoryInfo: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .italic()
+        }
+    }
+
+    @ViewBuilder
+    private var codeReviewView: some View {
+        let hasAndroidCR = repository.androidCR != nil
+        let hasIosCR = repository.iosCR != nil
+        let hasAndroidReviewer = repository.androidReviewerName != nil
+        let hasIosReviewer = repository.iosReviewerName != nil
+
+        if hasAndroidCR || hasIosCR || hasAndroidReviewer || hasIosReviewer {
+            VStack(alignment: .leading, spacing: 6) {
+                // Android CR section
+                if hasAndroidCR || hasAndroidReviewer {
+                    HStack(spacing: 8) {
+                        if let androidCR = repository.androidCR {
+                            Button(action: {
+                                if let url = URL(string: androidCR) {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "link")
+                                        .font(.caption2)
+                                    Text("Android CR")
+                                        .font(.caption2)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.2))
+                                .foregroundColor(.blue)
+                                .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Open Android code review")
+                        }
+
+                        if let androidReviewerName = repository.androidReviewerName {
+                            HStack(spacing: 4) {
+                                Image(systemName: "person.fill")
+                                    .font(.caption2)
+                                Text(androidReviewerName)
+                                    .font(.caption2)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.15))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+
+                // iOS CR section
+                if hasIosCR || hasIosReviewer {
+                    HStack(spacing: 8) {
+                        if let iosCR = repository.iosCR {
+                            Button(action: {
+                                if let url = URL(string: iosCR) {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "link")
+                                        .font(.caption2)
+                                    Text("iOS CR")
+                                        .font(.caption2)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.purple.opacity(0.2))
+                                .foregroundColor(.purple)
+                                .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Open iOS code review")
+                        }
+
+                        if let iosReviewerName = repository.iosReviewerName {
+                            HStack(spacing: 4) {
+                                Image(systemName: "person.fill")
+                                    .font(.caption2)
+                                Text(iosReviewerName)
+                                    .font(.caption2)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.purple.opacity(0.15))
+                            .foregroundColor(.purple)
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+            }
         }
     }
 }

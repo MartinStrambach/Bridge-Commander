@@ -32,13 +32,29 @@ struct RepositoryActions: View {
                 action: { openInFinder(repository.path) }
             )
 
+			// Open PR button (conditional)
+			if let prUrl = repository.prUrl {
+				Button(action: {
+					if let url = URL(string: prUrl) {
+						NSWorkspace.shared.open(url)
+					}
+				}) {
+					Label(abbreviationMode.isAbbreviated ? "PR" : "Gitlab PR", systemImage: "link")
+						.frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
+				}
+				.buttonStyle(.bordered)
+				.controlSize(.regular)
+				.fixedSize(horizontal: true, vertical: false)
+				.help("Open pull request in Gitlab")
+			}
+
             // Open Ticket button (conditional)
             if let ticketId = repository.ticketId {
                 Button(action: {
                     openTicket(ticketId)
                 }) {
                     Label(abbreviationMode.isAbbreviated ? "Tkt" : "Ticket", systemImage: "ticket")
-                        .frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
+                        .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
@@ -51,7 +67,7 @@ struct RepositoryActions: View {
                 AndroidStudioLauncher.openInAndroidStudio(at: repository.path)
             }) {
                 Label(abbreviationMode.isAbbreviated ? "AS" : "Android Studio", systemImage: "square.3.layers.3d.top.filled")
-                    .frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
+                    .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
@@ -63,7 +79,7 @@ struct RepositoryActions: View {
                 TerminalLauncher.openTerminal(at: repository.path)
             }) {
                 Label(abbreviationMode.isAbbreviated ? "Trm" : "Terminal", systemImage: "terminal")
-                    .frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
+                    .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
@@ -77,27 +93,32 @@ struct RepositoryActions: View {
                 ClaudeCodeLauncher.runClaudeCode(at: repository.path)
             }) {
                 Label(abbreviationMode.isAbbreviated ? "CC" : "Claude Code", systemImage: "wand.and.rays")
-                    .frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
+                    .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
             .fixedSize(horizontal: true, vertical: false)
             .help("Open Terminal and run 'claude code .'")
 
-            // Remove worktree button (conditional)
-            if repository.isWorktree {
-                if isRemoving {
-					ProgressView()
-                } else {
-                    Button(action: { showRemoveConfirmation = true }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Remove worktree")
-                    .padding(.leading, 20)
-                }
-            }
+            // Remove worktree button (conditional) or spacer for alignment
+			Group {
+				if repository.isWorktree {
+					if isRemoving {
+						ProgressView()
+					} else {
+						Button(action: { showRemoveConfirmation = true }) {
+							Image(systemName: "trash")
+								.foregroundColor(.red)
+						}
+						.buttonStyle(.plain)
+						.help("Remove worktree")
+					}
+				} else {
+					// Spacer for alignment when not a worktree
+					Spacer()
+				}
+			}
+			.frame(width: 25)
         }
         .alert("Remove Worktree", isPresented: $showRemoveConfirmation) {
             Button("Cancel", role: .cancel) { }
