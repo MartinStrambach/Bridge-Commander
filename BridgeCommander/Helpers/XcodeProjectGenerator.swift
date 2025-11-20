@@ -70,8 +70,7 @@ struct XcodeProjectGenerator {
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
 
             // Replace 'mise exec' with full path to mise for compatibility in sandbox
-            let homeDir = NSHomeDirectory()
-            let misePath = homeDir + "/.local/bin/mise"
+            let misePath = NSHomeDirectory() + "/.local/bin/mise"
             let expandedCommand = command.replacingOccurrences(of: "mise exec", with: "\(misePath) exec")
 
             process.arguments = ["-c", expandedCommand]

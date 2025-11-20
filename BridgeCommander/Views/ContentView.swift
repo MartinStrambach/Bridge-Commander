@@ -10,7 +10,9 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var scanner = RepositoryScanner()
     @StateObject private var abbreviationMode = AbbreviationMode()
+    @EnvironmentObject var settings: AppSettings
     @State private var sortByTicket = true
+    @State private var refreshTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,7 +32,16 @@ struct ContentView: View {
         }
         .frame(minWidth: 600, minHeight: 400)
         .environmentObject(abbreviationMode)
-    }
+        .onAppear {
+            startPeriodicRefresh()
+        }
+        .onDisappear {
+            stopPeriodicRefresh()
+        }
+        .onChange(of: settings.periodicRefreshInterval) { _, _ in
+                startPeriodicRefresh()
+            }
+        }
 
     // MARK: - Header View
 
@@ -189,8 +200,36 @@ struct ContentView: View {
     private func removeRepository(_ repository: Repository) {
         scanner.repositories.removeAll { $0.id == repository.id }
     }
+
+    private func startPeriodicRefresh() {
+		stopPeriodicRefresh()
+        refreshTask = Task {
+            while !Task.isCancelled {
+                // Sleep for the configured interval
+                try? await Task.sleep(nanoseconds: UInt64(settings.periodicRefreshInterval.timeInterval * 1_000_000_000))
+
+                // Check if task was cancelled during sleep
+                if Task.isCancelled {
+                    break
+                }
+
+                // Only refresh if not already scanning and repositories are loaded
+                if !scanner.isScanning && !scanner.repositories.isEmpty {
+                    await MainActor.run {
+                        refreshRepositories()
+                    }
+                }
+            }
+        }
+    }
+
+    private func stopPeriodicRefresh() {
+        refreshTask?.cancel()
+        refreshTask = nil
+    }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(AppSettings())
 }

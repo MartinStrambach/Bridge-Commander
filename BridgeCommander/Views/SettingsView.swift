@@ -41,6 +41,25 @@ struct SettingsView: View {
             .background(Color(NSColor.controlBackgroundColor))
             .cornerRadius(8)
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Repository Refresh")
+                    .font(.headline)
+
+                Text("Automatically refresh repository status at the selected interval.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Picker("Refresh Interval", selection: $settings.periodicRefreshInterval) {
+                    ForEach(PeriodicRefreshInterval.allCases, id: \.self) { interval in
+                        Text(interval.displayName).tag(interval)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(8)
+
             Spacer()
         }
         .padding()
