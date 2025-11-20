@@ -17,7 +17,17 @@ struct XcodeProjectButton: View {
 
     var body: some View {
         Group {
-            if projectExists == false {
+            if state.isProcessing {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.8, anchor: .center)
+                    Text(buttonLabel)
+                        .font(.body)
+                }
+                .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+            } else if projectExists == false {
                 Button(action: handleButtonClick) {
                     Label(buttonLabel, systemImage: buttonIcon)
                         .frame(minWidth: abbreviationMode.isAbbreviated ? UIConstants.abbreviatedButtonWidth : UIConstants.normalButtonWidth)
@@ -64,13 +74,13 @@ struct XcodeProjectButton: View {
                 return abbreviationMode.isAbbreviated ? "Xcd" : "Xcode"
             }
         case .checking:
-            return abbreviationMode.isAbbreviated ? "..." : "Checking..."
+            return abbreviationMode.isAbbreviated ? "Chck" : "Checking"
         case .runningTi:
-            return abbreviationMode.isAbbreviated ? "ti..." : "Running ti..."
+            return abbreviationMode.isAbbreviated ? "ti" : "Running ti"
         case .runningTg:
-            return abbreviationMode.isAbbreviated ? "tg..." : "Running tg..."
+            return abbreviationMode.isAbbreviated ? "tg" : "Running tg"
         case .opening:
-            return abbreviationMode.isAbbreviated ? "Opn..." : "Opening..."
+            return abbreviationMode.isAbbreviated ? "Opn" : "Opening"
         case .error:
             return abbreviationMode.isAbbreviated ? "Xcd" : "Xcode"
         }

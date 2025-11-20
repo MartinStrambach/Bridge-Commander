@@ -13,13 +13,13 @@ enum XcodeProjectState: Equatable {
 		case .idle:
 			"Open Xcode Project"
 		case .checking:
-			"Checking..."
+			"Checking"
 		case .runningTi:
-			"Running ti..."
+			"Running ti"
 		case .runningTg:
-			"Running tg..."
+			"Running tg"
 		case .opening:
-			"Opening..."
+			"Opening"
 		case let .error(message):
 			"Error: \(message)"
 		}
