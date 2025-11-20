@@ -15,6 +15,7 @@ struct Repository: Identifiable, Hashable {
 	var iosCR: String?
 	var androidReviewerName: String?
 	var iosReviewerName: String?
+	var unpushedCommitCount: Int = 0
 
 	/// Returns the URL representation of the repository path
 	var url: URL {

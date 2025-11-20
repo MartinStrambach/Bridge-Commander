@@ -97,4 +97,35 @@ enum GitBranchDetector {
 		print("Extracted ticket ID '\(ticketId)' from branch '\(branchName)'")
 		return ticketId
 	}
+
+	/// Counts the number of unpushed commits in a repository
+	/// - Parameter path: The path to the Git repository
+	/// - Returns: The number of unpushed commits, or 0 if no upstream branch or error occurs
+	static func countUnpushedCommits(at path: String) -> Int {
+		let process = Process()
+		process.currentDirectoryPath = path
+		process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+		process.arguments = ["-c", "git rev-list --count @{u}..HEAD 2>/dev/null"]
+
+		let pipe = Pipe()
+		process.standardOutput = pipe
+
+		do {
+			try process.run()
+			process.waitUntilExit()
+
+			let data = pipe.fileHandleForReading.readDataToEndOfFile()
+			if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+			   let count = Int(output) {
+				if count > 0 {
+					print("Repository at \(path) has \(count) unpushed commits")
+				}
+				return count
+			}
+		} catch {
+			print("Error counting unpushed commits at \(path): \(error.localizedDescription)")
+		}
+
+		return 0
+	}
 }

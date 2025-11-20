@@ -68,6 +68,17 @@ struct RepositoryInfo: View {
 					.font(.caption)
 					.foregroundColor(.secondary)
 					.italic()
+
+				// Show unpushed commits indicator if any exist
+				if repository.unpushedCommitCount > 0 {
+					HStack(spacing: 3) {
+						Image(systemName: "exclamationmark.circle.fill")
+							.font(.caption2)
+						Text("\(repository.unpushedCommitCount) unpushed")
+							.font(.caption2)
+					}
+					.foregroundColor(.red)
+				}
 			}
 		}
 		else {

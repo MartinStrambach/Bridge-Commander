@@ -55,6 +55,9 @@ class RepositoryScanner: ObservableObject {
 		// Fetch status information asynchronously in the background
 		fetchStatusForRepositories()
 
+		// Fetch unpushed commits count asynchronously in the background
+		fetchUnpushedCommits()
+
 		// Fetch PR URLs asynchronously in the background
 		fetchPRUrlsForRepositories()
 	}
@@ -94,6 +97,25 @@ class RepositoryScanner: ObservableObject {
 						unstagedChangesCount: changes.unstagedCount,
 						stagedChangesCount: changes.stagedCount
 					)
+				}
+			}
+		}
+	}
+
+	/// Fetches the count of unpushed commits for all repositories
+	private func fetchUnpushedCommits() {
+		Task {
+			for (index, repository) in repositories.enumerated() {
+				// Count unpushed commits
+				let unpushedCount = GitBranchDetector.countUnpushedCommits(at: repository.path)
+
+				// Update repository on main thread
+				await MainActor.run {
+					guard index < repositories.count else {
+						return
+					}
+
+					repositories[index].unpushedCommitCount = unpushedCount
 				}
 			}
 		}
