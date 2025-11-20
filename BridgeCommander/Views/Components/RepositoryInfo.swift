@@ -110,14 +110,14 @@ struct RepositoryInfo: View {
                     HStack(spacing: 8) {
                         if let androidCR = repository.androidCR {
                             Button(action: {
-                                if let url = URL(string: androidCR) {
+								if let url = URL(string: repository.prUrl ?? "") {
                                     NSWorkspace.shared.open(url)
                                 }
                             }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "link")
                                         .font(.caption2)
-                                    Text("Android CR")
+                                    Text("Android CR: \(repository.androidCR ?? "")")
                                         .font(.caption2)
                                 }
                                 .padding(.horizontal, 6)
@@ -151,14 +151,14 @@ struct RepositoryInfo: View {
                     HStack(spacing: 8) {
                         if let iosCR = repository.iosCR {
                             Button(action: {
-                                if let url = URL(string: iosCR) {
+								if let url = URL(string: repository.prUrl ?? "") {
                                     NSWorkspace.shared.open(url)
                                 }
                             }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "link")
                                         .font(.caption2)
-                                    Text("iOS CR")
+                                    Text("iOS CR: \(repository.iosCR ?? "")")
                                         .font(.caption2)
                                 }
                                 .padding(.horizontal, 6)

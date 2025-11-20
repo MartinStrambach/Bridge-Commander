@@ -25,7 +25,7 @@ struct YouTrackService {
             return (nil, nil, nil, nil, nil)
         }
 
-        let issueURL = "\(baseURL)/issues/\(ticketId)?fields=customFields(name,value(text, name))"
+        let issueURL = "\(baseURL)/issues/\(ticketId)?fields=customFields(name,value(text,name))"
 
         guard let url = URL(string: issueURL) else {
             return (nil, nil, nil, nil, nil)
@@ -92,7 +92,7 @@ struct YouTrackService {
         for field in customFields {
             // Look for field named "Code review urls"
             if field.name?.lowercased() == "code review urls",
-               let fieldText = field.value?.stringValue {
+               let fieldText = field.value?.text {
                 // Extract the Monorepo PR URL from the field text
                 if let prUrl = extractMonorepoPRFromText(fieldText) {
                     return prUrl
@@ -115,7 +115,7 @@ struct YouTrackService {
 
         for field in customFields {
             if field.name?.lowercased() == fieldName.lowercased(),
-               let fieldValue = field.value?.stringValue {
+               let fieldValue = field.value?.text {
                 return fieldValue
             }
         }
@@ -188,68 +188,26 @@ struct CustomField: Decodable {
 
 struct CustomFieldValue: Decodable {
     let text: String?
-    let name: String?
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        // Check if value is null
-        if container.decodeNil() {
+        // Get the type field to determine which property to extract
+        let typeValue = (try container.decodeIfPresent(String.self, forKey: ._type)) ?? ""
+
+        // Parse based on type - extract the appropriate property
+        if typeValue.contains("TextFieldValue") {
+            self.text = try container.decodeIfPresent(String.self, forKey: .text)
+        } else if typeValue.contains("User") || typeValue.contains("EnumBundleElement") {
+            self.text = try container.decodeIfPresent(String.self, forKey: .name)
+        } else {
             self.text = nil
-            self.name = nil
-        } else {
-            // Decode as object with properties including $type
-            let dict = try container.decode([String: AnyCodable].self)
-
-            // Get the type field
-            let typeValue = dict["$type"]?.stringValue ?? ""
-
-            // Parse based on type
-            if typeValue.contains("TextFieldValue") {
-                // For TextFieldValue, extract text field
-                self.text = dict["text"]?.stringValue
-                self.name = nil
-            } else if typeValue.contains("User") || typeValue.contains("EnumBundleElement") {
-                // For User and EnumBundleElement, extract name field
-                self.text = nil
-                self.name = dict["name"]?.stringValue
-            } else {
-                // Unknown type, don't extract anything
-                self.text = nil
-                self.name = nil
-            }
         }
     }
 
-    /// Returns the first available string value (text preferred over name)
-    var stringValue: String? {
-        return text ?? name
-    }
-}
-
-/// Helper enum to decode various JSON value types
-enum AnyCodable: Decodable {
-    case string(String)
-    case null
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-
-        if container.decodeNil() {
-            self = .null
-        } else if let stringValue = try? container.decode(String.self) {
-            self = .string(stringValue)
-        } else {
-            self = .null
-        }
-    }
-
-    var stringValue: String? {
-        switch self {
-        case .string(let value):
-            return value
-        case .null:
-            return nil
-        }
+    enum CodingKeys: String, CodingKey {
+        case text
+        case name
+        case _type = "$type"
     }
 }
