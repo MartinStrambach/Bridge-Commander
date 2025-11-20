@@ -20,10 +20,6 @@ struct RepositoryInfo: View {
 					BadgeView(text: "MERGING", color: .red)
 				}
 
-				if repository.isWorktree {
-					BadgeView(text: "WORKTREE", color: .blue)
-				}
-
 				if let ticketId = repository.ticketId {
 					Button(action: {
 						openTicket(ticketId)
@@ -84,91 +80,20 @@ struct RepositoryInfo: View {
 
 	@ViewBuilder
 	private var codeReviewView: some View {
-		let hasAndroidCR = repository.androidCR != nil
-		let hasIosCR = repository.iosCR != nil
-		let hasAndroidReviewer = repository.androidReviewerName != nil
-		let hasIosReviewer = repository.iosReviewerName != nil
+		VStack(alignment: .leading, spacing: 6) {
+			CodeReviewSection(
+				platform: "Android",
+				state: repository.androidCR,
+				reviewerName: repository.androidReviewerName,
+				prUrl: repository.prUrl
+			)
 
-		if hasAndroidCR || hasIosCR || hasAndroidReviewer || hasIosReviewer {
-			VStack(alignment: .leading, spacing: 6) {
-				// Android CR section
-				if hasAndroidCR || hasAndroidReviewer {
-					HStack(spacing: 8) {
-						Button(action: {
-							if let url = URL(string: repository.prUrl ?? "") {
-								NSWorkspace.shared.open(url)
-							}
-						}) {
-							HStack(spacing: 4) {
-								Image(systemName: "link")
-									.font(.caption2)
-								Text("Android CR: \(repository.androidCR ?? "")")
-									.font(.caption2)
-							}
-							.padding(.horizontal, 6)
-							.padding(.vertical, 2)
-							.background(Color.blue.opacity(0.2))
-							.foregroundColor(.blue)
-							.cornerRadius(4)
-						}
-						.buttonStyle(.plain)
-						.help("Open Android code review")
-
-						if let androidReviewerName = repository.androidReviewerName {
-							HStack(spacing: 4) {
-								Image(systemName: "person.fill")
-									.font(.caption2)
-								Text(androidReviewerName)
-									.font(.caption2)
-							}
-							.padding(.horizontal, 6)
-							.padding(.vertical, 2)
-							.background(Color.blue.opacity(0.15))
-							.foregroundColor(.blue)
-							.cornerRadius(4)
-						}
-					}
-				}
-
-				// iOS CR section
-				if hasIosCR || hasIosReviewer {
-					HStack(spacing: 8) {
-						Button(action: {
-							if let url = URL(string: repository.prUrl ?? "") {
-								NSWorkspace.shared.open(url)
-							}
-						}) {
-							HStack(spacing: 4) {
-								Image(systemName: "link")
-									.font(.caption2)
-								Text("iOS CR: \(repository.iosCR ?? "")")
-									.font(.caption2)
-							}
-							.padding(.horizontal, 6)
-							.padding(.vertical, 2)
-							.background(Color.purple.opacity(0.2))
-							.foregroundColor(.purple)
-							.cornerRadius(4)
-						}
-						.buttonStyle(.plain)
-						.help("Open iOS code review")
-
-						if let iosReviewerName = repository.iosReviewerName {
-							HStack(spacing: 4) {
-								Image(systemName: "person.fill")
-									.font(.caption2)
-								Text(iosReviewerName)
-									.font(.caption2)
-							}
-							.padding(.horizontal, 6)
-							.padding(.vertical, 2)
-							.background(Color.purple.opacity(0.15))
-							.foregroundColor(.purple)
-							.cornerRadius(4)
-						}
-					}
-				}
-			}
+			CodeReviewSection(
+				platform: "iOS",
+				state: repository.iosCR,
+				reviewerName: repository.iosReviewerName,
+				prUrl: repository.prUrl
+			)
 		}
 	}
 
@@ -181,6 +106,94 @@ struct RepositoryInfo: View {
 		}
 	}
 
+}
+
+// MARK: - Code Review Section Component
+
+private struct CodeReviewSection: View {
+	let platform: String
+	let state: String?
+	let reviewerName: String?
+	let prUrl: String?
+
+	private var stateColor: Color {
+		guard let state else {
+			return .primary
+		}
+
+		if state.lowercased() == "passed" || state.lowercased() == "n/a" {
+			return .gray
+		}
+		else {
+			return Color(.sRGB, red: 1.0, green: 0.4, blue: 0.4)
+		}
+	}
+
+	var body: some View {
+		if state != nil || reviewerName != nil {
+			HStack(spacing: 8) {
+				if let state {
+					CodeReviewBadge(
+						platform: platform,
+						state: state,
+						prUrl: prUrl,
+						color: stateColor
+					)
+				}
+
+				if let reviewerName {
+					ReviewerBadge(
+						name: reviewerName,
+						color: stateColor,
+						image: Image(systemName: "person.fill")
+					)
+				}
+			}
+		}
+	}
+}
+
+// MARK: - Code Review Badge Component
+
+private struct CodeReviewBadge: View {
+	let platform: String
+	let state: String?
+	let prUrl: String?
+	let color: Color
+
+	var body: some View {
+		Button {
+			if let url = URL(string: prUrl ?? "") {
+				NSWorkspace.shared.open(url)
+			}
+		} label: {
+			ReviewerBadge(name: "\(platform) CR: \(state ?? "")", color: color, image: Image(systemName: "link"))
+		}
+		.buttonStyle(.plain)
+		.help("Open \(platform) code review")
+	}
+}
+
+// MARK: - Reviewer Badge Component
+
+private struct ReviewerBadge: View {
+	let name: String
+	let color: Color
+	let image: Image
+
+	var body: some View {
+		HStack(spacing: 4) {
+			image
+				.font(.caption2)
+			Text(name)
+				.font(.caption2)
+		}
+		.padding(.horizontal, 6)
+		.padding(.vertical, 2)
+		.background(color.opacity(0.15))
+		.foregroundColor(color)
+		.cornerRadius(4)
+	}
 }
 
 // MARK: - Badge View Component
