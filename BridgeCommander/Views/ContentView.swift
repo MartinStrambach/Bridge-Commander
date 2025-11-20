@@ -81,7 +81,8 @@ struct ContentView: View {
 								.foregroundColor(.blue)
 						}
 						.buttonStyle(.plain)
-						.help("Refresh repository status")
+						.help("Refresh repository status (⌘R)")
+						.keyboardShortcut("r", modifiers: .command)
 						.disabled(scanner.isScanning)
 
 						Button(action: scanner.clearResults) {
