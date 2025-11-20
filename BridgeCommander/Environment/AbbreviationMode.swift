@@ -1,13 +1,7 @@
-//
-//  AbbreviationMode.swift
-//  Bridge Commander
-//
-//  Environment object for managing button abbreviation mode
-//
-
-import SwiftUI
 import Combine
+import SwiftUI
 
 class AbbreviationMode: ObservableObject {
-    @Published var isAbbreviated: Bool = false
+	@Published
+	var isAbbreviated: Bool = false
 }
