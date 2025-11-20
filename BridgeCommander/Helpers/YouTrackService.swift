@@ -207,17 +207,17 @@ struct CustomFieldValue: Decodable {
 	let text: String?
 
 	init(from decoder: Decoder) throws {
-		let container = try decoder.container(keyedBy: CodingKeys.self)
+		let container = try? decoder.container(keyedBy: CodingKeys.self)
 
 		// Get the type field to determine which property to extract
-		let typeValue = try (container.decodeIfPresent(String.self, forKey: ._type)) ?? ""
+		let typeValue = try (container?.decodeIfPresent(String.self, forKey: ._type)) ?? ""
 
 		// Parse based on type - extract the appropriate property
 		if typeValue.contains("TextFieldValue") {
-			self.text = try container.decodeIfPresent(String.self, forKey: .text)
+			self.text = try container?.decodeIfPresent(String.self, forKey: .text)
 		}
 		else if typeValue.contains("User") || typeValue.contains("EnumBundleElement") {
-			self.text = try container.decodeIfPresent(String.self, forKey: .name)
+			self.text = try container?.decodeIfPresent(String.self, forKey: .name)
 		}
 		else {
 			self.text = nil
