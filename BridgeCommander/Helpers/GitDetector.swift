@@ -36,8 +36,8 @@ enum GitDetector {
 	/// Recursively scans a directory for Git repositories
 	/// - Parameter rootURL: The root directory to scan
 	/// - Returns: An array of discovered repositories (without status counts)
-	static func scanForRepositories(at rootURL: URL) async -> [Repository] {
-		var repositories: [Repository] = []
+	static func scanForRepositories(at rootURL: URL) async -> [ScannedRepository] {
+		var repositories: [ScannedRepository] = []
 		var visitedPaths: Set<String> = []
 
 		await scanDirectory(
@@ -53,7 +53,7 @@ enum GitDetector {
 	/// Recursively scans a single directory
 	private static func scanDirectory(
 		url: URL,
-		repositories: inout [Repository],
+		repositories: inout [ScannedRepository],
 		visitedPaths: inout Set<String>,
 		skipStatusCheck: Bool = false
 	) async {
@@ -79,12 +79,13 @@ enum GitDetector {
 					GitChanges(unstagedCount: 0, stagedCount: 0)
 				}
 				else {
-					GitStatusDetector.getChangesCount(at: url.path)
+					await GitStatusDetector.getChangesCount(at: url.path)
 				}
 
-			let repo = Repository(
-				name: repoName,
+			let repo = ScannedRepository(
 				path: url.path,
+				name: repoName,
+				directory: url.deletingLastPathComponent().path,
 				isWorktree: isWorktree,
 				branchName: branchName,
 				isMergeInProgress: mergeInProgress,
@@ -99,7 +100,22 @@ enum GitDetector {
 			return
 		}
 
-		// Get directory contents
+		// Get directory contents in a synchronous context
+		let subdirectories = getNonMainRepositorySubdirectories(at: url)
+
+		// Recursively scan subdirectories
+		for subdir in subdirectories {
+			await scanDirectory(
+				url: subdir,
+				repositories: &repositories,
+				visitedPaths: &visitedPaths,
+				skipStatusCheck: skipStatusCheck
+			)
+		}
+	}
+
+	/// Gets all subdirectories that aren't repositories themselves
+	private static func getNonMainRepositorySubdirectories(at url: URL) -> [URL] {
 		guard
 			let enumerator = FileManager.default.enumerator(
 				at: url,
@@ -107,7 +123,7 @@ enum GitDetector {
 				options: [.skipsPackageDescendants]
 			)
 		else {
-			return
+			return []
 		}
 
 		var subdirectories: [URL] = []
@@ -147,14 +163,6 @@ enum GitDetector {
 			subdirectories.append(fileURL)
 		}
 
-		// Recursively scan subdirectories
-		for subdir in subdirectories {
-			await scanDirectory(
-				url: subdir,
-				repositories: &repositories,
-				visitedPaths: &visitedPaths,
-				skipStatusCheck: skipStatusCheck
-			)
-		}
+		return subdirectories
 	}
 }

@@ -5,26 +5,38 @@ enum GitWorktreeRemover {
 	/// Removes a Git worktree at the specified path
 	/// - Parameter path: The path to the Git worktree
 	/// - Throws: An error if the removal fails
-	static func removeWorktree(at path: String) throws {
-		let process = Process()
-		process.currentDirectoryPath = path
-		process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+	static func removeWorktree(at path: String) async throws {
+		try await withCheckedThrowingContinuation { continuation in
+			let process = Process()
+			process.currentDirectoryPath = path
+			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.arguments = ["worktree", "remove", path]
 
-		process.arguments = ["worktree", "remove", path]
+			let outputPipe = Pipe()
+			let errorPipe = Pipe()
+			process.standardOutput = outputPipe
+			process.standardError = errorPipe
 
-		let pipe = Pipe()
-		let errorPipe = Pipe()
-		process.standardOutput = pipe
-		process.standardError = errorPipe
+			process.terminationHandler = { proc in
+				if proc.terminationStatus == 0 {
+					continuation.resume()
+				}
+				else {
+					let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+					let msg = String(data: errorData, encoding: .utf8)?
+						.trimmingCharacters(in: .whitespacesAndNewlines)
+						?? "Unknown error"
 
-		try process.run()
-		process.waitUntilExit()
+					continuation.resume(throwing: WorktreeRemovalError.removalFailed(message: msg))
+				}
+			}
 
-		if process.terminationStatus != 0 {
-			let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-			let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-			throw WorktreeRemovalError
-				.removalFailed(message: errorMessage.trimmingCharacters(in: .whitespacesAndNewlines))
+			do {
+				try process.run()
+			}
+			catch {
+				continuation.resume(throwing: error)
+			}
 		}
 	}
 }

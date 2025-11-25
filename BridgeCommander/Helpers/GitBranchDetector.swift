@@ -101,31 +101,40 @@ enum GitBranchDetector {
 	/// Counts the number of unpushed commits in a repository
 	/// - Parameter path: The path to the Git repository
 	/// - Returns: The number of unpushed commits, or 0 if no upstream branch or error occurs
-	static func countUnpushedCommits(at path: String) -> Int {
-		let process = Process()
-		process.currentDirectoryPath = path
-		process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-		process.arguments = ["-c", "git rev-list --count @{u}..HEAD 2>/dev/null"]
+	static func countUnpushedCommits(at path: String) async -> Int {
+		await withCheckedContinuation { continuation in
+			let process = Process()
+			process.currentDirectoryPath = path
+			process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+			process.arguments = ["-c", "git rev-list --count @{u}..HEAD 2>/dev/null"]
 
-		let pipe = Pipe()
-		process.standardOutput = pipe
+			let pipe = Pipe()
+			process.standardOutput = pipe
+			process.standardError = Pipe() // ignore stderr since you redirect in zsh
 
-		do {
-			try process.run()
-			process.waitUntilExit()
+			process.terminationHandler = { _ in
+				let data = pipe.fileHandleForReading.readDataToEndOfFile()
+				let output = String(data: data, encoding: .utf8)?
+					.trimmingCharacters(in: .whitespacesAndNewlines)
 
-			let data = pipe.fileHandleForReading.readDataToEndOfFile()
-			if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-			   let count = Int(output) {
-				if count > 0 {
-					print("Repository at \(path) has \(count) unpushed commits")
+				if let output, let count = Int(output) {
+					if count > 0 {
+						print("Repository at \(path) has \(count) unpushed commits")
+					}
+					continuation.resume(returning: count)
 				}
-				return count
+				else {
+					continuation.resume(returning: 0)
+				}
 			}
-		} catch {
-			print("Error counting unpushed commits at \(path): \(error.localizedDescription)")
-		}
 
-		return 0
+			do {
+				try process.run()
+			}
+			catch {
+				print("Error counting unpushed commits at \(path): \(error.localizedDescription)")
+				continuation.resume(returning: 0)
+			}
+		}
 	}
 }

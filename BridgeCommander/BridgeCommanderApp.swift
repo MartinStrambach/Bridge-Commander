@@ -1,26 +1,34 @@
-//
-//  BridgeCommanderApp.swift
-//  Bridge Commander
-//
-//  Main application entry point for Bridge Commander
-//
-
+import Combine
+import ComposableArchitecture
 import SwiftUI
 
 @main
 struct BridgeCommanderApp: App {
-    @StateObject private var appSettings = AppSettings()
+	@StateObject
+	private var appSettings = AppSettings()
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(appSettings)
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+	private let store: StoreOf<RepositoryListReducer> = .init(
+		initialState: .init(),
+		reducer: { RepositoryListReducer() }
+	)
 
-        Settings {
-            SettingsView(settings: appSettings)
-        }
-    }
+	var body: some Scene {
+		WindowGroup {
+			RepositoryListView(store: store)
+				.environmentObject(appSettings)
+		}
+		.windowStyle(.hiddenTitleBar)
+		.windowResizability(.contentSize)
+
+		Settings {
+			SettingsView(settings: appSettings)
+		}
+	}
+
+	init() {
+		let _appSettings = AppSettings()
+		_appSettings.objectWillChange.send()
+		self._appSettings = StateObject(wrappedValue: _appSettings)
+	}
+
 }
