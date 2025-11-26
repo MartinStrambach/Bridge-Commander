@@ -24,7 +24,7 @@ struct DeleteWorktreeButtonView: View {
 			Button("Cancel", role: .cancel) { store.send(.cancelRemoval) }
 			Button("Remove", role: .destructive) { store.send(.confirmRemoval) }
 		} message: {
-			Text("Are you sure you want to remove this worktree?\n\n\(store.repositoryPath)")
+			Text("Are you sure you want to remove this worktree?\n\n\(store.name)")
 		}
 		.alert("Removal Error", isPresented: .constant(store.removalError != nil)) {
 			Button("OK") { store.send(.didFailWithError("")) }
@@ -40,7 +40,8 @@ struct DeleteWorktreeButtonView: View {
 	DeleteWorktreeButtonView(
 		store: Store(
 			initialState: DeleteWorktreeButtonReducer.State(
-				repositoryPath: "/path/to/worktree"
+				name: "worktree",
+				path: "/path/to/worktree"
 			),
 			reducer: {
 				DeleteWorktreeButtonReducer()

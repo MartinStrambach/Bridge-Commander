@@ -5,12 +5,25 @@ enum GitWorktreeRemover {
 	/// Removes a Git worktree at the specified path
 	/// - Parameter path: The path to the Git worktree
 	/// - Throws: An error if the removal fails
-	static func removeWorktree(at path: String) async throws {
+	static func removeWorktree(name: String, path: String) async throws {
 		try await withCheckedThrowingContinuation { continuation in
+			let script = """
+				branch="\(name)"
+				folder="../${branch//\\//_}"
+
+				if git worktree list | grep -q "$folder"; then
+				  echo "→ Removing worktree at: $folder"
+				  git worktree remove --force "$folder"
+				else
+				  echo "❌ No worktree found for: $branch ($folder)"
+				  exit 1
+				fi
+				"""
+
 			let process = Process()
 			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-			process.arguments = ["worktree", "remove", path]
+			process.executableURL = URL(fileURLWithPath: "/bin/sh")
+			process.arguments = ["-c", script]
 
 			let outputPipe = Pipe()
 			let errorPipe = Pipe()

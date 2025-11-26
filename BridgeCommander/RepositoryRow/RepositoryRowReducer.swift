@@ -62,7 +62,7 @@ struct RepositoryRowReducer {
 			self.claudeCodeButton = .init(repositoryPath: path)
 			self.androidStudioButton = .init(repositoryPath: path)
 			self.ticketButton = nil
-			self.deleteWorktreeButton = .init(repositoryPath: path)
+			self.deleteWorktreeButton = .init(name: name, path: path)
 
 			self.lastRefreshTime = nil
 		}
@@ -87,6 +87,7 @@ struct RepositoryRowReducer {
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
+		case worktreeDeleted
 
 		enum FetchType: Equatable {
 			case branch
@@ -193,7 +194,14 @@ struct RepositoryRowReducer {
 			case .ticketButton:
 				return .none
 
-			case .deleteWorktreeButton:
+			case let .deleteWorktreeButton(action):
+				// Handle successful worktree deletion by sending signal to parent
+				if case .didRemoveSuccessfully = action {
+					return .send(.worktreeDeleted)
+				}
+				return .none
+
+			case .worktreeDeleted:
 				return .none
 			}
 		}

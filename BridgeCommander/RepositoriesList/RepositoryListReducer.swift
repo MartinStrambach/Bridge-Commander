@@ -92,9 +92,6 @@ struct RepositoryListReducer {
 			case .stopPeriodicRefresh:
 				return .cancel(id: CancellableId.periodicRefresh)
 
-			case .repositories:
-				return .none
-
 			case .clearResults:
 				state.repositories.removeAll()
 				state.selectedDirectory = nil
@@ -107,6 +104,12 @@ struct RepositoryListReducer {
 				state.repositories = .init(
 					uniqueElements: sortRepositories(Array(state.repositories), sortByTicket: state.sortByTicket)
 				)
+				return .none
+
+			case .repositories(.element(_, .worktreeDeleted)):
+				return .send(.startScan)
+
+			case .repositories:
 				return .none
 			}
 		}

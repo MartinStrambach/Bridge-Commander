@@ -5,7 +5,8 @@ import Foundation
 struct DeleteWorktreeButtonReducer {
 	@ObservableState
 	struct State: Equatable {
-		let repositoryPath: String
+		let name: String
+		let path: String
 		var isRemoving: Bool = false
 		var showRemoveConfirmation: Bool = false
 		var removalError: String?
@@ -35,9 +36,9 @@ struct DeleteWorktreeButtonReducer {
 			case .confirmRemoval:
 				state.showRemoveConfirmation = false
 				state.isRemoving = true
-				return .run { [path = state.repositoryPath] send in
+				return .run { [name = state.name, path = state.path] send in
 					do {
-						try await GitWorktreeRemover.removeWorktree(at: path)
+						try await GitWorktreeRemover.removeWorktree(name: name, path: path)
 						await send(.didRemoveSuccessfully)
 					}
 					catch {

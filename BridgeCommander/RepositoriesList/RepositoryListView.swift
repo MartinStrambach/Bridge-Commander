@@ -35,7 +35,7 @@ struct RepositoryListView: View {
 		.onDisappear {
 			store.send(.stopPeriodicRefresh)
 		}
-		.onChange(of: appSettings.periodicRefreshInterval) { oldValue, newValue in
+		.onChange(of: appSettings.periodicRefreshInterval) { _, newValue in
 			store.send(.stopPeriodicRefresh)
 			store.send(.startPeriodicRefresh(newValue.timeInterval))
 		}
@@ -130,7 +130,7 @@ struct RepositoryListView: View {
 	private var scanningView: some View {
 		VStack(spacing: 16) {
 			ProgressView()
-				.scaleEffect(1.5, anchor: .center)
+				.frame(width: 20, height: 20)
 			Text("Scanning repositories...")
 				.font(.headline)
 				.foregroundColor(.secondary)
