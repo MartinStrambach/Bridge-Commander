@@ -122,7 +122,13 @@ struct RepositoryRowView: View {
 			if let androidCR = store.androidCR {
 				let waiting = androidCR.lowercased() == "passed" || androidCR.lowercased() == "n/a"
 				HStack(spacing: 4) {
-					Text("Android: \(androidCR)")
+					Image("android")
+						.resizable()
+						.renderingMode(.template)
+						.scaledToFit()
+						.frame(height: 12)
+						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
+					Text(androidCR)
 						.font(.caption)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
 					if let reviewerName = store.androidReviewerName {
@@ -139,6 +145,8 @@ struct RepositoryRowView: View {
 				let waiting = iosCR.lowercased() == "passed" || iosCR.lowercased() == "n/a"
 				HStack(spacing: 4) {
 					Image(systemName: "apple.logo")
+						.renderingMode(.template)
+						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
 					Text(iosCR)
 						.font(.caption)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))

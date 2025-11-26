@@ -22,8 +22,17 @@ struct AndroidStudioButtonView: View {
 			}
 			else {
 				Button(action: { store.send(.openAndroidStudioButtonTapped) }) {
-					Label(buttonLabel, systemImage: buttonIcon)
-						.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 120)
+					Label {
+						Text(buttonLabel)
+					} icon: {
+						Image("android")
+							.resizable()
+							.renderingMode(.template)
+							.scaledToFit()
+							.frame(height: 11)
+							.foregroundStyle(.white)
+					}
+					.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 120)
 				}
 				.buttonStyle(.bordered)
 			}
