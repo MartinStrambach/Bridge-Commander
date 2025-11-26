@@ -9,6 +9,8 @@ struct RepositoryListReducer {
 		var isScanning: Bool = false
 		var selectedDirectory: String?
 		var errorMessage: String?
+
+		var sortByTicket: Bool = true
 	}
 
 	enum Action: Sendable {
@@ -21,6 +23,7 @@ struct RepositoryListReducer {
 		case repositories(IdentifiedActionOf<RepositoryRowReducer>)
 		case startPeriodicRefresh(TimeInterval)
 		case stopPeriodicRefresh
+		case toggleSortMode
 	}
 
 	private nonisolated enum CancellableId: Hashable, Sendable {
@@ -98,6 +101,13 @@ struct RepositoryListReducer {
 				state.errorMessage = nil
 				state.isScanning = false
 				return .cancel(id: CancellableId.periodicRefresh)
+
+			case .toggleSortMode:
+				state.sortByTicket.toggle()
+				state.repositories = .init(
+					uniqueElements: sortRepositories(Array(state.repositories), sortByTicket: state.sortByTicket)
+				)
+				return .none
 			}
 		}
 		.forEach(\.repositories, action: \.repositories) {
@@ -107,6 +117,24 @@ struct RepositoryListReducer {
 }
 
 // MARK: - Private Helpers
+
+private func sortRepositories(
+	_ repositories: [RepositoryRowReducer.State],
+	sortByTicket: Bool
+) -> [RepositoryRowReducer.State] {
+	repositories.sorted { repo1, repo2 in
+		if sortByTicket {
+			let ticket1 = repo1.ticketId ?? ""
+			let ticket2 = repo2.ticketId ?? ""
+			return ticket1.localizedCaseInsensitiveCompare(ticket2) == .orderedDescending
+		}
+		else {
+			let branch1 = repo1.branchName ?? ""
+			let branch2 = repo2.branchName ?? ""
+			return branch1.localizedCaseInsensitiveCompare(branch2) == .orderedAscending
+		}
+	}
+}
 
 private func scanRepositories(in directory: String) async throws -> [ScannedRepository] {
 	let url = URL(fileURLWithPath: directory)
@@ -164,5 +192,7 @@ private func mergeRepositories(into state: inout RepositoryListReducer.State, sc
 		}
 	}
 
-	state.repositories = IdentifiedArrayOf(uniqueElements: updatedRepos)
+	// Sort based on current sort mode
+	let sortedRepos = sortRepositories(updatedRepos, sortByTicket: state.sortByTicket)
+	state.repositories = IdentifiedArrayOf(uniqueElements: sortedRepos)
 }

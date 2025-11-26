@@ -7,8 +7,6 @@ struct RepositoryListView: View {
 	private var abbreviationMode = AbbreviationMode()
 	@EnvironmentObject
 	var appSettings: AppSettings
-	@State
-	private var sortByTicket = true
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -75,12 +73,12 @@ struct RepositoryListView: View {
 				.buttonStyle(.plain)
 				.help(abbreviationMode.isAbbreviated ? "Show full text" : "Abbreviate text")
 
-				Button(action: { sortByTicket.toggle() }) {
-					Image(systemName: sortByTicket ? "ticket.fill" : "line.horizontal.3")
+				Button(action: { store.send(.toggleSortMode) }) {
+					Image(systemName: store.sortByTicket ? "ticket.fill" : "line.horizontal.3")
 						.foregroundColor(.gray)
 				}
 				.buttonStyle(.plain)
-				.help(sortByTicket ? "Sort by branch name" : "Sort by ticket number")
+				.help(store.sortByTicket ? "Sort by branch name" : "Sort by ticket number")
 
 				Spacer()
 

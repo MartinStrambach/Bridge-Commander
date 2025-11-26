@@ -45,7 +45,7 @@ struct RepositoryRowReducer {
 			self.isWorktree = isWorktree
 
 			self.branchName = nil
-			self.ticketId = nil
+			self.ticketId = GitBranchDetector.extractTicketId(from: name)
 			self.isMergeInProgress = false
 			self.unstagedChangesCount = 0
 			self.stagedChangesCount = 0
@@ -74,7 +74,6 @@ struct RepositoryRowReducer {
 		case didFetchBranch(String, Bool, Int, Int)
 		case didFetchUnpushedCount(Int)
 		case didFetchYouTrack(
-			ticketId: String?,
 			prUrl: String?,
 			androidCR: String?,
 			iosCR: String?,
@@ -155,15 +154,13 @@ struct RepositoryRowReducer {
 				state.unpushedCommitCount = count
 				return .none
 
-			case let .didFetchYouTrack(ticketId, prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName):
-				state.ticketId = ticketId
+			case let .didFetchYouTrack(prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName):
 				state.prUrl = prUrl
 				state.androidCR = androidCR
 				state.iosCR = iosCR
 				state.androidReviewerName = androidReviewerName
 				state.iosReviewerName = iosReviewerName
-				// Update ticketButton state based on ticketId
-				if let ticketId {
+				if let ticketId = state.ticketId {
 					state.ticketButton = .init(ticketId: ticketId)
 				}
 				else {
@@ -240,7 +237,6 @@ struct RepositoryRowReducer {
 			do {
 				guard let ticketId = await youTrackService.extractTicketId(from: branch) else {
 					await send(.didFetchYouTrack(
-						ticketId: nil,
 						prUrl: nil,
 						androidCR: nil,
 						iosCR: nil,
@@ -252,7 +248,6 @@ struct RepositoryRowReducer {
 
 				let details = try await youTrackService.fetchIssueDetails(for: ticketId)
 				await send(.didFetchYouTrack(
-					ticketId: ticketId,
 					prUrl: details.prUrl,
 					androidCR: details.androidCR,
 					iosCR: details.iosCR,
