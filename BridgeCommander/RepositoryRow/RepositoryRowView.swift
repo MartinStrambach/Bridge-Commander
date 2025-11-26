@@ -117,6 +117,7 @@ struct RepositoryRowView: View {
 					.padding(6)
 					.background(Color.blue.opacity(0.2))
 					.cornerRadius(4)
+					.lineLimit(1)
 			}
 
 			if let androidCR = store.androidCR {
@@ -131,10 +132,12 @@ struct RepositoryRowView: View {
 					Text(androidCR)
 						.font(.caption)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
+						.lineLimit(1)
 					if let reviewerName = store.androidReviewerName {
 						Text("(\(reviewerName))")
 							.font(.caption2)
 							.foregroundColor(waiting ? .secondary : .orange)
+							.lineLimit(1)
 					}
 				}
 				.padding(6)
@@ -150,10 +153,12 @@ struct RepositoryRowView: View {
 					Text(iosCR)
 						.font(.caption)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
+						.lineLimit(1)
 					if let reviewerName = store.iosReviewerName {
 						Text("(\(reviewerName))")
 							.font(.caption2)
 							.foregroundColor(waiting ? .secondary : .orange)
+							.lineLimit(1)
 					}
 				}
 				.padding(6)
