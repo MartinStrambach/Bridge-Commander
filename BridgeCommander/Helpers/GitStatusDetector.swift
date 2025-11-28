@@ -27,7 +27,7 @@ enum GitStatusDetector {
 			let process = Process()
 			process.currentDirectoryPath = path
 			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-			process.arguments = ["ls-files", "-mdo", "--exclude-standard"]
+			process.arguments = ["ls-files", "-mdo", "--exclude-standard", "--exclude=*/submodules/*"]
 
 			let pipe = Pipe()
 			process.standardOutput = pipe
