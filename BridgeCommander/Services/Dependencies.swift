@@ -39,3 +39,16 @@ extension DependencyValues {
 		set { self[XcodeServiceKey.self] = newValue }
 	}
 }
+
+// MARK: - Last Opened Directory Service Dependency
+
+private struct LastOpenedDirectoryServiceKey: DependencyKey {
+	static let liveValue: LastOpenedDirectoryServiceType = LastOpenedDirectoryServiceImpl()
+}
+
+extension DependencyValues {
+	var lastOpenedDirectoryService: LastOpenedDirectoryServiceType {
+		get { self[LastOpenedDirectoryServiceKey.self] }
+		set { self[LastOpenedDirectoryServiceKey.self] = newValue }
+	}
+}

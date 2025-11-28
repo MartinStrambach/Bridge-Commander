@@ -29,3 +29,11 @@ protocol XcodeServiceType: Sendable {
 	func hasXcodeProject(in path: String) -> Bool
 	func findXcodeProject(in repositoryPath: String) -> String?
 }
+
+// MARK: - Last Opened Directory Service Protocol
+
+protocol LastOpenedDirectoryServiceType: Sendable {
+	func load() -> String?
+	func save(_ directory: String)
+	func clear()
+}

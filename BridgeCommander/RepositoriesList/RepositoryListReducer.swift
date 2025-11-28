@@ -17,7 +17,7 @@ struct RepositoryListReducer {
 		case clearResults
 		case didScanRepositories([ScannedRepository])
 		case scanFailed(String)
-		case setDirectory(String?)
+		case setDirectory(String)
 		case startScan
 		case refreshRepositories
 		case repositories(IdentifiedActionOf<RepositoryRowReducer>)
@@ -30,15 +30,20 @@ struct RepositoryListReducer {
 		case periodicRefresh
 	}
 
+	@Dependency(\.lastOpenedDirectoryService)
+	private var lastOpenedDirectoryService
+
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case let .setDirectory(directory):
+				lastOpenedDirectoryService.save(directory)
 				state.selectedDirectory = directory
 				state.errorMessage = nil
 				return .none
 
 			case .startScan:
+				state.selectedDirectory = lastOpenedDirectoryService.load()
 				guard let directory = state.selectedDirectory else {
 					state.errorMessage = "No directory selected"
 					return .none
@@ -97,6 +102,7 @@ struct RepositoryListReducer {
 				state.selectedDirectory = nil
 				state.errorMessage = nil
 				state.isScanning = false
+				lastOpenedDirectoryService.clear()
 				return .cancel(id: CancellableId.periodicRefresh)
 
 			case .toggleSortMode:
