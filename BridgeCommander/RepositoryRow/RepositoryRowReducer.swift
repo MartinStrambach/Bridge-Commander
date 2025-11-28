@@ -30,6 +30,7 @@ struct RepositoryRowReducer {
 		var claudeCodeButton: ClaudeCodeButtonReducer.State
 		var androidStudioButton: AndroidStudioButtonReducer.State
 		var ticketButton: TicketButtonReducer.State?
+		var shareButton: ShareButtonReducer.State
 		var deleteWorktreeButton: DeleteWorktreeButtonReducer.State
 
 		fileprivate var lastRefreshTime: Date?
@@ -44,27 +45,27 @@ struct RepositoryRowReducer {
 			self.name = name
 			self.isWorktree = isWorktree
 
-			self.branchName = nil
-			self.ticketId = GitBranchDetector.extractTicketId(from: name)
+			self.branchName = name
+			let ticketId = GitBranchDetector.extractTicketId(from: name)
+			self.ticketId = ticketId
 			self.isMergeInProgress = false
 			self.unstagedChangesCount = 0
 			self.stagedChangesCount = 0
 
 			self.unpushedCommitCount = 0
-			self.prUrl = nil
-			self.androidCR = nil
-			self.iosCR = nil
-			self.androidReviewerName = nil
-			self.iosReviewerName = nil
 
 			self.xcodeButton = .init(repositoryPath: path)
 			self.terminalButton = .init(repositoryPath: path)
 			self.claudeCodeButton = .init(repositoryPath: path)
 			self.androidStudioButton = .init(repositoryPath: path)
-			self.ticketButton = nil
+			if let ticketId {
+				self.ticketButton = .init(ticketId: ticketId)
+			}
+			self.shareButton = .init(
+				branchName: name,
+				ticketURL: ticketId != nil ? "https://youtrack.livesport.eu/issue/\(ticketId!)" : "",
+			)
 			self.deleteWorktreeButton = .init(name: name, path: path)
-
-			self.lastRefreshTime = nil
 		}
 	}
 
@@ -86,6 +87,7 @@ struct RepositoryRowReducer {
 		case claudeCodeButton(ClaudeCodeButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
+		case shareButton(ShareButtonReducer.Action)
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
 		case worktreeDeleted
 
@@ -122,21 +124,18 @@ struct RepositoryRowReducer {
 			AndroidStudioButtonReducer()
 		}
 
+		Scope(state: \.shareButton, action: \.shareButton) {
+			ShareButtonReducer()
+		}
+
 		Scope(state: \.deleteWorktreeButton, action: \.deleteWorktreeButton) {
 			DeleteWorktreeButtonReducer()
 		}
 
 		Reduce { state, action in
 			switch action {
-			case .onAppear:
-				state.lastRefreshTime = Date()
-				return .merge(
-					fetchBranch(for: &state),
-					fetchUnpushed(for: &state),
-					fetchYouTrack(for: &state)
-				)
-
-			case .requestRefresh:
+			case .onAppear,
+			     .requestRefresh:
 				state.lastRefreshTime = Date()
 				return .merge(
 					fetchBranch(for: &state),
@@ -161,12 +160,7 @@ struct RepositoryRowReducer {
 				state.iosCR = iosCR
 				state.androidReviewerName = androidReviewerName
 				state.iosReviewerName = iosReviewerName
-				if let ticketId = state.ticketId {
-					state.ticketButton = .init(ticketId: ticketId)
-				}
-				else {
-					state.ticketButton = nil
-				}
+				state.shareButton.updatePRURL(prUrl)
 				return .none
 
 			case let .retryFetch(fetchType):
@@ -179,21 +173,6 @@ struct RepositoryRowReducer {
 					return fetchYouTrack(for: &state)
 				}
 
-			case .xcodeButton:
-				return .none
-
-			case .terminalButton:
-				return .none
-
-			case .claudeCodeButton:
-				return .none
-
-			case .androidStudioButton:
-				return .none
-
-			case .ticketButton:
-				return .none
-
 			case let .deleteWorktreeButton(action):
 				// Handle successful worktree deletion by sending signal to parent
 				if case .didRemoveSuccessfully = action {
@@ -201,7 +180,7 @@ struct RepositoryRowReducer {
 				}
 				return .none
 
-			case .worktreeDeleted:
+			default:
 				return .none
 			}
 		}

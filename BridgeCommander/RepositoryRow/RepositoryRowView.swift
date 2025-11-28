@@ -199,10 +199,16 @@ struct RepositoryRowView: View {
 				.help("Open pull request in Gitlab")
 			}
 
+			ShareButtonView(store: store.scope(
+				state: \.shareButton,
+				action: \.shareButton
+			))
+
 			if let ticketButtonStore = store.scope(state: \.ticketButton, action: \.ticketButton) {
 				TicketButtonView(store: ticketButtonStore)
 					.environmentObject(abbreviationMode)
 			}
+
 
 			AndroidStudioButtonView(store: store.scope(
 				state: \.androidStudioButton,
