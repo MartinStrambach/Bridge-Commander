@@ -13,7 +13,7 @@ enum GitWorktreeRemover {
 
 				if git worktree list | grep -q "$folder"; then
 				  echo "→ Removing worktree at: $folder"
-				  git worktree remove --force "$folder"
+				  git worktree remove "$folder"
 				else
 				  echo "❌ No worktree found for: $branch ($folder)" >&2
 				  exit 1
@@ -24,6 +24,7 @@ enum GitWorktreeRemover {
 			process.currentDirectoryPath = path
 			process.executableURL = URL(fileURLWithPath: "/bin/sh")
 			process.arguments = ["-c", script]
+			process.environment = GitEnvironmentHelper.setupEnvironment()
 
 			let outputPipe = Pipe()
 			let errorPipe = Pipe()

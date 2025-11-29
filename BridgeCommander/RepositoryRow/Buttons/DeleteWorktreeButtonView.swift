@@ -27,7 +27,7 @@ struct DeleteWorktreeButtonView: View {
 			Text("Are you sure you want to remove this worktree?\n\n\(store.name)")
 		}
 		.alert("Removal Error", isPresented: .constant(store.removalError != nil)) {
-			Button("OK") { store.send(.didFailWithError("")) }
+			Button("OK") { store.removalError = nil }
 		} message: {
 			if let error = store.removalError {
 				Text(error)

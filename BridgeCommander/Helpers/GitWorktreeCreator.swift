@@ -42,13 +42,7 @@ enum GitWorktreeCreator {
 			process.currentDirectoryPath = repositoryPath
 			process.executableURL = URL(fileURLWithPath: "/bin/sh")
 			process.arguments = ["-c", script, "-s", branchName]
-
-			// Set up environment with PATH from user's shell
-			var environment = ProcessInfo.processInfo.environment
-			if let path = environment["PATH"] {
-				environment["PATH"] = "/usr/local/bin:/opt/homebrew/bin:\(path)"
-			}
-			process.environment = environment
+			process.environment = GitEnvironmentHelper.setupEnvironment()
 
 			let outputPipe = Pipe()
 			let errorPipe = Pipe()
