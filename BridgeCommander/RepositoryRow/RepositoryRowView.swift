@@ -187,16 +187,14 @@ struct RepositoryRowView: View {
 
 			// Open PR button (conditional)
 			if let prUrl = store.prUrl {
-				Button(action: {
+				ActionButton(
+					icon: "link",
+					tooltip: "Open pull request in Gitlab"
+				) {
 					if let url = URL(string: prUrl) {
 						NSWorkspace.shared.open(url)
 					}
-				}) {
-					Image(systemName: "link")
-						.foregroundColor(.blue)
 				}
-				.buttonStyle(.plain)
-				.help("Open pull request in Gitlab")
 			}
 
 			ShareButtonView(store: store.scope(
@@ -261,23 +259,6 @@ struct RepositoryRowView: View {
 
 	private func openInFinder(_ path: String) {
 		NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
-	}
-}
-
-// MARK: - Icon Action Button Component
-
-private struct ActionButton: View {
-	let icon: String
-	let tooltip: String
-	let action: () -> Void
-
-	var body: some View {
-		Button(action: action) {
-			Image(systemName: icon)
-				.foregroundColor(.secondary)
-		}
-		.buttonStyle(.plain)
-		.help(tooltip)
 	}
 }
 

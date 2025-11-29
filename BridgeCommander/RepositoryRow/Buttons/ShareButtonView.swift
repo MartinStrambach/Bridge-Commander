@@ -7,7 +7,8 @@ struct ShareButtonView: View {
 	var body: some View {
 		ShareLink(item: store.shareText) {
 			Image(systemName: "square.and.arrow.up")
-				.foregroundColor(.blue)
+				.foregroundColor(.secondary)
+				.frame(width: 20, height: 20)
 		}
 		.help("Share branch, ticket, and PR")
 	}
