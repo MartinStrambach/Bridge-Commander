@@ -9,38 +9,17 @@ struct AndroidStudioButtonView: View {
 	var abbreviationMode: AbbreviationMode
 
 	var body: some View {
-		Group {
-			if store.isOpening {
-				HStack(spacing: 8) {
-					ProgressView()
-					Text(buttonLabel)
-						.font(.body)
-				}
-				.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 120)
-				.buttonStyle(.borderedProminent)
-				.tint(.green)
-			}
-			else {
-				Button(action: { store.send(.openAndroidStudioButtonTapped) }) {
-					Label {
-						Text(buttonLabel)
-					} icon: {
-						Image("android")
-							.resizable()
-							.renderingMode(.template)
-							.scaledToFit()
-							.frame(height: 11)
-							.foregroundStyle(.white)
-					}
-					.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 120)
-				}
-				.buttonStyle(.bordered)
-			}
-		}
-		.controlSize(.small)
-		.fixedSize(horizontal: true, vertical: false)
-		.disabled(store.isOpening)
-		.help(buttonTooltip)
+		ToolButton(
+			label: store.isOpening
+				? (abbreviationMode.isAbbreviated ? "Open" : "Opening")
+				: (abbreviationMode.isAbbreviated ? "AS" : "Android Studio"),
+			icon: .customImage("android"),
+			tooltip: buttonTooltip,
+			isProcessing: store.isOpening,
+			tint: store.isOpening ? .green : nil,
+			action: { store.send(.openAndroidStudioButtonTapped) }
+		)
+		.environmentObject(abbreviationMode)
 		.alert("Failed to Open Android Studio", isPresented: .constant(store.errorMessage != nil)) {
 			Button("OK") {
 				store.send(.dismissError)
@@ -53,19 +32,6 @@ struct AndroidStudioButtonView: View {
 	}
 
 	// MARK: - Computed Properties
-
-	private var buttonLabel: String {
-		if store.isOpening {
-			abbreviationMode.isAbbreviated ? "Open" : "Opening"
-		}
-		else {
-			abbreviationMode.isAbbreviated ? "AS" : "Android Studio"
-		}
-	}
-
-	private var buttonIcon: String {
-		"square.stack.3d.up.badge.automatic.fill"
-	}
 
 	private var buttonTooltip: String {
 		if let errorMessage = store.errorMessage {

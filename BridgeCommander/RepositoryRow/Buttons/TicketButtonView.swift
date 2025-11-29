@@ -9,53 +9,17 @@ struct TicketButtonView: View {
 	var abbreviationMode: AbbreviationMode
 
 	var body: some View {
-		Group {
-			if store.isOpening {
-				HStack(spacing: 8) {
-					ProgressView()
-					Text(buttonLabel)
-						.font(.body)
-				}
-				.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
-				.buttonStyle(.borderedProminent)
-				.tint(.orange)
-			}
-			else {
-				Button(action: { store.send(.openTicketButtonTapped) }) {
-					Label(buttonLabel, systemImage: buttonIcon)
-						.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 100)
-				}
-				.buttonStyle(.bordered)
-			}
-		}
-		.controlSize(.small)
-		.fixedSize(horizontal: true, vertical: false)
-		.disabled(store.isOpening)
-		.help(buttonTooltip)
-	}
-
-	// MARK: - Computed Properties
-
-	private var buttonLabel: String {
-		if store.isOpening {
-			abbreviationMode.isAbbreviated ? "Open" : "Opening"
-		}
-		else {
-			abbreviationMode.isAbbreviated ? "Tkt" : "Ticket"
-		}
-	}
-
-	private var buttonIcon: String {
-		"ticket"
-	}
-
-	private var buttonTooltip: String {
-		if store.isOpening {
-			"Opening ticket..."
-		}
-		else {
-			"Open YouTrack ticket \(store.ticketId)"
-		}
+		ToolButton(
+			label: store.isOpening
+				? (abbreviationMode.isAbbreviated ? "Open" : "Opening")
+				: (abbreviationMode.isAbbreviated ? "Tkt" : "Ticket"),
+			icon: .systemImage("ticket"),
+			tooltip: store.isOpening ? "Opening ticket..." : "Open YouTrack ticket \(store.ticketId)",
+			isProcessing: store.isOpening,
+			tint: store.isOpening ? .orange : nil,
+			action: { store.send(.openTicketButtonTapped) }
+		)
+		.environmentObject(abbreviationMode)
 	}
 }
 

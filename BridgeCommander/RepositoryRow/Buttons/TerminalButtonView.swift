@@ -9,19 +9,13 @@ struct TerminalButtonView: View {
 	var abbreviationMode: AbbreviationMode
 
 	var body: some View {
-		Button(action: { store.send(.openTerminalButtonTapped) }) {
-			Label(buttonLabel, systemImage: "terminal")
-				.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 120)
-		}
-		.buttonStyle(.bordered)
-		.fixedSize(horizontal: true, vertical: false)
-		.help("Open terminal at repository location")
-	}
-
-	// MARK: - Computed Properties
-
-	private var buttonLabel: String {
-		abbreviationMode.isAbbreviated ? "Term" : "Terminal"
+		ToolButton(
+			label: abbreviationMode.isAbbreviated ? "Term" : "Terminal",
+			icon: .systemImage("terminal"),
+			tooltip: "Open terminal at repository location",
+			action: { store.send(.openTerminalButtonTapped) }
+		)
+		.environmentObject(abbreviationMode)
 	}
 }
 

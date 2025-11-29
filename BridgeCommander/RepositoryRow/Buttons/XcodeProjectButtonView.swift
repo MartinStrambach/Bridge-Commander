@@ -9,29 +9,15 @@ struct XcodeProjectButtonView: View {
 	var abbreviationMode: AbbreviationMode
 
 	var body: some View {
-		Group {
-			if store.projectState.isProcessing {
-				HStack(spacing: 8) {
-					ProgressView()
-					Text(buttonLabel)
-						.font(.body)
-				}
-				.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 120)
-				.buttonStyle(.borderedProminent)
-			}
-			else {
-				Button(action: { store.send(.openProject) }) {
-					Label(buttonLabel, systemImage: buttonIcon)
-						.frame(minWidth: abbreviationMode.isAbbreviated ? 50 : 120)
-				}
-				.buttonStyle(.bordered)
-			}
-		}
-		.tint(store.projectPath == nil ? .orange : nil)
-		.controlSize(.small)
-		.fixedSize(horizontal: true, vertical: false)
-		.disabled(store.projectState.isProcessing)
-		.help(buttonTooltip)
+		ToolButton(
+			label: buttonLabel,
+			icon: .systemImage(buttonIcon),
+			tooltip: buttonTooltip,
+			isProcessing: store.projectState.isProcessing,
+			tint: store.projectPath == nil ? .orange : nil,
+			action: { store.send(.openProject) }
+		)
+		.environmentObject(abbreviationMode)
 		.alert("No Xcode Project Found", isPresented: .constant(store.showingWarning)) {
 			Button("Cancel", role: .cancel) {
 				store.send(.dismissWarning)

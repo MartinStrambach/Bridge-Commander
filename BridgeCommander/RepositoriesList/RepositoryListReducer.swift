@@ -1,16 +1,17 @@
 import ComposableArchitecture
 import Foundation
+import SwiftUI
 
 @Reducer
 struct RepositoryListReducer {
 	@ObservableState
 	struct State: Equatable {
 		var repositories: IdentifiedArrayOf<RepositoryRowReducer.State> = []
-		var isScanning: Bool = false
+		var isScanning = false
 		var selectedDirectory: String?
 		var errorMessage: String?
 
-		var sortByTicket: Bool = true
+		var sortByTicket = true
 	}
 
 	enum Action: Sendable {
@@ -106,10 +107,12 @@ struct RepositoryListReducer {
 				return .cancel(id: CancellableId.periodicRefresh)
 
 			case .toggleSortMode:
-				state.sortByTicket.toggle()
-				state.repositories = .init(
-					uniqueElements: sortRepositories(Array(state.repositories), sortByTicket: state.sortByTicket)
-				)
+				withAnimation {
+					state.sortByTicket.toggle()
+					state.repositories = .init(
+						uniqueElements: sortRepositories(Array(state.repositories), sortByTicket: state.sortByTicket)
+					)
+				}
 				return .none
 
 			case .repositories(.element(_, .worktreeDeleted)):
