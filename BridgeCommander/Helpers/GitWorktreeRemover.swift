@@ -8,17 +8,17 @@ enum GitWorktreeRemover {
 	static func removeWorktree(name: String, path: String) async throws {
 		try await withCheckedThrowingContinuation { continuation in
 			let script = """
-				branch="\(name)"
-				folder="../${branch//\\//_}"
+			branch="\(name)"
+			folder="../${branch//\\//_}"
 
-				if git worktree list | grep -q "$folder"; then
-				  echo "→ Removing worktree at: $folder"
-				  git worktree remove "$folder"
-				else
-				  echo "❌ No worktree found for: $branch ($folder)" >&2
-				  exit 1
-				fi
-				"""
+			if git worktree list | grep -q "$folder"; then
+			  echo "→ Removing worktree at: $folder"
+			  git worktree remove "$folder"
+			else
+			  echo "❌ No worktree found for: $branch ($folder)" >&2
+			  exit 1
+			fi
+			"""
 
 			let process = Process()
 			process.currentDirectoryPath = path

@@ -59,53 +59,53 @@ struct RepositoryListView: View {
 						.foregroundColor(.secondary)
 				}
 			}
-			HStack(spacing: 0) {
-				Button(action: { abbreviationMode.isAbbreviated.toggle() }) {
-					Image(systemName: abbreviationMode.isAbbreviated
-						? "arrow.left.and.right.righttriangle.left.righttriangle.right"
-						: "arrow.left.and.right")
-						.foregroundColor(.gray)
-				}
-				.buttonStyle(.plain)
-				.help(abbreviationMode.isAbbreviated ? "Show full text" : "Abbreviate text")
+			if !store.repositories.isEmpty {
+				HStack(spacing: 8) {
+					HeaderButton(
+						icon: abbreviationMode.isAbbreviated
+							? "arrow.left.and.right.righttriangle.left.righttriangle.right"
+							: "arrow.left.and.right",
+						tooltip: abbreviationMode.isAbbreviated ? "Show full text" : "Abbreviate text",
+						action: { abbreviationMode.isAbbreviated.toggle() }
+					)
 
-				Button(action: { store.send(.toggleSortMode) }) {
-					Image(systemName: store.sortByTicket ? "ticket.fill" : "line.horizontal.3")
-						.foregroundColor(.gray)
-				}
-				.buttonStyle(.plain)
-				.help(store.sortByTicket ? "Sort by branch name" : "Sort by ticket number")
+					HeaderButton(
+						icon: store.sortByTicket ? "ticket.fill" : "line.horizontal.3",
+						tooltip: store.sortByTicket ? "Sort by branch name" : "Sort by ticket number",
+						action: { store.send(.toggleSortMode) }
+					)
 
-				Spacer()
+					Spacer()
 
-				HStack(spacing: 12) {
-					if !store.repositories.isEmpty {
+					HStack(spacing: 12) {
 						Text("\(store.repositories.count) repositories")
 							.font(.subheadline)
 							.foregroundColor(.secondary)
 
 						if store.isScanning {
 							ProgressView()
-								.scaleEffect(0.5)
+								.scaleEffect(0.7)
 						}
 						else {
-							Button(action: { store.send(.refreshRepositories) }) {
-								Image(systemName: "arrow.clockwise")
-									.foregroundColor(.blue)
-							}
-							.buttonStyle(.plain)
-							.help("Refresh repository status (⌘R)")
+							HeaderButton(
+								icon: "arrow.clockwise",
+								tooltip: "Refresh repository status (⌘R)",
+								color: .blue,
+								action: { store.send(.refreshRepositories) }
+							)
 							.keyboardShortcut("r", modifiers: .command)
 						}
 
-						Button(action: { store.send(.clearResults) }) {
-							Image(systemName: "xmark.circle.fill")
-								.foregroundColor(.gray)
-						}
-						.buttonStyle(.plain)
-						.help("Clear results")
+						HeaderButton(
+							icon: "xmark.circle.fill",
+							tooltip: "Clear results",
+							action: { store.send(.clearResults) }
+						)
 					}
 				}
+			}
+			else {
+				Spacer()
 			}
 		}
 		.padding()

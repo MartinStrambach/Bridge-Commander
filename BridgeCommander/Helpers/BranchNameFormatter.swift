@@ -1,6 +1,6 @@
 import Foundation
 
-struct BranchNameFormatter {
+enum BranchNameFormatter {
 	/// Returns a formatted, human-readable version of a branch name
 	/// Removes prefixes (feature/fix/etc), project types, ticket numbers, and replaces underscores with spaces
 	static func format(_ branchName: String?, ticketId: String? = nil) -> String {

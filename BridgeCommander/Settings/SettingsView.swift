@@ -1,80 +1,78 @@
-//
-//  SettingsView.swift
-//  Bridge Commander
-//
-//  Settings view for configuring application preferences
-//
-
 import SwiftUI
 
 struct SettingsView: View {
-    @ObservedObject var settings: AppSettings
-    @State private var showTokenClearedAlert = false
+	@ObservedObject
+	var settings: AppSettings
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Settings")
-                .font(.title2)
-                .fontWeight(.bold)
+	@State
+	private var showTokenClearedAlert = false
 
-            Divider()
+	var body: some View {
+		VStack(alignment: .leading, spacing: 16) {
+			Text("Settings")
+				.font(.title2)
+				.fontWeight(.bold)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("YouTrack Authentication")
-                    .font(.headline)
+			Divider()
 
-                Text("Enter your YouTrack personal access token. This token will be stored locally and used to fetch issue details.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+			VStack(alignment: .leading, spacing: 8) {
+				Text("YouTrack Authentication")
+					.font(.headline)
 
-                SecureField("YouTrack Auth Token", text: $settings.youtrackAuthToken)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
+				Text(
+					"Enter your YouTrack personal access token. This token will be stored locally and used to fetch issue details."
+				)
+				.font(.caption)
+				.foregroundColor(.secondary)
 
-                Button(action: { showTokenClearedAlert = true }) {
-                    Label("Clear Token", systemImage: "xmark.circle")
-                }
-                .buttonStyle(.bordered)
-                .foregroundColor(.red)
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
+				SecureField("YouTrack Auth Token", text: $settings.youtrackAuthToken)
+					.textFieldStyle(.roundedBorder)
+					.font(.system(.body, design: .monospaced))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Repository Refresh")
-                    .font(.headline)
+				Button(action: { showTokenClearedAlert = true }) {
+					Label("Clear Token", systemImage: "xmark.circle")
+				}
+				.buttonStyle(.bordered)
+				.foregroundColor(.red)
+			}
+			.padding()
+			.background(Color(NSColor.controlBackgroundColor))
+			.cornerRadius(8)
 
-                Text("Automatically refresh repository status at the selected interval.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+			VStack(alignment: .leading, spacing: 8) {
+				Text("Repository Refresh")
+					.font(.headline)
 
-                Picker("Refresh Interval", selection: $settings.periodicRefreshInterval) {
-                    ForEach(PeriodicRefreshInterval.allCases, id: \.self) { interval in
-                        Text(interval.displayName).tag(interval)
-                    }
-                }
-                .pickerStyle(.segmented)
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
+				Text("Automatically refresh repository status at the selected interval.")
+					.font(.caption)
+					.foregroundColor(.secondary)
 
-            Spacer()
-        }
-        .padding()
-        .frame(minWidth: 500, minHeight: 300)
-        .alert("Clear Token", isPresented: $showTokenClearedAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Clear", role: .destructive) {
-                settings.clear()
-            }
-        } message: {
-            Text("Are you sure you want to clear the token? YouTrack features will not work without a valid token.")
-        }
-    }
+				Picker("Refresh Interval", selection: $settings.periodicRefreshInterval) {
+					ForEach(PeriodicRefreshInterval.allCases, id: \.self) { interval in
+						Text(interval.displayName).tag(interval)
+					}
+				}
+				.pickerStyle(.segmented)
+			}
+			.padding()
+			.background(Color(NSColor.controlBackgroundColor))
+			.cornerRadius(8)
+
+			Spacer()
+		}
+		.padding()
+		.frame(minWidth: 500, minHeight: 300)
+		.alert("Clear Token", isPresented: $showTokenClearedAlert) {
+			Button("Cancel", role: .cancel) {}
+			Button("Clear", role: .destructive) {
+				settings.clear()
+			}
+		} message: {
+			Text("Are you sure you want to clear the token? YouTrack features will not work without a valid token.")
+		}
+	}
 }
 
 #Preview {
-    SettingsView(settings: AppSettings())
+	SettingsView(settings: AppSettings())
 }

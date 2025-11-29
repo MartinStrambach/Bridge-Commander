@@ -209,7 +209,6 @@ struct RepositoryRowView: View {
 					.environmentObject(abbreviationMode)
 			}
 
-
 			AndroidStudioButtonView(store: store.scope(
 				state: \.androidStudioButton,
 				action: \.androidStudioButton

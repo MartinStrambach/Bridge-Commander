@@ -13,7 +13,6 @@ struct XcodeProjectButtonView: View {
 			if store.projectState.isProcessing {
 				HStack(spacing: 8) {
 					ProgressView()
-						.scaleEffect(0.5)
 					Text(buttonLabel)
 						.font(.body)
 				}

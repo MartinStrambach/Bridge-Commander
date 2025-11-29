@@ -13,7 +13,6 @@ struct ClaudeCodeButtonView: View {
 			if store.isLaunching {
 				HStack(spacing: 8) {
 					ProgressView()
-						.scaleEffect(0.5)
 					Text(buttonLabel)
 						.font(.body)
 				}
