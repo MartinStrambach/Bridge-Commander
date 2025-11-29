@@ -115,6 +115,9 @@ struct RepositoryListReducer {
 			case .repositories(.element(_, .worktreeDeleted)):
 				return .send(.startScan)
 
+			case .repositories(.element(_, .worktreeCreated)):
+				return .send(.startScan)
+
 			case .repositories:
 				return .none
 			}
@@ -157,8 +160,6 @@ private func scanRepositories(in directory: String) async throws -> [ScannedRepo
 			isWorktree: repo.isWorktree,
 			branchName: repo.branchName,
 			isMergeInProgress: repo.isMergeInProgress,
-			unstagedChangesCount: repo.unstagedChangesCount,
-			stagedChangesCount: repo.stagedChangesCount
 		)
 	}
 }
@@ -181,8 +182,6 @@ private func mergeRepositories(into state: inout RepositoryListReducer.State, sc
 			updated.isWorktree = scannedRepo.isWorktree
 			updated.branchName = scannedRepo.branchName
 			updated.isMergeInProgress = scannedRepo.isMergeInProgress
-			updated.unstagedChangesCount = scannedRepo.unstagedChangesCount
-			updated.stagedChangesCount = scannedRepo.stagedChangesCount
 			// Keep: prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, unpushedCommitCount
 			updatedRepos.append(updated)
 		}
@@ -195,8 +194,6 @@ private func mergeRepositories(into state: inout RepositoryListReducer.State, sc
 			)
 			newRepo.branchName = scannedRepo.branchName
 			newRepo.isMergeInProgress = scannedRepo.isMergeInProgress
-			newRepo.unstagedChangesCount = scannedRepo.unstagedChangesCount
-			newRepo.stagedChangesCount = scannedRepo.stagedChangesCount
 			updatedRepos.append(newRepo)
 		}
 	}

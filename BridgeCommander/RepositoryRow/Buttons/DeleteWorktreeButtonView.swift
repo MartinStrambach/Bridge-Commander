@@ -9,7 +9,7 @@ struct DeleteWorktreeButtonView: View {
 		Group {
 			if store.isRemoving {
 				ProgressView()
-					.frame(width: 20, height: 20)
+					.scaleEffect(0.5)
 			}
 			else {
 				Button(action: { store.send(.showConfirmation) }) {

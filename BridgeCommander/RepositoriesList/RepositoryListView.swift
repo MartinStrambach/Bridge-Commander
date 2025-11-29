@@ -15,11 +15,7 @@ struct RepositoryListView: View {
 
 			Divider()
 
-			// Content area
-			if store.isScanning {
-				scanningView
-			}
-			else if store.repositories.isEmpty {
+			if store.repositories.isEmpty {
 				emptyStateView
 			}
 			else {
@@ -88,14 +84,19 @@ struct RepositoryListView: View {
 							.font(.subheadline)
 							.foregroundColor(.secondary)
 
-						Button(action: { store.send(.refreshRepositories) }) {
-							Image(systemName: "arrow.clockwise")
-								.foregroundColor(.blue)
+						if store.isScanning {
+							ProgressView()
+								.scaleEffect(0.5)
 						}
-						.buttonStyle(.plain)
-						.help("Refresh repository status (⌘R)")
-						.keyboardShortcut("r", modifiers: .command)
-						.disabled(store.isScanning)
+						else {
+							Button(action: { store.send(.refreshRepositories) }) {
+								Image(systemName: "arrow.clockwise")
+									.foregroundColor(.blue)
+							}
+							.buttonStyle(.plain)
+							.help("Refresh repository status (⌘R)")
+							.keyboardShortcut("r", modifiers: .command)
+						}
 
 						Button(action: { store.send(.clearResults) }) {
 							Image(systemName: "xmark.circle.fill")
@@ -130,7 +131,6 @@ struct RepositoryListView: View {
 	private var scanningView: some View {
 		VStack(spacing: 16) {
 			ProgressView()
-				.frame(width: 20, height: 20)
 			Text("Scanning repositories...")
 				.font(.headline)
 				.foregroundColor(.secondary)

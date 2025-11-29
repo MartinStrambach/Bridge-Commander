@@ -242,8 +242,10 @@ struct RepositoryRowView: View {
 					))
 				}
 				else {
-					// Placeholder to maintain alignment when delete button is not shown
-					Color.clear
+					CreateWorktreeButtonView(store: store.scope(
+						state: \.createWorktreeButton,
+						action: \.createWorktreeButton
+					))
 				}
 			}
 			.frame(width: 20, height: 20)

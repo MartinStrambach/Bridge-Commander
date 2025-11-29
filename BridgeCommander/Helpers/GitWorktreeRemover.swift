@@ -15,7 +15,7 @@ enum GitWorktreeRemover {
 				  echo "→ Removing worktree at: $folder"
 				  git worktree remove --force "$folder"
 				else
-				  echo "❌ No worktree found for: $branch ($folder)"
+				  echo "❌ No worktree found for: $branch ($folder)" >&2
 				  exit 1
 				fi
 				"""

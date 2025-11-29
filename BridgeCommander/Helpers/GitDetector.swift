@@ -44,7 +44,6 @@ enum GitDetector {
 			url: rootURL,
 			repositories: &repositories,
 			visitedPaths: &visitedPaths,
-			skipStatusCheck: true
 		)
 
 		return repositories.sorted { $0.path < $1.path }
@@ -55,7 +54,6 @@ enum GitDetector {
 		url: URL,
 		repositories: inout [ScannedRepository],
 		visitedPaths: inout Set<String>,
-		skipStatusCheck: Bool = false
 	) async {
 		// Avoid scanning the same path twice (handles symlinks)
 		let canonicalPath = (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) ?? url.path
@@ -73,15 +71,6 @@ enum GitDetector {
 			let branchName = GitBranchDetector.getCurrentBranch(at: url.path)
 			let mergeInProgress = GitMergeDetector.isGitOperationInProgress(at: url.path)
 
-			// Skip expensive status checks during initial scan for performance
-			let changes: GitChanges =
-				if skipStatusCheck {
-					GitChanges(unstagedCount: 0, stagedCount: 0)
-				}
-				else {
-					await GitStatusDetector.getChangesCount(at: url.path)
-				}
-
 			let repo = ScannedRepository(
 				path: url.path,
 				name: repoName,
@@ -89,14 +78,8 @@ enum GitDetector {
 				isWorktree: isWorktree,
 				branchName: branchName,
 				isMergeInProgress: mergeInProgress,
-				unstagedChangesCount: changes.unstagedCount,
-				stagedChangesCount: changes.stagedCount
 			)
 			repositories.append(repo)
-
-			// Don't scan inside repositories unless looking for nested worktrees
-			// For now, we'll stop scanning deeper to avoid submodules
-			// If you want to detect submodules as independent repos, remove this return
 			return
 		}
 
@@ -109,7 +92,6 @@ enum GitDetector {
 				url: subdir,
 				repositories: &repositories,
 				visitedPaths: &visitedPaths,
-				skipStatusCheck: skipStatusCheck
 			)
 		}
 	}

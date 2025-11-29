@@ -9,6 +9,4 @@ struct ScannedRepository: Equatable {
 	var isWorktree: Bool
 	var branchName: String?
 	var isMergeInProgress: Bool
-	var unstagedChangesCount: Int
-	var stagedChangesCount: Int
 }

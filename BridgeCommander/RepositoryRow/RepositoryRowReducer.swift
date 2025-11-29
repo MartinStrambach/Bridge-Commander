@@ -32,6 +32,7 @@ struct RepositoryRowReducer {
 		var ticketButton: TicketButtonReducer.State?
 		var shareButton: ShareButtonReducer.State
 		var deleteWorktreeButton: DeleteWorktreeButtonReducer.State
+		var createWorktreeButton: CreateWorktreeButtonReducer.State
 
 		fileprivate var lastRefreshTime: Date?
 
@@ -66,6 +67,7 @@ struct RepositoryRowReducer {
 				ticketURL: ticketId != nil ? "https://youtrack.livesport.eu/issue/\(ticketId!)" : "",
 			)
 			self.deleteWorktreeButton = .init(name: name, path: path)
+			self.createWorktreeButton = .init(repositoryPath: path)
 		}
 	}
 
@@ -89,7 +91,9 @@ struct RepositoryRowReducer {
 		case ticketButton(TicketButtonReducer.Action)
 		case shareButton(ShareButtonReducer.Action)
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
+		case createWorktreeButton(CreateWorktreeButtonReducer.Action)
 		case worktreeDeleted
+		case worktreeCreated
 
 		enum FetchType: Equatable {
 			case branch
@@ -130,6 +134,10 @@ struct RepositoryRowReducer {
 
 		Scope(state: \.deleteWorktreeButton, action: \.deleteWorktreeButton) {
 			DeleteWorktreeButtonReducer()
+		}
+
+		Scope(state: \.createWorktreeButton, action: \.createWorktreeButton) {
+			CreateWorktreeButtonReducer()
 		}
 
 		Reduce { state, action in
@@ -177,6 +185,13 @@ struct RepositoryRowReducer {
 				// Handle successful worktree deletion by sending signal to parent
 				if case .didRemoveSuccessfully = action {
 					return .send(.worktreeDeleted)
+				}
+				return .none
+
+			case let .createWorktreeButton(action):
+				// Handle successful worktree creation by sending signal to parent
+				if case .didCreateSuccessfully = action {
+					return .send(.worktreeCreated)
 				}
 				return .none
 
