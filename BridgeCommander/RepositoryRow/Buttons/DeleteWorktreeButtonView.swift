@@ -20,19 +20,8 @@ struct DeleteWorktreeButtonView: View {
 				.help("Remove worktree")
 			}
 		}
-		.alert("Remove Worktree", isPresented: $store.showRemoveConfirmation) {
-			Button("Cancel", role: .cancel) { store.send(.cancelRemoval) }
-			Button("Remove", role: .destructive) { store.send(.confirmRemoval) }
-		} message: {
-			Text("Are you sure you want to remove this worktree?\n\n\(store.name)")
-		}
-		.alert("Removal Error", isPresented: .constant(store.removalError != nil)) {
-			Button("OK") { store.removalError = nil }
-		} message: {
-			if let error = store.removalError {
-				Text(error)
-			}
-		}
+		.alert(store: store.scope(state: \.$confirmationAlert, action: \.confirmationAlert))
+		.alert(store: store.scope(state: \.$errorAlert, action: \.errorAlert))
 	}
 }
 

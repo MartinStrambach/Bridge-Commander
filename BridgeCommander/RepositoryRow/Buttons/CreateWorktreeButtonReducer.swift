@@ -9,7 +9,8 @@ struct CreateWorktreeButtonReducer {
 		var isCreating: Bool = false
 		var showCreateDialog: Bool = false
 		var branchName: String = ""
-		var creationError: String?
+		@Presents
+		var errorAlert: AlertState<Action.ErrorAlert>?
 	}
 
 	enum Action: BindableAction {
@@ -17,8 +18,11 @@ struct CreateWorktreeButtonReducer {
 		case showDialog
 		case cancelCreation
 		case confirmCreation
+		case errorAlert(PresentationAction<ErrorAlert>)
 		case didCreateSuccessfully
 		case didFailWithError(String)
+
+		enum ErrorAlert: Equatable {}
 	}
 
 	var body: some Reducer<State, Action> {
@@ -28,7 +32,6 @@ struct CreateWorktreeButtonReducer {
 			case .showDialog:
 				state.showCreateDialog = true
 				state.branchName = ""
-				state.creationError = nil
 				return .none
 
 			case .cancelCreation:
@@ -63,12 +66,24 @@ struct CreateWorktreeButtonReducer {
 
 			case let .didFailWithError(error):
 				state.isCreating = false
-				state.creationError = error
+				state.errorAlert = AlertState {
+					TextState("Creation Error")
+				} actions: {
+					ButtonState(role: .cancel) {
+						TextState("OK")
+					}
+				} message: {
+					TextState(error)
+				}
+				return .none
+
+			case .errorAlert:
 				return .none
 
 			default:
 				return .none
 			}
 		}
+		.ifLet(\.$errorAlert, action: \.errorAlert)
 	}
 }

@@ -10,8 +10,8 @@ struct XcodeProjectButtonReducer {
 		let repositoryPath: String
 		var projectState: XcodeProjectState = .checking
 		var projectPath: String?
-		var showingWarning: Bool = false
-		var errorMessage: String? = nil
+		@Presents
+		var alert: AlertState<Action.Alert>?
 	}
 
 	enum Action {
@@ -20,12 +20,14 @@ struct XcodeProjectButtonReducer {
 		case openProject
 		case didOpenProject
 		case openFailed(String)
-		case generateProject
 		case projectGenerationProgress(XcodeProjectState)
 		case didGenerateProject(String)
 		case generationFailed(String)
-		case dismissWarning
-		case dismissError
+		case alert(PresentationAction<Alert>)
+
+		enum Alert: Equatable {
+			case confirmGenerate
+		}
 	}
 
 	@Dependency(\.xcodeService)
@@ -47,8 +49,22 @@ struct XcodeProjectButtonReducer {
 
 			case .openProject:
 				guard let projectPath = state.projectPath else {
-					return .send(.generateProject)
+					// Show warning alert asking to generate
+					state.alert = AlertState {
+						TextState("No Xcode Project Found")
+					} actions: {
+						ButtonState(role: .cancel) {
+							TextState("Cancel")
+						}
+						ButtonState(action: .confirmGenerate) {
+							TextState("Generate")
+						}
+					} message: {
+						TextState("No Xcode project or workspace was found.\n\nWould you like to generate one?")
+					}
+					return .none
 				}
+
 				state.projectState = .opening
 
 				return .run { send in
@@ -67,10 +83,18 @@ struct XcodeProjectButtonReducer {
 
 			case let .openFailed(error):
 				state.projectState = .error(error)
-				state.errorMessage = error
+				state.alert = AlertState {
+					TextState("Failed to Open Xcode Project")
+				} actions: {
+					ButtonState(role: .cancel) {
+						TextState("OK")
+					}
+				} message: {
+					TextState(error)
+				}
 				return .none
 
-			case .generateProject:
+			case .alert(.presented(.confirmGenerate)):
 				return .run { [path = state.repositoryPath] send in
 					do {
 						let projectPath = try await XcodeProjectGenerator.generateProject(at: path) { newState in
@@ -97,19 +121,23 @@ struct XcodeProjectButtonReducer {
 
 			case let .generationFailed(error):
 				state.projectState = .error(error)
-				state.errorMessage = error
+				state.alert = AlertState {
+					TextState("Project Generation Failed")
+				} actions: {
+					ButtonState(role: .cancel) {
+						TextState("OK")
+					}
+				} message: {
+					TextState(error)
+				}
 				return .none
 
-			case .dismissWarning:
-				state.showingWarning = false
-				state.projectState = .idle
-				return .none
-
-			case .dismissError:
-				state.errorMessage = nil
+			case .alert:
+				// When alert is dismissed, reset state
 				state.projectState = .idle
 				return .none
 			}
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 }

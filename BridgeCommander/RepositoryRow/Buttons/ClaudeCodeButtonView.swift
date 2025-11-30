@@ -20,24 +20,13 @@ struct ClaudeCodeButtonView: View {
 			action: { store.send(.launchClaudeCodeButtonTapped) }
 		)
 		.environmentObject(abbreviationMode)
-		.alert("Failed to Launch Claude Code", isPresented: .constant(store.errorMessage != nil)) {
-			Button("OK") {
-				store.send(.dismissError)
-			}
-		} message: {
-			if let errorMessage = store.errorMessage {
-				Text(errorMessage)
-			}
-		}
+		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 
 	// MARK: - Computed Properties
 
 	private var buttonTooltip: String {
-		if let errorMessage = store.errorMessage {
-			"Error: \(errorMessage)"
-		}
-		else if store.isLaunching {
+		if store.isLaunching {
 			"Launching Claude Code..."
 		}
 		else {

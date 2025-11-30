@@ -7,14 +7,17 @@ struct ClaudeCodeButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isLaunching: Bool = false
-		var errorMessage: String?
+		@Presents
+		var alert: AlertState<Action.Alert>?
 	}
 
 	enum Action: Equatable {
 		case launchClaudeCodeButtonTapped
 		case didLaunchClaudeCode
 		case launchFailed(String)
-		case dismissError
+		case alert(PresentationAction<Alert>)
+
+		enum Alert: Equatable {}
 	}
 
 	var body: some Reducer<State, Action> {
@@ -38,13 +41,21 @@ struct ClaudeCodeButtonReducer {
 
 			case let .launchFailed(errorMessage):
 				state.isLaunching = false
-				state.errorMessage = errorMessage
+				state.alert = AlertState {
+					TextState("Failed to Launch Claude Code")
+				} actions: {
+					ButtonState(role: .cancel) {
+						TextState("OK")
+					}
+				} message: {
+					TextState(errorMessage)
+				}
 				return .none
 
-			case .dismissError:
-				state.errorMessage = nil
+			case .alert:
 				return .none
 			}
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 }

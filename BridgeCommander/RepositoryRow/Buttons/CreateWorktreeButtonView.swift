@@ -28,13 +28,7 @@ struct CreateWorktreeButtonView: View {
 		} message: {
 			Text("Enter the name for the new worktree branch")
 		}
-		.alert("Creation Error", isPresented: .constant(store.creationError != nil)) {
-			Button("OK") { store.creationError = nil }
-		} message: {
-			if let error = store.creationError {
-				Text(error)
-			}
-		}
+		.alert(store: store.scope(state: \.$errorAlert, action: \.errorAlert))
 	}
 }
 

@@ -18,16 +18,7 @@ struct XcodeProjectButtonView: View {
 			action: { store.send(.openProject) }
 		)
 		.environmentObject(abbreviationMode)
-		.alert("No Xcode Project Found", isPresented: .constant(store.showingWarning)) {
-			Button("Cancel", role: .cancel) {
-				store.send(.dismissWarning)
-			}
-			Button("Generate") {
-				store.send(.generateProject)
-			}
-		} message: {
-			Text("No Xcode project or workspace was found.\n\nWould you like to generate one?")
-		}
+		.alert(store: store.scope(state: \.$alert, action: \.alert))
 		.task {
 			store.send(.onAppear)
 		}
@@ -80,9 +71,6 @@ struct XcodeProjectButtonView: View {
 			else {
 				"Open Xcode project or workspace"
 			}
-
-		case .error:
-			"Error: \(store.errorMessage ?? "unknown")"
 
 		default:
 			store.projectState.displayMessage

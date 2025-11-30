@@ -7,14 +7,17 @@ struct AndroidStudioButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isOpening: Bool = false
-		var errorMessage: String? = nil
+		@Presents
+		var alert: AlertState<Action.Alert>?
 	}
 
 	enum Action: Equatable {
 		case openAndroidStudioButtonTapped
 		case didOpenAndroidStudio
 		case openFailed(String)
-		case dismissError
+		case alert(PresentationAction<Alert>)
+
+		enum Alert: Equatable {}
 	}
 
 	var body: some Reducer<State, Action> {
@@ -26,7 +29,8 @@ struct AndroidStudioButtonReducer {
 					do {
 						try await AndroidStudioLauncher.openInAndroidStudio(at: path)
 						await send(.didOpenAndroidStudio)
-					} catch {
+					}
+					catch {
 						await send(.openFailed(error.localizedDescription))
 					}
 				}
@@ -37,13 +41,21 @@ struct AndroidStudioButtonReducer {
 
 			case let .openFailed(errorMessage):
 				state.isOpening = false
-				state.errorMessage = errorMessage
+				state.alert = AlertState {
+					TextState("Failed to Open Android Studio")
+				} actions: {
+					ButtonState(role: .cancel) {
+						TextState("OK")
+					}
+				} message: {
+					TextState(errorMessage)
+				}
 				return .none
 
-			case .dismissError:
-				state.errorMessage = nil
+			case .alert:
 				return .none
 			}
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 }
