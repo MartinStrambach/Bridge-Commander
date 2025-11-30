@@ -1,0 +1,98 @@
+import ComposableArchitecture
+import Foundation
+
+// MARK: - Pull Button Reducer
+
+@Reducer
+struct PullButtonReducer {
+	@ObservableState
+	struct State: Equatable {
+		let repositoryPath: String
+		var isPulling = false
+		@Presents
+		var alert: AlertState<Action.Alert>?
+	}
+
+	enum Action: Equatable {
+		case pullTapped
+		case pullStarted
+		case pullCompleted(result: GitPullHelper.PullResult?, error: GitPullHelper.PullError?)
+		case alert(PresentationAction<Alert>)
+
+		enum Alert: Equatable {}
+	}
+
+	@Dependency(\.gitService)
+	private var gitService
+
+	var body: some Reducer<State, Action> {
+		Reduce { state, action in
+			switch action {
+			case .pullTapped:
+				state.isPulling = true
+				return .send(.pullStarted)
+
+			case .pullStarted:
+				return .run { [path = state.repositoryPath] send in
+					do {
+						let result = try await gitService.pull(at: path)
+						await send(.pullCompleted(result: result, error: nil))
+					}
+					catch let error as GitPullHelper.PullError {
+						await send(.pullCompleted(result: nil, error: error))
+					}
+					catch {
+						print("Unexpected error during pull: \(error)")
+						await send(.pullCompleted(result: nil, error: nil))
+					}
+				}
+
+			case let .pullCompleted(result, error):
+				state.isPulling = false
+				if let error {
+					let message =
+						switch error {
+						case let .pullFailed(msg):
+							"Pull failed: \(msg)"
+						}
+					state.alert = AlertState {
+						TextState("Git Operation Failed")
+					} actions: {
+						ButtonState(role: .cancel) {
+							TextState("OK")
+						}
+					} message: {
+						TextState(message)
+					}
+				}
+				else if let result {
+					let message =
+						if result.isAlreadyUpToDate {
+							"Your branch is already up to date with the remote branch."
+						}
+						else if result.commitCount > 0 {
+							"Successfully pulled \(result.commitCount) commit\(result.commitCount == 1 ? "" : "s") from remote branch."
+						}
+						else {
+							"Pull completed successfully."
+						}
+
+					state.alert = AlertState {
+						TextState("Pull Successful")
+					} actions: {
+						ButtonState(role: .cancel) {
+							TextState("OK")
+						}
+					} message: {
+						TextState(message)
+					}
+				}
+				return .none
+
+			case .alert:
+				return .none
+			}
+		}
+		.ifLet(\.$alert, action: \.alert)
+	}
+}

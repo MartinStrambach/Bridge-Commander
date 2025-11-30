@@ -1,14 +1,14 @@
 import ComposableArchitecture
 import Foundation
 
-// MARK: - Git Actions Menu Reducer
+// MARK: - Merge Master Button Reducer
 
 @Reducer
-struct GitActionsMenuReducer {
+struct MergeMasterButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
-		var isMergingMaster: Bool = false
+		var isMergingMaster = false
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}

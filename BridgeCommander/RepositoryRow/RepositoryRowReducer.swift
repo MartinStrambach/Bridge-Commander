@@ -69,7 +69,7 @@ struct RepositoryRowReducer {
 			)
 			self.deleteWorktreeButton = .init(name: name, path: path)
 			self.createWorktreeButton = .init(repositoryPath: path)
-			self.gitActionsMenu = .init(repositoryPath: path)
+			self.gitActionsMenu = .init(repositoryPath: path, currentBranch: name)
 		}
 	}
 
@@ -163,6 +163,8 @@ struct RepositoryRowReducer {
 				state.isMergeInProgress = isMerge
 				state.unstagedChangesCount = unstaged
 				state.stagedChangesCount = staged
+				state.gitActionsMenu.isMergeInProgress = isMerge
+				state.gitActionsMenu.currentBranch = branch
 				return .none
 
 			case let .didFetchUnpushedCount(count):
@@ -203,9 +205,12 @@ struct RepositoryRowReducer {
 				return .none
 
 			case let .gitActionsMenu(action):
-				// Refresh repository state after merge completes (success or error)
+				// Refresh repository state after merge or pull completes (success or error)
 				// Failed merges may leave the repository in merge-in-progress state
-				if case .mergeMasterCompleted = action {
+				if case .mergeMasterButton(.mergeMasterCompleted) = action {
+					return .send(.requestRefresh)
+				}
+				if case .pullButton(.pullCompleted) = action {
 					return .send(.requestRefresh)
 				}
 				return .none

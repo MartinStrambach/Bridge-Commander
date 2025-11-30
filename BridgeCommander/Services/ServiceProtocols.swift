@@ -7,6 +7,7 @@ protocol GitServiceType: Sendable {
 		-> (branch: String, isMerge: Bool, unstagedCount: Int, stagedCount: Int)
 	func countUnpushedCommits(at path: String) async throws -> Int
 	func mergeMaster(at path: String) async throws
+	func pull(at path: String) async throws -> GitPullHelper.PullResult
 }
 
 // MARK: - YouTrack Service Protocol

@@ -31,4 +31,8 @@ struct GitService: GitServiceType, Sendable {
 	func mergeMaster(at path: String) async throws {
 		try await GitMergeMasterHelper.mergeMaster(at: path)
 	}
+
+	func pull(at path: String) async throws -> GitPullHelper.PullResult {
+		try await GitPullHelper.pull(at: path)
+	}
 }
