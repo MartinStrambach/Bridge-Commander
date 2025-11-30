@@ -9,7 +9,6 @@ struct RepositoryListReducer {
 		var repositories: IdentifiedArrayOf<RepositoryRowReducer.State> = []
 		var isScanning = false
 		var selectedDirectory: String?
-		var errorMessage: String?
 
 		var sortByTicket = true
 	}
@@ -40,18 +39,15 @@ struct RepositoryListReducer {
 			case let .setDirectory(directory):
 				lastOpenedDirectoryService.save(directory)
 				state.selectedDirectory = directory
-				state.errorMessage = nil
 				return .none
 
 			case .startScan:
 				state.selectedDirectory = lastOpenedDirectoryService.load()
 				guard let directory = state.selectedDirectory else {
-					state.errorMessage = "No directory selected"
 					return .none
 				}
 
 				state.isScanning = true
-				state.errorMessage = nil
 
 				return .run { send in
 					do {
@@ -68,9 +64,8 @@ struct RepositoryListReducer {
 				mergeRepositories(into: &state, scanned: scannedRepos)
 				return .none
 
-			case let .scanFailed(error):
+			case .scanFailed:
 				state.isScanning = false
-				state.errorMessage = error
 				return .none
 
 			case .refreshRepositories:
@@ -84,7 +79,7 @@ struct RepositoryListReducer {
 						.send(.repositories(.element(id: repository.id, action: .requestRefresh)))
 					)
 				}
-				return .merge(effects)
+				return .concatenate(.send(.startScan), .merge(effects))
 
 			case let .startPeriodicRefresh(interval):
 				return .run { send in
@@ -101,7 +96,6 @@ struct RepositoryListReducer {
 			case .clearResults:
 				state.repositories.removeAll()
 				state.selectedDirectory = nil
-				state.errorMessage = nil
 				state.isScanning = false
 				lastOpenedDirectoryService.clear()
 				return .cancel(id: CancellableId.periodicRefresh)
@@ -115,10 +109,8 @@ struct RepositoryListReducer {
 				}
 				return .none
 
-			case .repositories(.element(_, .worktreeDeleted)):
-				return .send(.startScan)
-
-			case .repositories(.element(_, .worktreeCreated)):
+			case .repositories(.element(_, .worktreeCreated)),
+			     .repositories(.element(_, .worktreeDeleted)):
 				return .send(.startScan)
 
 			case .repositories:
