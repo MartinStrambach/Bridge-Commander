@@ -12,12 +12,12 @@ struct CreateWorktreeButtonView: View {
 					.scaleEffect(0.5)
 			}
 			else {
-				Button(action: { store.send(.showDialog) }) {
-					Image(systemName: "plus.square.on.square")
-						.foregroundColor(.green)
-				}
-				.buttonStyle(.plain)
-				.help("Create new worktree")
+				ActionButton(
+					icon: "plus.square.on.square",
+					tooltip: "Create new worktree",
+					color: .green,
+					action: { store.send(.showDialog) }
+				)
 			}
 		}
 		.alert("Create New Worktree", isPresented: $store.showCreateDialog) {

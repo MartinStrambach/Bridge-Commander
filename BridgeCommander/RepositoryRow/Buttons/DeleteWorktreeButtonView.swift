@@ -12,12 +12,12 @@ struct DeleteWorktreeButtonView: View {
 					.scaleEffect(0.5)
 			}
 			else {
-				Button(action: { store.send(.showConfirmation) }) {
-					Image(systemName: "trash")
-						.foregroundColor(.red)
-				}
-				.buttonStyle(.plain)
-				.help("Remove worktree")
+				ActionButton(
+					icon: "trash",
+					tooltip: "Remove worktree",
+					color: .red,
+					action: { store.send(.showConfirmation) }
+				)
 			}
 		}
 		.alert(store: store.scope(state: \.$confirmationAlert, action: \.confirmationAlert))
