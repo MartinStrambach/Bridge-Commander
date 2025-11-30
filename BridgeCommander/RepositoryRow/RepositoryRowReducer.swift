@@ -203,8 +203,9 @@ struct RepositoryRowReducer {
 				return .none
 
 			case let .gitActionsMenu(action):
-				// Refresh repository state after successful merge
-				if case let .mergeMasterCompleted(success, _) = action, success {
+				// Refresh repository state after merge completes (success or error)
+				// Failed merges may leave the repository in merge-in-progress state
+				if case .mergeMasterCompleted = action {
 					return .send(.requestRefresh)
 				}
 				return .none
