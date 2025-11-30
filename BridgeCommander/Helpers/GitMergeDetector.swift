@@ -2,48 +2,19 @@ import Foundation
 
 enum GitMergeDetector {
 
-	/// Checks if a repository is currently in the middle of a merge
+	/// Checks if a repository has any ongoing git operation (merge, rebase, etc.)
 	/// - Parameter path: The path to the Git repository
-	/// - Returns: true if merge is in progress, false otherwise
-	static func isMergeInProgress(at path: String) -> Bool {
-		let mergeHeadPath = (path as NSString).appendingPathComponent(".git/MERGE_HEAD")
-
-		// Check if MERGE_HEAD file exists - this indicates an ongoing merge
-		return FileManager.default.fileExists(atPath: mergeHeadPath)
+	/// - Returns: true if any git operation is in progress, false otherwise
+	static func isGitOperationInProgress(at path: String) -> Bool {
+		isMergeInProgress(at: path) || isRebaseInProgress(at: path)
 	}
 
 	/// Checks if a repository is currently in the middle of a rebase
 	/// - Parameter path: The path to the Git repository
 	/// - Returns: true if rebase is in progress, false otherwise
-	static func isRebaseInProgress(at path: String) -> Bool {
-		let gitPath = (path as NSString).appendingPathComponent(".git")
-		var isDirectory: ObjCBool = false
-		let gitExists = FileManager.default.fileExists(atPath: gitPath, isDirectory: &isDirectory)
-
-		guard gitExists else {
+	private static func isRebaseInProgress(at path: String) -> Bool {
+		guard let actualGitPath = resolveGitDirectory(at: path) else {
 			return false
-		}
-
-		// If .git is a file (worktree), read it to find the actual git directory
-		let actualGitPath: String
-		if !isDirectory.boolValue {
-			// It's a worktree
-			guard let gitFileContent = try? String(contentsOfFile: gitPath, encoding: .utf8) else {
-				return false
-			}
-
-			let trimmed = gitFileContent.trimmingCharacters(in: .whitespacesAndNewlines)
-			if trimmed.hasPrefix("gitdir:") {
-				let gitDir = trimmed.replacingOccurrences(of: "gitdir:", with: "")
-					.trimmingCharacters(in: .whitespaces)
-				actualGitPath = gitDir
-			}
-			else {
-				return false
-			}
-		}
-		else {
-			actualGitPath = gitPath
 		}
 
 		// Check for rebase-merge or rebase-apply directories
@@ -54,10 +25,50 @@ enum GitMergeDetector {
 			FileManager.default.fileExists(atPath: rebaseApplyPath)
 	}
 
-	/// Checks if a repository has any ongoing git operation (merge, rebase, etc.)
+	/// Resolves the actual git directory path, handling both regular repos and worktrees
 	/// - Parameter path: The path to the Git repository
-	/// - Returns: true if any git operation is in progress, false otherwise
-	static func isGitOperationInProgress(at path: String) -> Bool {
-		isMergeInProgress(at: path) || isRebaseInProgress(at: path)
+	/// - Returns: The actual git directory path, or nil if not found
+	private static func resolveGitDirectory(at path: String) -> String? {
+		let gitPath = (path as NSString).appendingPathComponent(".git")
+		var isDirectory: ObjCBool = false
+		let gitExists = FileManager.default.fileExists(atPath: gitPath, isDirectory: &isDirectory)
+
+		guard gitExists else {
+			return nil
+		}
+
+		// If .git is a file (worktree), read it to find the actual git directory
+		if !isDirectory.boolValue {
+			// It's a worktree
+			guard let gitFileContent = try? String(contentsOfFile: gitPath, encoding: .utf8) else {
+				return nil
+			}
+
+			let trimmed = gitFileContent.trimmingCharacters(in: .whitespacesAndNewlines)
+			if trimmed.hasPrefix("gitdir:") {
+				return trimmed.replacingOccurrences(of: "gitdir:", with: "")
+					.trimmingCharacters(in: .whitespaces)
+			}
+			else {
+				return nil
+			}
+		}
+		else {
+			return gitPath
+		}
 	}
+
+	/// Checks if a repository is currently in the middle of a merge
+	/// - Parameter path: The path to the Git repository
+	/// - Returns: true if merge is in progress, false otherwise
+	private static func isMergeInProgress(at path: String) -> Bool {
+		guard let actualGitPath = resolveGitDirectory(at: path) else {
+			return false
+		}
+
+		// Check if MERGE_HEAD file exists - this indicates an ongoing merge
+		let mergeHeadPath = (actualGitPath as NSString).appendingPathComponent("MERGE_HEAD")
+		return FileManager.default.fileExists(atPath: mergeHeadPath)
+	}
+
 }

@@ -171,6 +171,12 @@ struct RepositoryRowView: View {
 
 	private var repositoryActions: some View {
 		HStack(spacing: 8) {
+			// Git actions dropdown menu
+			GitActionsMenuView(store: store.scope(
+				state: \.gitActionsMenu,
+				action: \.gitActionsMenu
+			))
+
 			// Copy path button
 			ActionButton(
 				icon: "doc.on.doc",

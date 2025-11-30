@@ -33,6 +33,7 @@ struct RepositoryRowReducer {
 		var shareButton: ShareButtonReducer.State
 		var deleteWorktreeButton: DeleteWorktreeButtonReducer.State
 		var createWorktreeButton: CreateWorktreeButtonReducer.State
+		var gitActionsMenu: GitActionsMenuReducer.State
 
 		fileprivate var lastRefreshTime: Date?
 
@@ -68,6 +69,7 @@ struct RepositoryRowReducer {
 			)
 			self.deleteWorktreeButton = .init(name: name, path: path)
 			self.createWorktreeButton = .init(repositoryPath: path)
+			self.gitActionsMenu = .init(repositoryPath: path)
 		}
 	}
 
@@ -92,6 +94,7 @@ struct RepositoryRowReducer {
 		case shareButton(ShareButtonReducer.Action)
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
 		case createWorktreeButton(CreateWorktreeButtonReducer.Action)
+		case gitActionsMenu(GitActionsMenuReducer.Action)
 		case worktreeDeleted
 		case worktreeCreated
 
@@ -138,6 +141,10 @@ struct RepositoryRowReducer {
 
 		Scope(state: \.createWorktreeButton, action: \.createWorktreeButton) {
 			CreateWorktreeButtonReducer()
+		}
+
+		Scope(state: \.gitActionsMenu, action: \.gitActionsMenu) {
+			GitActionsMenuReducer()
 		}
 
 		Reduce { state, action in
@@ -192,6 +199,13 @@ struct RepositoryRowReducer {
 				// Handle successful worktree creation by sending signal to parent
 				if case .didCreateSuccessfully = action {
 					return .send(.worktreeCreated)
+				}
+				return .none
+
+			case let .gitActionsMenu(action):
+				// Refresh repository state after successful merge
+				if case let .mergeMasterCompleted(success, _) = action, success {
+					return .send(.requestRefresh)
 				}
 				return .none
 
