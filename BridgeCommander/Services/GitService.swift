@@ -8,7 +8,13 @@ struct GitService: GitServiceType, Sendable {
 	-> (branch: String, isMerge: Bool, unstagedCount: Int, stagedCount: Int) {
 		let branch = GitBranchDetector.getCurrentBranch(at: path) ?? "unknown"
 		let isMerge = GitMergeDetector.isGitOperationInProgress(at: path)
-		let changes = await GitStatusDetector.getChangesCount(at: path)
+		let changes =
+			if isMerge {
+				GitChanges(unstagedCount: 0, stagedCount: 0)
+			}
+			else {
+				await GitStatusDetector.getChangesCount(at: path)
+			}
 
 		return (
 			branch: branch,
