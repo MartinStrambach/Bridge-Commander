@@ -7,21 +7,10 @@ struct MergeMasterButtonView: View {
 	let store: StoreOf<MergeMasterButtonReducer>
 
 	var body: some View {
-		Group {
-			if store.isMergingMaster {
-				GitOperationProgressView(
-					text: "Merging...",
-					color: .orange,
-					helpText: "Merging master branch..."
-				)
-			}
-			else {
-				Button {
-					store.send(.mergeMasterTapped)
-				} label: {
-					Label("Merge Master", systemImage: "arrow.triangle.merge")
-				}
-			}
+		Button {
+			store.send(.mergeMasterTapped)
+		} label: {
+			Label("Merge Master", systemImage: "arrow.triangle.merge")
 		}
 		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}

@@ -7,20 +7,38 @@ struct GitActionsMenuView: View {
 	let store: StoreOf<GitActionsMenuReducer>
 
 	var body: some View {
-		Menu {
-			if store.hasRemoteBranch {
-				PullButtonView(store: store.scope(state: \.pullButton, action: \.pullButton))
+		Group {
+			if store.pullButton.isPulling {
+				GitOperationProgressView(
+					text: "Pulling...",
+					color: .blue,
+					helpText: "Pulling changes from remote..."
+				)
 			}
+			else if store.mergeMasterButton.isMergingMaster {
+				GitOperationProgressView(
+					text: "Merging...",
+					color: .orange,
+					helpText: "Merging master branch..."
+				)
+			}
+			else {
+				Menu {
+					if store.hasRemoteBranch {
+						PullButtonView(store: store.scope(state: \.pullButton, action: \.pullButton))
+					}
 
-			if store.currentBranch != "master", store.currentBranch != "main", !store.isMergeInProgress {
-				MergeMasterButtonView(store: store.scope(state: \.mergeMasterButton, action: \.mergeMasterButton))
+					if store.currentBranch != "master", store.currentBranch != "main", !store.isMergeInProgress {
+						MergeMasterButtonView(store: store.scope(state: \.mergeMasterButton, action: \.mergeMasterButton))
+					}
+				} label: {
+					Text("Git Actions")
+						.font(.system(size: 12))
+				}
+				.menuStyle(.borderlessButton)
+				.help("Quick Git Actions")
 			}
-		} label: {
-			Text("Git Actions")
-				.font(.system(size: 12))
 		}
-		.menuStyle(.borderlessButton)
-		.help("Quick Git Actions")
 		.fixedSize()
 		.task {
 			store.send(.onAppear)
