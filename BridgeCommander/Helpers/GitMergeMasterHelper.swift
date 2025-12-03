@@ -17,8 +17,8 @@ enum GitMergeMasterHelper {
 	private static func fetchOriginMaster(at path: String) async throws {
 		try await withCheckedThrowingContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.currentDirectoryURL = URL(filePath: path)
+			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["fetch", "origin", "master"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 
@@ -55,7 +55,7 @@ enum GitMergeMasterHelper {
 		try await withCheckedThrowingContinuation { continuation in
 			let process = Process()
 			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["merge", "origin/master"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 

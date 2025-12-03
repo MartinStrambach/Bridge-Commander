@@ -5,8 +5,8 @@ enum GitRemoteBranchDetector {
 	static func hasRemoteBranch(at path: String) async -> Bool {
 		await withCheckedContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.currentDirectoryURL = URL(filePath: path)
+			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]
 
 			let pipe = Pipe()

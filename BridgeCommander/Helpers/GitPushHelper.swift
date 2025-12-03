@@ -10,12 +10,11 @@ enum GitPushHelper {
 	/// - Parameter path: The path to the Git repository
 	/// - Returns: PushResult with information about the push operation
 	/// - Throws: PushError if the push fails
-	@concurrent
 	static func push(at path: String) async throws -> PushResult {
 		try await withCheckedThrowingContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.currentDirectoryURL = URL(filePath: path)
+			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["push"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 

@@ -21,8 +21,8 @@ enum GitWorktreeRemover {
 			"""
 
 			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/bin/sh")
+			process.currentDirectoryURL = URL(filePath: path)
+			process.executableURL = URL(filePath: "/bin/sh")
 			process.arguments = ["-c", script]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 

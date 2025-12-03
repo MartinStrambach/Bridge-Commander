@@ -25,8 +25,8 @@ enum GitStatusDetector {
 	private static func getUnstagedCount(at path: String) async -> Int {
 		await withCheckedContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.currentDirectoryURL = URL(filePath: path)
+			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["ls-files", "-mdo", "--exclude-standard", "--exclude=*/submodules/*"]
 
 			let pipe = Pipe()

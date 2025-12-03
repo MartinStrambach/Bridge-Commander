@@ -15,7 +15,7 @@ enum AndroidStudioLauncher {
 
 		try await withCheckedThrowingContinuation { continuation in
 			let process = Process()
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+			process.executableURL = URL(filePath: "/usr/bin/open")
 			process.arguments = ["-a", "Android Studio", path]
 
 			let errorPipe = Pipe()

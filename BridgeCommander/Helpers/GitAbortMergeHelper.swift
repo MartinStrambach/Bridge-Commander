@@ -4,12 +4,11 @@ enum GitAbortMergeHelper {
 	/// Aborts an ongoing merge operation
 	/// - Parameter path: The path to the Git repository
 	/// - Throws: An error if the abort fails
-	@concurrent
 	static func abortMerge(at path: String) async throws {
 		try await withCheckedThrowingContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.currentDirectoryURL = URL(filePath: path)
+			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["merge", "--abort"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 

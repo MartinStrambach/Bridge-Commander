@@ -47,7 +47,7 @@ enum XcodeProjectGenerator {
 	/// - Parameter projectPath: Full path to .xcworkspace or .xcodeproj
 	static func openProject(at projectPath: String) throws {
 		let process = Process()
-		process.launchPath = "/usr/bin/open"
+		process.executableURL = URL(filePath: "/usr/bin/open")
 		process.arguments = [projectPath]
 
 		process.launch()

@@ -10,7 +10,7 @@ enum TerminalLauncher {
 		let escapedPath = path.replacingOccurrences(of: "\"", with: "\\\"")
 
 		let process = Process()
-		process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+		process.executableURL = URL(filePath: "/usr/bin/open")
 		process.arguments = ["-a", "Terminal", escapedPath]
 		process.launch()
 	}

@@ -13,8 +13,8 @@ enum GitPullHelper {
 	static func pull(at path: String) async throws -> PullResult {
 		try await withCheckedThrowingContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+			process.currentDirectoryURL = URL(filePath: path)
+			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["pull"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 
