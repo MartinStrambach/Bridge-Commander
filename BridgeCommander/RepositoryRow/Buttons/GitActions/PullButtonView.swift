@@ -12,7 +12,6 @@ struct PullButtonView: View {
 		} label: {
 			Label("Pull", systemImage: "arrow.down.circle")
 		}
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 }
 

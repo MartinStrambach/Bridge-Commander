@@ -15,6 +15,13 @@ struct GitActionsMenuView: View {
 					helpText: "Pulling changes from remote..."
 				)
 			}
+			else if store.pushButton.isPushing {
+				GitOperationProgressView(
+					text: "Pushing...",
+					color: .green,
+					helpText: "Pushing commits to remote..."
+				)
+			}
 			else if store.mergeMasterButton.isMergingMaster {
 				GitOperationProgressView(
 					text: "Merging...",
@@ -39,8 +46,13 @@ struct GitActionsMenuView: View {
 						PullButtonView(store: store.scope(state: \.pullButton, action: \.pullButton))
 					}
 
+					PushButtonView(store: store.scope(state: \.pushButton, action: \.pushButton))
+
 					if store.currentBranch != "master", store.currentBranch != "main", !store.isMergeInProgress {
-						MergeMasterButtonView(store: store.scope(state: \.mergeMasterButton, action: \.mergeMasterButton))
+						MergeMasterButtonView(store: store.scope(
+							state: \.mergeMasterButton,
+							action: \.mergeMasterButton
+						))
 					}
 				} label: {
 					Text("Git Actions")
@@ -51,6 +63,10 @@ struct GitActionsMenuView: View {
 			}
 		}
 		.fixedSize()
+		.alert(store: store.scope(state: \.pullButton.$alert, action: \.pullButton.alert))
+		.alert(store: store.scope(state: \.pushButton.$alert, action: \.pushButton.alert))
+		.alert(store: store.scope(state: \.mergeMasterButton.$alert, action: \.mergeMasterButton.alert))
+		.alert(store: store.scope(state: \.abortMergeButton.$alert, action: \.abortMergeButton.alert))
 		.task {
 			store.send(.onAppear)
 		}

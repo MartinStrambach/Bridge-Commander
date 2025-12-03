@@ -12,7 +12,6 @@ struct AbortMergeButtonView: View {
 		} label: {
 			Label("Abort Merge", systemImage: "xmark.circle")
 		}
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 }
 

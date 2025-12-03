@@ -21,9 +21,6 @@ struct AbortMergeButtonReducer {
 		enum Alert: Equatable {}
 	}
 
-	@Dependency(\.gitService)
-	private var gitService
-
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {

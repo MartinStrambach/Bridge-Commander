@@ -12,6 +12,7 @@ struct GitActionsMenuReducer {
 		var hasRemoteBranch = false
 		var isMergeInProgress = false
 		var pullButton: PullButtonReducer.State
+		var pushButton: PushButtonReducer.State
 		var mergeMasterButton: MergeMasterButtonReducer.State
 		var abortMergeButton: AbortMergeButtonReducer.State
 
@@ -19,6 +20,7 @@ struct GitActionsMenuReducer {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch
 			self.pullButton = PullButtonReducer.State(repositoryPath: repositoryPath)
+			self.pushButton = PushButtonReducer.State(repositoryPath: repositoryPath)
 			self.mergeMasterButton = MergeMasterButtonReducer.State(repositoryPath: repositoryPath)
 			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
 		}
@@ -28,6 +30,7 @@ struct GitActionsMenuReducer {
 		case onAppear
 		case didCheckGitStatus(hasRemoteBranch: Bool, isMergeInProgress: Bool)
 		case pullButton(PullButtonReducer.Action)
+		case pushButton(PushButtonReducer.Action)
 		case mergeMasterButton(MergeMasterButtonReducer.Action)
 		case abortMergeButton(AbortMergeButtonReducer.Action)
 	}
@@ -35,6 +38,10 @@ struct GitActionsMenuReducer {
 	var body: some Reducer<State, Action> {
 		Scope(state: \.pullButton, action: \.pullButton) {
 			PullButtonReducer()
+		}
+
+		Scope(state: \.pushButton, action: \.pushButton) {
+			PushButtonReducer()
 		}
 
 		Scope(state: \.mergeMasterButton, action: \.mergeMasterButton) {
@@ -49,6 +56,7 @@ struct GitActionsMenuReducer {
 			switch action {
 			case .onAppear,
 			     .pullButton(.pullCompleted),
+			     .pushButton(.pushCompleted),
 			     .mergeMasterButton(.mergeMasterCompleted),
 			     .abortMergeButton(.abortMergeCompleted):
 				return .run { [path = state.repositoryPath] send in

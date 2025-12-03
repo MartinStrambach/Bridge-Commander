@@ -12,7 +12,6 @@ struct MergeMasterButtonView: View {
 		} label: {
 			Label("Merge Master", systemImage: "arrow.triangle.merge")
 		}
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 }
 
