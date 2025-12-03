@@ -14,7 +14,7 @@ enum ClaudeCodeLauncher {
 		"""
 
 		let process = Process()
-		process.launchPath = "/usr/bin/osascript"
+		process.executableURL = URL(filePath: "/usr/bin/osascript")
 		process.arguments = ["-e", appleScript]
 		try process.run()
 	}
