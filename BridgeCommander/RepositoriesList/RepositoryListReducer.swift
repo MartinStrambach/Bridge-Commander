@@ -176,7 +176,6 @@ private func mergeRepositories(into state: inout RepositoryListReducer.State, sc
 			updated.name = scannedRepo.name
 			updated.isWorktree = scannedRepo.isWorktree
 			updated.branchName = scannedRepo.branchName
-			updated.isMergeInProgress = scannedRepo.isMergeInProgress
 			// Keep: prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, unpushedCommitCount
 			updatedRepos.append(updated)
 		}
@@ -188,7 +187,6 @@ private func mergeRepositories(into state: inout RepositoryListReducer.State, sc
 				isWorktree: scannedRepo.isWorktree
 			)
 			newRepo.branchName = scannedRepo.branchName
-			newRepo.isMergeInProgress = scannedRepo.isMergeInProgress
 			updatedRepos.append(newRepo)
 		}
 	}

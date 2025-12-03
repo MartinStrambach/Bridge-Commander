@@ -22,8 +22,19 @@ struct GitActionsMenuView: View {
 					helpText: "Merging master branch..."
 				)
 			}
+			else if store.abortMergeButton.isAbortingMerge {
+				GitOperationProgressView(
+					text: "Aborting...",
+					color: .red,
+					helpText: "Aborting merge..."
+				)
+			}
 			else {
 				Menu {
+					if store.isMergeInProgress {
+						AbortMergeButtonView(store: store.scope(state: \.abortMergeButton, action: \.abortMergeButton))
+					}
+
 					if store.hasRemoteBranch {
 						PullButtonView(store: store.scope(state: \.pullButton, action: \.pullButton))
 					}

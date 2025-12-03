@@ -5,7 +5,7 @@ import Foundation
 struct GitService: GitServiceType, Sendable {
 
 	func getCurrentBranch(at path: String) async
-	-> (branch: String, isMerge: Bool, unstagedCount: Int, stagedCount: Int) {
+	-> (branch: String, unstagedCount: Int, stagedCount: Int) {
 		let branch = GitBranchDetector.getCurrentBranch(at: path) ?? "unknown"
 		let isMerge = GitMergeDetector.isGitOperationInProgress(at: path)
 		let changes =
@@ -18,7 +18,6 @@ struct GitService: GitServiceType, Sendable {
 
 		return (
 			branch: branch,
-			isMerge: isMerge,
 			unstagedCount: changes.unstagedCount,
 			stagedCount: changes.stagedCount
 		)

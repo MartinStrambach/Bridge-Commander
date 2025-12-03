@@ -4,7 +4,7 @@ import Foundation
 
 protocol GitServiceType: Sendable {
 	func getCurrentBranch(at path: String) async
-		-> (branch: String, isMerge: Bool, unstagedCount: Int, stagedCount: Int)
+		-> (branch: String, unstagedCount: Int, stagedCount: Int)
 	func countUnpushedCommits(at path: String) async throws -> Int
 	func mergeMaster(at path: String) async throws
 	func pull(at path: String) async throws -> GitPullHelper.PullResult

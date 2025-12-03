@@ -14,7 +14,6 @@ struct RepositoryRowReducer {
 
 		var branchName: String?
 		var ticketId: String?
-		var isMergeInProgress: Bool
 		var unstagedChangesCount: Int
 		var stagedChangesCount: Int
 
@@ -50,7 +49,6 @@ struct RepositoryRowReducer {
 			self.branchName = name
 			let ticketId = GitBranchDetector.extractTicketId(from: name)
 			self.ticketId = ticketId
-			self.isMergeInProgress = false
 			self.unstagedChangesCount = 0
 			self.stagedChangesCount = 0
 
@@ -76,7 +74,7 @@ struct RepositoryRowReducer {
 	enum Action {
 		case onAppear
 		case requestRefresh
-		case didFetchBranch(String, Bool, Int, Int)
+		case didFetchBranch(String, Int, Int)
 		case didFetchUnpushedCount(Int)
 		case didFetchYouTrack(
 			prUrl: String?,
@@ -158,12 +156,10 @@ struct RepositoryRowReducer {
 					fetchYouTrack(for: &state)
 				)
 
-			case let .didFetchBranch(branch, isMerge, unstaged, staged):
+			case let .didFetchBranch(branch, unstaged, staged):
 				state.branchName = branch
-				state.isMergeInProgress = isMerge
 				state.unstagedChangesCount = unstaged
 				state.stagedChangesCount = staged
-				state.gitActionsMenu.isMergeInProgress = isMerge
 				state.gitActionsMenu.currentBranch = branch
 				return .none
 
@@ -229,8 +225,8 @@ struct RepositoryRowReducer {
 	private func fetchBranch(for state: inout State) -> Effect<Action> {
 		.run { [path = state.path] send in
 			do {
-				let (branch, isMerge, unstaged, staged) = await gitService.getCurrentBranch(at: path)
-				await send(.didFetchBranch(branch, isMerge, unstaged, staged))
+				let (branch, unstaged, staged) = await gitService.getCurrentBranch(at: path)
+				await send(.didFetchBranch(branch, unstaged, staged))
 			}
 			catch {
 				print(error.localizedDescription)

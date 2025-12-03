@@ -13,20 +13,23 @@ struct GitActionsMenuReducer {
 		var isMergeInProgress = false
 		var pullButton: PullButtonReducer.State
 		var mergeMasterButton: MergeMasterButtonReducer.State
+		var abortMergeButton: AbortMergeButtonReducer.State
 
 		init(repositoryPath: String, currentBranch: String) {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch
 			self.pullButton = PullButtonReducer.State(repositoryPath: repositoryPath)
 			self.mergeMasterButton = MergeMasterButtonReducer.State(repositoryPath: repositoryPath)
+			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
 		}
 	}
 
 	enum Action: Equatable {
 		case onAppear
-		case didCheckRemoteBranch(Bool)
+		case didCheckGitStatus(hasRemoteBranch: Bool, isMergeInProgress: Bool)
 		case pullButton(PullButtonReducer.Action)
 		case mergeMasterButton(MergeMasterButtonReducer.Action)
+		case abortMergeButton(AbortMergeButtonReducer.Action)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -38,17 +41,25 @@ struct GitActionsMenuReducer {
 			MergeMasterButtonReducer()
 		}
 
+		Scope(state: \.abortMergeButton, action: \.abortMergeButton) {
+			AbortMergeButtonReducer()
+		}
+
 		Reduce { state, action in
 			switch action {
 			case .onAppear,
-			     .pullButton(.pullCompleted):
+			     .pullButton(.pullCompleted),
+			     .mergeMasterButton(.mergeMasterCompleted),
+			     .abortMergeButton(.abortMergeCompleted):
 				return .run { [path = state.repositoryPath] send in
 					let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
-					await send(.didCheckRemoteBranch(hasRemote))
+					let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
+					await send(.didCheckGitStatus(hasRemoteBranch: hasRemote, isMergeInProgress: isMergeInProgress))
 				}
 
-			case let .didCheckRemoteBranch(hasRemote):
+			case let .didCheckGitStatus(hasRemote, isMergeInProgress):
 				state.hasRemoteBranch = hasRemote
+				state.isMergeInProgress = isMergeInProgress
 				return .none
 
 			default:

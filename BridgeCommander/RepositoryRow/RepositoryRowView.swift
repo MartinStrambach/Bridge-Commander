@@ -10,7 +10,7 @@ struct RepositoryRowView: View {
 		HStack(alignment: .center, spacing: 16) {
 			RepositoryIcon(
 				isWorktree: store.isWorktree,
-				isMergeInProgress: store.isMergeInProgress
+				isMergeInProgress: store.gitActionsMenu.isMergeInProgress
 			)
 			repositoryInfo
 			Spacer()
@@ -96,7 +96,7 @@ struct RepositoryRowView: View {
 			}
 
 			// Merge in progress
-			if store.isMergeInProgress {
+			if store.gitActionsMenu.isMergeInProgress {
 				HStack(spacing: 4) {
 					Image(systemName: "arrow.triangle.merge")
 						.foregroundColor(.red)
