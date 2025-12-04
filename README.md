@@ -1,86 +1,121 @@
 # Bridge Commander
 
-A macOS application for managing Git repositories and worktrees, built entirely in SwiftUI.
+A macOS application for managing Git repositories and worktrees, built with SwiftUI and the Composable Architecture (TCA). Bridge Commander provides a powerful interface for discovering, monitoring, and interacting with Git repositories across your system.
 
 ## Features
 
-- Scan directories recursively for Git repositories
-- Detect both standard repositories and git worktrees
-- Display all discovered repositories in a clean list
-- Open any repository in Terminal with one click
-- Copy repository paths to clipboard
-- Open repositories in Finder
+### Repository Management
+- **Smart Scanning**: Recursively scan directories for Git repositories
+- **Worktree Support**: Detect both standard repositories and git worktrees
+- **Branch Detection**: Display current branch for each repository
+- **Status Monitoring**: Track staged and unstaged changes in real-time
+- **Merge Detection**: Identify repositories with merge-in-progress status
+
+### Git Operations
+- **Pull**: Pull latest changes from remote with one click
+- **Merge Master**: Merge main/master branch into current branch
+- **Create Worktree**: Create new git worktrees from any branch
+- **Delete Worktree**: Remove worktrees safely
+- **Push Changes**: Push commits to remote repository
+- **Abort Merge**: Cancel merge operations in progress
+
+### IDE & Tool Integration
+- **Terminal**: Open repositories in Terminal.app
+- **Xcode**: Detect and open Xcode projects, generate projects from Swift packages
+- **Android Studio**: Detect and open Android/Gradle projects
+- **Claude Code**: Launch Claude Code CLI in repository context
+- **Finder**: Quick access to repository location
+- **YouTrack**: Integration with YouTrack ticket tracking
+
+### UI Features
+- **Copy Paths**: Copy repository paths to clipboard
+- **Share**: Export repository information
+- **Progress Indicators**: Visual feedback for long-running operations
+- **Settings**: Customize directory, YouTrack configuration, and text abbreviation modes
 
 ## Requirements
 
 - macOS 13.0 or later
-- Xcode 15.0 or later
+- Xcode 26.0 or later (for building)
+- Git installed and available in PATH
 
 ## Building and Running
 
-### Option 1: Using Xcode
+### Using Xcode
 
-1. Open the project in Xcode:
+1. Open the project:
    ```bash
-   open bridge_commander
+   open BridgeCommander.xcodeproj
    ```
 
-2. Create a new macOS App project in Xcode:
-   - File → New → Project
-   - Choose "macOS" → "App"
-   - Product Name: "BridgeCommander"
-   - Interface: SwiftUI
-   - Language: Swift
+2. Build and run (⌘R)
 
-3. Replace the default files with the files from this directory
+### Building from Command Line
 
-4. Build and run (⌘R)
-
-### Option 2: Create Xcode Project from Files
-
-You can create an Xcode project and add all the source files:
-
-1. Open Xcode
-2. Create a new macOS App project
-3. Add all `.swift` files to the project
-4. Build and run
-
-### Option 3: Using Swift Package Manager
-
-While this package includes a Package.swift, note that SPM cannot build standalone macOS GUI applications. You'll need to use Xcode to create a proper .app bundle.
-
-## Project Structure
-
+```bash
+xcodebuild -project BridgeCommander.xcodeproj -scheme BridgeCommander build
 ```
-bridge_commander/
-├── BridgeCommanderApp.swift       # App entry point
-├── Models/
-│   └── Repository.swift           # Repository data model
-├── ViewModels/
-│   └── RepositoryScanner.swift    # Scanning logic and state
-├── Views/
-│   ├── ContentView.swift          # Main view
-│   └── RepositoryRowView.swift    # Repository row component
-└── Helpers/
-    ├── GitDetector.swift          # Git detection logic
-    └── TerminalLauncher.swift     # Terminal launcher
+
+### Creating an Archive
+
+To create a release archive for distribution:
+
+```bash
+xcodebuild -project BridgeCommander.xcodeproj \
+  -scheme BridgeCommander \
+  -configuration Release \
+  clean archive \
+  -archivePath ./build/BridgeCommander.xcarchive
 ```
+
+The archive will be created at `./build/BridgeCommander.xcarchive`
+
+## Architecture
+
+Bridge Commander uses the **Composable Architecture (TCA)** for state management, providing:
+- Predictable state changes through reducers
+- Testable business logic
+- Effect-based async operations
+- Dependency injection for services
+
+### Key Technologies
+- **SwiftUI**: Modern declarative UI framework
+- **TCA**: State management and architecture pattern
+- **Protocol-based Services**: Clean separation of concerns
+- **Swift Concurrency**: Async/await for modern async operations
 
 ## How It Works
 
-1. **Directory Selection**: Click "Select Directory" to choose a folder to scan
-2. **Scanning**: The app recursively scans for Git repositories, detecting both:
+1. **Directory Selection**: Select a directory to scan via Settings or the scan button
+2. **Automatic Scanning**: The app recursively discovers all Git repositories, detecting:
    - Standard repos (directories with a `.git` folder)
    - Worktrees (directories with a `.git` file containing a gitdir pointer)
-3. **Display**: All repositories are listed with their name, path, and type
-4. **Actions**: Each repository can be:
-   - Opened in Terminal
-   - Opened in Finder
-   - Path copied to clipboard
+   - Current branch name
+   - Staged and unstaged changes
+   - Merge status
+3. **Repository List**: All repositories are displayed with:
+   - Repository name and location
+   - Current branch (if detected)
+   - Change indicators (staged/unstaged counts)
+   - Merge-in-progress status
+4. **Actions**: Perform operations on any repository:
+   - Git operations (pull, merge, push, create/delete worktrees)
+   - Open in IDEs (Xcode, Android Studio, Claude Code)
+   - Open in Terminal or Finder
+   - Copy paths, view tickets, share information
 
 ## Permissions
 
-The app requires permission to control Terminal.app. You'll be prompted to grant this permission when you first open a repository in Terminal.
+The app requires the following permissions:
+- **File System Access**: To scan directories for repositories
+- **Terminal.app Automation**: To open repositories in Terminal (you'll be prompted on first use)
+- **Network Access**: For YouTrack integration (if configured)
+
+## Configuration
+
+Access Settings (⌘,) to configure:
+- **Refresh interval**: The interval for automatic repositories refresh
+- **YouTrack Settings**: Base URL, token, and project IDs for ticket integration
 
 ## License
 
