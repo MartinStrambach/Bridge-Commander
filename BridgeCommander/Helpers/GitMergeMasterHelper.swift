@@ -54,7 +54,7 @@ enum GitMergeMasterHelper {
 	private static func mergeOriginMaster(at path: String) async throws {
 		try await withCheckedThrowingContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
+			process.currentDirectoryURL = URL(filePath: path)
 			process.executableURL = URL(filePath: "/usr/bin/git")
 			process.arguments = ["merge", "origin/master"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
@@ -73,7 +73,7 @@ enum GitMergeMasterHelper {
 					let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
 					guard !errorMessage.isEmpty else {
 						continuation.resume(
-							throwing: MergeError.mergeFailed("Merge coudn't be finished. Check the repository state.")
+							throwing: MergeError.mergeFailed("Merge couldn't be finished. Check the repository state.")
 						)
 						return
 					}

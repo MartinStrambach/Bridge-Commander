@@ -120,7 +120,7 @@ struct RepositoryRowView: View {
 					.lineLimit(1)
 			}
 
-			if let androidCR = store.androidCR {
+			if let androidCR = store.androidCR, androidCR.lowercased() != "not needed" {
 				let waiting = androidCR.lowercased() == "passed" || androidCR.lowercased() == "n/a"
 				HStack(spacing: 4) {
 					Image("android")
@@ -144,7 +144,7 @@ struct RepositoryRowView: View {
 				.cornerRadius(4)
 			}
 
-			if let iosCR = store.iosCR {
+			if let iosCR = store.iosCR, iosCR.lowercased() != "not needed" {
 				let waiting = iosCR.lowercased() == "passed" || iosCR.lowercased() == "n/a"
 				HStack(spacing: 4) {
 					Image(systemName: "apple.logo")
