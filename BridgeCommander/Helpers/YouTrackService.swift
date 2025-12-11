@@ -10,27 +10,29 @@ enum YouTrackService {
 
 	/// Fetches PR URL and code review fields from a YouTrack issue
 	/// - Parameter ticketId: The YouTrack ticket ID (e.g., "MOB-1963")
-	/// - Returns: A tuple containing (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName), any of which may
+	/// - Returns: A tuple containing (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState), any
+	/// of which may
 	/// be nil if not found
 	static func fetchIssueDetails(for ticketId: String) async
 		-> (
 			prUrl: String?,
-			androidCR: String?,
-			iosCR: String?,
+			androidCR: CodeReviewState?,
+			iosCR: CodeReviewState?,
 			androidReviewerName: String?,
-			iosReviewerName: String?
+			iosReviewerName: String?,
+			ticketState: TicketState?
 		)
 	{
 		// Validate that a token is configured
 		guard !authToken.isEmpty else {
 			print("YouTrackService: Cannot fetch issue details without a valid auth token")
-			return (nil, nil, nil, nil, nil)
+			return (nil, nil, nil, nil, nil, nil)
 		}
 
 		let issueURL = "\(baseURL)/issues/\(ticketId)?fields=customFields(name,value(text,name))"
 
 		guard let url = URL(string: issueURL) else {
-			return (nil, nil, nil, nil, nil)
+			return (nil, nil, nil, nil, nil, nil)
 		}
 
 		var request = URLRequest(url: url)
@@ -45,7 +47,7 @@ enum YouTrackService {
 			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
 				print("YouTrackService: Failed with status code \(statusCode)")
-				return (nil, nil, nil, nil, nil)
+				return (nil, nil, nil, nil, nil, nil)
 			}
 
 			let decoder = JSONDecoder()
@@ -53,10 +55,14 @@ enum YouTrackService {
 			print("YouTrackService: Successfully fetched issue \(issue.key ?? "unknown")")
 
 			let prUrl = extractMonorepoPRUrl(from: issue)
-			let androidCR = extractCustomFieldValue(from: issue, fieldName: "Android CR")
-			let iosCR = extractCustomFieldValue(from: issue, fieldName: "iOS CR")
+			let androidCRString = extractCustomFieldValue(from: issue, fieldName: "Android CR")
+			let androidCR = androidCRString.flatMap { CodeReviewState(rawValue: $0) }
+			let iosCRString = extractCustomFieldValue(from: issue, fieldName: "iOS CR")
+			let iosCR = iosCRString.flatMap { CodeReviewState(rawValue: $0) }
 			let androidReviewerName = extractCustomFieldValue(from: issue, fieldName: "Android CR Assignee")
 			let iosReviewerName = extractCustomFieldValue(from: issue, fieldName: "iOS CR Assignee")
+			let ticketStateString = extractCustomFieldValue(from: issue, fieldName: "State")
+			let ticketState = ticketStateString.flatMap { TicketState(rawValue: $0) }
 
 			if let prUrl {
 				print("YouTrackService: Found Monorepo PR: \(prUrl)")
@@ -64,11 +70,11 @@ enum YouTrackService {
 			else {
 				print("YouTrackService: No Monorepo PR found")
 			}
-			if let androidCR {
-				print("YouTrackService: Found Android CR: \(androidCR)")
+			if let androidCRString {
+				print("YouTrackService: Found Android CR: \(androidCRString) -> \(androidCR?.rawValue ?? "unknown")")
 			}
-			if let iosCR {
-				print("YouTrackService: Found iOS CR: \(iosCR)")
+			if let iosCRString {
+				print("YouTrackService: Found iOS CR: \(iosCRString) -> \(iosCR?.rawValue ?? "unknown")")
 			}
 			if let androidReviewerName {
 				print("YouTrackService: Found Android CR Assignee: \(androidReviewerName)")
@@ -76,12 +82,15 @@ enum YouTrackService {
 			if let iosReviewerName {
 				print("YouTrackService: Found iOS CR Assignee: \(iosReviewerName)")
 			}
+			if let ticketStateString {
+				print("YouTrackService: Found State: \(ticketStateString) -> \(ticketState?.rawValue ?? "unknown")")
+			}
 
-			return (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName)
+			return (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState)
 		}
 		catch {
 			print("YouTrackService: Error decoding response: \(error)")
-			return (nil, nil, nil, nil, nil)
+			return (nil, nil, nil, nil, nil, nil)
 		}
 	}
 
@@ -216,7 +225,10 @@ struct CustomFieldValue: Decodable {
 		if typeValue.contains("TextFieldValue") {
 			self.text = try container?.decodeIfPresent(String.self, forKey: .text)
 		}
-		else if typeValue.contains("User") || typeValue.contains("EnumBundleElement") {
+		else if
+			typeValue.contains("User") || typeValue.contains("EnumBundleElement") || typeValue
+				.contains("StateBundleElement")
+		{
 			self.text = try container?.decodeIfPresent(String.self, forKey: .name)
 		}
 		else {

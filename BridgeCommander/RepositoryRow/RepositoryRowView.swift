@@ -18,7 +18,7 @@ struct RepositoryRowView: View {
 		}
 		.padding(.horizontal, 16)
 		.padding(.vertical, 12)
-		.background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+		.background(backgroundColorForState)
 		.contentShape(Rectangle())
 		.task {
 			store.send(.onAppear)
@@ -120,8 +120,9 @@ struct RepositoryRowView: View {
 					.lineLimit(1)
 			}
 
-			if let androidCR = store.androidCR, androidCR.lowercased() != "not needed" {
-				let waiting = androidCR.lowercased() == "passed" || androidCR.lowercased() == "n/a"
+			if let androidCR = store.androidCR {
+				let waiting = androidCR == .passed || androidCR == .notApplicable || store
+					.ticketState != .waitingToCodeReview
 				HStack(spacing: 4) {
 					Image("android")
 						.resizable()
@@ -129,7 +130,7 @@ struct RepositoryRowView: View {
 						.scaledToFit()
 						.frame(height: 12)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
-					Text(androidCR)
+					Text(androidCR.rawValue)
 						.font(.caption)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
 						.lineLimit(1)
@@ -144,13 +145,13 @@ struct RepositoryRowView: View {
 				.cornerRadius(4)
 			}
 
-			if let iosCR = store.iosCR, iosCR.lowercased() != "not needed" {
-				let waiting = iosCR.lowercased() == "passed" || iosCR.lowercased() == "n/a"
+			if let iosCR = store.iosCR {
+				let waiting = iosCR == .passed || iosCR == .notApplicable || store.ticketState != .waitingToCodeReview
 				HStack(spacing: 4) {
 					Image(systemName: "apple.logo")
 						.renderingMode(.template)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
-					Text(iosCR)
+					Text(iosCR.rawValue)
 						.font(.caption)
 						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
 						.lineLimit(1)
@@ -253,6 +254,28 @@ struct RepositoryRowView: View {
 			}
 			.frame(width: 20, height: 20)
 		}
+	}
+
+	// MARK: - Computed Properties
+
+	private var backgroundColorForState: Color {
+		if let ticketState = store.ticketState {
+			switch ticketState {
+			case .accepted,
+			     .done,
+			     .waitingToAcceptation:
+				return Color.mint.opacity(0.1)
+
+			case .inProgress:
+				return Color.orange.opacity(0.1)
+
+			case .open,
+			     .waitingForTesting,
+			     .waitingToCodeReview:
+				return Color(NSColor.controlBackgroundColor).opacity(0.5)
+			}
+		}
+		return Color(NSColor.controlBackgroundColor).opacity(0.5)
 	}
 
 	// MARK: - Helper Methods

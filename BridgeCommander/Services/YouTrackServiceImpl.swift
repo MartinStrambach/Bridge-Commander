@@ -9,7 +9,7 @@ struct YouTrackServiceImpl: YouTrackServiceType, Sendable {
 	}
 
 	func fetchIssueDetails(for ticketId: String) async throws -> IssueDetails {
-		let (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName) = await YouTrackService
+		let (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState) = await YouTrackService
 			.fetchIssueDetails(for: ticketId)
 
 		return IssueDetails(
@@ -17,7 +17,8 @@ struct YouTrackServiceImpl: YouTrackServiceType, Sendable {
 			androidCR: androidCR,
 			iosCR: iosCR,
 			androidReviewerName: androidReviewerName,
-			iosReviewerName: iosReviewerName
+			iosReviewerName: iosReviewerName,
+			ticketState: ticketState
 		)
 	}
 }

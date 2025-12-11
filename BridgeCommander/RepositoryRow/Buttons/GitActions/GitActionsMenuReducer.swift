@@ -54,11 +54,11 @@ struct GitActionsMenuReducer {
 
 		Reduce { state, action in
 			switch action {
-			case .onAppear,
-			     .pullButton(.pullCompleted),
-			     .pushButton(.pushCompleted),
+			case .abortMergeButton(.abortMergeCompleted),
 			     .mergeMasterButton(.mergeMasterCompleted),
-			     .abortMergeButton(.abortMergeCompleted):
+			     .onAppear,
+			     .pullButton(.pullCompleted),
+			     .pushButton(.pushCompleted):
 				return .run { [path = state.repositoryPath] send in
 					let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
 					let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)

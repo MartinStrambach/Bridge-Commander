@@ -19,10 +19,11 @@ struct RepositoryRowReducer {
 
 		var unpushedCommitCount: Int
 		var prUrl: String?
-		var androidCR: String?
-		var iosCR: String?
+		var androidCR: CodeReviewState?
+		var iosCR: CodeReviewState?
 		var androidReviewerName: String?
 		var iosReviewerName: String?
+		var ticketState: TicketState?
 
 		var xcodeButton: XcodeProjectButtonReducer.State
 		var terminalButton: TerminalButtonReducer.State
@@ -78,10 +79,11 @@ struct RepositoryRowReducer {
 		case didFetchUnpushedCount(Int)
 		case didFetchYouTrack(
 			prUrl: String?,
-			androidCR: String?,
-			iosCR: String?,
+			androidCR: CodeReviewState?,
+			iosCR: CodeReviewState?,
 			androidReviewerName: String?,
-			iosReviewerName: String?
+			iosReviewerName: String?,
+			ticketState: TicketState?
 		)
 		case retryFetch(FetchType)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
@@ -167,12 +169,13 @@ struct RepositoryRowReducer {
 				state.unpushedCommitCount = count
 				return .none
 
-			case let .didFetchYouTrack(prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName):
+			case let .didFetchYouTrack(prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState):
 				state.prUrl = prUrl
 				state.androidCR = androidCR
 				state.iosCR = iosCR
 				state.androidReviewerName = androidReviewerName
 				state.iosReviewerName = iosReviewerName
+				state.ticketState = ticketState
 				state.shareButton.updatePRURL(prUrl)
 				return .none
 
@@ -259,7 +262,8 @@ struct RepositoryRowReducer {
 						androidCR: nil,
 						iosCR: nil,
 						androidReviewerName: nil,
-						iosReviewerName: nil
+						iosReviewerName: nil,
+						ticketState: nil
 					))
 					return
 				}
@@ -270,7 +274,8 @@ struct RepositoryRowReducer {
 					androidCR: details.androidCR,
 					iosCR: details.iosCR,
 					androidReviewerName: details.androidReviewerName,
-					iosReviewerName: details.iosReviewerName
+					iosReviewerName: details.iosReviewerName,
+					ticketState: details.ticketState
 				))
 			}
 			catch {
