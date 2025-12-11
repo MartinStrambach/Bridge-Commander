@@ -10,7 +10,7 @@ enum XcodeProjectDetector {
 		let fileManager = FileManager.default
 
 		// Build path to ios/Flashscore subfolder
-		let iosFlashscorePath = (repositoryPath as NSString).appendingPathComponent("ios/Flashscore")
+		let iosFlashscorePath = Self.getIosFlashscorePath(in: repositoryPath)
 
 		// Check if ios/Flashscore directory exists
 		var isDirectory: ObjCBool = false
@@ -50,6 +50,6 @@ enum XcodeProjectDetector {
 	/// - Parameter repositoryPath: The repository root path
 	/// - Returns: Path to ios/Flashscore subfolder
 	static func getIosFlashscorePath(in repositoryPath: String) -> String {
-		(repositoryPath as NSString).appendingPathComponent("ios/Flashscore")
+		(repositoryPath as NSString).appendingPathComponent("ios/FlashScore")
 	}
 }
