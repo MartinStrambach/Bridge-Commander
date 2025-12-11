@@ -2,6 +2,12 @@ import ComposableArchitecture
 import Foundation
 import SwiftUI
 
+enum SortMode: String, Equatable, Sendable {
+	case state = "State"
+	case ticket = "Ticket"
+	case branch = "Branch"
+}
+
 @Reducer
 struct RepositoryListReducer {
 	@ObservableState
@@ -10,7 +16,7 @@ struct RepositoryListReducer {
 		var isScanning = false
 		var selectedDirectory: String?
 
-		var sortByTicket = true
+		var sortMode: SortMode = .state
 	}
 
 	enum Action: Sendable {
@@ -102,9 +108,17 @@ struct RepositoryListReducer {
 
 			case .toggleSortMode:
 				withAnimation {
-					state.sortByTicket.toggle()
+					// Cycle through sort modes: state -> ticket -> branch -> state
+					switch state.sortMode {
+					case .state:
+						state.sortMode = .ticket
+					case .ticket:
+						state.sortMode = .branch
+					case .branch:
+						state.sortMode = .state
+					}
 					state.repositories = .init(
-						uniqueElements: sortRepositories(Array(state.repositories), sortByTicket: state.sortByTicket)
+						uniqueElements: sortRepositories(Array(state.repositories), sortMode: state.sortMode)
 					)
 				}
 				return .none
@@ -112,6 +126,17 @@ struct RepositoryListReducer {
 			case .repositories(.element(_, .worktreeCreated)),
 			     .repositories(.element(_, .worktreeDeleted)):
 				return .send(.startScan)
+
+			case .repositories(.element(_, .didFetchYouTrack)):
+				// Re-sort when ticket state is fetched (if sorting by state)
+				if state.sortMode == .state {
+					withAnimation {
+						state.repositories = .init(
+							uniqueElements: sortRepositories(Array(state.repositories), sortMode: state.sortMode)
+						)
+					}
+				}
+				return .none
 
 			case .repositories:
 				return .none
@@ -127,19 +152,66 @@ struct RepositoryListReducer {
 
 private func sortRepositories(
 	_ repositories: [RepositoryRowReducer.State],
-	sortByTicket: Bool
+	sortMode: SortMode
 ) -> [RepositoryRowReducer.State] {
 	repositories.sorted { repo1, repo2 in
-		if sortByTicket {
+		switch sortMode {
+		case .state:
+			return sortByState(repo1, repo2)
+
+		case .ticket:
 			let ticket1 = repo1.ticketId ?? ""
 			let ticket2 = repo2.ticketId ?? ""
 			return ticket1.localizedCaseInsensitiveCompare(ticket2) == .orderedDescending
-		}
-		else {
+
+		case .branch:
 			let branch1 = repo1.branchName ?? ""
 			let branch2 = repo2.branchName ?? ""
 			return branch1.localizedCaseInsensitiveCompare(branch2) == .orderedAscending
 		}
+	}
+}
+
+private func sortByState(
+	_ repo1: RepositoryRowReducer.State,
+	_ repo2: RepositoryRowReducer.State
+) -> Bool {
+	// Define priority order: inProgress (highest) -> others -> done (lowest)
+	let priority1 = stateSortPriority(repo1.ticketState)
+	let priority2 = stateSortPriority(repo2.ticketState)
+
+	if priority1 != priority2 {
+		return priority1 < priority2 // Lower priority number = higher in list
+	}
+
+	// If same state, sort by ticket ID as secondary sort
+	let ticket1 = repo1.ticketId ?? ""
+	let ticket2 = repo2.ticketId ?? ""
+	return ticket1.localizedCaseInsensitiveCompare(ticket2) == .orderedDescending
+}
+
+private func stateSortPriority(_ state: TicketState?) -> Int {
+	guard let state else {
+		return 5
+	}
+
+	// nil states go near the end
+
+	switch state {
+	case .inProgress:
+		return 0 // Highest priority - at the top
+	case .waitingToCodeReview:
+		return 1
+	case .waitingForTesting:
+		return 2
+	case .waitingToAcceptation:
+		return 3
+	case .accepted:
+		return 4
+	case .open:
+		return 5
+	case .done:
+		return 6 // Lowest priority - at the bottom
 	}
 }
 
@@ -192,6 +264,6 @@ private func mergeRepositories(into state: inout RepositoryListReducer.State, sc
 	}
 
 	// Sort based on current sort mode
-	let sortedRepos = sortRepositories(updatedRepos, sortByTicket: state.sortByTicket)
+	let sortedRepos = sortRepositories(updatedRepos, sortMode: state.sortMode)
 	state.repositories = IdentifiedArrayOf(uniqueElements: sortedRepos)
 }

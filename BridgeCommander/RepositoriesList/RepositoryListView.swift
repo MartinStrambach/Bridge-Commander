@@ -37,6 +37,30 @@ struct RepositoryListView: View {
 		}
 	}
 
+	// MARK: - Computed Properties
+
+	private var sortModeIcon: String {
+		switch store.sortMode {
+		case .state:
+			"chart.bar.fill"
+		case .ticket:
+			"ticket.fill"
+		case .branch:
+			"line.horizontal.3"
+		}
+	}
+
+	private var sortModeTooltip: String {
+		switch store.sortMode {
+		case .state:
+			"Sorted by state (click to sort by ticket)"
+		case .ticket:
+			"Sorted by ticket (click to sort by branch)"
+		case .branch:
+			"Sorted by branch (click to sort by state)"
+		}
+	}
+
 	// MARK: - Header View
 
 	private var headerView: some View {
@@ -70,8 +94,8 @@ struct RepositoryListView: View {
 					)
 
 					HeaderButton(
-						icon: store.sortByTicket ? "ticket.fill" : "line.horizontal.3",
-						tooltip: store.sortByTicket ? "Sort by branch name" : "Sort by ticket number",
+						icon: sortModeIcon,
+						tooltip: sortModeTooltip,
 						action: { store.send(.toggleSortMode) }
 					)
 
