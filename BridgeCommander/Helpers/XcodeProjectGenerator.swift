@@ -66,6 +66,7 @@ enum XcodeProjectGenerator {
 			let process = Process()
 			process.currentDirectoryPath = path
 			process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+			process.environment = GitEnvironmentHelper.setupEnvironment()
 
 			// Replace 'mise exec' with full path to mise for compatibility in sandbox
 			let misePath = NSHomeDirectory() + "/.local/bin/mise"
