@@ -28,11 +28,17 @@ enum XcodeProjectGenerator {
 
 		// Step 1: Run ti command in ios/Flashscore
 		onStateChange(.runningTi)
-		try await runCommand("mise exec -- tuist install", at: iosFlashscorePath)
+		let installResult = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath)
+		if case let .failure(error) = installResult {
+			throw ProjectGenerationError.commandFailed(command: "tuist install", message: error.localizedDescription)
+		}
 
 		// Step 2: Run tg command in ios/Flashscore
 		onStateChange(.runningTg)
-		try await runCommand("mise exec -- tuist generate", at: iosFlashscorePath)
+		let generateResult = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath)
+		if case let .failure(error) = generateResult {
+			throw ProjectGenerationError.commandFailed(command: "tuist generate", message: error.localizedDescription)
+		}
 
 		// Step 3: Find the generated project
 		onStateChange(.checking)
@@ -58,52 +64,6 @@ enum XcodeProjectGenerator {
 		}
 	}
 
-	// MARK: - Private Helpers
-
-	/// Runs a shell command at the specified path
-	private static func runCommand(_ command: String, at path: String) async throws {
-		try await withCheckedThrowingContinuation { continuation in
-			let process = Process()
-			process.currentDirectoryPath = path
-			process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-			process.environment = GitEnvironmentHelper.setupEnvironment()
-
-			// Replace 'mise exec' with full path to mise for compatibility in sandbox
-			let misePath = NSHomeDirectory() + "/.local/bin/mise"
-			let expandedCommand = command.replacingOccurrences(of: "mise exec", with: "\(misePath) exec")
-
-			process.arguments = ["-c", expandedCommand]
-
-			let pipe = Pipe()
-			let errorPipe = Pipe()
-			process.standardOutput = pipe
-			process.standardError = errorPipe
-
-			process.terminationHandler = { process in
-				if process.terminationStatus == 0 {
-					continuation.resume()
-				}
-				else {
-					let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-					let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-					continuation.resume(throwing: ProjectGenerationError.commandFailed(
-						command: command,
-						message: errorMessage
-					))
-				}
-			}
-
-			do {
-				try process.run()
-			}
-			catch {
-				continuation.resume(throwing: ProjectGenerationError.commandFailed(
-					command: command,
-					message: error.localizedDescription
-				))
-			}
-		}
-	}
 }
 
 // MARK: - Error Types

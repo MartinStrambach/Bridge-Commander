@@ -26,6 +26,7 @@ struct RepositoryRowReducer {
 		var ticketState: TicketState?
 
 		var xcodeButton: XcodeProjectButtonReducer.State
+		var tuistButton: TuistButtonReducer.State
 		var terminalButton: TerminalButtonReducer.State
 		var claudeCodeButton: ClaudeCodeButtonReducer.State
 		var androidStudioButton: AndroidStudioButtonReducer.State
@@ -56,6 +57,7 @@ struct RepositoryRowReducer {
 			self.unpushedCommitCount = 0
 
 			self.xcodeButton = .init(repositoryPath: path)
+			self.tuistButton = .init(repositoryPath: path)
 			self.terminalButton = .init(repositoryPath: path)
 			self.claudeCodeButton = .init(repositoryPath: path)
 			self.androidStudioButton = .init(repositoryPath: path)
@@ -87,6 +89,7 @@ struct RepositoryRowReducer {
 		)
 		case retryFetch(FetchType)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
+		case tuistButton(TuistButtonReducer.Action)
 		case terminalButton(TerminalButtonReducer.Action)
 		case claudeCodeButton(ClaudeCodeButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
@@ -117,6 +120,10 @@ struct RepositoryRowReducer {
 	var body: some Reducer<State, Action> {
 		Scope(state: \.xcodeButton, action: \.xcodeButton) {
 			XcodeProjectButtonReducer()
+		}
+
+		Scope(state: \.tuistButton, action: \.tuistButton) {
+			TuistButtonReducer()
 		}
 
 		Scope(state: \.terminalButton, action: \.terminalButton) {

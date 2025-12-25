@@ -1,0 +1,101 @@
+import ComposableArchitecture
+import Foundation
+
+// MARK: - Tuist Button Reducer
+
+@Reducer
+struct TuistButtonReducer {
+	@ObservableState
+	struct State: Equatable {
+		let repositoryPath: String
+		var runningAction: TuistAction?
+		@Presents
+		var alert: AlertState<Action.Alert>?
+
+		var isProcessing: Bool {
+			runningAction != nil
+		}
+	}
+
+	enum Action {
+		case generateTapped
+		case installTapped
+		case cacheTapped
+		case actionCompleted(TuistAction, Result<String, Error>)
+		case alert(PresentationAction<Alert>)
+
+		enum Alert: Equatable {
+			case dismissError
+		}
+	}
+
+	var body: some Reducer<State, Action> {
+		Reduce { state, action in
+			switch action {
+			case .generateTapped:
+				guard state.runningAction == nil else {
+					return .none
+				}
+
+				state.runningAction = .generate
+				return .run { [repositoryPath = state.repositoryPath] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(in: repositoryPath)
+					let result = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath)
+					await send(.actionCompleted(.generate, result))
+				}
+
+			case .installTapped:
+				guard state.runningAction == nil else {
+					return .none
+				}
+
+				state.runningAction = .install
+				return .run { [repositoryPath = state.repositoryPath] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(in: repositoryPath)
+					let result = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath)
+					await send(.actionCompleted(.install, result))
+				}
+
+			case .cacheTapped:
+				guard state.runningAction == nil else {
+					return .none
+				}
+
+				state.runningAction = .cache
+				return .run { [repositoryPath = state.repositoryPath] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(in: repositoryPath)
+					let result = await TuistCommandHelper.runCommand(.cache, at: iosFlashscorePath)
+					await send(.actionCompleted(.cache, result))
+				}
+
+			case let .actionCompleted(tuistAction, result):
+				state.runningAction = nil
+				switch result {
+				case .success:
+					return .none
+				case let .failure(error):
+					let title =
+						switch tuistAction {
+						case .generate: "Tuist Generate Failed"
+						case .install: "Tuist Install Failed"
+						case .cache: "Tuist Cache Failed"
+						}
+					state.alert = AlertState {
+						TextState(title)
+					} actions: {
+						ButtonState(role: .cancel, action: .dismissError) {
+							TextState("OK")
+						}
+					} message: {
+						TextState(error.localizedDescription)
+					}
+					return .none
+				}
+
+			case .alert:
+				return .none
+			}
+		}
+		.ifLet(\.$alert, action: \.alert)
+	}
+}

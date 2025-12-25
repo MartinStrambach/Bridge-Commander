@@ -178,6 +178,12 @@ struct RepositoryRowView: View {
 				action: \.gitActionsMenu
 			))
 
+			TuistButtonView(store: store.scope(
+				state: \.tuistButton,
+				action: \.tuistButton
+			))
+			.environmentObject(abbreviationMode)
+
 			// Copy path button
 			ActionButton(
 				icon: "doc.on.doc",
