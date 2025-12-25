@@ -162,7 +162,8 @@ struct RepositoryRowReducer {
 				return .merge(
 					fetchBranch(for: &state),
 					fetchUnpushed(for: &state),
-					fetchYouTrack(for: &state)
+					fetchYouTrack(for: &state),
+					.send(.gitActionsMenu(.onAppear))
 				)
 
 			case let .didFetchBranch(branch, unstaged, staged):
