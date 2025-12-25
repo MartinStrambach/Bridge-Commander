@@ -5,25 +5,9 @@ import SwiftUI
 
 struct XcodeProjectButtonView: View {
 	let store: StoreOf<XcodeProjectButtonReducer>
+
 	@Shared(.isAbbreviated)
 	private var isAbbreviated = false
-
-	var body: some View {
-		ToolButton(
-			label: buttonLabel,
-			icon: .systemImage(buttonIcon),
-			tooltip: buttonTooltip,
-			isProcessing: store.projectState.isProcessing,
-			tint: store.projectPath == nil ? .orange : nil,
-			action: { store.send(.openProject) }
-		)
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
-		.task {
-			store.send(.onAppear)
-		}
-	}
-
-	// MARK: - Computed Properties
 
 	private var buttonLabel: String {
 		switch store.projectState {
@@ -75,6 +59,22 @@ struct XcodeProjectButtonView: View {
 			store.projectState.displayMessage
 		}
 	}
+
+	var body: some View {
+		ToolButton(
+			label: buttonLabel,
+			icon: .systemImage(buttonIcon),
+			tooltip: buttonTooltip,
+			isProcessing: store.projectState.isProcessing,
+			tint: store.projectPath == nil ? .orange : nil,
+			action: { store.send(.openProject) }
+		)
+		.alert(store: store.scope(state: \.$alert, action: \.alert))
+		.task {
+			store.send(.onAppear)
+		}
+	}
+
 }
 
 #Preview {

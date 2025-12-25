@@ -1,0 +1,90 @@
+--allman false
+--anonymousforeach convert
+--assetliterals visual-width
+--asynccapturing 
+--beforemarks 
+--binarygrouping 4,8
+--line-between-guards false
+--categorymark "MARK: %c"
+--classthreshold 0
+--closingparen balanced
+--closurevoid remove
+--commas always
+--conflictmarkers reject
+--decimalgrouping 3,6
+--elseposition next-line
+--emptybraces no-space
+--enumnamespaces always
+--enumthreshold 0
+--exponentcase lowercase
+--exponentgrouping disabled
+--extensionacl on-extension
+--extensionlength 0
+--extensionmark "MARK: - %t + %c"
+--fractiongrouping disabled
+--fragment false
+--funcattributes prev-line
+--generictypes 
+--groupedextension "MARK: %c"
+--guardelse auto
+--header strip
+--hexgrouping 4,8
+--hexliteralcase uppercase
+--ifdef no-indent
+--importgrouping alpha
+--indent tab
+--indentcase false
+--indentstrings false
+--lifecycle 
+--lineaftermarks true
+--linebreaks lf
+--markcategories false
+--markextensions always
+--marktypes always
+--maxwidth 120
+--modifierorder 
+--nevertrailing 
+--nospaceoperators 
+--nowrapoperators 
+--octalgrouping 4,8
+--onelineforeach ignore
+--operatorfunc spaced
+--organizetypes actor,class,enum,static,struct,typealias
+--patternlet hoist
+--ranges spaced
+--redundanttype infer-locals-only
+--self init-only
+--selfrequired 
+--semicolons inline
+--shortoptionals always
+--smarttabs enabled
+--someany true
+--stripunusedargs closure-only
+--structthreshold 0
+--swiftversion 5.10
+--tabwidth 4
+--throwcapturing 
+--trailingclosures 
+--trimwhitespace always
+--typeattributes prev-line
+--typeblanklines preserve
+--typemark "MARK: - %t"
+--organization-mode type
+--type-order beforeMarks, nestedType, staticProperty, staticPropertyWithBody, classPropertyWithBody, overriddenProperty, swiftUIPropertyWrapper, instanceProperty, computedProperty, swiftUIProperty, instanceLifecycle, swiftUIMethod, overriddenMethod, staticMethod, classMethod, instanceMethod
+--visibility-order open, public, package, internal, fileprivate, private
+--varattributes prev-line
+--voidtype void
+--wraparguments before-first
+--wrapcollections before-first
+--wrapconditions before-first
+--wrapeffects never
+--wrapenumcases always
+--wrapparameters before-first
+--wrapreturntype preserve
+--wrapternary before-operators
+--wraptypealiases after-first
+--xcodeindentation enabled
+--yodaswap always
+--disable strongOutlets,trailingCommas
+--enable blankLinesAfterGuardStatements,blankLineAfterSwitchCase,isEmpty,privateStateVariables,preferCountWhere,redundantPublic,redundantProperty,sortSwitchCases,swiftTestingTestCaseNames,wrapConditionalBodies,wrapEnumCases,wrapMultilineConditionalAssignment,wrapMultilineFunctionChains,wrapSwitchCases, organizeDeclarations
+--exclude **/.build,**/Generated,**/LegacyTrash,**/*Trash,**/DerivedData,**/Legacy*,**/build-scripts

@@ -5,6 +5,7 @@ import SwiftUI
 
 struct TerminalButtonView: View {
 	let store: StoreOf<TerminalButtonReducer>
+
 	@Shared(.isAbbreviated)
 	private var isAbbreviated = false
 

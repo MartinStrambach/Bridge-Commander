@@ -4,6 +4,26 @@ import SwiftUI
 struct RepositoryRowView: View {
 	let store: StoreOf<RepositoryRowReducer>
 
+	private var backgroundColorForState: Color {
+		if let ticketState = store.ticketState {
+			switch ticketState {
+			case .accepted,
+			     .done,
+			     .waitingToAcceptation:
+				return Color.mint.opacity(0.1)
+
+			case .inProgress:
+				return Color.orange.opacity(0.1)
+
+			case .open,
+			     .waitingForTesting,
+			     .waitingToCodeReview:
+				return Color(NSColor.controlBackgroundColor).opacity(0.5)
+			}
+		}
+		return Color(NSColor.controlBackgroundColor).opacity(0.5)
+	}
+
 	var body: some View {
 		HStack(alignment: .center, spacing: 16) {
 			RepositoryIcon(
@@ -69,6 +89,7 @@ struct RepositoryRowView: View {
 					Image(systemName: "checkmark.circle.fill")
 						.foregroundColor(.green)
 					Text("\(store.stagedChangesCount)")
+						.lineLimit(1)
 						.font(.caption)
 				}
 			}
@@ -79,6 +100,7 @@ struct RepositoryRowView: View {
 					Image(systemName: "pencil.circle.fill")
 						.foregroundColor(.orange)
 					Text("\(store.unstagedChangesCount)")
+						.lineLimit(1)
 						.font(.caption)
 				}
 			}
@@ -89,6 +111,7 @@ struct RepositoryRowView: View {
 					Image(systemName: "exclamationmark.circle.fill")
 						.foregroundColor(.red)
 					Text("\(store.unpushedCommitCount)")
+						.lineLimit(1)
 						.font(.caption)
 				}
 			}
@@ -99,6 +122,7 @@ struct RepositoryRowView: View {
 					Image(systemName: "arrow.triangle.merge")
 						.foregroundColor(.red)
 					Text("Merge")
+						.lineLimit(1)
 						.font(.caption)
 				}
 			}
@@ -252,28 +276,6 @@ struct RepositoryRowView: View {
 			}
 			.frame(width: 20, height: 20)
 		}
-	}
-
-	// MARK: - Computed Properties
-
-	private var backgroundColorForState: Color {
-		if let ticketState = store.ticketState {
-			switch ticketState {
-			case .accepted,
-			     .done,
-			     .waitingToAcceptation:
-				return Color.mint.opacity(0.1)
-
-			case .inProgress:
-				return Color.orange.opacity(0.1)
-
-			case .open,
-			     .waitingForTesting,
-			     .waitingToCodeReview:
-				return Color(NSColor.controlBackgroundColor).opacity(0.5)
-			}
-		}
-		return Color(NSColor.controlBackgroundColor).opacity(0.5)
 	}
 
 	// MARK: - Helper Methods

@@ -3,8 +3,31 @@ import SwiftUI
 
 struct RepositoryListView: View {
 	let store: StoreOf<RepositoryListReducer>
+
 	@Shared(.isAbbreviated)
 	private var isAbbreviated = false
+
+	private var sortModeIcon: String {
+		switch store.sortMode {
+		case .state:
+			"chart.bar.fill"
+		case .ticket:
+			"ticket.fill"
+		case .branch:
+			"line.horizontal.3"
+		}
+	}
+
+	private var sortModeTooltip: String {
+		switch store.sortMode {
+		case .state:
+			"Sorted by state (click to sort by ticket)"
+		case .ticket:
+			"Sorted by ticket (click to sort by branch)"
+		case .branch:
+			"Sorted by branch (click to sort by state)"
+		}
+	}
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -31,30 +54,6 @@ struct RepositoryListView: View {
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
 			store.send(.stopPeriodicRefresh)
 			store.send(.startPeriodicRefresh)
-		}
-	}
-
-	// MARK: - Computed Properties
-
-	private var sortModeIcon: String {
-		switch store.sortMode {
-		case .state:
-			"chart.bar.fill"
-		case .ticket:
-			"ticket.fill"
-		case .branch:
-			"line.horizontal.3"
-		}
-	}
-
-	private var sortModeTooltip: String {
-		switch store.sortMode {
-		case .state:
-			"Sorted by state (click to sort by ticket)"
-		case .ticket:
-			"Sorted by ticket (click to sort by branch)"
-		case .branch:
-			"Sorted by branch (click to sort by state)"
 		}
 	}
 
@@ -132,21 +131,6 @@ struct RepositoryListView: View {
 		.padding()
 	}
 
-	// MARK: - Directory Selection
-
-	private func selectDirectory() {
-		let panel = NSOpenPanel()
-		panel.canChooseFiles = false
-		panel.canChooseDirectories = true
-		panel.allowsMultipleSelection = false
-		panel.message = "Select a directory to scan for repositories"
-
-		if panel.runModal() == .OK, let url = panel.url {
-			store.send(.setDirectory(url.path))
-			store.send(.startScan)
-		}
-	}
-
 	// MARK: - Scanning View
 
 	private var scanningView: some View {
@@ -199,6 +183,22 @@ struct RepositoryListView: View {
 		}
 		.listStyle(.plain)
 	}
+
+	// MARK: - Directory Selection
+
+	private func selectDirectory() {
+		let panel = NSOpenPanel()
+		panel.canChooseFiles = false
+		panel.canChooseDirectories = true
+		panel.allowsMultipleSelection = false
+		panel.message = "Select a directory to scan for repositories"
+
+		if panel.runModal() == .OK, let url = panel.url {
+			store.send(.setDirectory(url.path))
+			store.send(.startScan)
+		}
+	}
+
 }
 
 #Preview {

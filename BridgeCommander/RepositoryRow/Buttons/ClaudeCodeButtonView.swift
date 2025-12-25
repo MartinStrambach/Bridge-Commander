@@ -5,8 +5,18 @@ import SwiftUI
 
 struct ClaudeCodeButtonView: View {
 	let store: StoreOf<ClaudeCodeButtonReducer>
+
 	@Shared(.isAbbreviated)
 	private var isAbbreviated = false
+
+	private var buttonTooltip: String {
+		if store.isLaunching {
+			"Launching Claude Code..."
+		}
+		else {
+			"Launch Claude Code in repository"
+		}
+	}
 
 	var body: some View {
 		ToolButton(
@@ -22,16 +32,6 @@ struct ClaudeCodeButtonView: View {
 		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 
-	// MARK: - Computed Properties
-
-	private var buttonTooltip: String {
-		if store.isLaunching {
-			"Launching Claude Code..."
-		}
-		else {
-			"Launch Claude Code in repository"
-		}
-	}
 }
 
 #Preview {
