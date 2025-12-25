@@ -15,6 +15,7 @@ struct GitActionsMenuReducer {
 		var pushButton: PushButtonReducer.State
 		var mergeMasterButton: MergeMasterButtonReducer.State
 		var abortMergeButton: AbortMergeButtonReducer.State
+		var stashButton: StashButtonReducer.State
 
 		init(repositoryPath: String, currentBranch: String) {
 			self.repositoryPath = repositoryPath
@@ -23,6 +24,7 @@ struct GitActionsMenuReducer {
 			self.pushButton = PushButtonReducer.State(repositoryPath: repositoryPath)
 			self.mergeMasterButton = MergeMasterButtonReducer.State(repositoryPath: repositoryPath)
 			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
+			self.stashButton = StashButtonReducer.State(repositoryPath: repositoryPath)
 		}
 	}
 
@@ -33,6 +35,7 @@ struct GitActionsMenuReducer {
 		case pushButton(PushButtonReducer.Action)
 		case mergeMasterButton(MergeMasterButtonReducer.Action)
 		case abortMergeButton(AbortMergeButtonReducer.Action)
+		case stashButton(StashButtonReducer.Action)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -52,6 +55,10 @@ struct GitActionsMenuReducer {
 			AbortMergeButtonReducer()
 		}
 
+		Scope(state: \.stashButton, action: \.stashButton) {
+			StashButtonReducer()
+		}
+
 		Reduce { state, action in
 			switch action {
 			case .abortMergeButton(.abortMergeCompleted),
@@ -59,16 +66,24 @@ struct GitActionsMenuReducer {
 			     .onAppear,
 			     .pullButton(.pullCompleted),
 			     .pushButton(.pushCompleted):
-				return .run { [path = state.repositoryPath] send in
-					let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
-					let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-					await send(.didCheckGitStatus(hasRemoteBranch: hasRemote, isMergeInProgress: isMergeInProgress))
-				}
+				return .merge(
+					.run { [path = state.repositoryPath] send in
+						let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
+						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
+						await send(.didCheckGitStatus(hasRemoteBranch: hasRemote, isMergeInProgress: isMergeInProgress))
+					},
+					.send(.stashButton(.checkStashStatus))
+				)
 
 			case let .didCheckGitStatus(hasRemote, isMergeInProgress):
 				state.hasRemoteBranch = hasRemote
 				state.isMergeInProgress = isMergeInProgress
 				return .none
+
+			case .stashButton(.stashCompleted),
+			     .stashButton(.stashPopCompleted):
+				// Refresh stash status after stash operations
+				return .send(.stashButton(.checkStashStatus))
 
 			default:
 				return .none

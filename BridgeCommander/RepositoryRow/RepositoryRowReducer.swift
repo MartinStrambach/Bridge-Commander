@@ -171,7 +171,8 @@ struct RepositoryRowReducer {
 				state.unstagedChangesCount = unstaged
 				state.stagedChangesCount = staged
 				state.gitActionsMenu.currentBranch = branch
-				return .none
+				let hasChanges = unstaged > 0 || staged > 0
+				return .send(.gitActionsMenu(.stashButton(.updateHasChanges(hasChanges))))
 
 			case let .didFetchUnpushedCount(count):
 				state.unpushedCommitCount = count
@@ -212,15 +213,16 @@ struct RepositoryRowReducer {
 				return .none
 
 			case let .gitActionsMenu(action):
-				// Refresh repository state after merge or pull completes (success or error)
-				// Failed merges may leave the repository in merge-in-progress state
-				if case .mergeMasterButton(.mergeMasterCompleted) = action {
+				switch action {
+				case .mergeMasterButton(.mergeMasterStarted),
+				     .pullButton(.pullCompleted),
+				     .stashButton(.stashCompleted),
+				     .stashButton(.stashPopCompleted):
 					return .send(.requestRefresh)
+
+				default:
+					return .none
 				}
-				if case .pullButton(.pullCompleted) = action {
-					return .send(.requestRefresh)
-				}
-				return .none
 
 			default:
 				return .none

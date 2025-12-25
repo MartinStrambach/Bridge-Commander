@@ -36,6 +36,13 @@ struct GitActionsMenuView: View {
 					helpText: "Aborting merge..."
 				)
 			}
+			else if store.stashButton.isProcessing {
+				GitOperationProgressView(
+					text: store.stashButton.hasStash ? "Popping stash..." : "Stashing...",
+					color: .purple,
+					helpText: store.stashButton.hasStash ? "Restoring stashed changes..." : "Stashing changes..."
+				)
+			}
 			else {
 				Menu {
 					if store.isMergeInProgress {
@@ -47,6 +54,10 @@ struct GitActionsMenuView: View {
 					}
 
 					PushButtonView(store: store.scope(state: \.pushButton, action: \.pushButton))
+
+					if !store.isMergeInProgress {
+						StashButtonView(store: store.scope(state: \.stashButton, action: \.stashButton))
+					}
 
 					if store.currentBranch != "master", store.currentBranch != "main", !store.isMergeInProgress {
 						MergeMasterButtonView(store: store.scope(
@@ -67,6 +78,7 @@ struct GitActionsMenuView: View {
 		.alert(store: store.scope(state: \.pushButton.$alert, action: \.pushButton.alert))
 		.alert(store: store.scope(state: \.mergeMasterButton.$alert, action: \.mergeMasterButton.alert))
 		.alert(store: store.scope(state: \.abortMergeButton.$alert, action: \.abortMergeButton.alert))
+		.alert(store: store.scope(state: \.stashButton.$alert, action: \.stashButton.alert))
 		.task {
 			store.send(.onAppear)
 		}
