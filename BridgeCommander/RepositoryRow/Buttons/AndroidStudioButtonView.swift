@@ -5,21 +5,20 @@ import SwiftUI
 
 struct AndroidStudioButtonView: View {
 	let store: StoreOf<AndroidStudioButtonReducer>
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
+	@Shared(.isAbbreviated)
+	private var isAbbreviated = false
 
 	var body: some View {
 		ToolButton(
 			label: store.isOpening
-				? (abbreviationMode.isAbbreviated ? "Open" : "Opening")
-				: (abbreviationMode.isAbbreviated ? "AS" : "Android Studio"),
+				? (isAbbreviated ? "Open" : "Opening")
+				: (isAbbreviated ? "AS" : "Android Studio"),
 			icon: .customImage("android"),
 			tooltip: buttonTooltip,
 			isProcessing: store.isOpening,
 			tint: store.isOpening ? .green : nil,
 			action: { store.send(.openAndroidStudioButtonTapped) }
 		)
-		.environmentObject(abbreviationMode)
 		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 
@@ -46,5 +45,4 @@ struct AndroidStudioButtonView: View {
 			}
 		)
 	)
-	.environmentObject(AbbreviationMode())
 }

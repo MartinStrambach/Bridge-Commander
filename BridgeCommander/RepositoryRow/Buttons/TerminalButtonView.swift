@@ -5,17 +5,16 @@ import SwiftUI
 
 struct TerminalButtonView: View {
 	let store: StoreOf<TerminalButtonReducer>
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
+	@Shared(.isAbbreviated)
+	private var isAbbreviated = false
 
 	var body: some View {
 		ToolButton(
-			label: abbreviationMode.isAbbreviated ? "Term" : "Terminal",
+			label: isAbbreviated ? "Term" : "Terminal",
 			icon: .systemImage("terminal"),
 			tooltip: "Open terminal at repository location",
 			action: { store.send(.openTerminalButtonTapped) }
 		)
-		.environmentObject(abbreviationMode)
 	}
 }
 
@@ -30,5 +29,4 @@ struct TerminalButtonView: View {
 			}
 		)
 	)
-	.environmentObject(AbbreviationMode())
 }

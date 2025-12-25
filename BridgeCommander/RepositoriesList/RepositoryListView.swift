@@ -3,8 +3,8 @@ import SwiftUI
 
 struct RepositoryListView: View {
 	let store: StoreOf<RepositoryListReducer>
-	@StateObject
-	private var abbreviationMode = AbbreviationMode()
+	@Shared(.isAbbreviated)
+	private var isAbbreviated = false
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -21,7 +21,6 @@ struct RepositoryListView: View {
 			}
 		}
 		.frame(minWidth: 600, minHeight: 400)
-		.environmentObject(abbreviationMode)
 		.onAppear {
 			store.send(.startScan)
 			store.send(.startPeriodicRefresh)
@@ -84,11 +83,11 @@ struct RepositoryListView: View {
 			if !store.repositories.isEmpty {
 				HStack(spacing: 8) {
 					HeaderButton(
-						icon: abbreviationMode.isAbbreviated
+						icon: isAbbreviated
 							? "arrow.left.and.right.righttriangle.left.righttriangle.right"
 							: "arrow.left.and.right",
-						tooltip: abbreviationMode.isAbbreviated ? "Show full text" : "Abbreviate text",
-						action: { abbreviationMode.isAbbreviated.toggle() }
+						tooltip: isAbbreviated ? "Show full text" : "Abbreviate text",
+						action: { $isAbbreviated.withLock { $0.toggle() } }
 					)
 
 					HeaderButton(
@@ -197,7 +196,6 @@ struct RepositoryListView: View {
 	private var repositoryListView: some View {
 		List(store.scope(state: \.repositories, action: \.repositories)) { rowStore in
 			RepositoryRowView(store: rowStore)
-				.environmentObject(abbreviationMode)
 		}
 		.listStyle(.plain)
 	}

@@ -5,8 +5,8 @@ import SwiftUI
 
 struct XcodeProjectButtonView: View {
 	let store: StoreOf<XcodeProjectButtonReducer>
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
+	@Shared(.isAbbreviated)
+	private var isAbbreviated = false
 
 	var body: some View {
 		ToolButton(
@@ -17,7 +17,6 @@ struct XcodeProjectButtonView: View {
 			tint: store.projectPath == nil ? .orange : nil,
 			action: { store.send(.openProject) }
 		)
-		.environmentObject(abbreviationMode)
 		.alert(store: store.scope(state: \.$alert, action: \.alert))
 		.task {
 			store.send(.onAppear)
@@ -30,26 +29,26 @@ struct XcodeProjectButtonView: View {
 		switch store.projectState {
 		case .idle:
 			if store.projectPath == nil {
-				abbreviationMode.isAbbreviated ? "Gen" : "Generate"
+				isAbbreviated ? "Gen" : "Generate"
 			}
 			else {
-				abbreviationMode.isAbbreviated ? "Xcd" : "Xcode"
+				isAbbreviated ? "Xcd" : "Xcode"
 			}
 
 		case .checking:
-			abbreviationMode.isAbbreviated ? "Chck" : "Checking"
+			isAbbreviated ? "Chck" : "Checking"
 
 		case .runningTi:
-			abbreviationMode.isAbbreviated ? "ti" : "Running ti"
+			isAbbreviated ? "ti" : "Running ti"
 
 		case .runningTg:
-			abbreviationMode.isAbbreviated ? "tg" : "Running tg"
+			isAbbreviated ? "tg" : "Running tg"
 
 		case .opening:
-			abbreviationMode.isAbbreviated ? "Opn" : "Opening"
+			isAbbreviated ? "Opn" : "Opening"
 
 		case .error:
-			abbreviationMode.isAbbreviated ? "Xcd" : "Xcode"
+			isAbbreviated ? "Xcd" : "Xcode"
 		}
 	}
 
@@ -89,5 +88,4 @@ struct XcodeProjectButtonView: View {
 			}
 		)
 	)
-	.environmentObject(AbbreviationMode())
 }

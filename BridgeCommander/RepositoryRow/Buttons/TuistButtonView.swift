@@ -87,5 +87,4 @@ struct TuistButtonView: View {
 			}
 		)
 	)
-	.environmentObject(AbbreviationMode())
 }

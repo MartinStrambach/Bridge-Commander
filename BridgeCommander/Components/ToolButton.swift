@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import SwiftUI
 
 /// Reusable tool button component for repository row tool actions
@@ -7,8 +8,8 @@ struct ToolButton: View {
 		case customImage(String)
 	}
 
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
+	@Shared(.isAbbreviated)
+	private var isAbbreviated = false
 
 	private let label: String
 	private let icon: ButtonIcon
@@ -29,7 +30,7 @@ struct ToolButton: View {
 					Text(label)
 						.font(.body)
 				}
-				.frame(minWidth: abbreviationMode.isAbbreviated ? minWidthCompact : minWidthFull)
+				.frame(minWidth: isAbbreviated ? minWidthCompact : minWidthFull)
 				.buttonStyle(.borderedProminent)
 			}
 			else {
@@ -56,7 +57,7 @@ struct ToolButton: View {
 						}
 					}
 					.frame(height: 20)
-					.frame(minWidth: abbreviationMode.isAbbreviated ? minWidthCompact : minWidthFull)
+					.frame(minWidth: isAbbreviated ? minWidthCompact : minWidthFull)
 				}
 				.buttonStyle(.bordered)
 			}
@@ -94,7 +95,6 @@ struct ToolButton: View {
 			tooltip: "Open terminal",
 			action: {}
 		)
-		.environmentObject(AbbreviationMode())
 
 		ToolButton(
 			label: "Opening",
@@ -104,7 +104,6 @@ struct ToolButton: View {
 			tint: .orange,
 			action: {}
 		)
-		.environmentObject(AbbreviationMode())
 
 		ToolButton(
 			label: "Android Studio",
@@ -113,7 +112,6 @@ struct ToolButton: View {
 			tint: .green,
 			action: {}
 		)
-		.environmentObject(AbbreviationMode())
 	}
 	.padding()
 }

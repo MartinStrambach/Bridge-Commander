@@ -5,21 +5,20 @@ import SwiftUI
 
 struct ClaudeCodeButtonView: View {
 	let store: StoreOf<ClaudeCodeButtonReducer>
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
+	@Shared(.isAbbreviated)
+	private var isAbbreviated = false
 
 	var body: some View {
 		ToolButton(
 			label: store.isLaunching
-				? (abbreviationMode.isAbbreviated ? "Launch" : "Launching")
-				: (abbreviationMode.isAbbreviated ? "CC" : "Claude Code"),
+				? (isAbbreviated ? "Launch" : "Launching")
+				: (isAbbreviated ? "CC" : "Claude Code"),
 			icon: .systemImage("sparkles"),
 			tooltip: buttonTooltip,
 			isProcessing: store.isLaunching,
 			tint: store.isLaunching ? .purple : nil,
 			action: { store.send(.launchClaudeCodeButtonTapped) }
 		)
-		.environmentObject(abbreviationMode)
 		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 
@@ -46,5 +45,4 @@ struct ClaudeCodeButtonView: View {
 			}
 		)
 	)
-	.environmentObject(AbbreviationMode())
 }

@@ -1,7 +1,8 @@
-import Combine
+import ComposableArchitecture
 import SwiftUI
 
-class AbbreviationMode: ObservableObject {
-	@Published
-	var isAbbreviated: Bool = false
+extension SharedReaderKey where Self == InMemoryKey<Bool> {
+	static var isAbbreviated: Self {
+		inMemory("isAbbreviated")
+	}
 }

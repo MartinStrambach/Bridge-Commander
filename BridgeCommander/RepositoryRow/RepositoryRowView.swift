@@ -3,8 +3,6 @@ import SwiftUI
 
 struct RepositoryRowView: View {
 	let store: StoreOf<RepositoryRowReducer>
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
 
 	var body: some View {
 		HStack(alignment: .center, spacing: 16) {
@@ -182,7 +180,6 @@ struct RepositoryRowView: View {
 				state: \.tuistButton,
 				action: \.tuistButton
 			))
-			.environmentObject(abbreviationMode)
 
 			// Copy path button
 			ActionButton(
@@ -223,25 +220,21 @@ struct RepositoryRowView: View {
 				state: \.androidStudioButton,
 				action: \.androidStudioButton
 			))
-			.environmentObject(abbreviationMode)
 
 			TerminalButtonView(store: store.scope(
 				state: \.terminalButton,
 				action: \.terminalButton
 			))
-			.environmentObject(abbreviationMode)
 
 			XcodeProjectButtonView(store: store.scope(
 				state: \.xcodeButton,
 				action: \.xcodeButton
 			))
-			.environmentObject(abbreviationMode)
 
 			ClaudeCodeButtonView(store: store.scope(
 				state: \.claudeCodeButton,
 				action: \.claudeCodeButton
 			))
-			.environmentObject(abbreviationMode)
 
 			Group {
 				if store.isWorktree {
@@ -309,5 +302,4 @@ struct RepositoryRowView: View {
 			}
 		)
 	)
-	.environmentObject(AbbreviationMode())
 }
