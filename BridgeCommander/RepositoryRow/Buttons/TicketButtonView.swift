@@ -5,21 +5,13 @@ import SwiftUI
 
 struct TicketButtonView: View {
 	let store: StoreOf<TicketButtonReducer>
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
 
 	var body: some View {
-		ToolButton(
-			label: store.isOpening
-				? (abbreviationMode.isAbbreviated ? "Open" : "Opening")
-				: (abbreviationMode.isAbbreviated ? "Tkt" : "Ticket"),
-			icon: .systemImage("ticket"),
-			tooltip: store.isOpening ? "Opening ticket..." : "Open YouTrack ticket \(store.ticketId)",
-			isProcessing: store.isOpening,
-			tint: store.isOpening ? .orange : nil,
+		ActionButton(
+			icon: "ticket",
+			tooltip: "Open YouTrack ticket \(store.ticketId)",
 			action: { store.send(.openTicketButtonTapped) }
 		)
-		.environmentObject(abbreviationMode)
 	}
 }
 
@@ -34,5 +26,4 @@ struct TicketButtonView: View {
 			}
 		)
 	)
-	.environmentObject(AbbreviationMode())
 }

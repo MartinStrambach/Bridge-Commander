@@ -5,8 +5,6 @@ import SwiftUI
 
 struct TuistButtonView: View {
 	let store: StoreOf<TuistButtonReducer>
-	@EnvironmentObject
-	var abbreviationMode: AbbreviationMode
 
 	var body: some View {
 		Group {
@@ -38,14 +36,13 @@ struct TuistButtonView: View {
 					}
 				} label: {
 					ToolButton(
-						label: abbreviationMode.isAbbreviated ? "Tst" : "Tuist",
-						icon: .systemImage("cube.box"),
+						label: "Tuist",
+						icon: .systemImage(""),
 						tooltip: "Tuist actions",
 						isProcessing: false,
 						tint: .purple,
 						action: {}
 					)
-					.environmentObject(abbreviationMode)
 				}
 				.menuStyle(.borderlessButton)
 			}
@@ -59,22 +56,22 @@ struct TuistButtonView: View {
 	private func progressText(for action: TuistAction) -> String {
 		switch action {
 		case .generate:
-			return "Generating..."
+			"Generating..."
 		case .install:
-			return "Installing..."
+			"Installing..."
 		case .cache:
-			return "Caching..."
+			"Caching..."
 		}
 	}
 
 	private func progressHelpText(for action: TuistAction) -> String {
 		switch action {
 		case .generate:
-			return "Generating Xcode project with Tuist..."
+			"Generating Xcode project with Tuist..."
 		case .install:
-			return "Installing Tuist dependencies..."
+			"Installing Tuist dependencies..."
 		case .cache:
-			return "Caching Tuist targets..."
+			"Caching Tuist targets..."
 		}
 	}
 }

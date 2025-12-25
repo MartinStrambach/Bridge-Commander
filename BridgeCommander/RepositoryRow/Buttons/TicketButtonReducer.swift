@@ -7,27 +7,19 @@ struct TicketButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		let ticketId: String
-		var isOpening: Bool = false
 	}
 
 	enum Action: Equatable {
 		case openTicketButtonTapped
-		case didOpenTicket
 	}
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .openTicketButtonTapped:
-				state.isOpening = true
-				return .run { [ticketId = state.ticketId] send in
+				.run { [ticketId = state.ticketId] _ in
 					await openTicketURL(ticketId: ticketId)
-					await send(.didOpenTicket)
 				}
-
-			case .didOpenTicket:
-				state.isOpening = false
-				return .none
 			}
 		}
 	}
