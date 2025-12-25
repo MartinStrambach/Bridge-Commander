@@ -8,7 +8,7 @@ struct TicketButtonView: View {
 
 	var body: some View {
 		ActionButton(
-			icon: "ticket",
+			icon: .systemImage("ticket"),
 			tooltip: "Open YouTrack ticket \(store.ticketId)",
 			action: { store.send(.openTicketButtonTapped) }
 		)

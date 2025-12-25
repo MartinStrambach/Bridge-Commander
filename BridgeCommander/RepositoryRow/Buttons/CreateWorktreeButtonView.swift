@@ -13,7 +13,7 @@ struct CreateWorktreeButtonView: View {
 			}
 			else {
 				ActionButton(
-					icon: "plus.square.on.square",
+					icon: .systemImage("plus.square.on.square"),
 					tooltip: "Create new worktree",
 					color: .green,
 					action: { store.send(.showDialog) }

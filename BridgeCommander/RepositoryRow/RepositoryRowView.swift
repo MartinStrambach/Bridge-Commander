@@ -186,14 +186,14 @@ struct RepositoryRowView: View {
 
 			// Copy path button
 			ActionButton(
-				icon: "doc.on.doc",
+				icon: .systemImage("doc.on.doc"),
 				tooltip: "Copy path to clipboard",
 				action: { copyToClipboard(store.path) }
 			)
 
 			// Open in Finder button
 			ActionButton(
-				icon: "folder",
+				icon: .systemImage("folder"),
 				tooltip: "Open in Finder",
 				action: { openInFinder(store.path) }
 			)
@@ -201,7 +201,7 @@ struct RepositoryRowView: View {
 			// Open PR button (conditional)
 			if let prUrl = store.prUrl {
 				ActionButton(
-					icon: "link",
+					icon: .customImage("gitlab"),
 					tooltip: "Open pull request in Gitlab"
 				) {
 					if let url = URL(string: prUrl) {

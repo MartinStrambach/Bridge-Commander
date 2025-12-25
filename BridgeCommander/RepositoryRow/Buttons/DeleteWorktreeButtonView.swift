@@ -13,7 +13,7 @@ struct DeleteWorktreeButtonView: View {
 			}
 			else {
 				ActionButton(
-					icon: "trash",
+					icon: .systemImage("trash"),
 					tooltip: "Remove worktree",
 					color: .red,
 					action: { store.send(.showConfirmation) }
