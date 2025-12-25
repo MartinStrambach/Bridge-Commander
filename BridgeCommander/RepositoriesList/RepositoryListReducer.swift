@@ -17,6 +17,9 @@ struct RepositoryListReducer {
 		var selectedDirectory: String?
 
 		var sortMode: SortMode = .state
+
+		@Shared(.appStorage("periodicRefreshInterval"))
+		var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 	}
 
 	enum Action: Sendable {
@@ -27,7 +30,7 @@ struct RepositoryListReducer {
 		case startScan
 		case refreshRepositories
 		case repositories(IdentifiedActionOf<RepositoryRowReducer>)
-		case startPeriodicRefresh(TimeInterval)
+		case startPeriodicRefresh
 		case stopPeriodicRefresh
 		case toggleSortMode
 	}
@@ -87,7 +90,8 @@ struct RepositoryListReducer {
 				}
 				return .concatenate(.send(.startScan), .merge(effects))
 
-			case let .startPeriodicRefresh(interval):
+			case .startPeriodicRefresh:
+				let interval = state.periodicRefreshInterval.timeInterval
 				return .run { send in
 					while true {
 						try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))

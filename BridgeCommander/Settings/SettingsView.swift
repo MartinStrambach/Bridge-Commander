@@ -1,11 +1,9 @@
+import ComposableArchitecture
 import SwiftUI
 
 struct SettingsView: View {
-	@ObservedObject
-	var settings: AppSettings
-
-	@State
-	private var showTokenClearedAlert = false
+	@Bindable
+	var store: StoreOf<SettingsReducer>
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
@@ -25,11 +23,11 @@ struct SettingsView: View {
 				.font(.caption)
 				.foregroundColor(.secondary)
 
-				SecureField("YouTrack Auth Token", text: $settings.youtrackAuthToken)
+				SecureField("YouTrack Auth Token", text: $store.youtrackAuthToken.sending(\.setYouTrackToken))
 					.textFieldStyle(.roundedBorder)
 					.font(.system(.body, design: .monospaced))
 
-				Button(action: { showTokenClearedAlert = true }) {
+				Button(action: { store.send(.clearTokenButtonTapped) }) {
 					Label("Clear Token", systemImage: "xmark.circle")
 				}
 				.buttonStyle(.bordered)
@@ -47,7 +45,10 @@ struct SettingsView: View {
 					.font(.caption)
 					.foregroundColor(.secondary)
 
-				Picker("Refresh Interval", selection: $settings.periodicRefreshInterval) {
+				Picker(
+					"Refresh Interval",
+					selection: $store.periodicRefreshInterval.sending(\.setPeriodicRefreshInterval)
+				) {
 					ForEach(PeriodicRefreshInterval.allCases, id: \.self) { interval in
 						Text(interval.displayName).tag(interval)
 					}
@@ -62,17 +63,14 @@ struct SettingsView: View {
 		}
 		.padding()
 		.frame(minWidth: 500, minHeight: 300)
-		.alert("Clear Token", isPresented: $showTokenClearedAlert) {
-			Button("Cancel", role: .cancel) {}
-			Button("Clear", role: .destructive) {
-				settings.clear()
-			}
-		} message: {
-			Text("Are you sure you want to clear the token? YouTrack features will not work without a valid token.")
-		}
+		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 }
 
 #Preview {
-	SettingsView(settings: AppSettings())
+	SettingsView(
+		store: Store(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+	)
 }

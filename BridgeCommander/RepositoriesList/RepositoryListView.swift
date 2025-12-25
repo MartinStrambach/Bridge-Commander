@@ -5,8 +5,6 @@ struct RepositoryListView: View {
 	let store: StoreOf<RepositoryListReducer>
 	@StateObject
 	private var abbreviationMode = AbbreviationMode()
-	@EnvironmentObject
-	var appSettings: AppSettings
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -26,14 +24,14 @@ struct RepositoryListView: View {
 		.environmentObject(abbreviationMode)
 		.onAppear {
 			store.send(.startScan)
-			store.send(.startPeriodicRefresh(appSettings.periodicRefreshInterval.timeInterval))
+			store.send(.startPeriodicRefresh)
 		}
 		.onDisappear {
 			store.send(.stopPeriodicRefresh)
 		}
-		.onChange(of: appSettings.periodicRefreshInterval) { _, newValue in
+		.onChange(of: store.periodicRefreshInterval) { _, _ in
 			store.send(.stopPeriodicRefresh)
-			store.send(.startPeriodicRefresh(newValue.timeInterval))
+			store.send(.startPeriodicRefresh)
 		}
 	}
 
@@ -214,5 +212,4 @@ struct RepositoryListView: View {
 			}
 		)
 	)
-	.environmentObject(AppSettings())
 }

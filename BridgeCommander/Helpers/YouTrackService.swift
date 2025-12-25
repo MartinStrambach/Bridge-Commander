@@ -3,17 +3,14 @@ import Foundation
 enum YouTrackService {
 	private static let baseURL = "https://youtrack.livesport.eu/api"
 
-	/// Gets the auth token from UserDefaults
-	private static var authToken: String {
-		UserDefaults.standard.string(forKey: "youtrackAuthToken") ?? ""
-	}
-
 	/// Fetches PR URL and code review fields from a YouTrack issue
-	/// - Parameter ticketId: The YouTrack ticket ID (e.g., "MOB-1963")
+	/// - Parameters:
+	///   - ticketId: The YouTrack ticket ID (e.g., "MOB-1963")
+	///   - authToken: The YouTrack authentication token
 	/// - Returns: A tuple containing (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState), any
 	/// of which may
 	/// be nil if not found
-	static func fetchIssueDetails(for ticketId: String) async
+	static func fetchIssueDetails(for ticketId: String, authToken: String) async
 		-> (
 			prUrl: String?,
 			androidCR: CodeReviewState?,

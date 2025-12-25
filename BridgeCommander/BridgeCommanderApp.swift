@@ -1,34 +1,27 @@
-import Combine
 import ComposableArchitecture
 import SwiftUI
 
 @main
 struct BridgeCommanderApp: App {
-	@StateObject
-	private var appSettings = AppSettings()
-
-	private let store: StoreOf<RepositoryListReducer> = .init(
+	private let repositoryListStore: StoreOf<RepositoryListReducer> = .init(
 		initialState: .init(),
 		reducer: { RepositoryListReducer() }
 	)
 
+	private let settingsStore: StoreOf<SettingsReducer> = .init(
+		initialState: .init(),
+		reducer: { SettingsReducer() }
+	)
+
 	var body: some Scene {
 		WindowGroup {
-			RepositoryListView(store: store)
-				.environmentObject(appSettings)
+			RepositoryListView(store: repositoryListStore)
 		}
 		.windowStyle(.hiddenTitleBar)
 		.windowResizability(.contentSize)
 
 		Settings {
-			SettingsView(settings: appSettings)
+			SettingsView(store: settingsStore)
 		}
 	}
-
-	init() {
-		let _appSettings = AppSettings()
-		_appSettings.objectWillChange.send()
-		self._appSettings = StateObject(wrappedValue: _appSettings)
-	}
-
 }
