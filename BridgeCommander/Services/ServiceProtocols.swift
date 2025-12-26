@@ -6,6 +6,7 @@ protocol GitServiceType: Sendable {
 	func getCurrentBranch(at path: String) async
 		-> (branch: String, unstagedCount: Int, stagedCount: Int)
 	func countUnpushedCommits(at path: String) async throws -> Int
+	func countCommitsBehind(at path: String) async throws -> Int
 	func mergeMaster(at path: String) async throws
 	func pull(at path: String) async throws -> GitPullHelper.PullResult
 }

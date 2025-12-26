@@ -137,4 +137,44 @@ enum GitBranchDetector {
 			}
 		}
 	}
+
+	/// Counts the number of commits behind the remote branch
+	/// - Parameter path: The path to the Git repository
+	/// - Returns: The number of commits to pull, or 0 if no upstream branch or error occurs
+	static func countCommitsBehind(at path: String) async -> Int {
+		await withCheckedContinuation { continuation in
+			let process = Process()
+			process.currentDirectoryPath = path
+			process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+			process.arguments = ["-c", "git rev-list --count HEAD..@{u} 2>/dev/null"]
+
+			let pipe = Pipe()
+			process.standardOutput = pipe
+			process.standardError = Pipe()
+
+			process.terminationHandler = { _ in
+				let data = pipe.fileHandleForReading.readDataToEndOfFile()
+				let output = String(data: data, encoding: .utf8)?
+					.trimmingCharacters(in: .whitespacesAndNewlines)
+
+				if let output, let count = Int(output) {
+					if count > 0 {
+						print("Repository at \(path) is behind by \(count) commits")
+					}
+					continuation.resume(returning: count)
+				}
+				else {
+					continuation.resume(returning: 0)
+				}
+			}
+
+			do {
+				try process.run()
+			}
+			catch {
+				print("Error counting commits behind at \(path): \(error.localizedDescription)")
+				continuation.resume(returning: 0)
+			}
+		}
+	}
 }

@@ -18,6 +18,7 @@ struct RepositoryRowReducer {
 		var stagedChangesCount: Int
 
 		var unpushedCommitCount: Int
+		var commitsBehindCount: Int
 		var prUrl: String?
 		var androidCR: CodeReviewState?
 		var iosCR: CodeReviewState?
@@ -55,6 +56,7 @@ struct RepositoryRowReducer {
 			self.stagedChangesCount = 0
 
 			self.unpushedCommitCount = 0
+			self.commitsBehindCount = 0
 
 			self.xcodeButton = .init(repositoryPath: path)
 			self.tuistButton = .init(repositoryPath: path)
@@ -79,6 +81,7 @@ struct RepositoryRowReducer {
 		case requestRefresh
 		case didFetchBranch(String, Int, Int)
 		case didFetchUnpushedCount(Int)
+		case didFetchCommitsBehind(Int)
 		case didFetchYouTrack(
 			prUrl: String?,
 			androidCR: CodeReviewState?,
@@ -162,6 +165,7 @@ struct RepositoryRowReducer {
 				return .merge(
 					fetchBranch(for: &state),
 					fetchUnpushed(for: &state),
+					fetchCommitsBehind(for: &state),
 					fetchYouTrack(for: &state),
 					.send(.gitActionsMenu(.onAppear))
 				)
@@ -176,6 +180,10 @@ struct RepositoryRowReducer {
 
 			case let .didFetchUnpushedCount(count):
 				state.unpushedCommitCount = count
+				return .none
+
+			case let .didFetchCommitsBehind(count):
+				state.commitsBehindCount = count
 				return .none
 
 			case let .didFetchYouTrack(prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState):
@@ -252,6 +260,18 @@ struct RepositoryRowReducer {
 			do {
 				let count = try await gitService.countUnpushedCommits(at: path)
 				await send(.didFetchUnpushedCount(count))
+			}
+			catch {
+				print(error.localizedDescription)
+			}
+		}
+	}
+
+	private func fetchCommitsBehind(for state: inout State) -> Effect<Action> {
+		.run { [path = state.path] send in
+			do {
+				let count = try await gitService.countCommitsBehind(at: path)
+				await send(.didFetchCommitsBehind(count))
 			}
 			catch {
 				print(error.localizedDescription)

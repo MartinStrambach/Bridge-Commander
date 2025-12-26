@@ -116,6 +116,17 @@ struct RepositoryRowView: View {
 				}
 			}
 
+			// Commits behind (need to pull)
+			if store.commitsBehindCount > 0 {
+				HStack(spacing: 4) {
+					Image(systemName: "arrow.down.circle.fill")
+						.foregroundColor(.blue)
+					Text("\(store.commitsBehindCount)")
+						.lineLimit(1)
+						.font(.caption)
+				}
+			}
+
 			// Merge in progress
 			if store.gitActionsMenu.isMergeInProgress {
 				HStack(spacing: 4) {

@@ -27,6 +27,10 @@ struct GitService: GitServiceType, Sendable {
 		await GitBranchDetector.countUnpushedCommits(at: path)
 	}
 
+	func countCommitsBehind(at path: String) async -> Int {
+		await GitBranchDetector.countCommitsBehind(at: path)
+	}
+
 	func mergeMaster(at path: String) async throws {
 		try await GitMergeMasterHelper.mergeMaster(at: path)
 	}
