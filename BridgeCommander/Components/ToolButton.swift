@@ -8,9 +8,6 @@ struct ToolButton: View {
 		case customImage(String)
 	}
 
-	@Shared(.isAbbreviated)
-	private var isAbbreviated = false
-
 	private let label: String
 	private let icon: ButtonIcon
 	private let tooltip: String
@@ -18,53 +15,50 @@ struct ToolButton: View {
 	private let tint: Color?
 	private let action: () -> Void
 
-	private let minWidthFull: CGFloat = 110
-	private let minWidthCompact: CGFloat = 50
-	private let iconHeight: CGFloat = 13
+	private let buttonSize: CGFloat = 65
+	private let iconSize: CGFloat = 25
 
 	var body: some View {
-		Group {
-			if isProcessing {
-				HStack(spacing: 8) {
+		Button(action: action) {
+			VStack(spacing: 4) {
+				if isProcessing {
 					ProgressView()
-					Text(label)
-						.font(.body)
+						.frame(width: iconSize, height: iconSize)
+						.controlSize(.small)
 				}
-				.frame(minWidth: isAbbreviated ? minWidthCompact : minWidthFull)
-				.buttonStyle(.borderedProminent)
-			}
-			else {
-				Button(action: action) {
-					Label {
-						Text(label)
-					} icon: {
+				else {
+					Group {
 						switch icon {
 						case let .systemImage(name):
 							Image(systemName: name)
 								.resizable()
 								.renderingMode(.template)
-								.scaledToFit()
-								.frame(height: iconHeight)
-								.foregroundStyle(tint ?? .white)
 
 						case let .customImage(name):
 							Image(name)
 								.resizable()
 								.renderingMode(.template)
-								.scaledToFit()
-								.frame(height: iconHeight)
-								.foregroundStyle(tint ?? .white)
 						}
 					}
-					.frame(height: 20)
-					.frame(minWidth: isAbbreviated ? minWidthCompact : minWidthFull)
+					.scaledToFit()
+					.frame(width: iconSize, height: iconSize)
+					.foregroundStyle(tint ?? .primary)
 				}
-				.buttonStyle(.bordered)
+
+				Spacer(minLength: 0)
+
+				Text(label)
+					.font(.caption2)
+					.lineLimit(2)
+					.multilineTextAlignment(.center)
+					.fixedSize(horizontal: false, vertical: true)
 			}
+			.padding(4)
+			.frame(width: buttonSize, height: buttonSize)
 		}
+		.buttonStyle(.bordered)
+		.fixedSize()
 		.tint(tint)
-		.controlSize(.small)
-		.fixedSize(horizontal: true, vertical: false)
 		.disabled(isProcessing)
 		.help(tooltip)
 	}

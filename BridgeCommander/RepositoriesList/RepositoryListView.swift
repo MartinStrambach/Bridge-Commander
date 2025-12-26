@@ -4,9 +4,6 @@ import SwiftUI
 struct RepositoryListView: View {
 	let store: StoreOf<RepositoryListReducer>
 
-	@Shared(.isAbbreviated)
-	private var isAbbreviated = false
-
 	private var sortModeIcon: String {
 		switch store.sortMode {
 		case .state:
@@ -81,14 +78,6 @@ struct RepositoryListView: View {
 			}
 			if !store.repositories.isEmpty {
 				HStack(spacing: 8) {
-					HeaderButton(
-						icon: isAbbreviated
-							? "arrow.left.and.right.righttriangle.left.righttriangle.right"
-							: "arrow.left.and.right",
-						tooltip: isAbbreviated ? "Show full text" : "Abbreviate text",
-						action: { $isAbbreviated.withLock { $0.toggle() } }
-					)
-
 					HeaderButton(
 						icon: sortModeIcon,
 						tooltip: sortModeTooltip,

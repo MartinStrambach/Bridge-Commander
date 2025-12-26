@@ -6,33 +6,30 @@ import SwiftUI
 struct XcodeProjectButtonView: View {
 	let store: StoreOf<XcodeProjectButtonReducer>
 
-	@Shared(.isAbbreviated)
-	private var isAbbreviated = false
-
 	private var buttonLabel: String {
 		switch store.projectState {
 		case .idle:
 			if store.projectPath == nil {
-				isAbbreviated ? "Gen" : "Generate"
+				"Generate"
 			}
 			else {
-				isAbbreviated ? "Xcd" : "Xcode"
+				"Xcode"
 			}
 
 		case .checking:
-			isAbbreviated ? "Chck" : "Checking"
+			"Checking"
 
 		case .runningTi:
-			isAbbreviated ? "ti" : "Running ti"
+			"Running ti"
 
 		case .runningTg:
-			isAbbreviated ? "tg" : "Running tg"
+			"Running tg"
 
 		case .opening:
-			isAbbreviated ? "Opn" : "Opening"
+			"Opening"
 
 		case .error:
-			isAbbreviated ? "Xcd" : "Xcode"
+			"Xcode"
 		}
 	}
 

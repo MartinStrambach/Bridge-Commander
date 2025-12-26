@@ -35,14 +35,8 @@ struct TuistButtonView: View {
 						Label("Cache", systemImage: "tray")
 					}
 				} label: {
-					ToolButton(
-						label: "Tuist",
-						icon: .systemImage(""),
-						tooltip: "Tuist actions",
-						isProcessing: false,
-						tint: .purple,
-						action: {}
-					)
+					Text("Tuist")
+						.font(.system(size: 12))
 				}
 				.menuStyle(.borderlessButton)
 			}

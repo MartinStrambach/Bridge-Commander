@@ -6,9 +6,6 @@ import SwiftUI
 struct AndroidStudioButtonView: View {
 	let store: StoreOf<AndroidStudioButtonReducer>
 
-	@Shared(.isAbbreviated)
-	private var isAbbreviated = false
-
 	private var buttonTooltip: String {
 		if store.isOpening {
 			"Opening Android Studio..."
@@ -20,9 +17,7 @@ struct AndroidStudioButtonView: View {
 
 	var body: some View {
 		ToolButton(
-			label: store.isOpening
-				? (isAbbreviated ? "Open" : "Opening")
-				: (isAbbreviated ? "AS" : "Android Studio"),
+			label: store.isOpening ? "Opening" : "Android Studio",
 			icon: .customImage("android"),
 			tooltip: buttonTooltip,
 			isProcessing: store.isOpening,

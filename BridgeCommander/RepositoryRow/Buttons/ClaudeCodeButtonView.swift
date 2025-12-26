@@ -6,9 +6,6 @@ import SwiftUI
 struct ClaudeCodeButtonView: View {
 	let store: StoreOf<ClaudeCodeButtonReducer>
 
-	@Shared(.isAbbreviated)
-	private var isAbbreviated = false
-
 	private var buttonTooltip: String {
 		if store.isLaunching {
 			"Launching Claude Code..."
@@ -20,9 +17,7 @@ struct ClaudeCodeButtonView: View {
 
 	var body: some View {
 		ToolButton(
-			label: store.isLaunching
-				? (isAbbreviated ? "Launch" : "Launching")
-				: (isAbbreviated ? "CC" : "Claude Code"),
+			label: store.isLaunching ? "Launching" : "Claude Code",
 			icon: .systemImage("sparkles"),
 			tooltip: buttonTooltip,
 			isProcessing: store.isLaunching,
