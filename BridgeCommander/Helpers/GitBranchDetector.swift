@@ -103,7 +103,7 @@ enum GitBranchDetector {
 	static func countUnpushedCommits(at path: String) async -> Int {
 		await withCheckedContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
+			process.currentDirectoryURL = URL(fileURLWithPath: path)
 			process.executableURL = URL(fileURLWithPath: "/bin/zsh")
 			process.arguments = ["-c", "git rev-list --count @{u}..HEAD 2>/dev/null"]
 
@@ -143,7 +143,7 @@ enum GitBranchDetector {
 	static func countCommitsBehind(at path: String) async -> Int {
 		await withCheckedContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
+			process.currentDirectoryURL = URL(fileURLWithPath: path)
 			process.executableURL = URL(fileURLWithPath: "/bin/zsh")
 			process.arguments = ["-c", "git rev-list --count HEAD..@{u} 2>/dev/null"]
 

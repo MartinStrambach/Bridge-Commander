@@ -12,7 +12,12 @@ enum TerminalLauncher {
 		let process = Process()
 		process.executableURL = URL(filePath: "/usr/bin/open")
 		process.arguments = ["-a", "Terminal", escapedPath]
-		process.launch()
+
+		do {
+			try process.run()
+		} catch {
+			print("Failed to open Terminal: \(error.localizedDescription)")
+		}
 	}
 
 	/// Alternative method using NSWorkspace (opens terminal but doesn't set directory)

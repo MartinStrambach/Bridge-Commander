@@ -64,12 +64,7 @@ enum XcodeProjectGenerator {
 		process.executableURL = URL(filePath: "/usr/bin/open")
 		process.arguments = [projectPath]
 
-		process.launch()
-		process.waitUntilExit()
-
-		if process.terminationStatus != 0 {
-			throw ProjectGenerationError.failedToOpenProject
-		}
+		try process.run()
 	}
 
 }

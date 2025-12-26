@@ -30,7 +30,7 @@ enum TuistCommandHelper {
 	static func runCommand(_ action: TuistAction, at path: String) async -> Result<String, Error> {
 		await withCheckedContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
+			process.currentDirectoryURL = URL(fileURLWithPath: path)
 			process.executableURL = URL(fileURLWithPath: "/bin/zsh")
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 

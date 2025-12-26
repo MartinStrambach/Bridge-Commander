@@ -55,7 +55,7 @@ enum GitStatusDetector {
 	private static func getStagedCount(at path: String) async -> Int {
 		await withCheckedContinuation { continuation in
 			let process = Process()
-			process.currentDirectoryPath = path
+			process.currentDirectoryURL = URL(fileURLWithPath: path)
 			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
 			process.arguments = ["diff", "--name-only", "--cached"]
 

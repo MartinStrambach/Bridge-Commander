@@ -39,7 +39,7 @@ enum GitWorktreeCreator {
 			fi
 			"""
 			let process = Process()
-			process.currentDirectoryPath = repositoryPath
+			process.currentDirectoryURL = URL(fileURLWithPath: repositoryPath)
 			process.executableURL = URL(fileURLWithPath: "/bin/sh")
 			process.arguments = ["-c", script, "-s", branchName]
 			process.environment = GitEnvironmentHelper.setupEnvironment()

@@ -7,13 +7,14 @@ import Foundation
 struct RepositoryRowReducer {
 	@ObservableState
 	struct State: Equatable, Identifiable {
-		var id: String
-		var name: String
-		var path: String
-		var isWorktree: Bool
+		let id: String
+		let path: String
+		let ticketId: String?
 
+		var name: String
+		var isWorktree: Bool
 		var branchName: String?
-		var ticketId: String?
+		
 		var unstagedChangesCount: Int
 		var stagedChangesCount: Int
 
