@@ -14,6 +14,9 @@ struct SettingsReducer {
 		@Shared(.appStorage("iosSubfolderPath"))
 		var iosSubfolderPath = "ios/FlashScore"
 
+		@Shared(.appStorage("ticketIdRegex"))
+		var ticketIdRegex = "MOB-[0-9]+"
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -22,6 +25,7 @@ struct SettingsReducer {
 		case setYouTrackToken(String)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setIosSubfolderPath(String)
+		case setTicketIdRegex(String)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -44,6 +48,10 @@ struct SettingsReducer {
 
 			case let .setIosSubfolderPath(path):
 				state.$iosSubfolderPath.withLock { $0 = path }
+				return .none
+
+			case let .setTicketIdRegex(regex):
+				state.$ticketIdRegex.withLock { $0 = regex }
 				return .none
 
 			case .clearTokenButtonTapped:

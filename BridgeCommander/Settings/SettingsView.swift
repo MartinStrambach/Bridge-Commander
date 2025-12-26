@@ -76,6 +76,24 @@ struct SettingsView: View {
 			.padding()
 			.background(Color(NSColor.controlBackgroundColor))
 			.cornerRadius(8)
+
+			VStack(alignment: .leading, spacing: 8) {
+				Text("Ticket ID Regex Pattern")
+					.font(.headline)
+
+				Text(
+					"Specify the regular expression pattern to extract ticket IDs from branch names (e.g., 'MOB-[0-9]+', 'JIRA-[0-9]+')."
+				)
+				.font(.caption)
+				.foregroundColor(.secondary)
+
+				TextField("Ticket ID Regex", text: $store.ticketIdRegex.sending(\.setTicketIdRegex))
+					.textFieldStyle(.roundedBorder)
+					.font(.system(.body, design: .monospaced))
+			}
+			.padding()
+			.background(Color(NSColor.controlBackgroundColor))
+			.cornerRadius(8)
 		}
 		.padding()
 		.frame(minWidth: 500, minHeight: 300)

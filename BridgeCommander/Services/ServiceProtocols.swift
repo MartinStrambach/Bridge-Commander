@@ -64,7 +64,6 @@ enum TicketState: String, Sendable, Equatable {
 }
 
 protocol YouTrackServiceType: Sendable {
-	func extractTicketId(from branch: String) -> String?
 	func fetchIssueDetails(for ticketId: String) async throws -> IssueDetails
 }
 

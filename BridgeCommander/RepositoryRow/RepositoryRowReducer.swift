@@ -50,7 +50,12 @@ struct RepositoryRowReducer {
 			self.isWorktree = isWorktree
 
 			self.branchName = name
-			let ticketId = GitBranchDetector.extractTicketId(from: name)
+
+			// Access the shared ticketIdRegex setting
+			@Shared(.appStorage("ticketIdRegex"))
+			var regex = "MOB-[0-9]+"
+
+			let ticketId = GitBranchDetector.extractTicketId(from: name, pattern: regex)
 			self.ticketId = ticketId
 			self.unstagedChangesCount = 0
 			self.stagedChangesCount = 0
@@ -281,24 +286,12 @@ struct RepositoryRowReducer {
 	}
 
 	private func fetchYouTrack(for state: inout State) -> Effect<Action> {
-		guard let branchName = state.branchName else {
+		guard let ticketId = state.ticketId else {
 			return .none
 		}
 
-		return .run { [branch = branchName] send in
+		return .run { send in
 			do {
-				guard let ticketId = await youTrackService.extractTicketId(from: branch) else {
-					await send(.didFetchYouTrack(
-						prUrl: nil,
-						androidCR: nil,
-						iosCR: nil,
-						androidReviewerName: nil,
-						iosReviewerName: nil,
-						ticketState: nil
-					))
-					return
-				}
-
 				let details = try await youTrackService.fetchIssueDetails(for: ticketId)
 				await send(.didFetchYouTrack(
 					prUrl: details.prUrl,
