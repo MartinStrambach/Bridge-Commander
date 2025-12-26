@@ -3,37 +3,42 @@ import Foundation
 
 enum XcodeProjectGenerator {
 
-	/// Generates Xcode project by running ti and tg commands sequentially in ios/Flashscore
+	/// Generates Xcode project by running ti and tg commands sequentially in the configured iOS subfolder
 	/// - Parameters:
 	///   - repositoryPath: The repository root path
+	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	///   - onStateChange: Callback invoked when state changes
 	/// - Returns: Path to the generated Xcode project/workspace, or throws an error
 	@MainActor
 	static func generateProject(
 		at repositoryPath: String,
+		iosSubfolderPath: String,
 		onStateChange: @escaping (XcodeProjectState) -> Void
 	) async throws -> String {
-		// Get ios/Flashscore subfolder path
-		let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(in: repositoryPath)
+		// Get iOS subfolder path
+		let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+			in: repositoryPath,
+			iosSubfolderPath: iosSubfolderPath
+		)
 
-		// Verify ios/Flashscore directory exists
+		// Verify iOS subfolder directory exists
 		let fileManager = FileManager.default
 		var isDirectory: ObjCBool = false
 		guard
 			fileManager.fileExists(atPath: iosFlashscorePath, isDirectory: &isDirectory),
 			isDirectory.boolValue
 		else {
-			throw ProjectGenerationError.iosFlashscoreFolderNotFound
+			throw ProjectGenerationError.iosSubfolderNotFound(path: iosSubfolderPath)
 		}
 
-		// Step 1: Run ti command in ios/Flashscore
+		// Step 1: Run ti command in iOS subfolder
 		onStateChange(.runningTi)
 		let installResult = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath)
 		if case let .failure(error) = installResult {
 			throw ProjectGenerationError.commandFailed(command: "tuist install", message: error.localizedDescription)
 		}
 
-		// Step 2: Run tg command in ios/Flashscore
+		// Step 2: Run tg command in iOS subfolder
 		onStateChange(.runningTg)
 		let generateResult = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath)
 		if case let .failure(error) = generateResult {
@@ -42,7 +47,10 @@ enum XcodeProjectGenerator {
 
 		// Step 3: Find the generated project
 		onStateChange(.checking)
-		guard let projectPath = XcodeProjectDetector.findXcodeProject(in: repositoryPath) else {
+		guard let projectPath = XcodeProjectDetector.findXcodeProject(
+			in: repositoryPath,
+			iosSubfolderPath: iosSubfolderPath
+		) else {
 			throw ProjectGenerationError.projectNotFoundAfterGeneration
 		}
 
@@ -72,7 +80,7 @@ enum ProjectGenerationError: LocalizedError {
 	case commandFailed(command: String, message: String)
 	case projectNotFoundAfterGeneration
 	case failedToOpenProject
-	case iosFlashscoreFolderNotFound
+	case iosSubfolderNotFound(path: String)
 
 	var errorDescription: String? {
 		switch self {
@@ -82,8 +90,8 @@ enum ProjectGenerationError: LocalizedError {
 			"Project not found after generation"
 		case .failedToOpenProject:
 			"Failed to open Xcode project"
-		case .iosFlashscoreFolderNotFound:
-			"ios/Flashscore folder not found in repository"
+		case let .iosSubfolderNotFound(path):
+			"iOS subfolder '\(path)' not found in repository"
 		}
 	}
 }

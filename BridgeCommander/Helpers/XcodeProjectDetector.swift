@@ -2,15 +2,17 @@ import Foundation
 
 enum XcodeProjectDetector {
 
-	/// Finds an Xcode workspace or project in the ios/Flashscore subfolder
-	/// - Parameter repositoryPath: The repository root path
+	/// Finds an Xcode workspace or project in the configured iOS subfolder
+	/// - Parameters:
+	///   - repositoryPath: The repository root path
+	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	/// - Returns: Path to .xcworkspace or .xcodeproj, or nil if not found
 	/// - Note: Prioritizes .xcworkspace over .xcodeproj
-	static func findXcodeProject(in repositoryPath: String) -> String? {
+	static func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String? {
 		let fileManager = FileManager.default
 
-		// Build path to ios/Flashscore subfolder
-		let iosFlashscorePath = Self.getIosFlashscorePath(in: repositoryPath)
+		// Build path to iOS subfolder
+		let iosFlashscorePath = Self.getIosFlashscorePath(in: repositoryPath, iosSubfolderPath: iosSubfolderPath)
 
 		// Check if ios/Flashscore directory exists
 		var isDirectory: ObjCBool = false
@@ -39,17 +41,21 @@ enum XcodeProjectDetector {
 		return nil
 	}
 
-	/// Checks if an Xcode project or workspace exists in the ios/Flashscore subfolder
-	/// - Parameter repositoryPath: The repository root path
+	/// Checks if an Xcode project or workspace exists in the configured iOS subfolder
+	/// - Parameters:
+	///   - repositoryPath: The repository root path
+	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	/// - Returns: True if a project or workspace exists
-	static func hasXcodeProject(in repositoryPath: String) -> Bool {
-		findXcodeProject(in: repositoryPath) != nil
+	static func hasXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> Bool {
+		findXcodeProject(in: repositoryPath, iosSubfolderPath: iosSubfolderPath) != nil
 	}
 
-	/// Returns the ios/Flashscore subfolder path for a repository
-	/// - Parameter repositoryPath: The repository root path
-	/// - Returns: Path to ios/Flashscore subfolder
-	static func getIosFlashscorePath(in repositoryPath: String) -> String {
-		(repositoryPath as NSString).appendingPathComponent("ios/FlashScore")
+	/// Returns the iOS subfolder path for a repository
+	/// - Parameters:
+	///   - repositoryPath: The repository root path
+	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
+	/// - Returns: Full path to iOS subfolder
+	static func getIosFlashscorePath(in repositoryPath: String, iosSubfolderPath: String) -> String {
+		(repositoryPath as NSString).appendingPathComponent(iosSubfolderPath)
 	}
 }

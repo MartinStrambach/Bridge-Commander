@@ -59,10 +59,27 @@ struct SettingsView: View {
 			.background(Color(NSColor.controlBackgroundColor))
 			.cornerRadius(8)
 
-			Spacer()
+			VStack(alignment: .leading, spacing: 8) {
+				Text("iOS Project Subfolder")
+					.font(.headline)
+
+				Text(
+					"Specify the subfolder path within repositories where Tuist and Xcode actions should be executed (e.g., 'ios/FlashScore')."
+				)
+				.font(.caption)
+				.foregroundColor(.secondary)
+
+				TextField("iOS Subfolder Path", text: $store.iosSubfolderPath.sending(\.setIosSubfolderPath))
+					.textFieldStyle(.roundedBorder)
+					.font(.system(.body, design: .monospaced))
+			}
+			.padding()
+			.background(Color(NSColor.controlBackgroundColor))
+			.cornerRadius(8)
 		}
 		.padding()
 		.frame(minWidth: 500, minHeight: 300)
+		.fixedSize(horizontal: true, vertical: true)
 		.alert(store: store.scope(state: \.$alert, action: \.alert))
 	}
 }

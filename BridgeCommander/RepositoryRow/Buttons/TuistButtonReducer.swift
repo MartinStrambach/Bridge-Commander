@@ -9,6 +9,8 @@ struct TuistButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var runningAction: TuistAction?
+		@Shared(.appStorage("iosSubfolderPath"))
+		var iosSubfolderPath = "ios/FlashScore"
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -38,8 +40,11 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .generate
-				return .run { [repositoryPath = state.repositoryPath] send in
-					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(in: repositoryPath)
+				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+						in: repositoryPath,
+						iosSubfolderPath: iosSubfolderPath
+					)
 					let result = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath)
 					await send(.actionCompleted(.generate, result))
 				}
@@ -50,8 +55,11 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .install
-				return .run { [repositoryPath = state.repositoryPath] send in
-					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(in: repositoryPath)
+				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+						in: repositoryPath,
+						iosSubfolderPath: iosSubfolderPath
+					)
 					let result = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath)
 					await send(.actionCompleted(.install, result))
 				}
@@ -62,8 +70,11 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .cache
-				return .run { [repositoryPath = state.repositoryPath] send in
-					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(in: repositoryPath)
+				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+						in: repositoryPath,
+						iosSubfolderPath: iosSubfolderPath
+					)
 					let result = await TuistCommandHelper.runCommand(.cache, at: iosFlashscorePath)
 					await send(.actionCompleted(.cache, result))
 				}

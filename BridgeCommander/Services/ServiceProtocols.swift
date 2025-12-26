@@ -80,8 +80,8 @@ struct IssueDetails: Sendable {
 // MARK: - Xcode Service Protocol
 
 protocol XcodeServiceType: Sendable {
-	func hasXcodeProject(in path: String) -> Bool
-	func findXcodeProject(in repositoryPath: String) -> String?
+	func hasXcodeProject(in path: String, iosSubfolderPath: String) -> Bool
+	func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String?
 }
 
 // MARK: - Last Opened Directory Service Protocol

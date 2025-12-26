@@ -167,7 +167,8 @@ struct RepositoryRowReducer {
 					fetchUnpushed(for: &state),
 					fetchCommitsBehind(for: &state),
 					fetchYouTrack(for: &state),
-					.send(.gitActionsMenu(.onAppear))
+					.send(.gitActionsMenu(.onAppear)),
+					.send(.xcodeButton(.onAppear))
 				)
 
 			case let .didFetchBranch(branch, unstaged, staged):

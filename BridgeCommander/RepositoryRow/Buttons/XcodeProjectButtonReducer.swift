@@ -10,6 +10,8 @@ struct XcodeProjectButtonReducer {
 		let repositoryPath: String
 		var projectState: XcodeProjectState = .checking
 		var projectPath: String?
+		@Shared(.appStorage("iosSubfolderPath"))
+		var iosSubfolderPath = "ios/FlashScore"
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -37,8 +39,8 @@ struct XcodeProjectButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .onAppear:
-				return .run { [path = state.repositoryPath] send in
-					let projectPath = await xcodeService.findXcodeProject(in: path)
+				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+					let projectPath = await xcodeService.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
 					await send(.foundProjectPath(projectPath))
 				}
 
@@ -95,9 +97,12 @@ struct XcodeProjectButtonReducer {
 				return .none
 
 			case .alert(.presented(.confirmGenerate)):
-				return .run { [path = state.repositoryPath] send in
+				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
 					do {
-						let projectPath = try await XcodeProjectGenerator.generateProject(at: path) { newState in
+						let projectPath = try await XcodeProjectGenerator.generateProject(
+							at: path,
+							iosSubfolderPath: iosSubfolderPath
+						) { newState in
 							Task {
 								await send(.projectGenerationProgress(newState))
 							}

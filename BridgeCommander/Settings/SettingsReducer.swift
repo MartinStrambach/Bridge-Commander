@@ -11,6 +11,9 @@ struct SettingsReducer {
 		@Shared(.appStorage("periodicRefreshInterval"))
 		var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
+		@Shared(.appStorage("iosSubfolderPath"))
+		var iosSubfolderPath = "ios/FlashScore"
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -18,6 +21,7 @@ struct SettingsReducer {
 	enum Action: Sendable {
 		case setYouTrackToken(String)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
+		case setIosSubfolderPath(String)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -36,6 +40,10 @@ struct SettingsReducer {
 
 			case let .setPeriodicRefreshInterval(interval):
 				state.$periodicRefreshInterval.withLock { $0 = interval }
+				return .none
+
+			case let .setIosSubfolderPath(path):
+				state.$iosSubfolderPath.withLock { $0 = path }
 				return .none
 
 			case .clearTokenButtonTapped:

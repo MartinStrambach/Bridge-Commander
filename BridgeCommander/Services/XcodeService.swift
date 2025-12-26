@@ -3,11 +3,11 @@ import Foundation
 // MARK: - Xcode Service
 
 struct XcodeServiceImpl: XcodeServiceType, Sendable {
-	func hasXcodeProject(in path: String) -> Bool {
-		XcodeProjectDetector.hasXcodeProject(in: path)
+	func hasXcodeProject(in path: String, iosSubfolderPath: String) -> Bool {
+		XcodeProjectDetector.hasXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
 	}
 
-	func findXcodeProject(in repositoryPath: String) -> String? {
-		XcodeProjectDetector.findXcodeProject(in: repositoryPath)
+	func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String? {
+		XcodeProjectDetector.findXcodeProject(in: repositoryPath, iosSubfolderPath: iosSubfolderPath)
 	}
 }
