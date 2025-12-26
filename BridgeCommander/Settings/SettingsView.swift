@@ -94,6 +94,25 @@ struct SettingsView: View {
 			.padding()
 			.background(Color(NSColor.controlBackgroundColor))
 			.cornerRadius(8)
+
+			VStack(alignment: .leading, spacing: 8) {
+				Text("Tuist Generate Options")
+					.font(.headline)
+
+				Toggle(
+					"Open Xcode after generating project",
+					isOn: $store.openXcodeAfterGenerate.sending(\.setOpenXcodeAfterGenerate)
+				)
+
+				Text(
+					"Automatically open the generated Xcode project after running 'tuist generate'."
+				)
+				.font(.caption)
+				.foregroundColor(.secondary)
+			}
+			.padding()
+			.background(Color(NSColor.controlBackgroundColor))
+			.cornerRadius(8)
 		}
 		.padding()
 		.frame(minWidth: 500, minHeight: 300)

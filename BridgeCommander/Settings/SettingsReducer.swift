@@ -17,6 +17,9 @@ struct SettingsReducer {
 		@Shared(.appStorage("ticketIdRegex"))
 		var ticketIdRegex = "MOB-[0-9]+"
 
+		@Shared(.appStorage("openXcodeAfterGenerate"))
+		var openXcodeAfterGenerate = true
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -26,6 +29,7 @@ struct SettingsReducer {
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setIosSubfolderPath(String)
 		case setTicketIdRegex(String)
+		case setOpenXcodeAfterGenerate(Bool)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -52,6 +56,10 @@ struct SettingsReducer {
 
 			case let .setTicketIdRegex(regex):
 				state.$ticketIdRegex.withLock { $0 = regex }
+				return .none
+
+			case let .setOpenXcodeAfterGenerate(shouldOpen):
+				state.$openXcodeAfterGenerate.withLock { $0 = shouldOpen }
 				return .none
 
 			case .clearTokenButtonTapped:

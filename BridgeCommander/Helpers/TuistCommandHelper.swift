@@ -26,8 +26,9 @@ enum TuistCommandHelper {
 	/// - Parameters:
 	///   - action: The Tuist action to run
 	///   - path: The repository path where the command should be executed
+	///   - shouldOpenXcode: For generate action, controls whether Xcode opens after generation
 	/// - Returns: A Result containing the command output on success or an error on failure
-	static func runCommand(_ action: TuistAction, at path: String) async -> Result<String, Error> {
+	static func runCommand(_ action: TuistAction, at path: String, shouldOpenXcode: Bool) async -> Result<String, Error> {
 		await withCheckedContinuation { continuation in
 			let process = Process()
 			process.currentDirectoryURL = URL(fileURLWithPath: path)
@@ -37,7 +38,10 @@ enum TuistCommandHelper {
 			// Replace 'mise exec' with full path to mise for compatibility in sandbox
 			let misePath = NSHomeDirectory() + "/.local/bin/mise"
 			let commandString = action.commandString
-			let fullCommand = "\(misePath) exec -- tuist \(commandString)"
+
+			// Add --no-open flag for generate action when Xcode should not open
+			let flags = (action == .generate && !shouldOpenXcode) ? " --no-open" : ""
+			let fullCommand = "\(misePath) exec -- tuist \(commandString)\(flags)"
 
 			process.arguments = ["-c", fullCommand]
 

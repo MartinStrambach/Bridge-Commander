@@ -12,6 +12,8 @@ struct XcodeProjectButtonReducer {
 		var projectPath: String?
 		@Shared(.appStorage("iosSubfolderPath"))
 		var iosSubfolderPath = "ios/FlashScore"
+		@Shared(.appStorage("openXcodeAfterGenerate"))
+		var openXcodeAfterGenerate = true
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -97,11 +99,12 @@ struct XcodeProjectButtonReducer {
 				return .none
 
 			case .alert(.presented(.confirmGenerate)):
-				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, shouldOpen = state.openXcodeAfterGenerate] send in
 					do {
 						let projectPath = try await XcodeProjectGenerator.generateProject(
 							at: path,
-							iosSubfolderPath: iosSubfolderPath
+							iosSubfolderPath: iosSubfolderPath,
+							shouldOpenXcode: shouldOpen
 						) { newState in
 							Task {
 								await send(.projectGenerationProgress(newState))

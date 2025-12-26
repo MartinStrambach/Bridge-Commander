@@ -11,6 +11,8 @@ struct TuistButtonReducer {
 		var runningAction: TuistAction?
 		@Shared(.appStorage("iosSubfolderPath"))
 		var iosSubfolderPath = "ios/FlashScore"
+		@Shared(.appStorage("openXcodeAfterGenerate"))
+		var openXcodeAfterGenerate = true
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -40,12 +42,12 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .generate
-				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, shouldOpen = state.openXcodeAfterGenerate] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
 						iosSubfolderPath: iosSubfolderPath
 					)
-					let result = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath)
+					let result = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath, shouldOpenXcode: shouldOpen)
 					await send(.actionCompleted(.generate, result))
 				}
 
@@ -55,12 +57,12 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .install
-				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, shouldOpen = state.openXcodeAfterGenerate] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
 						iosSubfolderPath: iosSubfolderPath
 					)
-					let result = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath)
+					let result = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath, shouldOpenXcode: shouldOpen)
 					await send(.actionCompleted(.install, result))
 				}
 
@@ -70,12 +72,12 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .cache
-				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, shouldOpen = state.openXcodeAfterGenerate] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
 						iosSubfolderPath: iosSubfolderPath
 					)
-					let result = await TuistCommandHelper.runCommand(.cache, at: iosFlashscorePath)
+					let result = await TuistCommandHelper.runCommand(.cache, at: iosFlashscorePath, shouldOpenXcode: shouldOpen)
 					await send(.actionCompleted(.cache, result))
 				}
 

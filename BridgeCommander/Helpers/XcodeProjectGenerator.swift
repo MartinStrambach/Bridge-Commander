@@ -7,12 +7,14 @@ enum XcodeProjectGenerator {
 	/// - Parameters:
 	///   - repositoryPath: The repository root path
 	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
+	///   - shouldOpenXcode: Controls whether Xcode opens after generation
 	///   - onStateChange: Callback invoked when state changes
 	/// - Returns: Path to the generated Xcode project/workspace, or throws an error
 	@MainActor
 	static func generateProject(
 		at repositoryPath: String,
 		iosSubfolderPath: String,
+		shouldOpenXcode: Bool,
 		onStateChange: @escaping (XcodeProjectState) -> Void
 	) async throws -> String {
 		// Get iOS subfolder path
@@ -33,14 +35,14 @@ enum XcodeProjectGenerator {
 
 		// Step 1: Run ti command in iOS subfolder
 		onStateChange(.runningTi)
-		let installResult = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath)
+		let installResult = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath, shouldOpenXcode: shouldOpenXcode)
 		if case let .failure(error) = installResult {
 			throw ProjectGenerationError.commandFailed(command: "tuist install", message: error.localizedDescription)
 		}
 
 		// Step 2: Run tg command in iOS subfolder
 		onStateChange(.runningTg)
-		let generateResult = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath)
+		let generateResult = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath, shouldOpenXcode: shouldOpenXcode)
 		if case let .failure(error) = generateResult {
 			throw ProjectGenerationError.commandFailed(command: "tuist generate", message: error.localizedDescription)
 		}
