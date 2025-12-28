@@ -34,6 +34,12 @@ struct TuistButtonView: View {
 					} label: {
 						Label("Cache", systemImage: "tray")
 					}
+
+					Button {
+						store.send(.editTapped)
+					} label: {
+						Label("Edit", systemImage: "pencil")
+					}
 				} label: {
 					Text("Tuist")
 						.font(.system(size: 12))
@@ -55,6 +61,8 @@ struct TuistButtonView: View {
 			"Installing..."
 		case .cache:
 			"Caching..."
+		case .edit:
+			"Opening..."
 		}
 	}
 
@@ -66,6 +74,8 @@ struct TuistButtonView: View {
 			"Installing Tuist dependencies..."
 		case .cache:
 			"Caching Tuist targets..."
+		case .edit:
+			"Opening Tuist project for editing..."
 		}
 	}
 }

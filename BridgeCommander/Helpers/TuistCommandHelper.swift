@@ -6,6 +6,7 @@ enum TuistAction: Equatable {
 	case generate
 	case install
 	case cache
+	case edit
 
 	var commandString: String {
 		switch self {
@@ -15,6 +16,8 @@ enum TuistAction: Equatable {
 			"install"
 		case .cache:
 			"cache"
+		case .edit:
+			"edit"
 		}
 	}
 }
