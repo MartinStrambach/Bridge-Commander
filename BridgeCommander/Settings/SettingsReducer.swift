@@ -5,22 +5,22 @@ import Foundation
 struct SettingsReducer {
 	@ObservableState
 	struct State: Equatable {
-		@Shared(.appStorage("youtrackAuthToken"))
+		@Shared(.youtrackAuthToken)
 		var youtrackAuthToken = ""
 
-		@Shared(.appStorage("periodicRefreshInterval"))
+		@Shared(.periodicRefreshInterval)
 		var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
-		@Shared(.appStorage("iosSubfolderPath"))
+		@Shared(.iosSubfolderPath)
 		var iosSubfolderPath = "ios/FlashScore"
 
-		@Shared(.appStorage("ticketIdRegex"))
+		@Shared(.ticketIdRegex)
 		var ticketIdRegex = "MOB-[0-9]+"
 
-		@Shared(.appStorage("branchNameRegex"))
+		@Shared(.branchNameRegex)
 		var branchNameRegex = "[a-zA-Z]+-\\d+[_/]"
 
-		@Shared(.appStorage("openXcodeAfterGenerate"))
+		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 
 		@Presents

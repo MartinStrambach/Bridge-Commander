@@ -9,9 +9,9 @@ struct TuistButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var runningAction: TuistAction?
-		@Shared(.appStorage("iosSubfolderPath"))
+		@Shared(.iosSubfolderPath)
 		var iosSubfolderPath = "ios/FlashScore"
-		@Shared(.appStorage("openXcodeAfterGenerate"))
+		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 		@Presents
 		var alert: AlertState<Action.Alert>?

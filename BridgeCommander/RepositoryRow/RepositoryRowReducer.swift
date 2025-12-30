@@ -42,7 +42,7 @@ struct RepositoryRowReducer {
 		fileprivate var lastRefreshTime: Date?
 
 		var formattedBranchName: String {
-			@Shared(.appStorage("branchNameRegex"))
+			@Shared(.branchNameRegex)
 			var regex = "[a-zA-Z]+-\\d+[_/]"
 
 			return BranchNameFormatter.format(branchName, ticketId: ticketId, branchNameRegex: regex)
@@ -57,7 +57,7 @@ struct RepositoryRowReducer {
 			self.branchName = name
 
 			// Access the shared ticketIdRegex setting
-			@Shared(.appStorage("ticketIdRegex"))
+			@Shared(.ticketIdRegex)
 			var regex = "MOB-[0-9]+"
 
 			let ticketId = GitBranchDetector.extractTicketId(from: name, pattern: regex)

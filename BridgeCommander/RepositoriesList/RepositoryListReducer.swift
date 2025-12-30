@@ -18,7 +18,7 @@ struct RepositoryListReducer {
 
 		var sortMode: SortMode = .state
 
-		@Shared(.appStorage("periodicRefreshInterval"))
+		@Shared(.periodicRefreshInterval)
 		var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 	}
 

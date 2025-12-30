@@ -10,9 +10,9 @@ struct XcodeProjectButtonReducer {
 		let repositoryPath: String
 		var projectState: XcodeProjectState = .checking
 		var projectPath: String?
-		@Shared(.appStorage("iosSubfolderPath"))
+		@Shared(.iosSubfolderPath)
 		var iosSubfolderPath = "ios/FlashScore"
-		@Shared(.appStorage("openXcodeAfterGenerate"))
+		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 		@Presents
 		var alert: AlertState<Action.Alert>?
