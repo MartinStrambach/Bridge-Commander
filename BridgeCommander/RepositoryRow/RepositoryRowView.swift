@@ -49,9 +49,12 @@ struct RepositoryRowView: View {
 		VStack(alignment: .leading, spacing: 4) {
 			HStack(spacing: 12) {
 				VStack(alignment: .leading, spacing: 2) {
-					Text(store.formattedBranchName)
-						.font(.headline)
-						.lineLimit(1)
+					HStack(spacing: 8) {
+						Text(store.formattedBranchName)
+							.font(.headline)
+							.lineLimit(1)
+						changesIndicator
+					}
 
 					// Branch with icon
 					if let branchName = store.branchName {
@@ -64,7 +67,27 @@ struct RepositoryRowView: View {
 								.foregroundColor(.secondary)
 								.lineLimit(1)
 								.truncationMode(.middle)
-							changesIndicator
+
+							if store.gitActionsMenu.isMergeInProgress {
+								HStack(spacing: 4) {
+									Image(systemName: "arrow.triangle.merge")
+										.foregroundColor(.red)
+									Text("Merge")
+										.lineLimit(1)
+										.font(.caption)
+								}
+							}
+
+							if !store.hasRemoteBranch {
+								HStack(spacing: 4) {
+									Image(systemName: "icloud.slash.fill")
+										.foregroundColor(.orange)
+									Text("No remote")
+										.lineLimit(1)
+										.font(.caption)
+										.foregroundColor(.orange)
+								}
+							}
 						}
 					}
 				}
@@ -108,7 +131,7 @@ struct RepositoryRowView: View {
 			// Unpushed commits
 			if store.unpushedCommitCount > 0 {
 				HStack(spacing: 4) {
-					Image(systemName: "exclamationmark.circle.fill")
+					Image(systemName: "arrow.up.circle.fill")
 						.foregroundColor(.red)
 					Text("\(store.unpushedCommitCount)")
 						.lineLimit(1)
@@ -122,17 +145,6 @@ struct RepositoryRowView: View {
 					Image(systemName: "arrow.down.circle.fill")
 						.foregroundColor(.blue)
 					Text("\(store.commitsBehindCount)")
-						.lineLimit(1)
-						.font(.caption)
-				}
-			}
-
-			// Merge in progress
-			if store.gitActionsMenu.isMergeInProgress {
-				HStack(spacing: 4) {
-					Image(systemName: "arrow.triangle.merge")
-						.foregroundColor(.red)
-					Text("Merge")
 						.lineLimit(1)
 						.font(.caption)
 				}

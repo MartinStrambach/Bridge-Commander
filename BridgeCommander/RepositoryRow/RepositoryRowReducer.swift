@@ -20,6 +20,7 @@ struct RepositoryRowReducer {
 
 		var unpushedCommitCount: Int
 		var commitsBehindCount: Int
+		var hasRemoteBranch: Bool
 		var prUrl: String?
 		var androidCR: CodeReviewState?
 		var iosCR: CodeReviewState?
@@ -63,6 +64,7 @@ struct RepositoryRowReducer {
 
 			self.unpushedCommitCount = 0
 			self.commitsBehindCount = 0
+			self.hasRemoteBranch = true
 
 			self.xcodeButton = .init(repositoryPath: path)
 			self.tuistButton = .init(repositoryPath: path)
@@ -88,6 +90,7 @@ struct RepositoryRowReducer {
 		case didFetchBranch(String, Int, Int)
 		case didFetchUnpushedCount(Int)
 		case didFetchCommitsBehind(Int)
+		case didFetchRemoteBranch(Bool)
 		case didFetchYouTrack(
 			prUrl: String?,
 			androidCR: CodeReviewState?,
@@ -172,6 +175,7 @@ struct RepositoryRowReducer {
 					fetchBranch(for: &state),
 					fetchUnpushed(for: &state),
 					fetchCommitsBehind(for: &state),
+					fetchRemoteBranch(for: &state),
 					fetchYouTrack(for: &state),
 					.send(.gitActionsMenu(.onAppear)),
 					.send(.xcodeButton(.onAppear))
@@ -191,6 +195,10 @@ struct RepositoryRowReducer {
 
 			case let .didFetchCommitsBehind(count):
 				state.commitsBehindCount = count
+				return .none
+
+			case let .didFetchRemoteBranch(hasRemote):
+				state.hasRemoteBranch = hasRemote
 				return .none
 
 			case let .didFetchYouTrack(prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState):
@@ -283,6 +291,13 @@ struct RepositoryRowReducer {
 			catch {
 				print(error.localizedDescription)
 			}
+		}
+	}
+
+	private func fetchRemoteBranch(for state: inout State) -> Effect<Action> {
+		.run { [path = state.path] send in
+			let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
+			await send(.didFetchRemoteBranch(hasRemote))
 		}
 	}
 
