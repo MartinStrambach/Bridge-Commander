@@ -96,6 +96,24 @@ struct SettingsView: View {
 			.cornerRadius(8)
 
 			VStack(alignment: .leading, spacing: 8) {
+				Text("Branch Name Regex Pattern")
+					.font(.headline)
+
+				Text(
+					"Specify the regular expression pattern to remove project prefixes from branch names (e.g., '[a-zA-Z]+-\\\\d+[_/]' matches 'MOB-123_' or 'tech-60/')."
+				)
+				.font(.caption)
+				.foregroundColor(.secondary)
+
+				TextField("Branch Name Regex", text: $store.branchNameRegex.sending(\.setBranchNameRegex))
+					.textFieldStyle(.roundedBorder)
+					.font(.system(.body, design: .monospaced))
+			}
+			.padding()
+			.background(Color(NSColor.controlBackgroundColor))
+			.cornerRadius(8)
+
+			VStack(alignment: .leading, spacing: 8) {
 				Text("Tuist Generate Options")
 					.font(.headline)
 

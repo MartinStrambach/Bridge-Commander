@@ -3,7 +3,7 @@ import Foundation
 enum BranchNameFormatter {
 	/// Returns a formatted, human-readable version of a branch name
 	/// Removes prefixes (feature/fix/etc), project types, ticket numbers, and replaces underscores with spaces
-	static func format(_ branchName: String?, ticketId: String? = nil) -> String {
+	static func format(_ branchName: String?, ticketId: String? = nil, branchNameRegex: String) -> String {
 		guard let branchName else {
 			return ""
 		}
@@ -16,9 +16,8 @@ enum BranchNameFormatter {
 		}
 
 		// 2. Remove project type patterns like "tech-60", "mob-45" (case insensitive)
-		// Pattern: word-digits followed by underscore or slash
-		let projectTypePattern = "[a-zA-Z]+-\\d+[_/]"
-		if let regex = try? NSRegularExpression(pattern: projectTypePattern, options: .caseInsensitive) {
+		// Pattern: configurable via branchNameRegex parameter
+		if let regex = try? NSRegularExpression(pattern: branchNameRegex, options: .caseInsensitive) {
 			let range = NSRange(formatted.startIndex..., in: formatted)
 			formatted = regex.stringByReplacingMatches(
 				in: formatted,

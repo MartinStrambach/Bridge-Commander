@@ -14,7 +14,7 @@ struct RepositoryRowReducer {
 		var name: String
 		var isWorktree: Bool
 		var branchName: String?
-		
+
 		var unstagedChangesCount: Int
 		var stagedChangesCount: Int
 
@@ -42,7 +42,10 @@ struct RepositoryRowReducer {
 		fileprivate var lastRefreshTime: Date?
 
 		var formattedBranchName: String {
-			BranchNameFormatter.format(branchName, ticketId: ticketId)
+			@Shared(.appStorage("branchNameRegex"))
+			var regex = "[a-zA-Z]+-\\d+[_/]"
+
+			return BranchNameFormatter.format(branchName, ticketId: ticketId, branchNameRegex: regex)
 		}
 
 		init(path: String, name: String, isWorktree: Bool = false) {
