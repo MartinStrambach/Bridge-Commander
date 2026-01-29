@@ -15,7 +15,6 @@ struct PullButtonReducer {
 
 	enum Action: Equatable {
 		case pullTapped
-		case pullStarted
 		case pullCompleted(result: GitPullHelper.PullResult?, error: GitPullHelper.PullError?)
 		case alert(PresentationAction<Alert>)
 
@@ -30,9 +29,6 @@ struct PullButtonReducer {
 			switch action {
 			case .pullTapped:
 				state.isPulling = true
-				return .send(.pullStarted)
-
-			case .pullStarted:
 				return .run { [path = state.repositoryPath] send in
 					do {
 						let result = try await gitService.pull(at: path)

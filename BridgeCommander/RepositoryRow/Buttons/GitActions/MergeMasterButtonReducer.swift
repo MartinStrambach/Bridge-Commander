@@ -15,8 +15,7 @@ struct MergeMasterButtonReducer {
 
 	enum Action: Equatable {
 		case mergeMasterTapped
-		case mergeMasterStarted
-		case mergeMasterCompleted(success: Bool, error: GitMergeMasterHelper.MergeError?)
+		case mergeMasterCompleted(error: GitMergeMasterHelper.MergeError?)
 		case alert(PresentationAction<Alert>)
 
 		enum Alert: Equatable {}
@@ -30,24 +29,21 @@ struct MergeMasterButtonReducer {
 			switch action {
 			case .mergeMasterTapped:
 				state.isMergingMaster = true
-				return .send(.mergeMasterStarted)
-
-			case .mergeMasterStarted:
 				return .run { [path = state.repositoryPath] send in
 					do {
 						try await gitService.mergeMaster(at: path)
-						await send(.mergeMasterCompleted(success: true, error: nil))
+						await send(.mergeMasterCompleted(error: nil))
 					}
 					catch let error as GitMergeMasterHelper.MergeError {
-						await send(.mergeMasterCompleted(success: false, error: error))
+						await send(.mergeMasterCompleted(error: error))
 					}
 					catch {
 						print("Unexpected error during merge: \(error)")
-						await send(.mergeMasterCompleted(success: true, error: nil))
+						await send(.mergeMasterCompleted(error: nil))
 					}
 				}
 
-			case let .mergeMasterCompleted(_, error):
+			case let .mergeMasterCompleted(error):
 				state.isMergingMaster = false
 				if let error {
 					let message =

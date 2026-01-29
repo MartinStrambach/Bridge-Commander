@@ -18,8 +18,6 @@ struct StashButtonReducer {
 	enum Action: Equatable {
 		case stashTapped
 		case stashPopTapped
-		case stashStarted
-		case stashPopStarted
 		case stashCompleted(success: Bool, error: String?)
 		case stashPopCompleted(success: Bool, error: String?)
 		case checkStashStatus
@@ -35,9 +33,6 @@ struct StashButtonReducer {
 			switch action {
 			case .stashTapped:
 				state.isProcessing = true
-				return .send(.stashStarted)
-
-			case .stashStarted:
 				return .run { [path = state.repositoryPath] send in
 					do {
 						try await GitStashHelper.stash(at: path)
@@ -86,9 +81,6 @@ struct StashButtonReducer {
 
 			case .stashPopTapped:
 				state.isProcessing = true
-				return .send(.stashPopStarted)
-
-			case .stashPopStarted:
 				return .run { [path = state.repositoryPath] send in
 					do {
 						try await GitStashHelper.stashPop(at: path)
