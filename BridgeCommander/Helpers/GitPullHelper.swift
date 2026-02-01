@@ -15,7 +15,7 @@ enum GitPullHelper {
 			let process = Process()
 			process.currentDirectoryURL = URL(filePath: path)
 			process.executableURL = URL(filePath: "/usr/bin/git")
-			process.arguments = ["pull"]
+			process.arguments = ["pull", "--prune"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 
 			let outputPipe = Pipe()

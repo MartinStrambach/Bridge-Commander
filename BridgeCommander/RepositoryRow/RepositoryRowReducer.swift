@@ -240,7 +240,8 @@ struct RepositoryRowReducer {
 
 			case let .gitActionsMenu(action):
 				switch action {
-				case .mergeMasterButton(.mergeMasterCompleted),
+				case .fetchButton(.fetchCompleted),
+				     .mergeMasterButton(.mergeMasterCompleted),
 				     .pullButton(.pullCompleted),
 				     .stashButton(.stashCompleted),
 					 .pushButton(.pushCompleted),

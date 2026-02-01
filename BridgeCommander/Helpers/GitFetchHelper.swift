@@ -15,7 +15,7 @@ enum GitFetchHelper {
 			let process = Process()
 			process.currentDirectoryURL = URL(filePath: path)
 			process.executableURL = URL(filePath: "/usr/bin/git")
-			process.arguments = ["fetch", "--verbose"]
+			process.arguments = ["fetch", "--prune", "--verbose"]
 			process.environment = GitEnvironmentHelper.setupEnvironment()
 
 			let outputPipe = Pipe()
@@ -76,10 +76,14 @@ enum GitFetchHelper {
 		var branchCount = 0
 
 		for line in lines {
-			// Look for patterns like "abc123..def456  branch-name -> origin/branch-name"
-			// or "* [new branch]      branch-name -> origin/branch-name"
-			if line.contains("->"), line.contains("..") || line.contains("[new") {
-				branchCount += 1
+			// Look for patterns like:
+			// - "abc123..def456  branch-name -> origin/branch-name" (updated)
+			// - "* [new branch]      branch-name -> origin/branch-name" (new)
+			// - " - [deleted]         (none)     -> origin/branch-name" (pruned)
+			if line.contains("->") {
+				if line.contains("..") || line.contains("[new") || line.contains("[deleted]") {
+					branchCount += 1
+				}
 			}
 		}
 
