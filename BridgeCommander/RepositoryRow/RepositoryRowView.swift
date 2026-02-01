@@ -7,10 +7,12 @@ struct RepositoryRowView: View {
 	private var backgroundColorForState: Color {
 		if let ticketState = store.ticketState {
 			switch ticketState {
-			case .accepted,
-			     .done,
-			     .waitingToAcceptation:
+			case .done:
 				return Color.mint.opacity(0.1)
+
+			case .accepted,
+			     .waitingToAcceptation:
+				return Color.blue.opacity(0.15)
 
 			case .inProgress:
 				return Color.orange.opacity(0.1)

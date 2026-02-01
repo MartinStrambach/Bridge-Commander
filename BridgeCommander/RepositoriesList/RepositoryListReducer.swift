@@ -196,10 +196,8 @@ private func sortByState(
 
 private func stateSortPriority(_ state: TicketState?) -> Int {
 	guard let state else {
-		return 5
+		return 4 // No ticket (e.g., master) - above accepted
 	}
-
-	// nil states go near the end
 
 	switch state {
 	case .inProgress:
@@ -208,11 +206,10 @@ private func stateSortPriority(_ state: TicketState?) -> Int {
 		return 1
 	case .waitingForTesting:
 		return 2
-	case .waitingToAcceptation:
-		return 3
-	case .accepted:
-		return 4
 	case .open:
+		return 3
+	case .accepted,
+	     .waitingToAcceptation:
 		return 5
 	case .done:
 		return 6 // Lowest priority - at the bottom
