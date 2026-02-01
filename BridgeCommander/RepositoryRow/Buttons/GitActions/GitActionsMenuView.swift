@@ -8,7 +8,14 @@ struct GitActionsMenuView: View {
 
 	var body: some View {
 		Group {
-			if store.pullButton.isPulling {
+			if store.fetchButton.isFetching {
+				GitOperationProgressView(
+					text: "Fetching...",
+					color: .cyan,
+					helpText: "Fetching updates from remote..."
+				)
+			}
+			else if store.pullButton.isPulling {
 				GitOperationProgressView(
 					text: "Pulling...",
 					color: .blue,
@@ -50,10 +57,13 @@ struct GitActionsMenuView: View {
 					}
 
 					if store.hasRemoteBranch {
+						FetchButtonView(store: store.scope(state: \.fetchButton, action: \.fetchButton))
 						PullButtonView(store: store.scope(state: \.pullButton, action: \.pullButton))
 					}
 
-					PushButtonView(store: store.scope(state: \.pushButton, action: \.pushButton))
+					if store.unpushedCommitsCount > 0 || !store.hasRemoteBranch {
+						PushButtonView(store: store.scope(state: \.pushButton, action: \.pushButton))
+					}
 
 					if !store.isMergeInProgress {
 						StashButtonView(store: store.scope(state: \.stashButton, action: \.stashButton))
@@ -74,6 +84,7 @@ struct GitActionsMenuView: View {
 			}
 		}
 		.fixedSize()
+		.alert(store: store.scope(state: \.fetchButton.$alert, action: \.fetchButton.alert))
 		.alert(store: store.scope(state: \.pullButton.$alert, action: \.pullButton.alert))
 		.alert(store: store.scope(state: \.pushButton.$alert, action: \.pushButton.alert))
 		.alert(store: store.scope(state: \.mergeMasterButton.$alert, action: \.mergeMasterButton.alert))

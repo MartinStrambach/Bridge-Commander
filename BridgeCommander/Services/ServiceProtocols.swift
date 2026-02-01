@@ -9,6 +9,7 @@ protocol GitServiceType: Sendable {
 	func countCommitsBehind(at path: String) async throws -> Int
 	func mergeMaster(at path: String) async throws
 	func pull(at path: String) async throws -> GitPullHelper.PullResult
+	func fetch(at path: String) async throws -> GitFetchHelper.FetchResult
 }
 
 // MARK: - YouTrack Service Protocol

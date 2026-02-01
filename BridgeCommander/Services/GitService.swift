@@ -38,4 +38,8 @@ struct GitService: GitServiceType, Sendable {
 	func pull(at path: String) async throws -> GitPullHelper.PullResult {
 		try await GitPullHelper.pull(at: path)
 	}
+
+	func fetch(at path: String) async throws -> GitFetchHelper.FetchResult {
+		try await GitFetchHelper.fetch(at: path)
+	}
 }

@@ -11,6 +11,8 @@ struct GitActionsMenuReducer {
 		var currentBranch: String
 		var hasRemoteBranch = false
 		var isMergeInProgress = false
+		var unpushedCommitsCount = 0
+		var fetchButton: FetchButtonReducer.State
 		var pullButton: PullButtonReducer.State
 		var pushButton: PushButtonReducer.State
 		var mergeMasterButton: MergeMasterButtonReducer.State
@@ -20,6 +22,7 @@ struct GitActionsMenuReducer {
 		init(repositoryPath: String, currentBranch: String) {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch
+			self.fetchButton = FetchButtonReducer.State(repositoryPath: repositoryPath)
 			self.pullButton = PullButtonReducer.State(repositoryPath: repositoryPath)
 			self.pushButton = PushButtonReducer.State(repositoryPath: repositoryPath)
 			self.mergeMasterButton = MergeMasterButtonReducer.State(repositoryPath: repositoryPath)
@@ -30,7 +33,8 @@ struct GitActionsMenuReducer {
 
 	enum Action: Equatable {
 		case onAppear
-		case didCheckGitStatus(hasRemoteBranch: Bool, isMergeInProgress: Bool)
+		case didCheckGitStatus(hasRemoteBranch: Bool, isMergeInProgress: Bool, unpushedCommitsCount: Int)
+		case fetchButton(FetchButtonReducer.Action)
 		case pullButton(PullButtonReducer.Action)
 		case pushButton(PushButtonReducer.Action)
 		case mergeMasterButton(MergeMasterButtonReducer.Action)
@@ -39,6 +43,10 @@ struct GitActionsMenuReducer {
 	}
 
 	var body: some Reducer<State, Action> {
+		Scope(state: \.fetchButton, action: \.fetchButton) {
+			FetchButtonReducer()
+		}
+
 		Scope(state: \.pullButton, action: \.pullButton) {
 			PullButtonReducer()
 		}
@@ -62,6 +70,7 @@ struct GitActionsMenuReducer {
 		Reduce { state, action in
 			switch action {
 			case .abortMergeButton(.abortMergeCompleted),
+			     .fetchButton(.fetchCompleted),
 			     .mergeMasterButton(.mergeMasterCompleted),
 			     .onAppear,
 			     .pullButton(.pullCompleted),
@@ -70,14 +79,16 @@ struct GitActionsMenuReducer {
 					.run { [path = state.repositoryPath] send in
 						let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
 						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-						await send(.didCheckGitStatus(hasRemoteBranch: hasRemote, isMergeInProgress: isMergeInProgress))
+						let unpushedCount = await GitBranchDetector.countUnpushedCommits(at: path)
+						await send(.didCheckGitStatus(hasRemoteBranch: hasRemote, isMergeInProgress: isMergeInProgress, unpushedCommitsCount: unpushedCount))
 					},
 					.send(.stashButton(.checkStashStatus))
 				)
 
-			case let .didCheckGitStatus(hasRemote, isMergeInProgress):
+			case let .didCheckGitStatus(hasRemote, isMergeInProgress, unpushedCount):
 				state.hasRemoteBranch = hasRemote
 				state.isMergeInProgress = isMergeInProgress
+				state.unpushedCommitsCount = unpushedCount
 				return .none
 
 			case .stashButton(.stashCompleted),
