@@ -39,8 +39,6 @@ struct RepositoryRowReducer {
 		var createWorktreeButton: CreateWorktreeButtonReducer.State
 		var gitActionsMenu: GitActionsMenuReducer.State
 
-		fileprivate var lastRefreshTime: Date?
-
 		var formattedBranchName: String {
 			@Shared(.branchNameRegex)
 			var regex = "[a-zA-Z]+-\\d+[_/]"
@@ -77,9 +75,11 @@ struct RepositoryRowReducer {
 			if let ticketId {
 				self.ticketButton = .init(ticketId: ticketId)
 			}
+
+			let ticketURL = ticketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? ""
 			self.shareButton = .init(
 				branchName: name,
-				ticketURL: ticketId != nil ? "https://youtrack.livesport.eu/issue/\(ticketId!)" : "",
+				ticketURL: ticketURL
 			)
 			self.deleteWorktreeButton = .init(name: name, path: path)
 			self.createWorktreeButton = .init(repositoryPath: path)
@@ -89,20 +89,12 @@ struct RepositoryRowReducer {
 
 	enum Action {
 		case onAppear
-		case requestRefresh
+		case refresh
 		case didFetchBranch(String, Int, Int)
 		case didFetchUnpushedCount(Int)
 		case didFetchCommitsBehind(Int)
 		case didFetchRemoteBranch(Bool)
-		case didFetchYouTrack(
-			prUrl: String?,
-			androidCR: CodeReviewState?,
-			iosCR: CodeReviewState?,
-			androidReviewerName: String?,
-			iosReviewerName: String?,
-			ticketState: TicketState?
-		)
-		case retryFetch(FetchType)
+		case didFetchYouTrack(IssueDetails)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
 		case terminalButton(TerminalButtonReducer.Action)
@@ -115,12 +107,6 @@ struct RepositoryRowReducer {
 		case gitActionsMenu(GitActionsMenuReducer.Action)
 		case worktreeDeleted
 		case worktreeCreated
-
-		enum FetchType: Equatable {
-			case branch
-			case unpushed
-			case youTrack
-		}
 	}
 
 	@Dependency(\.gitService)
@@ -172,14 +158,13 @@ struct RepositoryRowReducer {
 		Reduce { state, action in
 			switch action {
 			case .onAppear,
-			     .requestRefresh:
-				state.lastRefreshTime = Date()
+			     .refresh:
 				return .merge(
-					fetchBranch(for: &state),
-					fetchUnpushed(for: &state),
-					fetchCommitsBehind(for: &state),
-					fetchRemoteBranch(for: &state),
-					fetchYouTrack(for: &state),
+					fetchBranch(for: state),
+					fetchUnpushed(for: state),
+					fetchCommitsBehind(for: state),
+					fetchRemoteBranch(for: state),
+					fetchYouTrack(for: state),
 					.send(.gitActionsMenu(.onAppear)),
 					.send(.xcodeButton(.onAppear))
 				)
@@ -204,35 +189,23 @@ struct RepositoryRowReducer {
 				state.hasRemoteBranch = hasRemote
 				return .none
 
-			case let .didFetchYouTrack(prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState):
-				state.prUrl = prUrl
-				state.androidCR = androidCR
-				state.iosCR = iosCR
-				state.androidReviewerName = androidReviewerName
-				state.iosReviewerName = iosReviewerName
-				state.ticketState = ticketState
-				state.shareButton.updatePRURL(prUrl)
+			case let .didFetchYouTrack(details):
+				state.prUrl = details.prUrl
+				state.androidCR = details.androidCR
+				state.iosCR = details.iosCR
+				state.androidReviewerName = details.androidReviewerName
+				state.iosReviewerName = details.iosReviewerName
+				state.ticketState = details.ticketState
+				state.shareButton.updatePRURL(details.prUrl)
 				return .none
 
-			case let .retryFetch(fetchType):
-				switch fetchType {
-				case .branch:
-					return fetchBranch(for: &state)
-				case .unpushed:
-					return fetchUnpushed(for: &state)
-				case .youTrack:
-					return fetchYouTrack(for: &state)
-				}
-
 			case let .deleteWorktreeButton(action):
-				// Handle successful worktree deletion by sending signal to parent
 				if case .didRemoveSuccessfully = action {
 					return .send(.worktreeDeleted)
 				}
 				return .none
 
 			case let .createWorktreeButton(action):
-				// Handle successful worktree creation by sending signal to parent
 				if case .didCreateSuccessfully = action {
 					return .send(.worktreeCreated)
 				}
@@ -240,14 +213,14 @@ struct RepositoryRowReducer {
 
 			case let .gitActionsMenu(action):
 				switch action {
-				case .fetchButton(.fetchCompleted),
+				case .abortMergeButton(.abortMergeCompleted),
+				     .fetchButton(.fetchCompleted),
 				     .mergeMasterButton(.mergeMasterCompleted),
 				     .pullButton(.pullCompleted),
+				     .pushButton(.pushCompleted),
 				     .stashButton(.stashCompleted),
-					 .pushButton(.pushCompleted),
-					 .abortMergeButton(.abortMergeCompleted),
 				     .stashButton(.stashPopCompleted):
-					return .send(.requestRefresh)
+					return .send(.refresh)
 
 				default:
 					return .none
@@ -264,50 +237,47 @@ struct RepositoryRowReducer {
 
 	// MARK: - Private Effect Builders
 
-	private func fetchBranch(for state: inout State) -> Effect<Action> {
+	private func fetchBranch(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
-			do {
-				let (branch, unstaged, staged) = await gitService.getCurrentBranch(at: path)
-				await send(.didFetchBranch(branch, unstaged, staged))
-			}
-			catch {
-				print(error.localizedDescription)
-			}
+			let (branch, unstaged, staged) = await gitService.getCurrentBranch(at: path)
+			await send(.didFetchBranch(branch, unstaged, staged))
 		}
 	}
 
-	private func fetchUnpushed(for state: inout State) -> Effect<Action> {
+	private func fetchUnpushed(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
 			do {
 				let count = try await gitService.countUnpushedCommits(at: path)
 				await send(.didFetchUnpushedCount(count))
 			}
 			catch {
-				print(error.localizedDescription)
+				// Silently fail - likely no upstream branch
+				await send(.didFetchUnpushedCount(0))
 			}
 		}
 	}
 
-	private func fetchCommitsBehind(for state: inout State) -> Effect<Action> {
+	private func fetchCommitsBehind(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
 			do {
 				let count = try await gitService.countCommitsBehind(at: path)
 				await send(.didFetchCommitsBehind(count))
 			}
 			catch {
-				print(error.localizedDescription)
+				// Silently fail - likely no upstream branch
+				await send(.didFetchCommitsBehind(0))
 			}
 		}
 	}
 
-	private func fetchRemoteBranch(for state: inout State) -> Effect<Action> {
+	private func fetchRemoteBranch(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
 			let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
 			await send(.didFetchRemoteBranch(hasRemote))
 		}
 	}
 
-	private func fetchYouTrack(for state: inout State) -> Effect<Action> {
+	private func fetchYouTrack(for state: State) -> Effect<Action> {
 		guard let ticketId = state.ticketId else {
 			return .none
 		}
@@ -315,17 +285,11 @@ struct RepositoryRowReducer {
 		return .run { send in
 			do {
 				let details = try await youTrackService.fetchIssueDetails(for: ticketId)
-				await send(.didFetchYouTrack(
-					prUrl: details.prUrl,
-					androidCR: details.androidCR,
-					iosCR: details.iosCR,
-					androidReviewerName: details.androidReviewerName,
-					iosReviewerName: details.iosReviewerName,
-					ticketState: details.ticketState
-				))
+				await send(.didFetchYouTrack(details))
 			}
 			catch {
-				print(error.localizedDescription)
+				// Silently fail - YouTrack might be unavailable
+				print("Failed to fetch YouTrack details for \(ticketId): \(error.localizedDescription)")
 			}
 		}
 	}

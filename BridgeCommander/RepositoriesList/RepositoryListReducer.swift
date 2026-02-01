@@ -25,7 +25,7 @@ struct RepositoryListReducer {
 	enum Action: Sendable {
 		case clearResults
 		case didScanRepositories([ScannedRepository])
-		case scanFailed(String)
+		case scanFailed
 		case setDirectory(String)
 		case startScan
 		case refreshRepositories
@@ -51,7 +51,11 @@ struct RepositoryListReducer {
 				return .none
 
 			case .startScan:
-				state.selectedDirectory = lastOpenedDirectoryService.load()
+				// Only load from service if no directory is set
+				if state.selectedDirectory == nil {
+					state.selectedDirectory = lastOpenedDirectoryService.load()
+				}
+
 				guard let directory = state.selectedDirectory else {
 					return .none
 				}
@@ -64,7 +68,8 @@ struct RepositoryListReducer {
 						await send(.didScanRepositories(scanned))
 					}
 					catch {
-						await send(.scanFailed(error.localizedDescription))
+						print("Scan failed: \(error.localizedDescription)")
+						await send(.scanFailed)
 					}
 				}
 
@@ -82,13 +87,11 @@ struct RepositoryListReducer {
 					return .none
 				}
 
-				var effects: [Effect<Action>] = []
-				for repository in state.repositories {
-					effects.append(
-						.send(.repositories(.element(id: repository.id, action: .requestRefresh)))
-					)
+				let refreshEffects = state.repositories.map { repository in
+					Effect<Action>.send(.repositories(.element(id: repository.id, action: .refresh)))
 				}
-				return .concatenate(.send(.startScan), .merge(effects))
+
+				return .concatenate(.send(.startScan), .merge(refreshEffects))
 
 			case .startPeriodicRefresh:
 				let interval = state.periodicRefreshInterval.timeInterval
@@ -121,9 +124,7 @@ struct RepositoryListReducer {
 					case .branch:
 						state.sortMode = .state
 					}
-					state.repositories = .init(
-						uniqueElements: sortRepositories(Array(state.repositories), sortMode: state.sortMode)
-					)
+					sortRepositoriesInState(in: &state)
 				}
 				return .none
 
@@ -133,11 +134,10 @@ struct RepositoryListReducer {
 
 			case .repositories(.element(_, .didFetchYouTrack)):
 				// Re-sort when ticket state is fetched (if sorting by state)
+				// Only sort if we're in state mode to avoid unnecessary work
 				if state.sortMode == .state {
 					withAnimation {
-						state.repositories = .init(
-							uniqueElements: sortRepositories(Array(state.repositories), sortMode: state.sortMode)
-						)
+						sortRepositoriesInState(in: &state)
 					}
 				}
 				return .none
@@ -150,9 +150,79 @@ struct RepositoryListReducer {
 			RepositoryRowReducer()
 		}
 	}
+
+	// MARK: - Private Helpers
+
+	private func sortRepositoriesInState(in state: inout State) {
+		let sorted = sortRepositories(Array(state.repositories), sortMode: state.sortMode)
+		state.repositories = IdentifiedArrayOf(uniqueElements: sorted)
+	}
 }
 
 // MARK: - Private Helpers
+
+private func scanRepositories(in directory: String) async throws -> [ScannedRepository] {
+	let url = URL(fileURLWithPath: directory)
+	let repositories = await GitDetector.scanForRepositories(at: url)
+
+	return repositories.map { repo in
+		let repoURL = URL(fileURLWithPath: repo.path)
+		let parentDirectory = repoURL.deletingLastPathComponent().path
+
+		return ScannedRepository(
+			path: repo.path,
+			name: repo.name,
+			directory: parentDirectory,
+			isWorktree: repo.isWorktree,
+			branchName: repo.branchName,
+			isMergeInProgress: repo.isMergeInProgress
+		)
+	}
+}
+
+private func mergeRepositories(
+	into state: inout RepositoryListReducer.State,
+	scanned: [ScannedRepository]
+) {
+	// Create a mapping of current repositories by path
+	var currentReposByPath: [String: RepositoryRowReducer.State] = [:]
+	for repo in state.repositories {
+		currentReposByPath[repo.path] = repo
+	}
+
+	// Build updated repository list
+	// Only include repositories that were scanned (this automatically removes deleted ones)
+	var updatedRepos: [RepositoryRowReducer.State] = []
+
+	for scannedRepo in scanned {
+		if let existing = currentReposByPath[scannedRepo.path] {
+			// Update existing repo with new scan data, preserve cached info
+			var updated = existing
+			updated.name = scannedRepo.name
+			updated.isWorktree = scannedRepo.isWorktree
+			updated.branchName = scannedRepo.branchName
+			// Preserved: prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName,
+			//            unpushedCommitCount, ticketState, etc.
+			updatedRepos.append(updated)
+		}
+		else {
+			// New repo discovered
+			var newRepo = RepositoryRowReducer.State(
+				path: scannedRepo.path,
+				name: scannedRepo.name,
+				isWorktree: scannedRepo.isWorktree
+			)
+			newRepo.branchName = scannedRepo.branchName
+			updatedRepos.append(newRepo)
+		}
+	}
+
+	// Sort using the shared sorting function
+	let sorted = sortRepositories(updatedRepos, sortMode: state.sortMode)
+	state.repositories = IdentifiedArrayOf(uniqueElements: sorted)
+}
+
+// MARK: - Sorting Functions
 
 private func sortRepositories(
 	_ repositories: [RepositoryRowReducer.State],
@@ -180,7 +250,6 @@ private func sortByState(
 	_ repo1: RepositoryRowReducer.State,
 	_ repo2: RepositoryRowReducer.State
 ) -> Bool {
-	// Define priority order: inProgress (highest) -> others -> done (lowest)
 	let priority1 = stateSortPriority(repo1.ticketState)
 	let priority2 = stateSortPriority(repo2.ticketState)
 
@@ -214,57 +283,4 @@ private func stateSortPriority(_ state: TicketState?) -> Int {
 	case .done:
 		return 6 // Lowest priority - at the bottom
 	}
-}
-
-private func scanRepositories(in directory: String) async throws -> [ScannedRepository] {
-	let url = URL(fileURLWithPath: directory)
-	let repositories = await GitDetector.scanForRepositories(at: url)
-
-	return repositories.map { repo in
-		ScannedRepository(
-			path: repo.path,
-			name: repo.name,
-			directory: repo.path.split(separator: "/").dropLast().joined(separator: "/"),
-			isWorktree: repo.isWorktree,
-			branchName: repo.branchName,
-			isMergeInProgress: repo.isMergeInProgress,
-		)
-	}
-}
-
-private func mergeRepositories(into state: inout RepositoryListReducer.State, scanned: [ScannedRepository]) {
-	// Create a mapping of current repositories by path
-	var currentReposByPath: [String: RepositoryRowReducer.State] = [:]
-	for repo in state.repositories {
-		currentReposByPath[repo.path] = repo
-	}
-
-	// Start with updated repos
-	var updatedRepos: [RepositoryRowReducer.State] = []
-
-	for scannedRepo in scanned {
-		if let existing = currentReposByPath[scannedRepo.path] {
-			// Update existing repo with new scan data, preserve cached info
-			var updated = existing
-			updated.name = scannedRepo.name
-			updated.isWorktree = scannedRepo.isWorktree
-			updated.branchName = scannedRepo.branchName
-			// Keep: prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, unpushedCommitCount
-			updatedRepos.append(updated)
-		}
-		else {
-			// New repo
-			var newRepo = RepositoryRowReducer.State(
-				path: scannedRepo.path,
-				name: scannedRepo.name,
-				isWorktree: scannedRepo.isWorktree
-			)
-			newRepo.branchName = scannedRepo.branchName
-			updatedRepos.append(newRepo)
-		}
-	}
-
-	// Sort based on current sort mode
-	let sortedRepos = sortRepositories(updatedRepos, sortMode: state.sortMode)
-	state.repositories = IdentifiedArrayOf(uniqueElements: sortedRepos)
 }
