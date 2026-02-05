@@ -14,21 +14,23 @@ struct ActionButton: View {
 
 	var body: some View {
 		Button(action: action) {
-			switch icon {
-			case let .systemImage(name):
-				Image(systemName: name)
-					.resizable()
-					.scaledToFit()
-					.frame(width: 20, height: 20)
+			Group {
+				switch icon {
+				case let .systemImage(name):
+					Image(systemName: name)
+						.resizable()
 
-			case let .customImage(name):
-				Image(name)
-					.resizable()
-					.renderingMode(.template)
-					.scaledToFit()
-					.frame(width: 20, height: 20)
+				case let .customImage(name):
+					Image(name)
+						.resizable()
+						.renderingMode(.template)
+				}
 			}
+			.scaledToFit()
+			.padding(4)
+			.frame(width: 25, height: 25)
 		}
+//		.fixedSize()
 		.foregroundColor(color ?? .secondary)
 		.help(tooltip)
 	}
