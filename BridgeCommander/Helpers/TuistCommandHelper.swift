@@ -1,21 +1,51 @@
 import Foundation
 
+// MARK: - Tuist Cache Type
+
+enum TuistCacheType: String, Equatable, CaseIterable {
+	case externalOnly
+	case all
+
+	var displayName: String {
+		switch self {
+		case .externalOnly:
+			"External Only"
+
+		case .all:
+			"All Targets"
+		}
+	}
+
+	var commandFlag: String {
+		switch self {
+		case .externalOnly:
+			"--external-only"
+
+		case .all:
+			""
+		}
+	}
+}
+
 // MARK: - Tuist Action
 
 enum TuistAction: Equatable {
 	case generate
 	case install
-	case cache
+	case cache(TuistCacheType)
 	case edit
 
 	var commandString: String {
 		switch self {
 		case .generate:
 			"generate"
+
 		case .install:
 			"install"
-		case .cache:
-			"cache --external-only"
+
+		case let .cache(type):
+			"cache \(type.commandFlag)".trimmingCharacters(in: .whitespaces)
+
 		case .edit:
 			"edit"
 		}
@@ -31,7 +61,11 @@ enum TuistCommandHelper {
 	///   - path: The repository path where the command should be executed
 	///   - shouldOpenXcode: For generate action, controls whether Xcode opens after generation
 	/// - Returns: A Result containing the command output on success or an error on failure
-	static func runCommand(_ action: TuistAction, at path: String, shouldOpenXcode: Bool) async -> Result<String, Error> {
+	static func runCommand(
+		_ action: TuistAction,
+		at path: String,
+		shouldOpenXcode: Bool
+	) async -> Result<String, Error> {
 		await withCheckedContinuation { continuation in
 			let process = Process()
 			process.currentDirectoryURL = URL(fileURLWithPath: path)

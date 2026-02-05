@@ -32,3 +32,9 @@ extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("openXcodeAfterGenerate")
 	}
 }
+
+extension SharedReaderKey where Self == AppStorageKey<TuistCacheType> {
+	static var tuistCacheType: Self {
+		appStorage("tuistCacheType")
+	}
+}

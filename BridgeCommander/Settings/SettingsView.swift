@@ -131,6 +131,30 @@ struct SettingsView: View {
 			.padding()
 			.background(Color(NSColor.controlBackgroundColor))
 			.cornerRadius(8)
+
+			VStack(alignment: .leading, spacing: 8) {
+				Text("Tuist Cache Options")
+					.font(.headline)
+
+				Picker(
+					"Cache Type",
+					selection: $store.tuistCacheType.sending(\.setTuistCacheType)
+				) {
+					ForEach(TuistCacheType.allCases, id: \.self) { cacheType in
+						Text(cacheType.displayName).tag(cacheType)
+					}
+				}
+				.pickerStyle(.segmented)
+
+				Text(
+					"Select which targets to cache. 'External Only' caches only external dependencies, while 'All Targets' caches all project targets."
+				)
+				.font(.caption)
+				.foregroundColor(.secondary)
+			}
+			.padding()
+			.background(Color(NSColor.controlBackgroundColor))
+			.cornerRadius(8)
 		}
 		.padding()
 		.frame(minWidth: 500, minHeight: 300)

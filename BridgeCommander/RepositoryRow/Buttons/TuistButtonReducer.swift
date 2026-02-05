@@ -13,6 +13,8 @@ struct TuistButtonReducer {
 		var iosSubfolderPath = "ios/FlashScore"
 		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
+		@Shared(.tuistCacheType)
+		var tuistCacheType = TuistCacheType.externalOnly
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -88,22 +90,24 @@ struct TuistButtonReducer {
 					return .none
 				}
 
-				state.runningAction = .cache
+				let cacheType = state.tuistCacheType
+				state.runningAction = .cache(cacheType)
 				return .run { [
 					repositoryPath = state.repositoryPath,
 					iosSubfolderPath = state.iosSubfolderPath,
-					shouldOpen = state.openXcodeAfterGenerate
+					shouldOpen = state.openXcodeAfterGenerate,
+					cacheType
 				] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
 						iosSubfolderPath: iosSubfolderPath
 					)
 					let result = await TuistCommandHelper.runCommand(
-						.cache,
+						.cache(cacheType),
 						at: iosFlashscorePath,
 						shouldOpenXcode: shouldOpen
 					)
-					await send(.actionCompleted(.cache, result))
+					await send(.actionCompleted(.cache(cacheType), result))
 				}
 
 			case .editTapped:

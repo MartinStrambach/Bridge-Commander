@@ -23,6 +23,9 @@ struct SettingsReducer {
 		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 
+		@Shared(.tuistCacheType)
+		var tuistCacheType = TuistCacheType.externalOnly
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -34,6 +37,7 @@ struct SettingsReducer {
 		case setTicketIdRegex(String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
+		case setTuistCacheType(TuistCacheType)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -68,6 +72,10 @@ struct SettingsReducer {
 
 			case let .setOpenXcodeAfterGenerate(shouldOpen):
 				state.$openXcodeAfterGenerate.withLock { $0 = shouldOpen }
+				return .none
+
+			case let .setTuistCacheType(cacheType):
+				state.$tuistCacheType.withLock { $0 = cacheType }
 				return .none
 
 			case .clearTokenButtonTapped:
