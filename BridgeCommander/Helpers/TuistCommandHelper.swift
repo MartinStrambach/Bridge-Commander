@@ -15,7 +15,7 @@ enum TuistAction: Equatable {
 		case .install:
 			"install"
 		case .cache:
-			"cache"
+			"cache --external-only"
 		case .edit:
 			"edit"
 		}
