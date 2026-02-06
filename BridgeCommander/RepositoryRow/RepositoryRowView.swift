@@ -322,6 +322,7 @@ struct RepositoryRowView: View {
 			initialState: RepositoryRowReducer.State(
 				path: "/Users/username/projects/my-project",
 				name: "my-project",
+				branchName: "branch",
 				isWorktree: false
 			),
 			reducer: {

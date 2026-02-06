@@ -210,6 +210,7 @@ private func mergeRepositories(
 			var newRepo = RepositoryRowReducer.State(
 				path: scannedRepo.path,
 				name: scannedRepo.name,
+				branchName: scannedRepo.branchName,
 				isWorktree: scannedRepo.isWorktree
 			)
 			newRepo.branchName = scannedRepo.branchName

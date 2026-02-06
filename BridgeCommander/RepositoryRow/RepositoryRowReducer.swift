@@ -46,13 +46,13 @@ struct RepositoryRowReducer {
 			return BranchNameFormatter.format(branchName, ticketId: ticketId, branchNameRegex: regex)
 		}
 
-		init(path: String, name: String, isWorktree: Bool = false) {
+		init(path: String, name: String, branchName: String?, isWorktree: Bool = false) {
 			self.id = path
 			self.path = path
 			self.name = name
 			self.isWorktree = isWorktree
 
-			self.branchName = name
+			self.branchName = branchName
 
 			// Access the shared ticketIdRegex setting
 			@Shared(.ticketIdRegex)
@@ -78,10 +78,10 @@ struct RepositoryRowReducer {
 
 			let ticketURL = ticketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? ""
 			self.shareButton = .init(
-				branchName: name,
+				branchName: branchName ?? name,
 				ticketURL: ticketURL
 			)
-			self.deleteWorktreeButton = .init(name: name, path: path)
+			self.deleteWorktreeButton = .init(name: branchName ?? name, path: path)
 			self.createWorktreeButton = .init(repositoryPath: path)
 			self.gitActionsMenu = .init(repositoryPath: path, currentBranch: name)
 		}
