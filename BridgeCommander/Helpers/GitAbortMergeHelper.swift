@@ -19,7 +19,7 @@ nonisolated enum GitAbortMergeHelper {
 
 // MARK: - Error Types
 
-enum AbortMergeError: LocalizedError {
+enum AbortMergeError: LocalizedError, Sendable {
 	case abortFailed(message: String)
 
 	var errorDescription: String? {

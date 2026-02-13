@@ -71,7 +71,7 @@ nonisolated enum GitWorktreeCreator {
 
 // MARK: - Error Types
 
-enum WorktreeCreationError: LocalizedError {
+enum WorktreeCreationError: LocalizedError, Sendable {
 	case creationFailed(message: String)
 
 	var errorDescription: String? {

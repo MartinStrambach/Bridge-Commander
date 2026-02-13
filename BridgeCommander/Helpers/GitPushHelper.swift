@@ -36,7 +36,7 @@ nonisolated enum GitPushHelper {
 
 // MARK: - Error Types
 
-enum PushError: LocalizedError, Equatable {
+enum PushError: LocalizedError, Equatable, Sendable {
 	case pushFailed(message: String)
 
 	var errorDescription: String? {

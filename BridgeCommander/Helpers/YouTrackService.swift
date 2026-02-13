@@ -185,7 +185,7 @@ nonisolated enum YouTrackService {
 
 // MARK: - YouTrack API Response Models
 
-nonisolated struct YouTrackIssue: Decodable {
+private nonisolated struct YouTrackIssue: Decodable {
 	enum CodingKeys: String, CodingKey {
 		case id
 		case key
@@ -197,12 +197,12 @@ nonisolated struct YouTrackIssue: Decodable {
 	let customFields: [CustomField]?
 }
 
-struct CustomField: Decodable {
+private struct CustomField: Decodable, Sendable {
 	let name: String?
 	let value: CustomFieldValue?
 }
 
-struct CustomFieldValue: Decodable {
+private struct CustomFieldValue: Decodable, Sendable {
 	enum CodingKeys: String, CodingKey {
 		case text
 		case name

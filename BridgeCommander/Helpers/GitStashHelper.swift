@@ -1,7 +1,7 @@
 import Foundation
 
 nonisolated enum GitStashHelper {
-	enum StashError: Error, Equatable {
+	enum StashError: Error, Equatable, Sendable {
 		case stashFailed(String)
 		case stashPopFailed(String)
 	}

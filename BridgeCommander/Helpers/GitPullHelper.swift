@@ -6,7 +6,7 @@ nonisolated enum GitPullHelper {
 		let isAlreadyUpToDate: Bool
 	}
 
-	enum PullError: Error, Equatable {
+	enum PullError: Error, Equatable, Sendable {
 		case pullFailed(String)
 	}
 

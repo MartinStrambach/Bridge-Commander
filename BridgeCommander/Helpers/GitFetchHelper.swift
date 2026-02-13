@@ -6,7 +6,7 @@ nonisolated enum GitFetchHelper {
 		let isAlreadyUpToDate: Bool
 	}
 
-	enum FetchError: Error, Equatable {
+	enum FetchError: Error, Equatable, Sendable {
 		case fetchFailed(String)
 	}
 

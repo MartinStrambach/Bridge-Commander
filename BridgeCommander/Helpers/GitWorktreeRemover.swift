@@ -39,7 +39,7 @@ nonisolated enum GitWorktreeRemover {
 
 // MARK: - Error Types
 
-enum WorktreeRemovalError: LocalizedError {
+enum WorktreeRemovalError: LocalizedError, Sendable {
 	case removalFailed(message: String)
 
 	var errorDescription: String? {
