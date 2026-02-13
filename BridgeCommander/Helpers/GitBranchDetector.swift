@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitBranchDetector {
+nonisolated enum GitBranchDetector {
 
 	/// Gets the current branch name for a Git repository
 	/// - Parameter path: The path to the Git repository

@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum TerminalLauncher {
+nonisolated enum TerminalLauncher {
 
 	/// Opens Terminal.app with a new window at the specified directory
 	/// - Parameter path: The directory path to open in Terminal

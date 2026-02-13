@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Tuist Cache Type
 
-enum TuistCacheType: String, Equatable, CaseIterable {
+nonisolated enum TuistCacheType: String, Equatable, CaseIterable, Sendable {
 	case externalOnly
 	case all
 
@@ -29,7 +29,7 @@ enum TuistCacheType: String, Equatable, CaseIterable {
 
 // MARK: - Tuist Action
 
-enum TuistAction: Equatable {
+nonisolated enum TuistAction: Equatable {
 	case generate
 	case install
 	case cache(TuistCacheType)
@@ -54,7 +54,7 @@ enum TuistAction: Equatable {
 
 // MARK: - Tuist Command Helper
 
-enum TuistCommandHelper {
+nonisolated enum TuistCommandHelper {
 	/// Runs a Tuist command using mise exec at the specified repository path
 	/// - Parameters:
 	///   - action: The Tuist action to run

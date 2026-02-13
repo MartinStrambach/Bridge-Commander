@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitMergeDetector {
+nonisolated enum GitMergeDetector {
 
 	/// Checks if a repository has any ongoing git operation (merge, rebase, etc.)
 	/// - Parameter path: The path to the Git repository

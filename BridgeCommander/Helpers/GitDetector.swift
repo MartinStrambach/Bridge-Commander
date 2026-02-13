@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitDetector {
+nonisolated enum GitDetector {
 
 	/// Checks if a directory is a Git repository or worktree
 	/// - Parameter url: The directory URL to check

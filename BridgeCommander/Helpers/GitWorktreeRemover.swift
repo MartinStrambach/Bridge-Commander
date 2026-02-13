@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitWorktreeRemover {
+nonisolated enum GitWorktreeRemover {
 
 	/// Removes a Git worktree at the specified path
 	/// - Parameters:

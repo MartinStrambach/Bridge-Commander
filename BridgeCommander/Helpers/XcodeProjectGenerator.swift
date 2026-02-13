@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum XcodeProjectGenerator {
+nonisolated enum XcodeProjectGenerator {
 
 	/// Generates Xcode project by running ti and tg commands sequentially in the configured iOS subfolder
 	/// - Parameters:
@@ -10,7 +10,6 @@ enum XcodeProjectGenerator {
 	///   - shouldOpenXcode: Controls whether Xcode opens after generation
 	///   - onStateChange: Callback invoked when state changes
 	/// - Returns: Path to the generated Xcode project/workspace, or throws an error
-	@MainActor
 	static func generateProject(
 		at repositoryPath: String,
 		iosSubfolderPath: String,
@@ -71,12 +70,15 @@ enum XcodeProjectGenerator {
 
 	/// Opens the Xcode project at the specified path
 	/// - Parameter projectPath: Full path to .xcworkspace or .xcodeproj
-	static func openProject(at projectPath: String) throws {
-		let process = Process()
-		process.executableURL = URL(filePath: "/usr/bin/open")
-		process.arguments = [projectPath]
+	static func openProject(at projectPath: String) async throws {
+		let result = await ProcessRunner.run(
+			executableURL: URL(filePath: "/usr/bin/open"),
+			arguments: [projectPath]
+		)
 
-		try process.run()
+		guard result.success else {
+			throw ProjectGenerationError.failedToOpenProject
+		}
 	}
 
 }

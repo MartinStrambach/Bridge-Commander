@@ -1,7 +1,7 @@
 import Foundation
 
 /// Result of a process execution with captured output and error streams
-struct ProcessResult {
+nonisolated struct ProcessResult: Sendable {
 	let exitCode: Int32
 	let output: Data
 	let error: Data
@@ -20,7 +20,7 @@ struct ProcessResult {
 }
 
 /// Helper for running shell processes with proper pipe handling to prevent buffer overflow
-enum ProcessRunner {
+nonisolated enum ProcessRunner {
 
 	/// Runs a process and captures its output and error streams
 	/// - Parameters:

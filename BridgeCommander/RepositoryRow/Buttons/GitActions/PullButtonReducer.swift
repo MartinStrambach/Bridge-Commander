@@ -21,8 +21,8 @@ struct PullButtonReducer {
 		enum Alert: Equatable {}
 	}
 
-	@Dependency(\.gitService)
-	private var gitService
+	@Dependency(GitClient.self)
+	private var gitClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -31,7 +31,7 @@ struct PullButtonReducer {
 				state.isPulling = true
 				return .run { [path = state.repositoryPath] send in
 					do {
-						let result = try await gitService.pull(at: path)
+						let result = try await gitClient.pull(at: path)
 						await send(.pullCompleted(result: result, error: nil))
 					}
 					catch let error as GitPullHelper.PullError {

@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum AndroidStudioLauncher {
+nonisolated enum AndroidStudioLauncher {
 
 	/// Opens Android Studio with the specified repository path
 	/// If the project is already open, focuses the existing window instead

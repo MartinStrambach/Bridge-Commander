@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitEnvironmentHelper {
+nonisolated enum GitEnvironmentHelper {
 
 	/// Sets up the environment for Git processes with enhanced PATH
 	/// - Returns: Environment dictionary with common Git tool paths included

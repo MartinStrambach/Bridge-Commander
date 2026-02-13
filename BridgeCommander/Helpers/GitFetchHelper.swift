@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitFetchHelper {
+nonisolated enum GitFetchHelper {
 	struct FetchResult: Equatable {
 		let fetchedBranches: Int
 		let isAlreadyUpToDate: Bool

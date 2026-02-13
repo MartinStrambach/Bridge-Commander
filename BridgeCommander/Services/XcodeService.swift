@@ -1,13 +1,26 @@
+import Dependencies
+import DependenciesMacros
 import Foundation
 
 // MARK: - Xcode Service
 
-struct XcodeServiceImpl: XcodeServiceType, Sendable {
-	func hasXcodeProject(in path: String, iosSubfolderPath: String) -> Bool {
-		XcodeProjectDetector.hasXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
-	}
+@DependencyClient
+nonisolated struct XcodeClient: Sendable {
+	var hasXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> Bool = { _, _ in false }
+	var findXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> String? = { _, _ in nil }
+}
 
-	func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String? {
-		XcodeProjectDetector.findXcodeProject(in: repositoryPath, iosSubfolderPath: iosSubfolderPath)
-	}
+extension XcodeClient: DependencyKey {
+	static let liveValue = XcodeClient(
+		hasXcodeProject: { path, iosSubfolderPath in
+			XcodeProjectDetector.hasXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
+		},
+		findXcodeProject: { repositoryPath, iosSubfolderPath in
+			XcodeProjectDetector.findXcodeProject(in: repositoryPath, iosSubfolderPath: iosSubfolderPath)
+		}
+	)
+}
+
+extension XcodeClient: TestDependencyKey {
+	static let testValue = XcodeClient()
 }

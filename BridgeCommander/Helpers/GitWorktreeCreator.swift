@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitWorktreeCreator {
+nonisolated enum GitWorktreeCreator {
 
 	/// Creates a new Git worktree with the specified branch name
 	/// - Parameters:

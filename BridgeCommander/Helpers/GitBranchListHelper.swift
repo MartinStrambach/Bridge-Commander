@@ -1,6 +1,6 @@
 import Foundation
 
-struct BranchInfo: Equatable, Hashable {
+struct BranchInfo: Equatable, Hashable, Sendable {
 	let name: String
 	let existsLocally: Bool
 	let existsRemotely: Bool
@@ -10,7 +10,7 @@ struct BranchInfo: Equatable, Hashable {
 	}
 }
 
-enum GitBranchListHelper {
+nonisolated enum GitBranchListHelper {
 
 	/// Lists all local and remote branches in the repository with their location info
 	/// - Parameter repositoryPath: The path to the Git repository

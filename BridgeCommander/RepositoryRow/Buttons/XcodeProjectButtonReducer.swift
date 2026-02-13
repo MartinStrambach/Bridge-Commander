@@ -34,15 +34,15 @@ struct XcodeProjectButtonReducer {
 		}
 	}
 
-	@Dependency(\.xcodeService)
-	private var xcodeService
+	@Dependency(XcodeClient.self)
+	private var xcodeClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .onAppear:
 				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
-					let projectPath = await xcodeService.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
+					let projectPath = await xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
 					await send(.foundProjectPath(projectPath))
 				}
 
@@ -99,7 +99,11 @@ struct XcodeProjectButtonReducer {
 				return .none
 
 			case .alert(.presented(.confirmGenerate)):
-				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, shouldOpen = state.openXcodeAfterGenerate] send in
+				return .run { [
+					path = state.repositoryPath,
+					iosSubfolderPath = state.iosSubfolderPath,
+					shouldOpen = state.openXcodeAfterGenerate
+				] send in
 					do {
 						let projectPath = try await XcodeProjectGenerator.generateProject(
 							at: path,

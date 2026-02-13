@@ -1,24 +1,36 @@
-import ComposableArchitecture
+import Dependencies
+import DependenciesMacros
 import Foundation
+import Sharing
 
 // MARK: - YouTrack Service
 
-struct YouTrackServiceImpl: YouTrackServiceType, Sendable {
-	@Dependency(\.authTokenProvider)
-	private var authTokenProvider
+@DependencyClient
+nonisolated struct YouTrackClient: Sendable {
+	var fetchIssueDetails: @Sendable (_ for: String) async throws -> IssueDetails
+}
 
-	func fetchIssueDetails(for ticketId: String) async throws -> IssueDetails {
-		let authToken = authTokenProvider.getYouTrackAuthToken()
-		let (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState) = await YouTrackService
-			.fetchIssueDetails(for: ticketId, authToken: authToken)
+extension YouTrackClient: DependencyKey {
+	static let liveValue = YouTrackClient(
+		fetchIssueDetails: { ticketId in
+			@Shared(.youtrackAuthToken)
+			var token = ""
 
-		return IssueDetails(
-			prUrl: prUrl,
-			androidCR: androidCR,
-			iosCR: iosCR,
-			androidReviewerName: androidReviewerName,
-			iosReviewerName: iosReviewerName,
-			ticketState: ticketState
-		)
-	}
+			let (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState) = await YouTrackService
+				.fetchIssueDetails(for: ticketId, authToken: token)
+
+			return IssueDetails(
+				prUrl: prUrl,
+				androidCR: androidCR,
+				iosCR: iosCR,
+				androidReviewerName: androidReviewerName,
+				iosReviewerName: iosReviewerName,
+				ticketState: ticketState
+			)
+		}
+	)
+}
+
+extension YouTrackClient: TestDependencyKey {
+	static let testValue = YouTrackClient()
 }

@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - App Storage Shared Keys
 
-extension SharedReaderKey where Self == AppStorageKey<String> {
+nonisolated extension SharedReaderKey where Self == AppStorageKey<String> {
 	static var youtrackAuthToken: Self {
 		appStorage("youtrackAuthToken")
 	}

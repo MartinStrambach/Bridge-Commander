@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitPushHelper {
+nonisolated enum GitPushHelper {
 	struct PushResult: Equatable {
 		let isUpToDate: Bool
 		let message: String

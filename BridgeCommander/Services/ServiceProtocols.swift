@@ -1,20 +1,9 @@
+import Dependencies
 import Foundation
-
-// MARK: - Git Service Protocol
-
-protocol GitServiceType: Sendable {
-	func getCurrentBranch(at path: String) async
-		-> (branch: String, unstagedCount: Int, stagedCount: Int)
-	func countUnpushedCommits(at path: String) async throws -> Int
-	func countCommitsBehind(at path: String) async throws -> Int
-	func mergeMaster(at path: String) async throws -> GitMergeMasterHelper.MergeResult
-	func pull(at path: String) async throws -> GitPullHelper.PullResult
-	func fetch(at path: String) async throws -> GitFetchHelper.FetchResult
-}
 
 // MARK: - YouTrack Service Protocol
 
-enum CodeReviewState: String, Sendable, Equatable {
+nonisolated enum CodeReviewState: String, Sendable, Equatable {
 	case passed = "Passed"
 	case waiting = "Waiting"
 	case notApplicable = "N/A"
@@ -33,7 +22,7 @@ enum CodeReviewState: String, Sendable, Equatable {
 	}
 }
 
-enum TicketState: String, Sendable, Equatable {
+nonisolated enum TicketState: String, Sendable, Equatable {
 	case open = "Open"
 	case inProgress = "In Progress"
 	case waitingToCodeReview = "Waiting to code review"
@@ -79,7 +68,7 @@ struct IssueDetails: Sendable {
 
 // MARK: - Xcode Service Protocol
 
-protocol XcodeServiceType: Sendable {
+nonisolated protocol XcodeServiceType: Sendable {
 	func hasXcodeProject(in path: String, iosSubfolderPath: String) -> Bool
 	func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String?
 }

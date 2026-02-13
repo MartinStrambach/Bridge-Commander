@@ -109,14 +109,14 @@ struct RepositoryRowReducer {
 		case worktreeCreated
 	}
 
-	@Dependency(\.gitService)
-	private var gitService
+	@Dependency(GitClient.self)
+	private var gitClient
 
-	@Dependency(\.youTrackService)
-	private var youTrackService
+	@Dependency(YouTrackClient.self)
+	private var youTrackClient
 
-	@Dependency(\.xcodeService)
-	private var xcodeService
+	@Dependency(XcodeClient.self)
+	private var xcodeClient
 
 	var body: some Reducer<State, Action> {
 		Scope(state: \.xcodeButton, action: \.xcodeButton) {
@@ -239,34 +239,22 @@ struct RepositoryRowReducer {
 
 	private func fetchBranch(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
-			let (branch, unstaged, staged) = await gitService.getCurrentBranch(at: path)
+			let (branch, unstaged, staged) = await gitClient.getCurrentBranch(at: path)
 			await send(.didFetchBranch(branch, unstaged, staged))
 		}
 	}
 
 	private func fetchUnpushed(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
-			do {
-				let count = try await gitService.countUnpushedCommits(at: path)
-				await send(.didFetchUnpushedCount(count))
-			}
-			catch {
-				// Silently fail - likely no upstream branch
-				await send(.didFetchUnpushedCount(0))
-			}
+			let count = await gitClient.countUnpushedCommits(at: path)
+			await send(.didFetchUnpushedCount(count))
 		}
 	}
 
 	private func fetchCommitsBehind(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
-			do {
-				let count = try await gitService.countCommitsBehind(at: path)
-				await send(.didFetchCommitsBehind(count))
-			}
-			catch {
-				// Silently fail - likely no upstream branch
-				await send(.didFetchCommitsBehind(0))
-			}
+			let count = await gitClient.countCommitsBehind(at: path)
+			await send(.didFetchCommitsBehind(count))
 		}
 	}
 
@@ -284,7 +272,7 @@ struct RepositoryRowReducer {
 
 		return .run { send in
 			do {
-				let details = try await youTrackService.fetchIssueDetails(for: ticketId)
+				let details = try await youTrackClient.fetchIssueDetails(for: ticketId)
 				await send(.didFetchYouTrack(details))
 			}
 			catch {

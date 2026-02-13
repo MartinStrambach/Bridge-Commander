@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitMergeMasterHelper {
+nonisolated enum GitMergeMasterHelper {
 	enum MergeError: Error, Equatable {
 		case fetchFailed(String)
 		case mergeFailed(String)

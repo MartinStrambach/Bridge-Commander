@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitPullHelper {
+nonisolated enum GitPullHelper {
 	struct PullResult: Equatable {
 		let commitCount: Int
 		let isAlreadyUpToDate: Bool

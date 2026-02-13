@@ -21,8 +21,8 @@ struct FetchButtonReducer {
 		enum Alert: Equatable {}
 	}
 
-	@Dependency(\.gitService)
-	private var gitService
+	@Dependency(GitClient.self)
+	private var gitClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -31,7 +31,7 @@ struct FetchButtonReducer {
 				state.isFetching = true
 				return .run { [path = state.repositoryPath] send in
 					do {
-						let result = try await gitService.fetch(at: path)
+						let result = try await gitClient.fetch(at: path)
 						await send(.fetchCompleted(result: result, error: nil))
 					}
 					catch let error as GitFetchHelper.FetchError {

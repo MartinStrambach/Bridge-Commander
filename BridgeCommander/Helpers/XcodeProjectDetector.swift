@@ -1,6 +1,6 @@
 import Foundation
 
-enum XcodeProjectDetector {
+nonisolated enum XcodeProjectDetector {
 
 	/// Finds an Xcode workspace or project in the configured iOS subfolder
 	/// - Parameters:

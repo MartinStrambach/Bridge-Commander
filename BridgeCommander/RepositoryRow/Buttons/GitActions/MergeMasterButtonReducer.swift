@@ -26,8 +26,8 @@ struct MergeMasterButtonReducer {
 		enum Alert: Equatable {}
 	}
 
-	@Dependency(\.gitService)
-	private var gitService
+	@Dependency(GitClient.self)
+	private var gitClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -36,7 +36,7 @@ struct MergeMasterButtonReducer {
 				state.isMergingMaster = true
 				return .run { [path = state.repositoryPath] send in
 					do {
-						let mergeResult = try await gitService.mergeMaster(at: path)
+						let mergeResult = try await gitClient.mergeMaster(at: path)
 						await send(.mergeMasterCompleted(result: .success(mergeResult)))
 					}
 					catch let error as GitMergeMasterHelper.MergeError {

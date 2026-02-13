@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum AndroidStudioDetector {
+nonisolated enum AndroidStudioDetector {
 
 	/// Checks if Android Studio is running
 	/// - Returns: true if Android Studio process is found

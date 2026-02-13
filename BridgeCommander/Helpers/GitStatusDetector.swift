@@ -1,11 +1,11 @@
 import Foundation
 
-struct GitChanges {
+struct GitChanges: Sendable {
 	let unstagedCount: Int
 	let stagedCount: Int
 }
 
-enum GitStatusDetector {
+nonisolated enum GitStatusDetector {
 
 	/// Detects both staged and unstaged changes in a repository
 	/// Uses `git ls-files -m` for unstaged changes and `git diff --name-only --cached` for staged changes

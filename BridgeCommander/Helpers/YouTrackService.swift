@@ -1,6 +1,6 @@
 import Foundation
 
-enum YouTrackService {
+nonisolated enum YouTrackService {
 	private static let baseURL = "https://youtrack.livesport.eu/api"
 
 	/// Fetches PR URL and code review fields from a YouTrack issue
@@ -185,7 +185,7 @@ enum YouTrackService {
 
 // MARK: - YouTrack API Response Models
 
-struct YouTrackIssue: Decodable {
+nonisolated struct YouTrackIssue: Decodable {
 	enum CodingKeys: String, CodingKey {
 		case id
 		case key
@@ -195,7 +195,6 @@ struct YouTrackIssue: Decodable {
 	let id: String?
 	let key: String?
 	let customFields: [CustomField]?
-
 }
 
 struct CustomField: Decodable {
@@ -232,5 +231,4 @@ struct CustomFieldValue: Decodable {
 			self.text = nil
 		}
 	}
-
 }

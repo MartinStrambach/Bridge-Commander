@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitStashHelper {
+nonisolated enum GitStashHelper {
 	enum StashError: Error, Equatable {
 		case stashFailed(String)
 		case stashPopFailed(String)
@@ -72,10 +72,8 @@ enum GitStashHelper {
 		// Check if any stash entry contains the current branch
 		// Format: "stash@{0}: WIP on branch-name: commit-hash commit-message"
 		// or "stash@{0}: On branch-name: commit-hash commit-message"
-		let hasStashOnBranch = output.split(separator: "\n").contains { line in
+		return output.split(separator: "\n").contains { line in
 			line.contains("WIP on \(branch):") || line.contains("On \(branch):")
 		}
-
-		return hasStashOnBranch
 	}
 }

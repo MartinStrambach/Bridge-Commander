@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitAbortMergeHelper {
+nonisolated enum GitAbortMergeHelper {
 	/// Aborts an ongoing merge operation
 	/// - Parameter path: The path to the Git repository
 	/// - Throws: An error if the abort fails

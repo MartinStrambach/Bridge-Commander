@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitRemoteBranchDetector {
+nonisolated enum GitRemoteBranchDetector {
 	/// Checks if the current branch has a remote tracking branch
 	static func hasRemoteBranch(at path: String) async -> Bool {
 		let result = await ProcessRunner.runGit(

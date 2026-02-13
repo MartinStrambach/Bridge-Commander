@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum ClaudeCodeLauncher {
+nonisolated enum ClaudeCodeLauncher {
 
 	/// Opens Terminal and runs Claude Code at the specified repository path
 	/// - Parameter path: The directory path to run Claude Code in

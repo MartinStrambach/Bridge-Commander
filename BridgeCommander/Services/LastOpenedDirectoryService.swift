@@ -1,22 +1,33 @@
+import Dependencies
+import DependenciesMacros
 import Foundation
 
-final class LastOpenedDirectoryServiceImpl: LastOpenedDirectoryServiceType {
-	private let userDefaults: UserDefaults
-	private let key = "lastOpenedDirectory"
+@DependencyClient
+struct LastOpenedDirectoryClient: Sendable {
+	var load: () -> String? = { nil }
+	var save: (_ directory: String) -> Void
+	var clear: () -> Void
+}
 
-	init(userDefaults: UserDefaults = .standard) {
-		self.userDefaults = userDefaults
-	}
+extension LastOpenedDirectoryClient: DependencyKey {
+	static let liveValue: LastOpenedDirectoryClient = {
+		let userDefaults = UserDefaults.standard
+		let key = "lastOpenedDirectory"
 
-	func load() -> String? {
-		userDefaults.string(forKey: key)
-	}
+		return LastOpenedDirectoryClient(
+			load: {
+				userDefaults.string(forKey: key)
+			},
+			save: { directory in
+				userDefaults.set(directory, forKey: key)
+			},
+			clear: {
+				userDefaults.removeObject(forKey: key)
+			}
+		)
+	}()
+}
 
-	func save(_ directory: String) {
-		userDefaults.set(directory, forKey: key)
-	}
-
-	func clear() {
-		userDefaults.removeObject(forKey: key)
-	}
+extension LastOpenedDirectoryClient: TestDependencyKey {
+	static let testValue = LastOpenedDirectoryClient()
 }
