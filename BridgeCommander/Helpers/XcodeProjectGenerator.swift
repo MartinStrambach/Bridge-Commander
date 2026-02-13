@@ -35,24 +35,34 @@ enum XcodeProjectGenerator {
 
 		// Step 1: Run ti command in iOS subfolder
 		onStateChange(.runningTi)
-		let installResult = await TuistCommandHelper.runCommand(.install, at: iosFlashscorePath, shouldOpenXcode: shouldOpenXcode)
+		let installResult = await TuistCommandHelper.runCommand(
+			.install,
+			at: iosFlashscorePath,
+			shouldOpenXcode: shouldOpenXcode
+		)
 		if case let .failure(error) = installResult {
 			throw ProjectGenerationError.commandFailed(command: "tuist install", message: error.localizedDescription)
 		}
 
 		// Step 2: Run tg command in iOS subfolder
 		onStateChange(.runningTg)
-		let generateResult = await TuistCommandHelper.runCommand(.generate, at: iosFlashscorePath, shouldOpenXcode: shouldOpenXcode)
+		let generateResult = await TuistCommandHelper.runCommand(
+			.generate,
+			at: iosFlashscorePath,
+			shouldOpenXcode: shouldOpenXcode
+		)
 		if case let .failure(error) = generateResult {
 			throw ProjectGenerationError.commandFailed(command: "tuist generate", message: error.localizedDescription)
 		}
 
 		// Step 3: Find the generated project
 		onStateChange(.checking)
-		guard let projectPath = XcodeProjectDetector.findXcodeProject(
-			in: repositoryPath,
-			iosSubfolderPath: iosSubfolderPath
-		) else {
+		guard
+			let projectPath = XcodeProjectDetector.findXcodeProject(
+				in: repositoryPath,
+				iosSubfolderPath: iosSubfolderPath
+			)
+		else {
 			throw ProjectGenerationError.projectNotFoundAfterGeneration
 		}
 

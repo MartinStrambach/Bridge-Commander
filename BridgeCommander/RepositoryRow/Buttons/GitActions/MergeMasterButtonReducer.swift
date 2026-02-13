@@ -7,15 +7,20 @@ import Foundation
 struct MergeMasterButtonReducer {
 	@ObservableState
 	struct State: Equatable {
-		let repositoryPath: String
 		var isMergingMaster = false
 		@Presents
 		var alert: AlertState<Action.Alert>?
+
+		fileprivate let repositoryPath: String
+
+		init(repositoryPath: String) {
+			self.repositoryPath = repositoryPath
+		}
 	}
 
 	enum Action: Equatable {
 		case mergeMasterTapped
-		case mergeMasterCompleted(error: GitMergeMasterHelper.MergeError?)
+		case mergeMasterCompleted(result: Result<GitMergeMasterHelper.MergeResult, GitMergeMasterHelper.MergeError>)
 		case alert(PresentationAction<Alert>)
 
 		enum Alert: Equatable {}
@@ -31,37 +36,48 @@ struct MergeMasterButtonReducer {
 				state.isMergingMaster = true
 				return .run { [path = state.repositoryPath] send in
 					do {
-						try await gitService.mergeMaster(at: path)
-						await send(.mergeMasterCompleted(error: nil))
+						let mergeResult = try await gitService.mergeMaster(at: path)
+						await send(.mergeMasterCompleted(result: .success(mergeResult)))
 					}
 					catch let error as GitMergeMasterHelper.MergeError {
-						await send(.mergeMasterCompleted(error: error))
+						await send(.mergeMasterCompleted(result: .failure(error)))
 					}
 					catch {
 						print("Unexpected error during merge: \(error)")
-						await send(.mergeMasterCompleted(error: nil))
+						await send(.mergeMasterCompleted(result: .failure(.mergeFailed(error.localizedDescription))))
 					}
 				}
 
-			case let .mergeMasterCompleted(error):
+			case let .mergeMasterCompleted(result):
 				state.isMergingMaster = false
-				if let error {
-					let message =
+				let (title, message) =
+					switch result {
+					case let .success(mergeResult):
+						mergeResult.commitsMerged
+							? ("Merge Successful", "Successfully merged commits from master.")
+							: (
+								"Already Up to Date",
+								"Branch is already up to date with master. No commits were merged."
+							)
+
+					case let .failure(error):
 						switch error {
 						case let .fetchFailed(msg):
-							"Fetch failed: \(msg)"
+							("Git Operation Failed", "Fetch failed: \(msg)")
+
 						case let .mergeFailed(msg):
-							"Merge failed: \(msg)"
+							("Git Operation Failed", "Merge failed: \(msg)")
 						}
-					state.alert = AlertState {
-						TextState("Git Operation Failed")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(message)
 					}
+
+				state.alert = AlertState {
+					TextState(title)
+				} actions: {
+					ButtonState(role: .cancel) {
+						TextState("OK")
+					}
+				} message: {
+					TextState(message)
 				}
 				return .none
 

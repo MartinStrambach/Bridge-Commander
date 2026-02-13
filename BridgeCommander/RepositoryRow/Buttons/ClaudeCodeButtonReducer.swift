@@ -27,7 +27,7 @@ struct ClaudeCodeButtonReducer {
 				state.isLaunching = true
 				return .run { [path = state.repositoryPath] send in
 					do {
-						try ClaudeCodeLauncher.runClaudeCode(at: path)
+						try await ClaudeCodeLauncher.runClaudeCode(at: path)
 						await send(.didLaunchClaudeCode)
 					}
 					catch {

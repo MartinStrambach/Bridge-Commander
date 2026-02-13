@@ -6,12 +6,16 @@ enum GitMergeMasterHelper {
 		case mergeFailed(String)
 	}
 
-	static func mergeMaster(at path: String) async throws {
+	struct MergeResult: Equatable {
+		let commitsMerged: Bool
+	}
+
+	static func mergeMaster(at path: String) async throws -> MergeResult {
 		// First, fetch origin/master
 		try await fetchOriginMaster(at: path)
 
 		// Then, merge origin/master
-		try await mergeOriginMaster(at: path)
+		return try await mergeOriginMaster(at: path)
 	}
 
 	private static func fetchOriginMaster(at path: String) async throws {
@@ -26,7 +30,7 @@ enum GitMergeMasterHelper {
 		}
 	}
 
-	private static func mergeOriginMaster(at path: String) async throws {
+	private static func mergeOriginMaster(at path: String) async throws -> MergeResult {
 		let result = await ProcessRunner.runGit(
 			arguments: ["merge", "origin/master"],
 			at: path
@@ -38,5 +42,11 @@ enum GitMergeMasterHelper {
 				errorMessage.isEmpty ? "Merge couldn't be finished. Check the repository state." : errorMessage
 			)
 		}
+
+		// Check if the output indicates no commits were merged
+		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		let alreadyUpToDate = output.contains("Already up to date") || output.contains("Already up-to-date")
+
+		return MergeResult(commitsMerged: !alreadyUpToDate)
 	}
 }
