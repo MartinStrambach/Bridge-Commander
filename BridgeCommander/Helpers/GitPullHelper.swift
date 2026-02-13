@@ -11,52 +11,19 @@ enum GitPullHelper {
 	}
 
 	static func pull(at path: String) async throws -> PullResult {
-		try await withCheckedThrowingContinuation { continuation in
-			let process = Process()
-			process.currentDirectoryURL = URL(filePath: path)
-			process.executableURL = URL(filePath: "/usr/bin/git")
-			process.arguments = ["pull", "--prune"]
-			process.environment = GitEnvironmentHelper.setupEnvironment()
+		let result = await ProcessRunner.runGit(
+			arguments: ["pull", "--prune"],
+			at: path
+		)
 
-			let outputPipe = Pipe()
-			let errorPipe = Pipe()
-			process.standardOutput = outputPipe
-			process.standardError = errorPipe
-
-			process.terminationHandler = { process in
-				if process.terminationStatus == 0 {
-					let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-					let output = String(data: outputData, encoding: .utf8) ?? ""
-					Task {
-						let result = await parsePullOutput(output, at: path)
-						continuation.resume(returning: result)
-					}
-				}
-				else {
-					let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-					let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-					guard !errorMessage.isEmpty else {
-						continuation.resume(
-							throwing: PullError.pullFailed("Pull couldn't be finished. Check the repository state.")
-						)
-						return
-					}
-
-					continuation.resume(
-						throwing: PullError.pullFailed(
-							errorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-						)
-					)
-				}
-			}
-
-			do {
-				try process.run()
-			}
-			catch {
-				continuation.resume(throwing: error)
-			}
+		guard result.success else {
+			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+			throw PullError.pullFailed(
+				errorMessage.isEmpty ? "Pull couldn't be finished. Check the repository state." : errorMessage
+			)
 		}
+
+		return await parsePullOutput(result.outputString, at: path)
 	}
 
 	private static func parsePullOutput(_ output: String, at path: String) async -> PullResult {
@@ -105,49 +72,16 @@ enum GitPullHelper {
 	}
 
 	private static func countCommitsBetween(from: String, to: String, at path: String) async -> Int {
-		await withCheckedContinuation { continuation in
-			let process = Process()
-			process.currentDirectoryURL = URL(filePath: path)
-			process.executableURL = URL(filePath: "/usr/bin/git")
-			process.arguments = ["rev-list", "--count", "\(from)..\(to)"]
-			process.environment = GitEnvironmentHelper.setupEnvironment()
+		let result = await ProcessRunner.runGit(
+			arguments: ["rev-list", "--count", "\(from)..\(to)"],
+			at: path
+		)
 
-			let outputPipe = Pipe()
-			process.standardOutput = outputPipe
-
-			let outputCollector = PipeDataCollector()
-
-			// Continuously read from output pipe in background to prevent buffer overflow
-			outputPipe.fileHandleForReading.readabilityHandler = { fileHandle in
-				let data = fileHandle.availableData
-				outputCollector.append(data)
-			}
-
-			process.terminationHandler = { proc in
-				// Stop reading from pipe
-				outputPipe.fileHandleForReading.readabilityHandler = nil
-
-				// Read any remaining data
-				let remainingOutput = (try? outputPipe.fileHandleForReading.readToEnd()) ?? Data()
-				outputCollector.append(remainingOutput)
-
-				if proc.terminationStatus == 0 {
-					let outputData = outputCollector.getData()
-					let output = String(data: outputData, encoding: .utf8)?
-						.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-					continuation.resume(returning: Int(output) ?? 0)
-				}
-				else {
-					continuation.resume(returning: 0)
-				}
-			}
-
-			do {
-				try process.run()
-			}
-			catch {
-				continuation.resume(returning: 0)
-			}
+		guard result.success else {
+			return 0
 		}
+
+		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		return Int(output) ?? 0
 	}
 }

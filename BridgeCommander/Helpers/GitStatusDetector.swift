@@ -23,61 +23,23 @@ enum GitStatusDetector {
 
 	/// Counts unstaged changes using git ls-files -m
 	private static func getUnstagedCount(at path: String) async -> Int {
-		await withCheckedContinuation { continuation in
-			let process = Process()
-			process.currentDirectoryURL = URL(filePath: path)
-			process.executableURL = URL(filePath: "/usr/bin/git")
-			process.arguments = ["ls-files", "-mdo", "--exclude-standard", "--exclude=*/submodules/*"]
+		let result = await ProcessRunner.runGit(
+			arguments: ["ls-files", "-mdo", "--exclude-standard", "--exclude=*/submodules/*"],
+			at: path
+		)
 
-			let pipe = Pipe()
-			process.standardOutput = pipe
-			process.standardError = Pipe()
-
-			process.terminationHandler = { _ in
-				let data = pipe.fileHandleForReading.readDataToEndOfFile()
-				let output = String(data: data, encoding: .utf8) ?? ""
-				let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-
-				let result = trimmed.isEmpty ? 0 : trimmed.split(separator: "\n").count
-				continuation.resume(returning: result)
-			}
-
-			do {
-				try process.run()
-			}
-			catch {
-				continuation.resume(returning: 0)
-			}
-		}
+		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		return output.isEmpty ? 0 : output.split(separator: "\n").count
 	}
 
 	/// Counts staged changes using git diff --name-only --cached
 	private static func getStagedCount(at path: String) async -> Int {
-		await withCheckedContinuation { continuation in
-			let process = Process()
-			process.currentDirectoryURL = URL(fileURLWithPath: path)
-			process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-			process.arguments = ["diff", "--name-only", "--cached"]
+		let result = await ProcessRunner.runGit(
+			arguments: ["diff", "--name-only", "--cached"],
+			at: path
+		)
 
-			let pipe = Pipe()
-			process.standardOutput = pipe
-			process.standardError = Pipe()
-
-			process.terminationHandler = { _ in
-				let data = pipe.fileHandleForReading.readDataToEndOfFile()
-				let output = String(data: data, encoding: .utf8) ?? ""
-				let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-
-				let result = trimmed.isEmpty ? 0 : trimmed.split(separator: "\n").count
-				continuation.resume(returning: result)
-			}
-
-			do {
-				try process.run()
-			}
-			catch {
-				continuation.resume(returning: 0)
-			}
-		}
+		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		return output.isEmpty ? 0 : output.split(separator: "\n").count
 	}
 }

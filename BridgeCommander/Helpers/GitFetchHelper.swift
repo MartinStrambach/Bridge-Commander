@@ -11,56 +11,21 @@ enum GitFetchHelper {
 	}
 
 	static func fetch(at path: String) async throws -> FetchResult {
-		try await withCheckedThrowingContinuation { continuation in
-			let process = Process()
-			process.currentDirectoryURL = URL(filePath: path)
-			process.executableURL = URL(filePath: "/usr/bin/git")
-			process.arguments = ["fetch", "--prune", "--verbose"]
-			process.environment = GitEnvironmentHelper.setupEnvironment()
+		let result = await ProcessRunner.runGit(
+			arguments: ["fetch", "--prune", "--verbose"],
+			at: path
+		)
 
-			let outputPipe = Pipe()
-			let errorPipe = Pipe()
-			process.standardOutput = outputPipe
-			process.standardError = errorPipe
-
-			process.terminationHandler = { process in
-				if process.terminationStatus == 0 {
-					// Git fetch outputs to stderr even on success
-					let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-					let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-					let output = String(data: errorData, encoding: .utf8) ?? String(
-						data: outputData,
-						encoding: .utf8
-					) ??
-						""
-					let result = parseFetchOutput(output)
-					continuation.resume(returning: result)
-				}
-				else {
-					let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-					let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-					guard !errorMessage.isEmpty else {
-						continuation.resume(
-							throwing: FetchError.fetchFailed("Fetch couldn't be finished. Check the repository state.")
-						)
-						return
-					}
-
-					continuation.resume(
-						throwing: FetchError.fetchFailed(
-							errorMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-						)
-					)
-				}
-			}
-
-			do {
-				try process.run()
-			}
-			catch {
-				continuation.resume(throwing: error)
-			}
+		guard result.success else {
+			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+			throw FetchError.fetchFailed(
+				errorMessage.isEmpty ? "Fetch couldn't be finished. Check the repository state." : errorMessage
+			)
 		}
+
+		// Git fetch outputs to stderr even on success
+		let output = result.errorString.isEmpty ? result.outputString : result.errorString
+		return parseFetchOutput(output)
 	}
 
 	private static func parseFetchOutput(_ output: String) -> FetchResult {

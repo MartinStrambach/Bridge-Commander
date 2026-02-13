@@ -5,18 +5,17 @@ enum TerminalLauncher {
 
 	/// Opens Terminal.app with a new window at the specified directory
 	/// - Parameter path: The directory path to open in Terminal
-	static func openTerminal(at path: String) {
+	static func openTerminal(at path: String) async {
 		// Escape the path for shell safety
 		let escapedPath = path.replacingOccurrences(of: "\"", with: "\\\"")
 
-		let process = Process()
-		process.executableURL = URL(filePath: "/usr/bin/open")
-		process.arguments = ["-a", "Terminal", escapedPath]
+		let result = await ProcessRunner.run(
+			executableURL: URL(filePath: "/usr/bin/open"),
+			arguments: ["-a", "Terminal", escapedPath]
+		)
 
-		do {
-			try process.run()
-		} catch {
-			print("Failed to open Terminal: \(error.localizedDescription)")
+		if !result.success {
+			print("Failed to open Terminal: \(result.errorString)")
 		}
 	}
 
