@@ -38,3 +38,13 @@ extension SharedReaderKey where Self == AppStorageKey<TuistCacheType> {
 		appStorage("tuistCacheType")
 	}
 }
+
+nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalOpeningBehavior> {
+	static var terminalOpeningBehavior: Self {
+		appStorage("terminalOpeningBehavior")
+	}
+
+	static var claudeCodeOpeningBehavior: Self {
+		appStorage("claudeCodeOpeningBehavior")
+	}
+}

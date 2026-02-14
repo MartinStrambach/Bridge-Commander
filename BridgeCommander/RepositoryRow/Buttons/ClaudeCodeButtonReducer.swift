@@ -7,6 +7,10 @@ struct ClaudeCodeButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isLaunching: Bool = false
+
+		@Shared(.claudeCodeOpeningBehavior)
+		var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -25,9 +29,9 @@ struct ClaudeCodeButtonReducer {
 			switch action {
 			case .launchClaudeCodeButtonTapped:
 				state.isLaunching = true
-				return .run { [path = state.repositoryPath] send in
+				return .run { [path = state.repositoryPath, behavior = state.claudeCodeOpeningBehavior] send in
 					do {
-						try await ClaudeCodeLauncher.runClaudeCode(at: path)
+						try await ClaudeCodeLauncher.runClaudeCode(at: path, behavior: behavior)
 						await send(.didLaunchClaudeCode)
 					}
 					catch {

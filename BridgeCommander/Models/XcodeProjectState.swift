@@ -1,6 +1,6 @@
 import Foundation
 
-enum XcodeProjectState: Equatable {
+enum XcodeProjectState: Equatable, Sendable {
 	case idle
 	case checking
 	case runningTi
@@ -12,14 +12,19 @@ enum XcodeProjectState: Equatable {
 		switch self {
 		case .idle:
 			"Open Xcode Project"
+
 		case .checking:
 			"Checking"
+
 		case .runningTi:
 			"Running ti"
+
 		case .runningTg:
 			"Running tg"
+
 		case .opening:
 			"Opening"
+
 		case let .error(message):
 			"Error: \(message)"
 		}
@@ -30,6 +35,7 @@ enum XcodeProjectState: Equatable {
 		case .error,
 		     .idle:
 			false
+
 		default:
 			true
 		}

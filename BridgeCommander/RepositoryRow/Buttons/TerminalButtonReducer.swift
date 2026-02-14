@@ -8,6 +8,9 @@ struct TerminalButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
+
+		@Shared(.terminalOpeningBehavior)
+		var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 	}
 
 	enum Action: Equatable {
@@ -18,8 +21,8 @@ struct TerminalButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .openTerminalButtonTapped:
-				.run { [path = state.repositoryPath] _ in
-					await TerminalLauncher.openTerminal(at: path)
+				.run { [path = state.repositoryPath, behavior = state.terminalOpeningBehavior] _ in
+					await TerminalLauncher.openTerminal(at: path, behavior: behavior)
 				}
 			}
 		}

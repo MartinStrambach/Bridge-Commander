@@ -26,6 +26,12 @@ struct SettingsReducer {
 		@Shared(.tuistCacheType)
 		var tuistCacheType = TuistCacheType.externalOnly
 
+		@Shared(.terminalOpeningBehavior)
+		var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
+
+		@Shared(.claudeCodeOpeningBehavior)
+		var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -38,6 +44,8 @@ struct SettingsReducer {
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setTuistCacheType(TuistCacheType)
+		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
+		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -76,6 +84,14 @@ struct SettingsReducer {
 
 			case let .setTuistCacheType(cacheType):
 				state.$tuistCacheType.withLock { $0 = cacheType }
+				return .none
+
+			case let .setTerminalOpeningBehavior(behavior):
+				state.$terminalOpeningBehavior.withLock { $0 = behavior }
+				return .none
+
+			case let .setClaudeCodeOpeningBehavior(behavior):
+				state.$claudeCodeOpeningBehavior.withLock { $0 = behavior }
 				return .none
 
 			case .clearTokenButtonTapped:
