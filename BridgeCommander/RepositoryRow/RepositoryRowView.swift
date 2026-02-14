@@ -2,7 +2,8 @@ import ComposableArchitecture
 import SwiftUI
 
 struct RepositoryRowView: View {
-	let store: StoreOf<RepositoryRowReducer>
+	@Bindable
+	var store: StoreOf<RepositoryRowReducer>
 
 	private var backgroundColorForState: Color {
 		if let ticketState = store.ticketState {
@@ -40,8 +41,22 @@ struct RepositoryRowView: View {
 		.padding(.vertical, 12)
 		.background(backgroundColorForState)
 		.contentShape(Rectangle())
+		.onTapGesture(count: 2) {
+			store.send(.openRepositoryDetail)
+		}
 		.task {
 			store.send(.onAppear)
+		}
+		.sheet(item: $store.scope(state: \.repositoryDetail, action: \.repositoryDetail)) { detailStore in
+			RepositoryDetailView(store: detailStore)
+				.frame(
+					minWidth: 1200,
+					idealWidth: 1500,
+					maxWidth: .infinity,
+					minHeight: 700,
+					idealHeight: 800,
+					maxHeight: .infinity
+				)
 		}
 	}
 

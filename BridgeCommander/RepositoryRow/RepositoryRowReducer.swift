@@ -39,6 +39,9 @@ struct RepositoryRowReducer {
 		var createWorktreeButton: CreateWorktreeButtonReducer.State
 		var gitActionsMenu: GitActionsMenuReducer.State
 
+		@Presents
+		var repositoryDetail: RepositoryDetail.State?
+
 		var formattedBranchName: String {
 			@Shared(.branchNameRegex)
 			var regex = "[a-zA-Z]+-\\d+[_/]"
@@ -95,6 +98,8 @@ struct RepositoryRowReducer {
 		case didFetchCommitsBehind(Int)
 		case didFetchRemoteBranch(Bool)
 		case didFetchYouTrack(IssueDetails)
+		case openRepositoryDetail
+		case repositoryDetail(PresentationAction<RepositoryDetail.Action>)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
 		case terminalButton(TerminalButtonReducer.Action)
@@ -157,6 +162,10 @@ struct RepositoryRowReducer {
 
 		Reduce { state, action in
 			switch action {
+			case .openRepositoryDetail:
+				state.repositoryDetail = RepositoryDetail.State(repositoryPath: state.path)
+				return .none
+
 			case .onAppear,
 			     .refresh:
 				return .merge(
@@ -226,12 +235,22 @@ struct RepositoryRowReducer {
 					return .none
 				}
 
+			case .repositoryDetail(.dismiss):
+				// Refresh when detail view is closed to pick up any staging changes
+				return .send(.refresh)
+
+			case .repositoryDetail:
+				return .none
+
 			default:
 				return .none
 			}
 		}
 		.ifLet(\.ticketButton, action: \.ticketButton) {
 			TicketButtonReducer()
+		}
+		.ifLet(\.$repositoryDetail, action: \.repositoryDetail) {
+			RepositoryDetail()
 		}
 	}
 
