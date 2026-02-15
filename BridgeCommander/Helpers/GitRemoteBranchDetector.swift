@@ -12,7 +12,7 @@ nonisolated enum GitRemoteBranchDetector {
 			return false
 		}
 
-		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		let output = result.trimmedOutput
 		return !output.isEmpty
 	}
 }

@@ -6,47 +6,14 @@ nonisolated enum GitBranchDetector {
 	/// - Parameter path: The path to the Git repository
 	/// - Returns: The current branch name, or nil if not available
 	static func getCurrentBranch(at path: String) -> String? {
-		// Try reading .git/HEAD directly instead of using git command
-		// This avoids sandbox issues with executing external processes
-		let gitHeadPath = (path as NSString).appendingPathComponent(".git/HEAD")
-
-		// Check if .git is a directory or a file (worktree)
-		let gitPath = (path as NSString).appendingPathComponent(".git")
-		var isDirectory: ObjCBool = false
-		let gitExists = FileManager.default.fileExists(atPath: gitPath, isDirectory: &isDirectory)
-
-		guard gitExists else {
+		// Resolve the actual git directory (handles both regular repos and worktrees)
+		guard let actualGitPath = GitDirectoryResolver.resolveGitDirectory(at: path) else {
 			print("No .git found at \(path)")
 			return nil
 		}
 
-		// If .git is a file (worktree), read it to find the actual git directory
-		let actualGitHeadPath: String
-		if !isDirectory.boolValue {
-			// It's a worktree - read the .git file to find gitdir
-			guard let gitFileContent = try? String(contentsOfFile: gitPath, encoding: .utf8) else {
-				print("Failed to read .git file at \(path)")
-				return nil
-			}
-
-			// Parse "gitdir: /path/to/git/worktrees/name"
-			let trimmed = gitFileContent.trimmingCharacters(in: .whitespacesAndNewlines)
-			if trimmed.hasPrefix("gitdir:") {
-				let gitDir = trimmed.replacingOccurrences(of: "gitdir:", with: "")
-					.trimmingCharacters(in: .whitespaces)
-				actualGitHeadPath = (gitDir as NSString).appendingPathComponent("HEAD")
-			}
-			else {
-				print("Invalid .git file format at \(path)")
-				return nil
-			}
-		}
-		else {
-			// Regular repository
-			actualGitHeadPath = gitHeadPath
-		}
-
 		// Read the HEAD file
+		let actualGitHeadPath = (actualGitPath as NSString).appendingPathComponent("HEAD")
 		guard let headContent = try? String(contentsOfFile: actualGitHeadPath, encoding: .utf8) else {
 			print("Failed to read HEAD file at \(actualGitHeadPath)")
 			return nil

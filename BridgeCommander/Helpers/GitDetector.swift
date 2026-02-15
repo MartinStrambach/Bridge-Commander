@@ -6,31 +6,14 @@ nonisolated enum GitDetector {
 	/// - Parameter url: The directory URL to check
 	/// - Returns: A tuple indicating if it's a repo and if it's a worktree
 	static func isGitRepository(at url: URL) -> (isRepo: Bool, isWorktree: Bool) {
-		let gitPath = url.appendingPathComponent(".git")
-
-		// Check if .git exists
-		var isDirectory: ObjCBool = false
-		let exists = FileManager.default.fileExists(atPath: gitPath.path, isDirectory: &isDirectory)
-
-		guard exists else {
+		// Use shared resolver to check if git directory exists
+		guard GitDirectoryResolver.resolveGitDirectory(at: url.path) != nil else {
 			return (false, false)
 		}
 
-		// If .git is a directory, it's a regular repository
-		if isDirectory.boolValue {
-			return (true, false)
-		}
-
-		// If .git is a file, it might be a worktree
-		// Read the file and check for "gitdir:" pointer
-		if let contents = try? String(contentsOf: gitPath, encoding: .utf8) {
-			let trimmed = contents.trimmingCharacters(in: .whitespacesAndNewlines)
-			if trimmed.hasPrefix("gitdir:") {
-				return (true, true)
-			}
-		}
-
-		return (false, false)
+		// Check if it's a worktree
+		let isWorktree = GitDirectoryResolver.isWorktree(at: url.path)
+		return (true, isWorktree)
 	}
 
 	/// Recursively scans a directory for Git repositories

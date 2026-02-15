@@ -39,26 +39,13 @@ struct AbortMergeButtonReducer {
 			case let .abortMergeCompleted(success, error):
 				state.isAbortingMerge = false
 				if let error {
-					state.alert = AlertState {
-						TextState("Abort Merge Failed")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(error)
-					}
+					state.alert = .okAlert(title: "Abort Merge Failed", message: error)
 				}
 				else if success {
-					state.alert = AlertState {
-						TextState("Merge Aborted")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState("The merge has been successfully aborted.")
-					}
+					state.alert = .okAlert(
+						title: "Merge Aborted",
+						message: "The merge has been successfully aborted."
+					)
 				}
 				return .none
 

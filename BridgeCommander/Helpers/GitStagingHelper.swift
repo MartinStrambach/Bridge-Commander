@@ -71,7 +71,7 @@ nonisolated enum GitStagingHelper {
 		let arguments = ["add", "--"] + filePaths
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
 		guard result.success else {
-			throw GitStagingError.commandFailed("Failed to stage files")
+			throw GitError.stagingFailed("Failed to stage files")
 		}
 	}
 
@@ -86,7 +86,7 @@ nonisolated enum GitStagingHelper {
 		let arguments = ["reset", "HEAD", "--"] + filePaths
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
 		guard result.success else {
-			throw GitStagingError.commandFailed("Failed to unstage files")
+			throw GitError.stagingFailed("Failed to unstage files")
 		}
 	}
 
@@ -97,23 +97,13 @@ nonisolated enum GitStagingHelper {
 		file: FileChange,
 		hunk: DiffHunk
 	) async throws {
-		// Create a patch with just this hunk
-		let patch = createPatchForHunk(file: file, hunk: hunk)
-
-		// Write patch to temporary file
-		let tempDir = FileManager.default.temporaryDirectory
-		let patchFile = tempDir.appendingPathComponent("hunk_\(UUID().uuidString).patch")
-
-		try patch.write(to: patchFile, atomically: true, encoding: .utf8)
-		defer { try? FileManager.default.removeItem(at: patchFile) }
-
-		// Apply the patch to the index with whitespace handling
-		let arguments = ["apply", "--cached", "--whitespace=nowarn", patchFile.path()]
-		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
-		guard result.success else {
-			let errorMsg = result.errorString.isEmpty ? "Unknown error" : result.errorString
-			throw GitStagingError.commandFailed("Failed to stage hunk: \(errorMsg)")
-		}
+		try await applyPatch(
+			at: repositoryPath,
+			file: file,
+			hunk: hunk,
+			arguments: ["apply", "--cached", "--whitespace=nowarn"],
+			errorMessage: "Failed to stage hunk"
+		)
 	}
 
 	// MARK: - Unstage Hunk
@@ -123,23 +113,13 @@ nonisolated enum GitStagingHelper {
 		file: FileChange,
 		hunk: DiffHunk
 	) async throws {
-		// Create a patch with just this hunk
-		let patch = createPatchForHunk(file: file, hunk: hunk)
-
-		// Write patch to temporary file
-		let tempDir = FileManager.default.temporaryDirectory
-		let patchFile = tempDir.appendingPathComponent("hunk_\(UUID().uuidString).patch")
-
-		try patch.write(to: patchFile, atomically: true, encoding: .utf8)
-		defer { try? FileManager.default.removeItem(at: patchFile) }
-
-		// Apply the patch in reverse to the index with whitespace handling
-		let arguments = ["apply", "--cached", "--reverse", "--whitespace=nowarn", patchFile.path()]
-		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
-		guard result.success else {
-			let errorMsg = result.errorString.isEmpty ? "Unknown error" : result.errorString
-			throw GitStagingError.commandFailed("Failed to unstage hunk: \(errorMsg)")
-		}
+		try await applyPatch(
+			at: repositoryPath,
+			file: file,
+			hunk: hunk,
+			arguments: ["apply", "--cached", "--reverse", "--whitespace=nowarn"],
+			errorMessage: "Failed to unstage hunk"
+		)
 	}
 
 	// MARK: - Discard Hunk
@@ -149,43 +129,30 @@ nonisolated enum GitStagingHelper {
 		file: FileChange,
 		hunk: DiffHunk
 	) async throws {
-		// Create a reverse patch of the hunk
-		let patch = createPatchForHunk(file: file, hunk: hunk)
-
-		// Write patch to temporary file
-		let tempDir = FileManager.default.temporaryDirectory
-		let patchFile = tempDir.appendingPathComponent("discard_hunk_\(UUID().uuidString).patch")
-
-		try patch.write(to: patchFile, atomically: true, encoding: .utf8)
-		defer { try? FileManager.default.removeItem(at: patchFile) }
-
-		// Apply the patch in reverse to the working directory with whitespace handling
-		let arguments = ["apply", "-R", "--whitespace=nowarn", patchFile.path()]
-		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
-		guard result.success else {
-			let errorMsg = result.errorString.isEmpty ? "Unknown error" : result.errorString
-			throw GitStagingError.commandFailed("Failed to discard hunk: \(errorMsg)")
-		}
+		try await applyPatch(
+			at: repositoryPath,
+			file: file,
+			hunk: hunk,
+			arguments: ["apply", "-R", "--whitespace=nowarn"],
+			errorMessage: "Failed to discard hunk"
+		)
 	}
 
 	// MARK: - Discard File Changes
 
 	static func discardFileChanges(at repositoryPath: String, filePath: String) async throws {
-		// First check if file is tracked
 		let lsFilesResult = await ProcessRunner.runGit(arguments: ["ls-files", "--", filePath], at: repositoryPath)
 		let isTracked = lsFilesResult.success && !lsFilesResult.outputString
 			.trimmingCharacters(in: .whitespacesAndNewlines)
 			.isEmpty
 
 		if isTracked {
-			// For tracked files, restore from HEAD
 			let result = await ProcessRunner.runGit(arguments: ["checkout", "HEAD", "--", filePath], at: repositoryPath)
 			guard result.success else {
-				throw GitStagingError.commandFailed("Failed to discard changes: \(filePath)")
+				throw GitError.stagingFailed("Failed to discard changes: \(filePath)")
 			}
 		}
 		else {
-			// For untracked files, just delete
 			try await deleteUntrackedFile(at: repositoryPath, filePath: filePath)
 		}
 	}
@@ -194,13 +161,12 @@ nonisolated enum GitStagingHelper {
 
 	static func deleteUntrackedFile(at repositoryPath: String, filePath: String) async throws {
 		let fullPath = (repositoryPath as NSString).appendingPathComponent(filePath)
-		let fileURL = URL(fileURLWithPath: fullPath)
 
 		do {
-			try FileManager.default.removeItem(at: fileURL)
+			try FileManager.default.removeItem(atPath: fullPath)
 		}
 		catch {
-			throw GitStagingError.fileOperationFailed("Failed to delete file: \(error.localizedDescription)")
+			throw GitError.fileOperationFailed("Failed to delete file: \(error.localizedDescription)")
 		}
 	}
 
@@ -211,41 +177,25 @@ nonisolated enum GitStagingHelper {
 		file: FileChange
 	) async -> FileDiff? {
 		let fullPath = (repositoryPath as NSString).appendingPathComponent(file.path)
-		let fileURL = URL(fileURLWithPath: fullPath)
-
-		// Check if file exists
-		guard FileManager.default.fileExists(atPath: fullPath) else {
-			return nil
-		}
-
-		// Check if it's a regular file (not directory or symlink)
 		var isDirectory: ObjCBool = false
+
 		guard
 			FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDirectory),
 			!isDirectory.boolValue
 		else {
 			return nil
 		}
-
-		// Try to read as text
-		guard let content = try? String(contentsOf: fileURL, encoding: .utf8) else {
-			// If can't read as UTF-8, it's likely binary
+		guard let content = try? String(contentsOf: URL(fileURLWithPath: fullPath), encoding: .utf8) else {
 			return FileDiff(fileChange: file, hunks: [], isBinary: true)
 		}
 
-		// Split into lines, preserving empty lines
 		var lines = content.split(separator: "\n", omittingEmptySubsequences: false)
-
-		// If file ends with newline, split adds an extra empty element - remove it
 		if lines.last?.isEmpty == true {
 			lines = lines.dropLast()
 		}
 
-		// Create diff lines (all additions)
 		let diffLines = lines.map { "+" + $0 }
 		let lineCount = diffLines.count
-
-		// Create synthetic hunk
 		let hunk = DiffHunk(
 			header: "@@ -0,0 +1,\(lineCount) @@",
 			oldStart: 0,
@@ -259,6 +209,29 @@ nonisolated enum GitStagingHelper {
 	}
 
 	// MARK: - Private Helpers
+
+	private static func applyPatch(
+		at repositoryPath: String,
+		file: FileChange,
+		hunk: DiffHunk,
+		arguments: [String],
+		errorMessage: String
+	) async throws {
+		let patch = createPatchForHunk(file: file, hunk: hunk)
+		let tempDir = FileManager.default.temporaryDirectory
+		let patchFile = tempDir.appendingPathComponent("patch_\(UUID().uuidString).patch")
+
+		try patch.write(to: patchFile, atomically: true, encoding: .utf8)
+		defer { try? FileManager.default.removeItem(at: patchFile) }
+
+		let fullArguments = arguments + [patchFile.path()]
+		let result = await ProcessRunner.runGit(arguments: fullArguments, at: repositoryPath)
+
+		guard result.success else {
+			let detail = result.errorString.isEmpty ? "Unknown error" : result.errorString
+			throw GitError.stagingFailed("\(errorMessage): \(detail)")
+		}
+	}
 
 	private static func fetchStagedFiles(at path: String) async -> [FileChange] {
 		let result = await ProcessRunner.runGit(arguments: ["diff", "--cached", "--name-status"], at: path)
@@ -335,12 +308,11 @@ nonisolated enum GitStagingHelper {
 		let hasHunkHeaders = lines.contains { $0.hasPrefix("@@") }
 
 		if !hasHunkHeaders, fileStatus == .added || fileStatus == .deleted {
-			// Collect all diff lines (skip metadata like "diff --git", "index", etc.)
 			let diffLines = lines.compactMap { line -> String? in
 				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
 					return line
-				} else if line.isEmpty {
-					// Empty line should be context line with space
+				}
+				else if line.isEmpty {
 					return " "
 				}
 				return nil
@@ -350,36 +322,14 @@ nonisolated enum GitStagingHelper {
 				return []
 			}
 
-			// Create a synthetic hunk for the entire file
 			let lineCount = diffLines.count
-			let header: String
-			let oldStart: Int
-			let oldCount: Int
-			let newStart: Int
-			let newCount: Int
-
-			if fileStatus == .added {
-				header = "@@ -0,0 +1,\(lineCount) @@"
-				oldStart = 0
-				oldCount = 0
-				newStart = 1
-				newCount = lineCount
-			}
-			else {
-				// deleted
-				header = "@@ -1,\(lineCount) +0,0 @@"
-				oldStart = 1
-				oldCount = lineCount
-				newStart = 0
-				newCount = 0
-			}
-
+			let isAdded = fileStatus == .added
 			let hunk = DiffHunk(
-				header: header,
-				oldStart: oldStart,
-				oldCount: oldCount,
-				newStart: newStart,
-				newCount: newCount,
+				header: isAdded ? "@@ -0,0 +1,\(lineCount) @@" : "@@ -1,\(lineCount) +0,0 @@",
+				oldStart: isAdded ? 0 : 1,
+				oldCount: isAdded ? 0 : lineCount,
+				newStart: isAdded ? 1 : 0,
+				newCount: isAdded ? lineCount : 0,
 				lines: diffLines.map { DiffLine(rawLine: $0) }
 			)
 
@@ -391,48 +341,11 @@ nonisolated enum GitStagingHelper {
 		var currentHunkHeader: String?
 		var hunkHeaderParts: (oldStart: Int, oldCount: Int, newStart: Int, newCount: Int)?
 
-		for line in lines {
-			if line.hasPrefix("@@") {
-				// Save previous hunk if exists
-				if
-					let header = currentHunkHeader,
-					let parts = hunkHeaderParts
-				{
-					let diffLines = currentHunkLines.map { DiffLine(rawLine: $0) }
-					hunks.append(
-						DiffHunk(
-							header: header,
-							oldStart: parts.oldStart,
-							oldCount: parts.oldCount,
-							newStart: parts.newStart,
-							newCount: parts.newCount,
-							lines: diffLines
-						)
-					)
-				}
-
-				// Start new hunk
-				currentHunkHeader = line
-				hunkHeaderParts = parseHunkHeader(line)
-				currentHunkLines = []
+		func saveCurrentHunk() {
+			guard let header = currentHunkHeader, let parts = hunkHeaderParts else {
+				return
 			}
-			else if currentHunkHeader != nil {
-				// Include lines that start with +, -, or space
-				// Also include empty lines (they should be context lines with just a space)
-				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
-					currentHunkLines.append(line)
-				} else if line.isEmpty {
-					// Empty line in a hunk should be treated as a context line
-					currentHunkLines.append(" ")
-				}
-			}
-		}
 
-		// Save last hunk
-		if
-			let header = currentHunkHeader,
-			let parts = hunkHeaderParts
-		{
 			let diffLines = currentHunkLines.map { DiffLine(rawLine: $0) }
 			hunks.append(
 				DiffHunk(
@@ -446,6 +359,24 @@ nonisolated enum GitStagingHelper {
 			)
 		}
 
+		for line in lines {
+			if line.hasPrefix("@@") {
+				saveCurrentHunk()
+				currentHunkHeader = line
+				hunkHeaderParts = parseHunkHeader(line)
+				currentHunkLines = []
+			}
+			else if currentHunkHeader != nil {
+				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
+					currentHunkLines.append(line)
+				}
+				else if line.isEmpty {
+					currentHunkLines.append(" ")
+				}
+			}
+		}
+
+		saveCurrentHunk()
 		return hunks
 	}
 
@@ -484,36 +415,24 @@ nonisolated enum GitStagingHelper {
 	}
 
 	private static func createPatchForHunk(file: FileChange, hunk: DiffHunk) -> String {
-		var patch = ""
+		var patch = "diff --git a/\(file.path) b/\(file.path)\n"
 
-		// Add diff header
-		patch += "diff --git a/\(file.path) b/\(file.path)\n"
-
-		// Adjust header based on file status
+		// Add file headers based on status
 		switch file.status {
-		case .added, .untracked:
-			patch += "--- /dev/null\n"
-			patch += "+++ b/\(file.path)\n"
+		case .added,
+		     .untracked:
+			patch += "--- /dev/null\n+++ b/\(file.path)\n"
 		case .deleted:
-			patch += "--- a/\(file.path)\n"
-			patch += "+++ /dev/null\n"
+			patch += "--- a/\(file.path)\n+++ /dev/null\n"
 		default:
-			patch += "--- a/\(file.path)\n"
-			patch += "+++ b/\(file.path)\n"
+			patch += "--- a/\(file.path)\n+++ b/\(file.path)\n"
 		}
 
-		// Add hunk header
 		patch += hunk.header + "\n"
 
-		// Add each line followed by newline to preserve empty lines
+		// Add hunk lines, normalizing empty context lines
 		for line in hunk.lines {
-			var rawLine = line.rawLine
-
-			// If rawLine is empty and it's a context line, it should be a single space
-			if rawLine.isEmpty && line.type == .context {
-				rawLine = " "
-			}
-
+			let rawLine = (line.rawLine.isEmpty && line.type == .context) ? " " : line.rawLine
 			patch += rawLine + "\n"
 		}
 
@@ -522,17 +441,3 @@ nonisolated enum GitStagingHelper {
 
 }
 
-// MARK: - Errors
-
-enum GitStagingError: Error, LocalizedError {
-	case commandFailed(String)
-	case fileOperationFailed(String)
-
-	var errorDescription: String? {
-		switch self {
-		case let .commandFailed(message),
-		     let .fileOperationFailed(message):
-			message
-		}
-	}
-}

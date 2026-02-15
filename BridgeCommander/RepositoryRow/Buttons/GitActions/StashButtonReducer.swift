@@ -38,15 +38,6 @@ struct StashButtonReducer {
 						try await GitStashHelper.stash(at: path)
 						await send(.stashCompleted(success: true, error: nil))
 					}
-					catch let error as GitStashHelper.StashError {
-						let errorMessage = switch error {
-						case let .stashFailed(msg):
-							msg
-						default:
-							"Unknown error"
-						}
-						await send(.stashCompleted(success: false, error: errorMessage))
-					}
 					catch {
 						await send(.stashCompleted(success: false, error: error.localizedDescription))
 					}
@@ -55,27 +46,17 @@ struct StashButtonReducer {
 			case let .stashCompleted(success, error):
 				state.isProcessing = false
 				if success {
-					state.alert = AlertState {
-						TextState("Stash Successful")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState("Changes have been stashed successfully.")
-					}
+					state.alert = .okAlert(
+						title: "Stash Successful",
+						message: "Changes have been stashed successfully."
+					)
 					return .send(.checkStashStatus)
 				}
 				else {
-					state.alert = AlertState {
-						TextState("Stash Failed")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(error ?? "Unknown error occurred")
-					}
+					state.alert = .okAlert(
+						title: "Stash Failed",
+						message: error ?? "Unknown error occurred"
+					)
 					return .none
 				}
 
@@ -86,15 +67,6 @@ struct StashButtonReducer {
 						try await GitStashHelper.stashPop(at: path)
 						await send(.stashPopCompleted(success: true, error: nil))
 					}
-					catch let error as GitStashHelper.StashError {
-						let errorMessage = switch error {
-						case let .stashPopFailed(msg):
-							msg
-						default:
-							"Unknown error"
-						}
-						await send(.stashPopCompleted(success: false, error: errorMessage))
-					}
 					catch {
 						await send(.stashPopCompleted(success: false, error: error.localizedDescription))
 					}
@@ -103,27 +75,17 @@ struct StashButtonReducer {
 			case let .stashPopCompleted(success, error):
 				state.isProcessing = false
 				if success {
-					state.alert = AlertState {
-						TextState("Stash Pop Successful")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState("Stashed changes have been restored successfully.")
-					}
+					state.alert = .okAlert(
+						title: "Stash Pop Successful",
+						message: "Stashed changes have been restored successfully."
+					)
 					return .send(.checkStashStatus)
 				}
 				else {
-					state.alert = AlertState {
-						TextState("Stash Pop Failed")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(error ?? "Unknown error occurred")
-					}
+					state.alert = .okAlert(
+						title: "Stash Pop Failed",
+						message: error ?? "Unknown error occurred"
+					)
 					return .none
 				}
 

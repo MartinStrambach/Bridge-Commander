@@ -31,21 +31,8 @@ nonisolated enum GitWorktreeRemover {
 		)
 
 		guard result.success else {
-			let msg = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw WorktreeRemovalError.removalFailed(message: msg.isEmpty ? "Unknown error" : msg)
-		}
-	}
-}
-
-// MARK: - Error Types
-
-enum WorktreeRemovalError: LocalizedError, Sendable {
-	case removalFailed(message: String)
-
-	var errorDescription: String? {
-		switch self {
-		case let .removalFailed(message):
-			"Failed to remove worktree: \(message)"
+			let msg = result.trimmedError
+			throw GitError.worktreeRemovalFailed(msg.isEmpty ? "Unknown error" : msg)
 		}
 	}
 }

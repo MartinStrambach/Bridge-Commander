@@ -48,7 +48,7 @@ nonisolated enum FileOpener {
 		}
 
 		guard result.success else {
-			let errorMsg = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+			let errorMsg = result.trimmedError
 			throw FileOpenerError
 				.failedToOpen(errorMsg.isEmpty ? "Unknown error (exit code \(result.exitCode))" : errorMsg)
 		}

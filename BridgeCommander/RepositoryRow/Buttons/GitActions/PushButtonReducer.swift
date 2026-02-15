@@ -15,7 +15,7 @@ struct PushButtonReducer {
 
 	enum Action: Equatable {
 		case pushTapped
-		case pushCompleted(result: GitPushHelper.PushResult?, error: PushError?)
+		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
 		case alert(PresentationAction<Alert>)
 
 		enum Alert: Equatable {}
@@ -31,7 +31,7 @@ struct PushButtonReducer {
 						let result = try await GitPushHelper.push(at: path)
 						await send(.pushCompleted(result: result, error: nil))
 					}
-					catch let error as PushError {
+					catch let error as GitError {
 						await send(.pushCompleted(result: nil, error: error))
 					}
 					catch {
@@ -43,20 +43,7 @@ struct PushButtonReducer {
 			case let .pushCompleted(result, error):
 				state.isPushing = false
 				if let error {
-					let message =
-						switch error {
-						case let .pushFailed(msg):
-							"Push failed: \(msg)"
-						}
-					state.alert = AlertState {
-						TextState("Git Operation Failed")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(message)
-					}
+					state.alert = .okAlert(title: "Git Operation Failed", message: error.localizedDescription)
 				}
 				else if let result {
 					let message =
@@ -67,15 +54,7 @@ struct PushButtonReducer {
 							"Successfully pushed commits to remote branch."
 						}
 
-					state.alert = AlertState {
-						TextState("Push Successful")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(message)
-					}
+					state.alert = .okAlert(title: "Push Successful", message: message)
 				}
 				return .none
 

@@ -28,7 +28,7 @@ nonisolated enum GitStatusDetector {
 			at: path
 		)
 
-		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		let output = result.trimmedOutput
 		return output.isEmpty ? 0 : output.split(separator: "\n").count
 	}
 
@@ -39,7 +39,7 @@ nonisolated enum GitStatusDetector {
 			at: path
 		)
 
-		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		let output = result.trimmedOutput
 		return output.isEmpty ? 0 : output.split(separator: "\n").count
 	}
 }

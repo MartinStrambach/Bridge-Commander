@@ -20,7 +20,7 @@ struct MergeMasterButtonReducer {
 
 	enum Action: Equatable {
 		case mergeMasterTapped
-		case mergeMasterCompleted(result: Result<GitMergeMasterHelper.MergeResult, GitMergeMasterHelper.MergeError>)
+		case mergeMasterCompleted(result: Result<GitMergeMasterHelper.MergeResult, GitError>)
 		case alert(PresentationAction<Alert>)
 
 		enum Alert: Equatable {}
@@ -39,7 +39,7 @@ struct MergeMasterButtonReducer {
 						let mergeResult = try await gitClient.mergeMaster(at: path)
 						await send(.mergeMasterCompleted(result: .success(mergeResult)))
 					}
-					catch let error as GitMergeMasterHelper.MergeError {
+					catch let error as GitError {
 						await send(.mergeMasterCompleted(result: .failure(error)))
 					}
 					catch {
@@ -61,24 +61,10 @@ struct MergeMasterButtonReducer {
 							)
 
 					case let .failure(error):
-						switch error {
-						case let .fetchFailed(msg):
-							("Git Operation Failed", "Fetch failed: \(msg)")
-
-						case let .mergeFailed(msg):
-							("Git Operation Failed", "Merge failed: \(msg)")
-						}
+						("Git Operation Failed", error.localizedDescription)
 					}
 
-				state.alert = AlertState {
-					TextState(title)
-				} actions: {
-					ButtonState(role: .cancel) {
-						TextState("OK")
-					}
-				} message: {
-					TextState(message)
-				}
+				state.alert = .okAlert(title: title, message: message)
 				return .none
 
 			case .alert:

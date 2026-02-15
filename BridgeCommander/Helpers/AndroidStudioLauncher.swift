@@ -19,7 +19,7 @@ nonisolated enum AndroidStudioLauncher {
 		)
 
 		guard result.success else {
-			let message = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+			let message = result.trimmedError
 			throw NSError(
 				domain: "AndroidStudioLauncher",
 				code: Int(result.exitCode),

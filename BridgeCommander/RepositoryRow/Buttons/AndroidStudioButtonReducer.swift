@@ -41,15 +41,10 @@ struct AndroidStudioButtonReducer {
 
 			case let .openFailed(errorMessage):
 				state.isOpening = false
-				state.alert = AlertState {
-					TextState("Failed to Open Android Studio")
-				} actions: {
-					ButtonState(role: .cancel) {
-						TextState("OK")
-					}
-				} message: {
-					TextState(errorMessage)
-				}
+				state.alert = .okAlert(
+					title: "Failed to Open Android Studio",
+					message: errorMessage
+				)
 				return .none
 
 			case .alert:

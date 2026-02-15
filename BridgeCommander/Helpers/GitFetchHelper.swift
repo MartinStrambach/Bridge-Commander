@@ -6,10 +6,6 @@ nonisolated enum GitFetchHelper {
 		let isAlreadyUpToDate: Bool
 	}
 
-	enum FetchError: Error, Equatable, Sendable {
-		case fetchFailed(String)
-	}
-
 	static func fetch(at path: String) async throws -> FetchResult {
 		let result = await ProcessRunner.runGit(
 			arguments: ["fetch", "--prune", "--verbose"],
@@ -17,8 +13,8 @@ nonisolated enum GitFetchHelper {
 		)
 
 		guard result.success else {
-			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw FetchError.fetchFailed(
+			let errorMessage = result.trimmedError
+			throw GitError.fetchFailed(
 				errorMessage.isEmpty ? "Fetch couldn't be finished. Check the repository state." : errorMessage
 			)
 		}

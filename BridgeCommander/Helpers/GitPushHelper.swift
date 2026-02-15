@@ -16,11 +16,11 @@ nonisolated enum GitPushHelper {
 			at: path
 		)
 
-		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
-		let errorOutput = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+		let output = result.trimmedOutput
+		let errorOutput = result.trimmedError
 
 		guard result.success else {
-			throw PushError.pushFailed(message: errorOutput)
+			throw GitError.pushFailed(errorOutput)
 		}
 
 		// Check if everything is up to date
@@ -34,15 +34,3 @@ nonisolated enum GitPushHelper {
 	}
 }
 
-// MARK: - Error Types
-
-enum PushError: LocalizedError, Equatable, Sendable {
-	case pushFailed(message: String)
-
-	var errorDescription: String? {
-		switch self {
-		case let .pushFailed(message):
-			"Failed to push: \(message)"
-		}
-	}
-}

@@ -63,21 +63,8 @@ nonisolated enum GitWorktreeCreator {
 		)
 
 		guard result.success else {
-			let msg = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw WorktreeCreationError.creationFailed(message: msg.isEmpty ? "Unknown error" : msg)
-		}
-	}
-}
-
-// MARK: - Error Types
-
-enum WorktreeCreationError: LocalizedError, Sendable {
-	case creationFailed(message: String)
-
-	var errorDescription: String? {
-		switch self {
-		case let .creationFailed(message):
-			"Failed to create worktree: \(message)"
+			let msg = result.trimmedError
+			throw GitError.worktreeCreationFailed(msg.isEmpty ? "Unknown error" : msg)
 		}
 	}
 }

@@ -87,15 +87,10 @@ struct XcodeProjectButtonReducer {
 
 			case let .openFailed(error):
 				state.projectState = .error(error)
-				state.alert = AlertState {
-					TextState("Failed to Open Xcode Project")
-				} actions: {
-					ButtonState(role: .cancel) {
-						TextState("OK")
-					}
-				} message: {
-					TextState(error)
-				}
+				state.alert = .okAlert(
+					title: "Failed to Open Xcode Project",
+					message: error
+				)
 				return .none
 
 			case .alert(.presented(.confirmGenerate)):
@@ -133,15 +128,10 @@ struct XcodeProjectButtonReducer {
 
 			case let .generationFailed(error):
 				state.projectState = .error(error)
-				state.alert = AlertState {
-					TextState("Project Generation Failed")
-				} actions: {
-					ButtonState(role: .cancel) {
-						TextState("OK")
-					}
-				} message: {
-					TextState(error)
-				}
+				state.alert = .okAlert(
+					title: "Project Generation Failed",
+					message: error
+				)
 				return .none
 
 			case .alert:

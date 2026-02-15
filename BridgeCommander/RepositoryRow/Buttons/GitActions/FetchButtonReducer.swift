@@ -15,7 +15,7 @@ struct FetchButtonReducer {
 
 	enum Action: Equatable {
 		case fetchTapped
-		case fetchCompleted(result: GitFetchHelper.FetchResult?, error: GitFetchHelper.FetchError?)
+		case fetchCompleted(result: GitFetchHelper.FetchResult?, error: GitError?)
 		case alert(PresentationAction<Alert>)
 
 		enum Alert: Equatable {}
@@ -34,7 +34,7 @@ struct FetchButtonReducer {
 						let result = try await gitClient.fetch(at: path)
 						await send(.fetchCompleted(result: result, error: nil))
 					}
-					catch let error as GitFetchHelper.FetchError {
+					catch let error as GitError {
 						await send(.fetchCompleted(result: nil, error: error))
 					}
 					catch {
@@ -46,20 +46,7 @@ struct FetchButtonReducer {
 			case let .fetchCompleted(result, error):
 				state.isFetching = false
 				if let error {
-					let message =
-						switch error {
-						case let .fetchFailed(msg):
-							"Fetch failed: \(msg)"
-						}
-					state.alert = AlertState {
-						TextState("Git Operation Failed")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(message)
-					}
+					state.alert = .okAlert(title: "Git Operation Failed", message: error.localizedDescription)
 				}
 				else if let result {
 					let message =
@@ -73,15 +60,7 @@ struct FetchButtonReducer {
 							"Fetch completed successfully."
 						}
 
-					state.alert = AlertState {
-						TextState("Fetch Successful")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(message)
-					}
+					state.alert = .okAlert(title: "Fetch Successful", message: message)
 				}
 				return .none
 

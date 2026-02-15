@@ -1,11 +1,6 @@
 import Foundation
 
 nonisolated enum GitMergeMasterHelper {
-	enum MergeError: Error, Equatable, Sendable {
-		case fetchFailed(String)
-		case mergeFailed(String)
-	}
-
 	struct MergeResult: Equatable {
 		let commitsMerged: Bool
 	}
@@ -25,8 +20,8 @@ nonisolated enum GitMergeMasterHelper {
 		)
 
 		guard result.success else {
-			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw MergeError.fetchFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
+			let errorMessage = result.trimmedError
+			throw GitError.fetchFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
 		}
 	}
 
@@ -37,15 +32,15 @@ nonisolated enum GitMergeMasterHelper {
 		)
 
 		guard result.success else {
-			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw MergeError.mergeFailed(
+			let errorMessage = result.trimmedError
+			throw GitError.mergeFailed(
 				errorMessage.isEmpty ? "Merge couldn't be finished. Check the repository state." : errorMessage
 			)
 		}
 
 		// Check if the output indicates no commits were merged
-		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
-		let alreadyUpToDate = output.contains("Already up to date") || output.contains("Already up-to-date")
+		let output = result.trimmedOutput
+		let alreadyUpToDate = output.isAlreadyUpToDate
 
 		return MergeResult(commitsMerged: !alreadyUpToDate)
 	}

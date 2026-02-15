@@ -45,15 +45,10 @@ struct ClaudeCodeButtonReducer {
 
 			case let .launchFailed(errorMessage):
 				state.isLaunching = false
-				state.alert = AlertState {
-					TextState("Failed to Launch Claude Code")
-				} actions: {
-					ButtonState(role: .cancel) {
-						TextState("OK")
-					}
-				} message: {
-					TextState(errorMessage)
-				}
+				state.alert = .okAlert(
+					title: "Failed to Launch Claude Code",
+					message: errorMessage
+				)
 				return .none
 
 			case .alert:

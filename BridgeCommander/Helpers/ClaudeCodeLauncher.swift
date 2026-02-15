@@ -47,7 +47,7 @@ nonisolated enum ClaudeCodeLauncher {
 		)
 
 		guard result.success else {
-			let message = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+			let message = result.trimmedError
 			throw NSError(
 				domain: "ClaudeCodeLauncher",
 				code: Int(result.exitCode),
@@ -76,7 +76,7 @@ nonisolated enum ClaudeCodeLauncher {
 		)
 
 		guard result.success else {
-			let message = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+			let message = result.trimmedError
 			throw NSError(
 				domain: "ClaudeCodeLauncher",
 				code: Int(result.exitCode),

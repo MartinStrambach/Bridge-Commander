@@ -6,10 +6,6 @@ nonisolated enum GitPullHelper {
 		let isAlreadyUpToDate: Bool
 	}
 
-	enum PullError: Error, Equatable, Sendable {
-		case pullFailed(String)
-	}
-
 	static func pull(at path: String) async throws -> PullResult {
 		let result = await ProcessRunner.runGit(
 			arguments: ["pull", "--prune"],
@@ -17,8 +13,8 @@ nonisolated enum GitPullHelper {
 		)
 
 		guard result.success else {
-			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw PullError.pullFailed(
+			let errorMessage = result.trimmedError
+			throw GitError.pullFailed(
 				errorMessage.isEmpty ? "Pull couldn't be finished. Check the repository state." : errorMessage
 			)
 		}
@@ -30,7 +26,7 @@ nonisolated enum GitPullHelper {
 		let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
 
 		// Check if already up to date
-		if trimmedOutput.contains("Already up to date") || trimmedOutput.contains("Already up-to-date") {
+		if trimmedOutput.isAlreadyUpToDate {
 			return PullResult(commitCount: 0, isAlreadyUpToDate: true)
 		}
 

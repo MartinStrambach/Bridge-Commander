@@ -15,7 +15,7 @@ struct PullButtonReducer {
 
 	enum Action: Equatable {
 		case pullTapped
-		case pullCompleted(result: GitPullHelper.PullResult?, error: GitPullHelper.PullError?)
+		case pullCompleted(result: GitPullHelper.PullResult?, error: GitError?)
 		case alert(PresentationAction<Alert>)
 
 		enum Alert: Equatable {}
@@ -34,7 +34,7 @@ struct PullButtonReducer {
 						let result = try await gitClient.pull(at: path)
 						await send(.pullCompleted(result: result, error: nil))
 					}
-					catch let error as GitPullHelper.PullError {
+					catch let error as GitError {
 						await send(.pullCompleted(result: nil, error: error))
 					}
 					catch {
@@ -46,20 +46,7 @@ struct PullButtonReducer {
 			case let .pullCompleted(result, error):
 				state.isPulling = false
 				if let error {
-					let message =
-						switch error {
-						case let .pullFailed(msg):
-							"Pull failed: \(msg)"
-						}
-					state.alert = AlertState {
-						TextState("Git Operation Failed")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(message)
-					}
+					state.alert = .okAlert(title: "Git Operation Failed", message: error.localizedDescription)
 				}
 				else if let result {
 					let message =
@@ -73,15 +60,7 @@ struct PullButtonReducer {
 							"Pull completed successfully."
 						}
 
-					state.alert = AlertState {
-						TextState("Pull Successful")
-					} actions: {
-						ButtonState(role: .cancel) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(message)
-					}
+					state.alert = .okAlert(title: "Pull Successful", message: message)
 				}
 				return .none
 

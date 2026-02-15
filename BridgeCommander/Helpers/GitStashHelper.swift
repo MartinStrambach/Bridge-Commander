@@ -1,14 +1,9 @@
 import Foundation
 
 nonisolated enum GitStashHelper {
-	enum StashError: Error, Equatable, Sendable {
-		case stashFailed(String)
-		case stashPopFailed(String)
-	}
-
 	/// Stashes changes including untracked files
 	/// - Parameter path: The path to the Git repository
-	/// - Throws: StashError if the operation fails
+	/// - Throws: GitError if the operation fails
 	static func stash(at path: String) async throws {
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "-u"], // Include untracked files
@@ -16,14 +11,14 @@ nonisolated enum GitStashHelper {
 		)
 
 		guard result.success else {
-			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw StashError.stashFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
+			let errorMessage = result.trimmedError
+			throw GitError.stashFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
 		}
 	}
 
 	/// Pops the most recent stash
 	/// - Parameter path: The path to the Git repository
-	/// - Throws: StashError if the operation fails
+	/// - Throws: GitError if the operation fails
 	static func stashPop(at path: String) async throws {
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "pop"],
@@ -31,8 +26,8 @@ nonisolated enum GitStashHelper {
 		)
 
 		guard result.success else {
-			let errorMessage = result.errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-			throw StashError.stashPopFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
+			let errorMessage = result.trimmedError
+			throw GitError.stashPopFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
 		}
 	}
 
@@ -49,7 +44,7 @@ nonisolated enum GitStashHelper {
 			return ""
 		}
 
-		return result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		return result.trimmedOutput
 	}
 
 	/// Checks if there is a stash on the specified branch
@@ -67,7 +62,7 @@ nonisolated enum GitStashHelper {
 			return false
 		}
 
-		let output = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		let output = result.trimmedOutput
 
 		// Check if any stash entry contains the current branch
 		// Format: "stash@{0}: WIP on branch-name: commit-hash commit-message"
