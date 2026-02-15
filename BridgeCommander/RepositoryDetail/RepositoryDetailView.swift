@@ -417,8 +417,13 @@ private struct HunkView: View {
 			.background(Color(nsColor: .controlBackgroundColor))
 
 			// Hunk Lines
-			ForEach(hunk.lines) { line in
-				DiffLineView(line: line)
+			ForEach(Array(hunk.lines.enumerated()), id: \.element.id) { index, line in
+				let lineNumbers = calculateLineNumbers(for: index)
+				DiffLineView(
+					line: line,
+					oldLineNumber: lineNumbers.oldLine,
+					newLineNumber: lineNumbers.newLine
+				)
 			}
 		}
 		.background(Color(nsColor: .textBackgroundColor))
@@ -430,6 +435,37 @@ private struct HunkView: View {
 		.padding(.horizontal, 12)
 		.padding(.vertical, 8)
 	}
+
+	private func calculateLineNumbers(for index: Int) -> (oldLine: Int?, newLine: Int?) {
+		var oldLine = hunk.oldStart
+		var newLine = hunk.newStart
+
+		for i in 0 ..< index {
+			let line = hunk.lines[i]
+			switch line.type {
+			case .context:
+				oldLine += 1
+				newLine += 1
+
+			case .deletion:
+				oldLine += 1
+
+			case .addition:
+				newLine += 1
+			}
+		}
+
+		let currentLine = hunk.lines[index]
+		switch currentLine.type {
+		case .context:
+			return (oldLine, newLine)
+		case .deletion:
+			return (oldLine, nil)
+		case .addition:
+			return (nil, newLine)
+		}
+	}
+
 }
 
 // MARK: - Hunk Action Button
@@ -503,6 +539,8 @@ private struct EmptyStateView: View {
 
 private struct DiffLineView: View {
 	let line: DiffLine
+	let oldLineNumber: Int?
+	let newLineNumber: Int?
 
 	private var linePrefix: String {
 		switch line.type {
@@ -533,20 +571,39 @@ private struct DiffLineView: View {
 
 	var body: some View {
 		HStack(spacing: 0) {
-			// Line prefix indicator
-			Text(linePrefix)
-				.frame(width: 20, alignment: .center)
-				.foregroundStyle(lineColor)
+			// Old line number
+			Text(oldLineNumber.map { String($0) } ?? "")
+				.frame(width: 35, alignment: .trailing)
+				.foregroundStyle(.secondary.opacity(0.6))
+				.font(.system(.caption, design: .monospaced))
+				.padding(.vertical, 1)
+				.padding(.leading, 8)
 
-			// Line content
-			Text(line.content)
-				.font(.system(.body, design: .monospaced))
-				.foregroundStyle(lineColor)
-				.frame(maxWidth: .infinity, alignment: .leading)
+			// New line number
+			Text(newLineNumber.map { String($0) } ?? "")
+				.frame(width: 35, alignment: .trailing)
+				.foregroundStyle(.secondary.opacity(0.6))
+				.font(.system(.caption, design: .monospaced))
+				.padding(.vertical, 1)
+				.padding(.trailing, 8)
+
+			// Line prefix and content with colored background
+			HStack(spacing: 0) {
+				// Line prefix indicator
+				Text(linePrefix)
+					.frame(width: 20, alignment: .center)
+					.foregroundStyle(lineColor)
+
+				// Line content
+				Text(line.content)
+					.font(.system(.body, design: .monospaced))
+					.foregroundStyle(lineColor)
+					.frame(maxWidth: .infinity, alignment: .leading)
+			}
+			.padding(.vertical, 1)
+			.padding(.trailing, 8)
+			.background(backgroundColor)
 		}
-		.padding(.vertical, 1)
-		.padding(.horizontal, 8)
-		.background(backgroundColor)
 	}
 
 }
