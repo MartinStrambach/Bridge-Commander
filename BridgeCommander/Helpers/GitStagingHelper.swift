@@ -31,17 +31,20 @@ nonisolated enum GitStagingHelper {
 		}
 
 		// For tracked files, use git diff
-		let diffCommand =
+		let arguments: [String] =
 			if isStaged {
-				"git -C \(repositoryPath.shellEscaped) diff --cached -- \(file.path.shellEscaped)"
+				["diff", "--cached", "--", file.path]
 			}
 			else {
-				"git -C \(repositoryPath.shellEscaped) diff -- \(file.path.shellEscaped)"
+				["diff", "--", file.path]
 			}
 
-		guard let diffOutput = await executeShellCommand(diffCommand) else {
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
 			return nil
 		}
+
+		let diffOutput = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
 
 		// Check if empty output
 		if diffOutput.isEmpty {
@@ -64,10 +67,10 @@ nonisolated enum GitStagingHelper {
 			return
 		}
 
-		// Build command with all file paths
-		let escapedPaths = filePaths.map(\.shellEscaped).joined(separator: " ")
-		let command = "git -C \(repositoryPath.shellEscaped) add -- \(escapedPaths)"
-		guard await executeShellCommand(command) != nil else {
+		// Build arguments with all file paths
+		let arguments = ["add", "--"] + filePaths
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
 			throw GitStagingError.commandFailed("Failed to stage files")
 		}
 	}
@@ -79,10 +82,10 @@ nonisolated enum GitStagingHelper {
 			return
 		}
 
-		// Build command with all file paths
-		let escapedPaths = filePaths.map(\.shellEscaped).joined(separator: " ")
-		let command = "git -C \(repositoryPath.shellEscaped) reset HEAD -- \(escapedPaths)"
-		guard await executeShellCommand(command) != nil else {
+		// Build arguments with all file paths
+		let arguments = ["reset", "HEAD", "--"] + filePaths
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
 			throw GitStagingError.commandFailed("Failed to unstage files")
 		}
 	}
@@ -105,8 +108,9 @@ nonisolated enum GitStagingHelper {
 		defer { try? FileManager.default.removeItem(at: patchFile) }
 
 		// Apply the patch to the index
-		let command = "git -C \(repositoryPath.shellEscaped) apply --cached \(patchFile.path.shellEscaped)"
-		guard await executeShellCommand(command) != nil else {
+		let arguments = ["apply", "--cached", patchFile.path]
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
 			throw GitStagingError.commandFailed("Failed to stage hunk")
 		}
 	}
@@ -129,9 +133,9 @@ nonisolated enum GitStagingHelper {
 		defer { try? FileManager.default.removeItem(at: patchFile) }
 
 		// Apply the patch in reverse to the index
-		let command =
-			"git -C \(repositoryPath.shellEscaped) apply --cached --reverse \(patchFile.path.shellEscaped)"
-		guard await executeShellCommand(command) != nil else {
+		let arguments = ["apply", "--cached", "--reverse", patchFile.path]
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
 			throw GitStagingError.commandFailed("Failed to unstage hunk")
 		}
 	}
@@ -154,8 +158,9 @@ nonisolated enum GitStagingHelper {
 		defer { try? FileManager.default.removeItem(at: patchFile) }
 
 		// Apply the patch in reverse to the working directory
-		let command = "git -C \(repositoryPath.shellEscaped) apply -R \(patchFile.path.shellEscaped)"
-		guard await executeShellCommand(command) != nil else {
+		let arguments = ["apply", "-R", patchFile.path]
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
 			throw GitStagingError.commandFailed("Failed to discard hunk")
 		}
 	}
@@ -164,13 +169,15 @@ nonisolated enum GitStagingHelper {
 
 	static func discardFileChanges(at repositoryPath: String, filePath: String) async throws {
 		// First check if file is tracked
-		let lsFilesCommand = "git -C \(repositoryPath.shellEscaped) ls-files -- \(filePath.shellEscaped)"
-		let isTracked = await executeShellCommand(lsFilesCommand)?.isEmpty == false
+		let lsFilesResult = await ProcessRunner.runGit(arguments: ["ls-files", "--", filePath], at: repositoryPath)
+		let isTracked = lsFilesResult.success && !lsFilesResult.outputString
+			.trimmingCharacters(in: .whitespacesAndNewlines)
+			.isEmpty
 
 		if isTracked {
 			// For tracked files, restore from HEAD
-			let command = "git -C \(repositoryPath.shellEscaped) checkout HEAD -- \(filePath.shellEscaped)"
-			guard await executeShellCommand(command) != nil else {
+			let result = await ProcessRunner.runGit(arguments: ["checkout", "HEAD", "--", filePath], at: repositoryPath)
+			guard result.success else {
 				throw GitStagingError.commandFailed("Failed to discard changes: \(filePath)")
 			}
 		}
@@ -251,22 +258,25 @@ nonisolated enum GitStagingHelper {
 	// MARK: - Private Helpers
 
 	private static func fetchStagedFiles(at path: String) async -> [FileChange] {
-		let command = "git -C \(path.shellEscaped) diff --cached --name-status"
-		guard let output = await executeShellCommand(command) else {
+		let result = await ProcessRunner.runGit(arguments: ["diff", "--cached", "--name-status"], at: path)
+		guard result.success else {
 			return []
 		}
 
-		return parseGitStatusOutput(output).sorted { $0.path < $1.path }
+		return parseGitStatusOutput(result.outputString).sorted { $0.path < $1.path }
 	}
 
 	private static func fetchUnstagedFiles(at path: String) async -> [FileChange] {
 		// Get modified/deleted files (unstaged)
-		let diffCommand = "git -C \(path.shellEscaped) diff --name-status"
-		let diffOutput = await executeShellCommand(diffCommand) ?? ""
+		let diffResult = await ProcessRunner.runGit(arguments: ["diff", "--name-status"], at: path)
+		let diffOutput = diffResult.success ? diffResult.outputString : ""
 
 		// Get untracked files
-		let untrackedCommand = "git -C \(path.shellEscaped) ls-files --others --exclude-standard"
-		let untrackedOutput = await executeShellCommand(untrackedCommand) ?? ""
+		let untrackedResult = await ProcessRunner.runGit(
+			arguments: ["ls-files", "--others", "--exclude-standard"],
+			at: path
+		)
+		let untrackedOutput = untrackedResult.success ? untrackedResult.outputString : ""
 
 		// Parse modified/deleted files
 		var changes = parseGitStatusOutput(diffOutput)
@@ -476,37 +486,6 @@ nonisolated enum GitStagingHelper {
 		return patch
 	}
 
-	// MARK: - Shell Execution
-
-	private static func executeShellCommand(_ command: String) async -> String? {
-		await withCheckedContinuation { continuation in
-			let process = Process()
-			process.executableURL = URL(fileURLWithPath: "/bin/bash")
-			process.arguments = ["-c", command]
-
-			let pipe = Pipe()
-			process.standardOutput = pipe
-			process.standardError = pipe
-
-			do {
-				try process.run()
-				process.waitUntilExit()
-
-				let data = pipe.fileHandleForReading.readDataToEndOfFile()
-				let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-				if process.terminationStatus == 0 {
-					continuation.resume(returning: output)
-				}
-				else {
-					continuation.resume(returning: nil)
-				}
-			}
-			catch {
-				continuation.resume(returning: nil)
-			}
-		}
-	}
 }
 
 // MARK: - Errors
@@ -521,13 +500,5 @@ enum GitStagingError: Error, LocalizedError {
 		     let .fileOperationFailed(message):
 			message
 		}
-	}
-}
-
-// MARK: - String Extension for Shell Escaping
-
-private nonisolated extension String {
-	var shellEscaped: String {
-		"'\(replacingOccurrences(of: "'", with: "'\\''"))'"
 	}
 }
