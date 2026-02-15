@@ -31,9 +31,10 @@ struct RepositoryDetail {
 		case cancelButtonTapped
 		case deleteUntrackedFile(FileChange)
 		case discardFileChanges(FileChange)
-		case discardHunk(FileChange, DiffHunk, isStaged: Bool)
+		case discardHunk(FileChange, DiffHunk)
 		case loadChanges
 		case loadChangesResponse(GitFileChanges)
+		case openFileInIDE(FileChange)
 		case selectFile(FileChange, isStaged: Bool)
 		case selectFileDiffResponse(FileDiff?)
 		case spaceKeyPressed
@@ -55,6 +56,9 @@ struct RepositoryDetail {
 
 	@Dependency(\.dismiss)
 	private var dismiss
+
+	@Shared(.androidStudioPath)
+	private var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -146,7 +150,7 @@ struct RepositoryDetail {
 					await send(.operationCompleted(result))
 				}
 
-			case let .discardHunk(file, hunk, isStaged):
+			case let .discardHunk(file, hunk):
 				return .run { [path = state.repositoryPath] send in
 					let result = await Result {
 						try await gitStagingClient.discardHunk(path, file, hunk)
@@ -176,6 +180,20 @@ struct RepositoryDetail {
 			case let .operationCompleted(.failure(error)):
 				print("Operation failed: \(error)")
 				return .none
+
+			case let .openFileInIDE(file):
+				return .run { [path = state.repositoryPath, studioPath = androidStudioPath] _ in
+					do {
+						try await FileOpener.openFileInIDE(
+							filePath: file.path,
+							repositoryPath: path,
+							androidStudioPath: studioPath
+						)
+					}
+					catch {
+						print("Failed to open file in IDE: \(error)")
+					}
+				}
 
 			case .cancelButtonTapped:
 				return .run { _ in

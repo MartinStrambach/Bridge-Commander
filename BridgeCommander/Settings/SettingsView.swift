@@ -27,6 +27,7 @@ struct SettingsView: View {
 					terminalBehaviorSection
 					claudeCodeBehaviorSection
 				}
+				androidStudioPathSection
 			}
 			.padding()
 		}
@@ -233,6 +234,26 @@ struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var androidStudioPathSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Android Studio Path")
+				.font(.headline)
+
+			Text(
+				"Specify the full path to the Android Studio executable. This is used to open Kotlin files within the project context."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
+			TextField("Android Studio Path", text: $store.androidStudioPath.sending(\.setAndroidStudioPath))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))

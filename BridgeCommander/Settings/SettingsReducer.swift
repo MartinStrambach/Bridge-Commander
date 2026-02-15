@@ -32,6 +32,9 @@ struct SettingsReducer {
 		@Shared(.claudeCodeOpeningBehavior)
 		var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
 
+		@Shared(.androidStudioPath)
+		var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -46,6 +49,7 @@ struct SettingsReducer {
 		case setTuistCacheType(TuistCacheType)
 		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
+		case setAndroidStudioPath(String)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -92,6 +96,10 @@ struct SettingsReducer {
 
 			case let .setClaudeCodeOpeningBehavior(behavior):
 				state.$claudeCodeOpeningBehavior.withLock { $0 = behavior }
+				return .none
+
+			case let .setAndroidStudioPath(path):
+				state.$androidStudioPath.withLock { $0 = path }
 				return .none
 
 			case .clearTokenButtonTapped:

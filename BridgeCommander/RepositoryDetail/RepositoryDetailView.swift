@@ -1,3 +1,4 @@
+import AppKit
 import ComposableArchitecture
 import SwiftUI
 
@@ -60,6 +61,9 @@ struct RepositoryDetailView: View {
 		.task {
 			store.send(.loadChanges)
 		}
+		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+			store.send(.loadChanges)
+		}
 	}
 
 	// MARK: - Staged Changes View
@@ -103,14 +107,26 @@ struct RepositoryDetailView: View {
 								let selected = store.stagedChanges
 									.filter { store.selectedStagedFileIds.contains($0.id) }
 								store.send(.unstageFiles(selected))
-							},
-							onDiscard: nil,
-							onDelete: nil
+							}
 						)
 						.tag(file.id)
+						.contextMenu {
+							Button("Open in IDE") {
+								store.send(.openFileInIDE(file))
+							}
+
+							Button("Unstage") {
+								store.send(.unstageFiles([file]))
+							}
+						}
 					}
 				}
 				.listStyle(.plain)
+				.onReturnPress {
+					if let file = store.stagedChanges.first(where: { store.selectedStagedFileIds.contains($0.id) }) {
+						store.send(.openFileInIDE(file))
+					}
+				}
 			}
 		}
 	}
@@ -156,18 +172,39 @@ struct RepositoryDetailView: View {
 								let selected = store.unstagedChanges
 									.filter { store.selectedUnstagedFileIds.contains($0.id) }
 								store.send(.stageFiles(selected))
-							},
-							onDiscard: {
-								store.send(.discardFileChanges(file))
-							},
-							onDelete: file.status == .untracked ? {
-								store.send(.deleteUntrackedFile(file))
-							} : nil
+							}
 						)
 						.tag(file.id)
+						.contextMenu {
+							Button("Open in IDE") {
+								store.send(.openFileInIDE(file))
+							}
+
+							Button("Stage") {
+								store.send(.stageFiles([file]))
+							}
+
+							Button("Discard Changes", role: .destructive) {
+								store.send(.discardFileChanges(file))
+							}
+
+							if file.status == .untracked {
+								Button("Delete File", role: .destructive) {
+									store.send(.deleteUntrackedFile(file))
+								}
+							}
+						}
 					}
 				}
 				.listStyle(.plain)
+				.onReturnPress {
+					if
+						let file = store.unstagedChanges
+							.first(where: { store.selectedUnstagedFileIds.contains($0.id) })
+					{
+						store.send(.openFileInIDE(file))
+					}
+				}
 			}
 		}
 		.overlay {
@@ -194,7 +231,7 @@ struct RepositoryDetailView: View {
 					store.send(.unstageHunk(diff.fileChange, hunk))
 				},
 				onDiscardHunk: { hunk in
-					store.send(.discardHunk(diff.fileChange, hunk, isStaged: isStaged))
+					store.send(.discardHunk(diff.fileChange, hunk))
 				}
 			)
 		}

@@ -6,8 +6,6 @@ struct FileChangeRow: View {
 	let selectedFileIds: Set<String>
 	let onToggle: () -> Void
 	let onToggleSelected: () -> Void
-	let onDiscard: (() -> Void)?
-	let onDelete: (() -> Void)?
 
 	private var statusColor: Color {
 		switch file.status {
@@ -55,26 +53,6 @@ struct FileChangeRow: View {
 			}
 
 			Spacer()
-
-			// Actions Menu
-			Menu {
-				if let onDiscard {
-					Button("Discard Changes", role: .destructive) {
-						onDiscard()
-					}
-				}
-
-				if let onDelete {
-					Button("Delete File", role: .destructive) {
-						onDelete()
-					}
-				}
-			} label: {
-				Image(systemName: "ellipsis.circle")
-					.foregroundStyle(.secondary)
-			}
-			.buttonStyle(.plain)
-			.opacity(onDiscard != nil || onDelete != nil ? 1 : 0)
 		}
 		.padding(.vertical, 4)
 	}

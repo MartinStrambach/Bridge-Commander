@@ -19,6 +19,10 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<String> {
 	static var branchNameRegex: Self {
 		appStorage("branchNameRegex")
 	}
+
+	static var androidStudioPath: Self {
+		appStorage("androidStudioPath")
+	}
 }
 
 extension SharedReaderKey where Self == AppStorageKey<PeriodicRefreshInterval> {
