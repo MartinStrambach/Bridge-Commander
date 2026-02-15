@@ -42,7 +42,7 @@ struct RepositoryDetailView: View {
 			Divider()
 
 			// Main Content
-			HSplitView {
+			NavigationSplitView(columnVisibility: .constant(.all)) {
 				// Left: File Changes Lists (Staged and Unstaged)
 				VSplitView {
 					// Top: Staged Changes
@@ -53,13 +53,11 @@ struct RepositoryDetailView: View {
 					unstagedChangesView
 						.frame(minHeight: 100)
 				}
-				.frame(minWidth: 250, maxWidth: 375)
-
+				.navigationSplitViewColumnWidth(min: 250, ideal: 350, max: 500)
+			} detail: {
 				// Right: Diff Viewer
 				diffViewerView
-					.frame(maxWidth: .infinity)
 			}
-			.frame(maxHeight: .infinity)
 		}
 		.onKeyPress(.space) {
 			store.send(.spaceKeyPressed)

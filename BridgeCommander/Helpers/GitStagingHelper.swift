@@ -44,10 +44,10 @@ nonisolated enum GitStagingHelper {
 			return nil
 		}
 
-		let diffOutput = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		let diffOutput = result.outputString
 
-		// Check if empty output
-		if diffOutput.isEmpty {
+		// Check if empty output (trim only for the check)
+		if diffOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
 			return nil
 		}
 
@@ -107,11 +107,12 @@ nonisolated enum GitStagingHelper {
 		try patch.write(to: patchFile, atomically: true, encoding: .utf8)
 		defer { try? FileManager.default.removeItem(at: patchFile) }
 
-		// Apply the patch to the index
-		let arguments = ["apply", "--cached", patchFile.path]
+		// Apply the patch to the index with whitespace handling
+		let arguments = ["apply", "--cached", "--whitespace=nowarn", patchFile.path()]
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
 		guard result.success else {
-			throw GitStagingError.commandFailed("Failed to stage hunk")
+			let errorMsg = result.errorString.isEmpty ? "Unknown error" : result.errorString
+			throw GitStagingError.commandFailed("Failed to stage hunk: \(errorMsg)")
 		}
 	}
 
@@ -132,11 +133,12 @@ nonisolated enum GitStagingHelper {
 		try patch.write(to: patchFile, atomically: true, encoding: .utf8)
 		defer { try? FileManager.default.removeItem(at: patchFile) }
 
-		// Apply the patch in reverse to the index
-		let arguments = ["apply", "--cached", "--reverse", patchFile.path]
+		// Apply the patch in reverse to the index with whitespace handling
+		let arguments = ["apply", "--cached", "--reverse", "--whitespace=nowarn", patchFile.path()]
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
 		guard result.success else {
-			throw GitStagingError.commandFailed("Failed to unstage hunk")
+			let errorMsg = result.errorString.isEmpty ? "Unknown error" : result.errorString
+			throw GitStagingError.commandFailed("Failed to unstage hunk: \(errorMsg)")
 		}
 	}
 
@@ -157,11 +159,12 @@ nonisolated enum GitStagingHelper {
 		try patch.write(to: patchFile, atomically: true, encoding: .utf8)
 		defer { try? FileManager.default.removeItem(at: patchFile) }
 
-		// Apply the patch in reverse to the working directory
-		let arguments = ["apply", "-R", patchFile.path]
+		// Apply the patch in reverse to the working directory with whitespace handling
+		let arguments = ["apply", "-R", "--whitespace=nowarn", patchFile.path()]
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
 		guard result.success else {
-			throw GitStagingError.commandFailed("Failed to discard hunk")
+			let errorMsg = result.errorString.isEmpty ? "Unknown error" : result.errorString
+			throw GitStagingError.commandFailed("Failed to discard hunk: \(errorMsg)")
 		}
 	}
 
@@ -333,8 +336,14 @@ nonisolated enum GitStagingHelper {
 
 		if !hasHunkHeaders, fileStatus == .added || fileStatus == .deleted {
 			// Collect all diff lines (skip metadata like "diff --git", "index", etc.)
-			let diffLines = lines.filter { line in
-				line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ")
+			let diffLines = lines.compactMap { line -> String? in
+				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
+					return line
+				} else if line.isEmpty {
+					// Empty line should be context line with space
+					return " "
+				}
+				return nil
 			}
 
 			guard !diffLines.isEmpty else {
@@ -407,11 +416,15 @@ nonisolated enum GitStagingHelper {
 				hunkHeaderParts = parseHunkHeader(line)
 				currentHunkLines = []
 			}
-			else if
-				currentHunkHeader != nil,
-				line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ")
-			{
-				currentHunkLines.append(line)
+			else if currentHunkHeader != nil {
+				// Include lines that start with +, -, or space
+				// Also include empty lines (they should be context lines with just a space)
+				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
+					currentHunkLines.append(line)
+				} else if line.isEmpty {
+					// Empty line in a hunk should be treated as a context line
+					currentHunkLines.append(" ")
+				}
 			}
 		}
 
@@ -475,13 +488,34 @@ nonisolated enum GitStagingHelper {
 
 		// Add diff header
 		patch += "diff --git a/\(file.path) b/\(file.path)\n"
-		patch += "--- a/\(file.path)\n"
-		patch += "+++ b/\(file.path)\n"
 
-		// Add hunk
+		// Adjust header based on file status
+		switch file.status {
+		case .added, .untracked:
+			patch += "--- /dev/null\n"
+			patch += "+++ b/\(file.path)\n"
+		case .deleted:
+			patch += "--- a/\(file.path)\n"
+			patch += "+++ /dev/null\n"
+		default:
+			patch += "--- a/\(file.path)\n"
+			patch += "+++ b/\(file.path)\n"
+		}
+
+		// Add hunk header
 		patch += hunk.header + "\n"
-		patch += hunk.lines.map(\.rawLine).joined(separator: "\n")
-		patch += "\n"
+
+		// Add each line followed by newline to preserve empty lines
+		for line in hunk.lines {
+			var rawLine = line.rawLine
+
+			// If rawLine is empty and it's a context line, it should be a single space
+			if rawLine.isEmpty && line.type == .context {
+				rawLine = " "
+			}
+
+			patch += rawLine + "\n"
+		}
 
 		return patch
 	}
