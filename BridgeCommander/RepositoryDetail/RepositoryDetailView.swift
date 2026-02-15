@@ -17,6 +17,13 @@ struct RepositoryDetailView: View {
 				Spacer()
 
 				Button {
+					store.send(.openTerminalButtonTapped)
+				} label: {
+					Label("Terminal", systemImage: "terminal")
+				}
+				.help("Open in Terminal")
+
+				Button {
 					store.send(.loadChanges)
 				} label: {
 					Image(systemName: "arrow.clockwise")

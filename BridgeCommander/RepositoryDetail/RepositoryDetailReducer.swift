@@ -36,6 +36,7 @@ struct RepositoryDetail {
 		case loadChanges
 		case loadChangesResponse(GitFileChanges)
 		case openFileInIDE(FileChange)
+		case openTerminalButtonTapped
 		case selectFile(FileChange, isStaged: Bool)
 		case selectFileDiffResponse(FileDiff?)
 		case spaceKeyPressed
@@ -60,6 +61,9 @@ struct RepositoryDetail {
 
 	@Shared(.androidStudioPath)
 	private var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
+
+	@Shared(.terminalOpeningBehavior)
+	private var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -215,6 +219,11 @@ struct RepositoryDetail {
 			case .cancelButtonTapped:
 				return .run { _ in
 					await dismiss()
+				}
+
+			case .openTerminalButtonTapped:
+				return .run { [path = state.repositoryPath, behavior = terminalOpeningBehavior] _ in
+					await TerminalLauncher.openTerminal(at: path, behavior: behavior)
 				}
 
 			case let .updateSelection(selectedIds, isStaged):
