@@ -16,6 +16,7 @@ struct RepositoryDetail {
 		var selectedStagedFileIds: Set<String> = []
 		var selectedUnstagedFileIds: Set<String> = []
 		var lastActionedFileId: String?
+		var lastActionedFileIndex: Int?
 		var wasStaging = false
 
 		var hasChanges: Bool {
@@ -109,6 +110,10 @@ struct RepositoryDetail {
 
 				state.lastActionedFileId = files.last?.id
 				state.wasStaging = true
+				// Track the index of the last actioned file in the unstaged list
+				if let lastFileId = files.last?.id {
+					state.lastActionedFileIndex = state.unstagedChanges.firstIndex(where: { $0.id == lastFileId })
+				}
 
 				let filePaths = files.map(\.path)
 				return .run { [path = state.repositoryPath] send in
@@ -125,6 +130,10 @@ struct RepositoryDetail {
 
 				state.lastActionedFileId = files.last?.id
 				state.wasStaging = false
+				// Track the index of the last actioned file in the staged list
+				if let lastFileId = files.last?.id {
+					state.lastActionedFileIndex = state.stagedChanges.firstIndex(where: { $0.id == lastFileId })
+				}
 
 				let filePaths = files.map(\.path)
 				return .run { [path = state.repositoryPath] send in
@@ -253,7 +262,7 @@ struct RepositoryDetail {
 		state: inout State,
 		changes: GitFileChanges
 	) -> Effect<Action> {
-		guard let lastFileId = state.lastActionedFileId else {
+		guard state.lastActionedFileId != nil else {
 			// No auto-selection needed, but refresh diff if file still exists
 			if let selectedFileId = state.selectedFileId, let wasStaged = state.selectedFileIsStaged {
 				if wasStaged, let file = changes.staged.first(where: { $0.id == selectedFileId }) {
@@ -271,25 +280,31 @@ struct RepositoryDetail {
 			return .none
 		}
 
+		// Clear tracking state
 		state.lastActionedFileId = nil
+		let actionedIndex = state.lastActionedFileIndex
+		state.lastActionedFileIndex = nil
 		state.selectedUnstagedFileIds.removeAll()
 		state.selectedStagedFileIds.removeAll()
 
+		// Determine which list to select from (the source list, where the file came from)
 		let (sourceList, targetList, isStaged) = state.wasStaging
 			? (changes.unstaged, changes.staged, false)
 			: (changes.staged, changes.unstaged, true)
 
-		// Try to select next file at same position in source list
-		if let oldIndex = sourceList.firstIndex(where: { $0.id == lastFileId }) {
-			if oldIndex < sourceList.count {
-				return .send(.selectFile(sourceList[oldIndex], isStaged: isStaged))
+		// Try to select file at the same index in the source list
+		if let index = actionedIndex {
+			// Try same index
+			if index < sourceList.count {
+				return .send(.selectFile(sourceList[index], isStaged: isStaged))
 			}
-			else if oldIndex > 0, !sourceList.isEmpty {
-				return .send(.selectFile(sourceList[oldIndex - 1], isStaged: isStaged))
+			// Try previous file if we're at the end
+			else if index > 0, !sourceList.isEmpty {
+				return .send(.selectFile(sourceList[sourceList.count - 1], isStaged: isStaged))
 			}
 		}
 
-		// No files in source, try target list
+		// No files in source list, try first file in target list
 		if let firstTarget = targetList.first {
 			return .send(.selectFile(firstTarget, isStaged: !isStaged))
 		}
