@@ -67,7 +67,15 @@ struct RepositoryDetail {
 			case .loadChanges:
 				state.isLoading = true
 				return .run { [path = state.repositoryPath] send in
-					let changes = await gitStagingClient.fetchFileChanges(path)
+					// Retry logic to handle git index race conditions
+					var changes = await gitStagingClient.fetchFileChanges(path)
+
+					// If we get empty results, retry once after a delay
+					if changes.staged.isEmpty && changes.unstaged.isEmpty {
+						try await Task.sleep(nanoseconds: 200_000_000) // 200ms
+						changes = await gitStagingClient.fetchFileChanges(path)
+					}
+
 					await send(.loadChangesResponse(changes))
 				}
 				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
