@@ -6,7 +6,6 @@ struct RepositoryDetail {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
-		var isLoading = false
 		var selectedFileDiff: FileDiff?
 		var stagedChanges: [FileChange] = []
 		var unstagedChanges: [FileChange] = []
@@ -69,13 +68,12 @@ struct RepositoryDetail {
 		Reduce { state, action in
 			switch action {
 			case .loadChanges:
-				state.isLoading = true
 				return .run { [path = state.repositoryPath] send in
 					// Retry logic to handle git index race conditions
 					var changes = await gitStagingClient.fetchFileChanges(path)
 
 					// If we get empty results, retry once after a delay
-					if changes.staged.isEmpty && changes.unstaged.isEmpty {
+					if changes.staged.isEmpty, changes.unstaged.isEmpty {
 						try await Task.sleep(nanoseconds: 200_000_000) // 200ms
 						changes = await gitStagingClient.fetchFileChanges(path)
 					}
@@ -85,7 +83,6 @@ struct RepositoryDetail {
 				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
 
 			case let .loadChangesResponse(changes):
-				state.isLoading = false
 				state.stagedChanges = changes.staged
 				state.unstagedChanges = changes.unstaged
 

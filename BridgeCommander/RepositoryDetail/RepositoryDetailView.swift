@@ -53,11 +53,11 @@ struct RepositoryDetailView: View {
 					unstagedChangesView
 						.frame(minHeight: 100)
 				}
-				.frame(minWidth: 250, idealWidth: 350)
+				.frame(minWidth: 250, maxWidth: 375)
 
 				// Right: Diff Viewer
 				diffViewerView
-					.frame(minWidth: 400)
+					.frame(maxWidth: .infinity)
 			}
 			.frame(maxHeight: .infinity)
 		}
@@ -212,12 +212,6 @@ struct RepositoryDetailView: View {
 						store.send(.openFileInIDE(file))
 					}
 				}
-			}
-		}
-		.overlay {
-			if store.isLoading {
-				ProgressView("Loading changes...")
-					.scaleEffect(0.5)
 			}
 		}
 	}
