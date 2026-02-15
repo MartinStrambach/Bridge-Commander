@@ -147,17 +147,11 @@ struct RepositoryDetail {
 				}
 
 			case let .discardHunk(file, hunk, isStaged):
-				if !isStaged {
-					return .run { [path = state.repositoryPath] send in
-						let result = await Result {
-							try await gitStagingClient.stageHunk(path, file, hunk)
-							try await gitStagingClient.unstageHunk(path, file, hunk)
-						}
-						await send(.operationCompleted(result))
+				return .run { [path = state.repositoryPath] send in
+					let result = await Result {
+						try await gitStagingClient.discardHunk(path, file, hunk)
 					}
-				}
-				else {
-					return .send(.unstageHunk(file, hunk))
+					await send(.operationCompleted(result))
 				}
 
 			case let .discardFileChanges(file):

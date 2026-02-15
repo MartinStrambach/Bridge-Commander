@@ -407,7 +407,9 @@ private struct HunkView: View {
 						HunkActionButton(title: "Unstage", action: onUnstage)
 					}
 
-					HunkActionButton(title: "Discard", action: onDiscard)
+					if !isStaged {
+						HunkActionButton(title: "Discard", action: onDiscard)
+					}
 				}
 			}
 			.padding(.horizontal, 12)
