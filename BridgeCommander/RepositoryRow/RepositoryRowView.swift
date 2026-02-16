@@ -41,9 +41,12 @@ struct RepositoryRowView: View {
 		.padding(.vertical, 12)
 		.background(backgroundColorForState)
 		.contentShape(Rectangle())
-		.onTapGesture(count: 2) {
-			store.send(.openRepositoryDetail)
-		}
+		.simultaneousGesture(
+			TapGesture(count: 2)
+				.onEnded {
+					store.send(.openRepositoryDetail)
+				}
+		)
 		.task {
 			store.send(.onAppear)
 		}
