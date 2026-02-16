@@ -116,12 +116,23 @@ struct RepositoryDetailView: View {
 						)
 						.tag(file.id)
 						.contextMenu {
-							Button("Open in IDE") {
-								store.send(.openFileInIDE(file))
+							if store.selectedStagedFileIds.count > 1, store.selectedStagedFileIds.contains(file.id) {
+								// Multi-selection context menu
+								Button("Unstage All Selected (\(store.selectedStagedFileIds.count) files)") {
+									let selected = store.stagedChanges
+										.filter { store.selectedStagedFileIds.contains($0.id) }
+									store.send(.unstageFiles(selected))
+								}
 							}
+							else {
+								// Single file context menu
+								Button("Open in IDE") {
+									store.send(.openFileInIDE(file))
+								}
 
-							Button("Unstage") {
-								store.send(.unstageFiles([file]))
+								Button("Unstage") {
+									store.send(.unstageFiles([file]))
+								}
 							}
 						}
 					}
@@ -181,21 +192,35 @@ struct RepositoryDetailView: View {
 						)
 						.tag(file.id)
 						.contextMenu {
-							Button("Open in IDE") {
-								store.send(.openFileInIDE(file))
+							if
+								store.selectedUnstagedFileIds.count > 1,
+								store.selectedUnstagedFileIds.contains(file.id)
+							{
+								// Multi-selection context menu
+								Button("Stage All Selected (\(store.selectedUnstagedFileIds.count) files)") {
+									let selected = store.unstagedChanges
+										.filter { store.selectedUnstagedFileIds.contains($0.id) }
+									store.send(.stageFiles(selected))
+								}
 							}
+							else {
+								// Single file context menu
+								Button("Open in IDE") {
+									store.send(.openFileInIDE(file))
+								}
 
-							Button("Stage") {
-								store.send(.stageFiles([file]))
-							}
+								Button("Stage") {
+									store.send(.stageFiles([file]))
+								}
 
-							Button("Discard Changes", role: .destructive) {
-								store.send(.discardFileChanges(file))
-							}
+								Button("Discard Changes", role: .destructive) {
+									store.send(.discardFileChanges(file))
+								}
 
-							if file.status == .untracked {
-								Button("Delete File", role: .destructive) {
-									store.send(.deleteUntrackedFile(file))
+								if file.status == .untracked {
+									Button("Delete File", role: .destructive) {
+										store.send(.deleteUntrackedFile(file))
+									}
 								}
 							}
 						}
