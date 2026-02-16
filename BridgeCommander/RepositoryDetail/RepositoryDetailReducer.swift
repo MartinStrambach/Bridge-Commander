@@ -287,8 +287,9 @@ struct RepositoryDetail {
 		changes: GitFileChanges
 	) -> Effect<Action> {
 		guard state.lastActionedFileId != nil else {
-			// No auto-selection needed, but refresh diff if file still exists
+			// No previous action - check if we need initial selection
 			if let selectedFileId = state.selectedFileId, let wasStaged = state.selectedFileIsStaged {
+				// Refresh diff if file still exists
 				if wasStaged, let file = changes.staged.first(where: { $0.id == selectedFileId }) {
 					return .send(.selectFile(file, isStaged: true))
 				}
@@ -299,6 +300,15 @@ struct RepositoryDetail {
 					state.selectedFileId = nil
 					state.selectedFileIsStaged = nil
 					state.selectedFileDiff = nil
+				}
+			}
+			else {
+				// Initial load - select first unstaged file, or first staged file if no unstaged files
+				if let firstUnstaged = changes.unstaged.first {
+					return .send(.selectFile(firstUnstaged, isStaged: false))
+				}
+				else if let firstStaged = changes.staged.first {
+					return .send(.selectFile(firstStaged, isStaged: true))
 				}
 			}
 			return .none
