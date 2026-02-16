@@ -140,33 +140,35 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Discard File Changes
 
-	static func discardFileChanges(at repositoryPath: String, filePath: String) async throws {
-		let lsFilesResult = await ProcessRunner.runGit(arguments: ["ls-files", "--", filePath], at: repositoryPath)
-		let isTracked = lsFilesResult.success && !lsFilesResult.outputString
-			.trimmingCharacters(in: .whitespacesAndNewlines)
-			.isEmpty
-
-		if isTracked {
-			let result = await ProcessRunner.runGit(arguments: ["checkout", "HEAD", "--", filePath], at: repositoryPath)
-			guard result.success else {
-				throw GitError.stagingFailed("Failed to discard changes: \(filePath)")
-			}
+	static func discardFileChanges(at repositoryPath: String, filePaths: [String]) async throws {
+		guard !filePaths.isEmpty else {
+			return
 		}
-		else {
-			try await deleteUntrackedFile(at: repositoryPath, filePath: filePath)
+
+		// Use git checkout with multiple files in a single command
+		let arguments = ["checkout", "HEAD", "--"] + filePaths
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
+			throw GitError.stagingFailed("Failed to discard changes")
 		}
 	}
 
-	// MARK: - Delete Untracked File
+	// MARK: - Delete Untracked Files
 
-	static func deleteUntrackedFile(at repositoryPath: String, filePath: String) async throws {
-		let fullPath = (repositoryPath as NSString).appendingPathComponent(filePath)
-
-		do {
-			try FileManager.default.removeItem(atPath: fullPath)
+	static func deleteUntrackedFiles(at repositoryPath: String, filePaths: [String]) async throws {
+		guard !filePaths.isEmpty else {
+			return
 		}
-		catch {
-			throw GitError.fileOperationFailed("Failed to delete file: \(error.localizedDescription)")
+
+		// Delete files using FileManager
+		for filePath in filePaths {
+			let fullPath = (repositoryPath as NSString).appendingPathComponent(filePath)
+			do {
+				try FileManager.default.removeItem(atPath: fullPath)
+			}
+			catch {
+				throw GitError.fileOperationFailed("Failed to delete file: \(error.localizedDescription)")
+			}
 		}
 	}
 

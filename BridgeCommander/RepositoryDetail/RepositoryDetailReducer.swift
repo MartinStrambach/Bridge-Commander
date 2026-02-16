@@ -29,8 +29,8 @@ struct RepositoryDetail {
 
 	enum Action: Sendable {
 		case cancelButtonTapped
-		case deleteUntrackedFile(FileChange)
-		case discardFileChanges(FileChange)
+		case deleteUntrackedFiles([FileChange])
+		case discardFileChanges([FileChange])
 		case discardHunk(FileChange, DiffHunk)
 		case loadChanges
 		case loadChangesResponse(GitFileChanges)
@@ -176,18 +176,28 @@ struct RepositoryDetail {
 					await send(.operationCompleted(result))
 				}
 
-			case let .discardFileChanges(file):
+			case let .discardFileChanges(files):
+				guard !files.isEmpty else {
+					return .none
+				}
+
+				let filePaths = files.map(\.path)
 				return .run { [path = state.repositoryPath] send in
 					let result = await Result {
-						try await gitStagingClient.discardFileChanges(path, file.path)
+						try await gitStagingClient.discardFileChanges(path, filePaths)
 					}
 					await send(.operationCompleted(result))
 				}
 
-			case let .deleteUntrackedFile(file):
+			case let .deleteUntrackedFiles(files):
+				guard !files.isEmpty else {
+					return .none
+				}
+
+				let filePaths = files.map(\.path)
 				return .run { [path = state.repositoryPath] send in
 					let result = await Result {
-						try await gitStagingClient.deleteUntrackedFile(path, file.path)
+						try await gitStagingClient.deleteUntrackedFiles(path, filePaths)
 					}
 					await send(.operationCompleted(result))
 				}

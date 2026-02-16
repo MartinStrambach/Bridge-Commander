@@ -16,8 +16,8 @@ nonisolated struct GitStagingClient: Sendable {
 	var stageHunk: @Sendable (_ at: String, _ file: FileChange, _ hunk: DiffHunk) async throws -> Void
 	var unstageHunk: @Sendable (_ at: String, _ file: FileChange, _ hunk: DiffHunk) async throws -> Void
 	var discardHunk: @Sendable (_ at: String, _ file: FileChange, _ hunk: DiffHunk) async throws -> Void
-	var discardFileChanges: @Sendable (_ at: String, _ filePath: String) async throws -> Void
-	var deleteUntrackedFile: @Sendable (_ at: String, _ filePath: String) async throws -> Void
+	var discardFileChanges: @Sendable (_ at: String, _ filePaths: [String]) async throws -> Void
+	var deleteUntrackedFiles: @Sendable (_ at: String, _ filePaths: [String]) async throws -> Void
 }
 
 // MARK: - File Changes Result
@@ -52,11 +52,11 @@ extension GitStagingClient: DependencyKey {
 		discardHunk: { at, file, hunk in
 			try await GitStagingHelper.discardHunk(at: at, file: file, hunk: hunk)
 		},
-		discardFileChanges: { at, filePath in
-			try await GitStagingHelper.discardFileChanges(at: at, filePath: filePath)
+		discardFileChanges: { at, filePaths in
+			try await GitStagingHelper.discardFileChanges(at: at, filePaths: filePaths)
 		},
-		deleteUntrackedFile: { at, filePath in
-			try await GitStagingHelper.deleteUntrackedFile(at: at, filePath: filePath)
+		deleteUntrackedFiles: { at, filePaths in
+			try await GitStagingHelper.deleteUntrackedFiles(at: at, filePaths: filePaths)
 		}
 	)
 }

@@ -197,10 +197,25 @@ struct RepositoryDetailView: View {
 								store.selectedUnstagedFileIds.contains(file.id)
 							{
 								// Multi-selection context menu
+								let selectedFiles = store.unstagedChanges
+									.filter { store.selectedUnstagedFileIds.contains($0.id) }
+								let allTracked = selectedFiles.allSatisfy { $0.status != .untracked }
+								let allUntracked = selectedFiles.allSatisfy { $0.status == .untracked }
+
 								Button("Stage All Selected (\(store.selectedUnstagedFileIds.count) files)") {
-									let selected = store.unstagedChanges
-										.filter { store.selectedUnstagedFileIds.contains($0.id) }
-									store.send(.stageFiles(selected))
+									store.send(.stageFiles(selectedFiles))
+								}
+
+								if allTracked {
+									Button("Discard All Selected Changes", role: .destructive) {
+										store.send(.discardFileChanges(selectedFiles))
+									}
+								}
+
+								if allUntracked {
+									Button("Delete All Selected Files", role: .destructive) {
+										store.send(.deleteUntrackedFiles(selectedFiles))
+									}
 								}
 							}
 							else {
@@ -214,12 +229,12 @@ struct RepositoryDetailView: View {
 								}
 
 								Button("Discard Changes", role: .destructive) {
-									store.send(.discardFileChanges(file))
+									store.send(.discardFileChanges([file]))
 								}
 
 								if file.status == .untracked {
 									Button("Delete File", role: .destructive) {
-										store.send(.deleteUntrackedFile(file))
+										store.send(.deleteUntrackedFiles([file]))
 									}
 								}
 							}
