@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum GitMergeMasterHelper {
+nonisolated enum GitMergeHelper {
 	struct MergeResult: Equatable {
 		let commitsMerged: Bool
 	}
@@ -11,6 +11,20 @@ nonisolated enum GitMergeMasterHelper {
 
 		// Then, merge origin/master
 		return try await mergeOriginMaster(at: path)
+	}
+
+	static func finishMerge(at path: String) async throws {
+		let result = await ProcessRunner.runGit(
+			arguments: ["commit", "--no-edit"],
+			at: path
+		)
+
+		guard result.success else {
+			let errorMessage = result.trimmedError
+			throw GitError.mergeFailed(
+				errorMessage.isEmpty ? "Failed to finish merge" : errorMessage
+			)
+		}
 	}
 
 	private static func fetchOriginMaster(at path: String) async throws {

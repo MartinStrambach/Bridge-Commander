@@ -9,6 +9,7 @@ struct RepositoryDetail {
 		var selectedFileDiff: FileDiff?
 		var stagedChanges: [FileChange] = []
 		var unstagedChanges: [FileChange] = []
+		var isMergeInProgress = false
 
 		var selectedFileId: String?
 		var selectedFileIsStaged: Bool?
@@ -32,8 +33,10 @@ struct RepositoryDetail {
 		case deleteUntrackedFiles([FileChange])
 		case discardFileChanges([FileChange])
 		case discardHunk(FileChange, DiffHunk)
+		case finishMergeButtonTapped
 		case loadChanges
 		case loadChangesResponse(GitFileChanges)
+		case loadMergeStatusResponse(Bool)
 		case openFileInIDE(FileChange)
 		case openTerminalButtonTapped
 		case selectFile(FileChange, isStaged: Bool)
@@ -68,18 +71,24 @@ struct RepositoryDetail {
 		Reduce { state, action in
 			switch action {
 			case .loadChanges:
-				return .run { [path = state.repositoryPath] send in
-					// Retry logic to handle git index race conditions
-					var changes = await gitStagingClient.fetchFileChanges(path)
+				return .merge(
+					.run { [path = state.repositoryPath] send in
+						// Retry logic to handle git index race conditions
+						var changes = await gitStagingClient.fetchFileChanges(path)
 
-					// If we get empty results, retry once after a delay
-					if changes.staged.isEmpty, changes.unstaged.isEmpty {
-						try await Task.sleep(nanoseconds: 200_000_000) // 200ms
-						changes = await gitStagingClient.fetchFileChanges(path)
+						// If we get empty results, retry once after a delay
+						if changes.staged.isEmpty, changes.unstaged.isEmpty {
+							try await Task.sleep(nanoseconds: 200_000_000) // 200ms
+							changes = await gitStagingClient.fetchFileChanges(path)
+						}
+
+						await send(.loadChangesResponse(changes))
+					},
+					.run { [path = state.repositoryPath] send in
+						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
+						await send(.loadMergeStatusResponse(isMergeInProgress))
 					}
-
-					await send(.loadChangesResponse(changes))
-				}
+				)
 				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
 
 			case let .loadChangesResponse(changes):
@@ -87,6 +96,10 @@ struct RepositoryDetail {
 				state.unstagedChanges = changes.unstaged
 
 				return handleAutoSelection(state: &state, changes: changes)
+
+			case let .loadMergeStatusResponse(isMergeInProgress):
+				state.isMergeInProgress = isMergeInProgress
+				return .none
 
 			case let .selectFile(file, isStaged):
 				state.selectedFileId = file.id
@@ -231,6 +244,14 @@ struct RepositoryDetail {
 			case .openTerminalButtonTapped:
 				return .run { [path = state.repositoryPath, behavior = terminalOpeningBehavior] _ in
 					await TerminalLauncher.openTerminal(at: path, behavior: behavior)
+				}
+
+			case .finishMergeButtonTapped:
+				return .run { [path = state.repositoryPath] send in
+					let result = await Result {
+						try await GitMergeHelper.finishMerge(at: path)
+					}
+					await send(.operationCompleted(result))
 				}
 
 			case let .updateSelection(selectedIds, isStaged):

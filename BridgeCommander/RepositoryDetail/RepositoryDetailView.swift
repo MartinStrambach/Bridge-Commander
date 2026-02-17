@@ -41,6 +41,11 @@ struct RepositoryDetailView: View {
 
 			Divider()
 
+			// Merge Status Banner
+			if store.isMergeInProgress {
+				mergeStatusBanner
+			}
+
 			// Main Content
 			NavigationSplitView(columnVisibility: .constant(.all)) {
 				// Left: File Changes Lists (Staged and Unstaged)
@@ -255,6 +260,30 @@ struct RepositoryDetailView: View {
 				}
 			}
 		}
+	}
+
+	// MARK: - Merge Status Banner
+
+	private var mergeStatusBanner: some View {
+		HStack(spacing: 8) {
+			Image(systemName: "arrow.triangle.merge")
+				.foregroundStyle(.orange)
+			Text("Merge in Progress")
+				.font(.headline)
+				.foregroundStyle(.orange)
+			Spacer()
+			Button {
+				store.send(.finishMergeButtonTapped)
+			} label: {
+				Label("Finish Merge", systemImage: "checkmark.circle")
+			}
+			.buttonStyle(.borderedProminent)
+			.tint(.orange)
+			.help("Complete merge with git commit --no-edit")
+		}
+		.padding(.horizontal)
+		.padding(.vertical, 12)
+		.background(Color.orange.opacity(0.1))
 	}
 
 	// MARK: - Diff Viewer

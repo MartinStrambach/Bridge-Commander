@@ -11,7 +11,7 @@ nonisolated struct GitClient: Sendable {
 	) = { _ in ("", 0, 0) }
 	var countUnpushedCommits: @Sendable (_ at: String) async -> Int = { _ in 0 }
 	var countCommitsBehind: @Sendable (_ at: String) async -> Int = { _ in 0 }
-	var mergeMaster: @Sendable (_ at: String) async throws -> GitMergeMasterHelper.MergeResult
+	var mergeMaster: @Sendable (_ at: String) async throws -> GitMergeHelper.MergeResult
 	var pull: @Sendable (_ at: String) async throws -> GitPullHelper.PullResult
 	var fetch: @Sendable (_ at: String) async throws -> GitFetchHelper.FetchResult
 }
@@ -42,7 +42,7 @@ extension GitClient: DependencyKey {
 			await GitBranchDetector.countCommitsBehind(at: at)
 		},
 		mergeMaster: { at in
-			try await GitMergeMasterHelper.mergeMaster(at: at)
+			try await GitMergeHelper.mergeMaster(at: at)
 		},
 		pull: { at in
 			try await GitPullHelper.pull(at: at)

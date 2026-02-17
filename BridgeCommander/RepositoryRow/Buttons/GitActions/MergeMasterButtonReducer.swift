@@ -20,7 +20,7 @@ struct MergeMasterButtonReducer {
 
 	enum Action: Equatable {
 		case mergeMasterTapped
-		case mergeMasterCompleted(result: Result<GitMergeMasterHelper.MergeResult, GitError>)
+		case mergeMasterCompleted(result: Result<GitMergeHelper.MergeResult, GitError>)
 		case alert(PresentationAction<Alert>)
 
 		enum Alert: Equatable {}
