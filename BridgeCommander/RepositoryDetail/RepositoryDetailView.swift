@@ -120,29 +120,29 @@ struct RepositoryDetailView: View {
 							}
 						)
 						.tag(file.id)
-							.contextMenu {
-								if
-									store.selectedStagedFileIds.count > 1,
-									store.selectedStagedFileIds.contains(file.id)
-								{
-									// Multi-selection context menu
-									Button("Unstage All Selected (\(store.selectedStagedFileIds.count) files)") {
-										let selected = store.stagedChanges
-											.filter { store.selectedStagedFileIds.contains($0.id) }
-										store.send(.unstageFiles(selected))
-									}
-								}
-								else {
-									// Single file context menu
-									Button("Open in IDE") {
-										store.send(.openFileInIDE(file))
-									}
-
-									Button("Unstage") {
-										store.send(.unstageFiles([file]))
-									}
+						.contextMenu {
+							if
+								store.selectedStagedFileIds.count > 1,
+								store.selectedStagedFileIds.contains(file.id)
+							{
+								// Multi-selection context menu
+								Button("Unstage All Selected (\(store.selectedStagedFileIds.count) files)") {
+									let selected = store.stagedChanges
+										.filter { store.selectedStagedFileIds.contains($0.id) }
+									store.send(.unstageFiles(selected))
 								}
 							}
+							else {
+								// Single file context menu
+								Button("Open in IDE") {
+									store.send(.openFileInIDE(file))
+								}
+
+								Button("Unstage") {
+									store.send(.unstageFiles([file]))
+								}
+							}
+						}
 					}
 				}
 				.listStyle(.plain)
@@ -236,13 +236,14 @@ struct RepositoryDetailView: View {
 									store.send(.stageFiles([file]))
 								}
 
-								Button("Discard Changes", role: .destructive) {
-									store.send(.discardFileChanges([file]))
-								}
-
 								if file.status == .untracked {
 									Button("Delete File", role: .destructive) {
 										store.send(.deleteUntrackedFiles([file]))
+									}
+								}
+								else {
+									Button("Discard Changes", role: .destructive) {
+										store.send(.discardFileChanges([file]))
 									}
 								}
 							}
