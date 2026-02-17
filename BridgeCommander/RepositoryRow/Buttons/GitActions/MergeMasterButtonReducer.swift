@@ -8,8 +8,7 @@ struct MergeMasterButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		var isMergingMaster = false
-		@Presents
-		var alert: AlertState<Action.Alert>?
+		var alert: GitAlert?
 
 		fileprivate let repositoryPath: String
 
@@ -21,9 +20,6 @@ struct MergeMasterButtonReducer {
 	enum Action: Equatable {
 		case mergeMasterTapped
 		case mergeMasterCompleted(result: Result<GitMergeHelper.MergeResult, GitError>)
-		case alert(PresentationAction<Alert>)
-
-		enum Alert: Equatable {}
 	}
 
 	@Dependency(GitClient.self)
@@ -50,27 +46,19 @@ struct MergeMasterButtonReducer {
 
 			case let .mergeMasterCompleted(result):
 				state.isMergingMaster = false
-				let (title, message) =
-					switch result {
-					case let .success(mergeResult):
-						mergeResult.commitsMerged
-							? ("Merge Successful", "Successfully merged commits from master.")
-							: (
-								"Already Up to Date",
-								"Branch is already up to date with master. No commits were merged."
-							)
+				switch result {
+				case let .success(mergeResult):
+					let (title, message) = mergeResult.commitsMerged
+						? ("Merge Successful", "Successfully merged commits from master.")
+						: ("Already Up to Date", "Branch is already up to date with master. No commits were merged.")
+					state.alert = GitAlert(title: title, message: message, isError: false)
 
-					case let .failure(error):
-						("Git Operation Failed", error.localizedDescription)
-					}
-
-				state.alert = .okAlert(title: title, message: message)
+				case let .failure(error):
+					state.alert = GitAlert(title: "Merge Failed", message: error.localizedDescription, isError: true)
+				}
 				return .none
 
-			case .alert:
-				return .none
 			}
 		}
-		.ifLet(\.$alert, action: \.alert)
 	}
 }

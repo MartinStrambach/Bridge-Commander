@@ -84,12 +84,12 @@ struct GitActionsMenuView: View {
 			}
 		}
 		.fixedSize()
-		.alert(store: store.scope(state: \.fetchButton.$alert, action: \.fetchButton.alert))
-		.alert(store: store.scope(state: \.pullButton.$alert, action: \.pullButton.alert))
-		.alert(store: store.scope(state: \.pushButton.$alert, action: \.pushButton.alert))
-		.alert(store: store.scope(state: \.mergeMasterButton.$alert, action: \.mergeMasterButton.alert))
-		.alert(store: store.scope(state: \.abortMergeButton.$alert, action: \.abortMergeButton.alert))
-		.alert(store: store.scope(state: \.stashButton.$alert, action: \.stashButton.alert))
+		.scrollableAlert(store.fetchButton.alert)
+		.scrollableAlert(store.pullButton.alert)
+		.scrollableAlert(store.pushButton.alert)
+		.scrollableAlert(store.mergeMasterButton.alert)
+		.scrollableAlert(store.abortMergeButton.alert)
+		.scrollableAlert(store.stashButton.alert)
 		.task {
 			store.send(.onAppear)
 		}

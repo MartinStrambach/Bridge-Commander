@@ -9,16 +9,12 @@ struct FetchButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isFetching = false
-		@Presents
-		var alert: AlertState<Action.Alert>?
+		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
 		case fetchTapped
 		case fetchCompleted(result: GitFetchHelper.FetchResult?, error: GitError?)
-		case alert(PresentationAction<Alert>)
-
-		enum Alert: Equatable {}
 	}
 
 	@Dependency(GitClient.self)
@@ -46,7 +42,7 @@ struct FetchButtonReducer {
 			case let .fetchCompleted(result, error):
 				state.isFetching = false
 				if let error {
-					state.alert = .okAlert(title: "Git Operation Failed", message: error.localizedDescription)
+					state.alert = GitAlert(title: "Fetch Failed", message: error.localizedDescription, isError: true)
 				}
 				else if let result {
 					let message =
@@ -59,15 +55,11 @@ struct FetchButtonReducer {
 						else {
 							"Fetch completed successfully."
 						}
-
-					state.alert = .okAlert(title: "Fetch Successful", message: message)
+					state.alert = GitAlert(title: "Fetch Successful", message: message, isError: false)
 				}
 				return .none
 
-			case .alert:
-				return .none
 			}
 		}
-		.ifLet(\.$alert, action: \.alert)
 	}
 }

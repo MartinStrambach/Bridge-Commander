@@ -9,16 +9,12 @@ struct PullButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isPulling = false
-		@Presents
-		var alert: AlertState<Action.Alert>?
+		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
 		case pullTapped
 		case pullCompleted(result: GitPullHelper.PullResult?, error: GitError?)
-		case alert(PresentationAction<Alert>)
-
-		enum Alert: Equatable {}
 	}
 
 	@Dependency(GitClient.self)
@@ -46,7 +42,7 @@ struct PullButtonReducer {
 			case let .pullCompleted(result, error):
 				state.isPulling = false
 				if let error {
-					state.alert = .okAlert(title: "Git Operation Failed", message: error.localizedDescription)
+					state.alert = GitAlert(title: "Pull Failed", message: error.localizedDescription, isError: true)
 				}
 				else if let result {
 					let message =
@@ -59,15 +55,11 @@ struct PullButtonReducer {
 						else {
 							"Pull completed successfully."
 						}
-
-					state.alert = .okAlert(title: "Pull Successful", message: message)
+					state.alert = GitAlert(title: "Pull Successful", message: message, isError: false)
 				}
 				return .none
 
-			case .alert:
-				return .none
 			}
 		}
-		.ifLet(\.$alert, action: \.alert)
 	}
 }

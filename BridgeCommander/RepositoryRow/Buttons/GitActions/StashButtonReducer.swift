@@ -11,8 +11,7 @@ struct StashButtonReducer {
 		var hasStash = false
 		var hasChanges = false
 		var isProcessing = false
-		@Presents
-		var alert: AlertState<Action.Alert>?
+		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
@@ -23,9 +22,6 @@ struct StashButtonReducer {
 		case checkStashStatus
 		case didCheckStashStatus(hasStash: Bool)
 		case updateHasChanges(Bool)
-		case alert(PresentationAction<Alert>)
-
-		enum Alert: Equatable {}
 	}
 
 	var body: some Reducer<State, Action> {
@@ -45,20 +41,18 @@ struct StashButtonReducer {
 
 			case let .stashCompleted(success, error):
 				state.isProcessing = false
-				if success {
-					state.alert = .okAlert(
+				if let error {
+					state.alert = GitAlert(title: "Stash Failed", message: error, isError: true)
+				}
+				else if success {
+					state.alert = GitAlert(
 						title: "Stash Successful",
-						message: "Changes have been stashed successfully."
+						message: "Changes have been stashed successfully.",
+						isError: false
 					)
 					return .send(.checkStashStatus)
 				}
-				else {
-					state.alert = .okAlert(
-						title: "Stash Failed",
-						message: error ?? "Unknown error occurred"
-					)
-					return .none
-				}
+				return .none
 
 			case .stashPopTapped:
 				state.isProcessing = true
@@ -74,24 +68,21 @@ struct StashButtonReducer {
 
 			case let .stashPopCompleted(success, error):
 				state.isProcessing = false
-				if success {
-					state.alert = .okAlert(
+				if let error {
+					state.alert = GitAlert(title: "Stash Pop Failed", message: error, isError: true)
+				}
+				else if success {
+					state.alert = GitAlert(
 						title: "Stash Pop Successful",
-						message: "Stashed changes have been restored successfully."
+						message: "Stashed changes have been restored successfully.",
+						isError: false
 					)
 					return .send(.checkStashStatus)
 				}
-				else {
-					state.alert = .okAlert(
-						title: "Stash Pop Failed",
-						message: error ?? "Unknown error occurred"
-					)
-					return .none
-				}
+				return .none
 
 			case .checkStashStatus:
 				return .run { [path = state.repositoryPath] send in
-					// First get the current branch
 					let currentBranch = await GitStashHelper.getCurrentBranch(at: path)
 					let hasStash = await GitStashHelper.checkHasStashOnBranch(at: path, branch: currentBranch)
 					await send(.didCheckStashStatus(hasStash: hasStash))
@@ -105,10 +96,7 @@ struct StashButtonReducer {
 				state.hasChanges = hasChanges
 				return .none
 
-			case .alert:
-				return .none
 			}
 		}
-		.ifLet(\.$alert, action: \.alert)
 	}
 }

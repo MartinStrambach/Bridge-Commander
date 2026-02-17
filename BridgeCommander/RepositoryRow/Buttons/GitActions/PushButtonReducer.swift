@@ -9,16 +9,12 @@ struct PushButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isPushing = false
-		@Presents
-		var alert: AlertState<Action.Alert>?
+		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
 		case pushTapped
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
-		case alert(PresentationAction<Alert>)
-
-		enum Alert: Equatable {}
 	}
 
 	var body: some Reducer<State, Action> {
@@ -43,25 +39,17 @@ struct PushButtonReducer {
 			case let .pushCompleted(result, error):
 				state.isPushing = false
 				if let error {
-					state.alert = .okAlert(title: "Git Operation Failed", message: error.localizedDescription)
+					state.alert = GitAlert(title: "Push Failed", message: error.localizedDescription, isError: true)
 				}
 				else if let result {
-					let message =
-						if result.isUpToDate {
-							"Everything is already up to date with the remote branch."
-						}
-						else {
-							"Successfully pushed commits to remote branch."
-						}
-
-					state.alert = .okAlert(title: "Push Successful", message: message)
+					let message = result.isUpToDate
+						? "Everything is already up to date with the remote branch."
+						: "Successfully pushed commits to remote branch."
+					state.alert = GitAlert(title: "Push Successful", message: message, isError: false)
 				}
 				return .none
 
-			case .alert:
-				return .none
 			}
 		}
-		.ifLet(\.$alert, action: \.alert)
 	}
 }

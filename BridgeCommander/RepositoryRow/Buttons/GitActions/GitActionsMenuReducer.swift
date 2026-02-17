@@ -93,7 +93,6 @@ struct GitActionsMenuReducer {
 
 			case .stashButton(.stashCompleted),
 			     .stashButton(.stashPopCompleted):
-				// Refresh stash status after stash operations
 				return .send(.stashButton(.checkStashStatus))
 
 			default:

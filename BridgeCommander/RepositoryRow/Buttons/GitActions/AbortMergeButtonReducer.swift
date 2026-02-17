@@ -9,16 +9,12 @@ struct AbortMergeButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isAbortingMerge = false
-		@Presents
-		var alert: AlertState<Action.Alert>?
+		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
 		case abortMergeTapped
 		case abortMergeCompleted(success: Bool, error: String?)
-		case alert(PresentationAction<Alert>)
-
-		enum Alert: Equatable {}
 	}
 
 	var body: some Reducer<State, Action> {
@@ -39,20 +35,18 @@ struct AbortMergeButtonReducer {
 			case let .abortMergeCompleted(success, error):
 				state.isAbortingMerge = false
 				if let error {
-					state.alert = .okAlert(title: "Abort Merge Failed", message: error)
+					state.alert = GitAlert(title: "Abort Merge Failed", message: error, isError: true)
 				}
 				else if success {
-					state.alert = .okAlert(
+					state.alert = GitAlert(
 						title: "Merge Aborted",
-						message: "The merge has been successfully aborted."
+						message: "The merge has been successfully aborted.",
+						isError: false
 					)
 				}
 				return .none
 
-			case .alert:
-				return .none
 			}
 		}
-		.ifLet(\.$alert, action: \.alert)
 	}
 }
