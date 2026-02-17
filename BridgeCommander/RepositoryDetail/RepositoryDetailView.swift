@@ -91,7 +91,11 @@ struct RepositoryDetailView: View {
 			Divider()
 
 			// List
-			if store.stagedChanges.isEmpty {
+			if store.isLoadingChanges {
+				ProgressView()
+					.frame(maxWidth: .infinity, maxHeight: .infinity)
+			}
+			else if store.stagedChanges.isEmpty {
 				EmptyStateView(
 					title: "No Staged Changes",
 					systemImage: "tray",
@@ -170,7 +174,11 @@ struct RepositoryDetailView: View {
 			Divider()
 
 			// List
-			if store.unstagedChanges.isEmpty {
+			if store.isLoadingChanges {
+				ProgressView()
+					.frame(maxWidth: .infinity, maxHeight: .infinity)
+			}
+			else if store.unstagedChanges.isEmpty {
 				EmptyStateView(
 					title: "No Unstaged Changes",
 					systemImage: "checkmark.circle",

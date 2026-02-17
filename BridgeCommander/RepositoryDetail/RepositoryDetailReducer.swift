@@ -10,6 +10,7 @@ struct RepositoryDetail {
 		var stagedChanges: [FileChange] = []
 		var unstagedChanges: [FileChange] = []
 		var isMergeInProgress = false
+		var isLoadingChanges: Bool = true
 
 		var selectedFileId: String?
 		var selectedFileIsStaged: Bool?
@@ -92,6 +93,7 @@ struct RepositoryDetail {
 				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
 
 			case let .loadChangesResponse(changes):
+				state.isLoadingChanges = false
 				state.stagedChanges = changes.staged
 				state.unstagedChanges = changes.unstaged
 
