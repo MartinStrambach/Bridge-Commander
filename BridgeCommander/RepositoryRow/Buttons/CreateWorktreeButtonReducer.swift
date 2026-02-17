@@ -12,6 +12,7 @@ struct CreateWorktreeButtonReducer {
 		var availableBranches: [BranchInfo] = []
 		var selectedBaseBranch: String = "master"
 		var isLoadingBranches: Bool = false
+		var createNewBranch: Bool = true
 		@Presents
 		var errorAlert: AlertState<Action.ErrorAlert>?
 	}
@@ -69,7 +70,7 @@ struct CreateWorktreeButtonReducer {
 				return .none
 
 			case .confirmCreation:
-				guard !state.branchName.isEmpty else {
+				guard !state.createNewBranch || !state.branchName.isEmpty else {
 					return .none
 				}
 
@@ -78,13 +79,15 @@ struct CreateWorktreeButtonReducer {
 				return .run { [
 					branchName = state.branchName,
 					baseBranch = state.selectedBaseBranch,
-					path = state.repositoryPath
+					path = state.repositoryPath,
+					createNewBranch = state.createNewBranch
 				] send in
 					do {
 						try await GitWorktreeCreator.createWorktree(
 							branchName: branchName,
 							baseBranch: baseBranch,
-							repositoryPath: path
+							repositoryPath: path,
+							createNewBranch: createNewBranch
 						)
 						await send(.didCreateSuccessfully)
 					}

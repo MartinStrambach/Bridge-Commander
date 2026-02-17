@@ -34,12 +34,16 @@ struct CreateWorktreeDialogView: View {
 					.disabled(store.availableBranches.isEmpty)
 				}
 
-				Text("New Branch Name")
-					.font(.subheadline)
-					.foregroundColor(.secondary)
+				Toggle("Create new branch", isOn: $store.createNewBranch)
 
-				TextField("Enter branch name", text: $store.branchName)
-					.textFieldStyle(.roundedBorder)
+				if store.createNewBranch {
+					Text("New Branch Name")
+						.font(.subheadline)
+						.foregroundColor(.secondary)
+
+					TextField("Enter branch name", text: $store.branchName)
+						.textFieldStyle(.roundedBorder)
+				}
 			}
 			.padding()
 
@@ -55,7 +59,7 @@ struct CreateWorktreeDialogView: View {
 					store.send(.confirmCreation)
 				}
 				.keyboardShortcut(.defaultAction)
-				.disabled(store.branchName.isEmpty || store.availableBranches.isEmpty)
+				.disabled((store.createNewBranch && store.branchName.isEmpty) || store.availableBranches.isEmpty)
 			}
 			.padding()
 		}
