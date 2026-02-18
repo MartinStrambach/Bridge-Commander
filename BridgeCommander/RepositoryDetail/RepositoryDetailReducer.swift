@@ -6,54 +6,47 @@ struct RepositoryDetail {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
-		var selectedFileDiff: FileDiff?
-		var stagedChanges: [FileChange] = []
-		var unstagedChanges: [FileChange] = []
-		var isMergeInProgress = false
-		var isLoadingChanges: Bool = true
+		var diffViewer: FileDiffViewer.State
+		var mergeStatus: MergeStatus.State
+		var staged: FileChangeList.State
+		var unstaged: FileChangeList.State
 
-		var selectedFileId: String?
-		var selectedFileIsStaged: Bool?
-		var selectedStagedFileIds: Set<String> = []
-		var selectedUnstagedFileIds: Set<String> = []
 		var lastActionedFileId: String?
 		var lastActionedFileIndex: Int?
 		var wasStaging = false
 
 		var hasChanges: Bool {
-			!stagedChanges.isEmpty || !unstagedChanges.isEmpty
+			!staged.files.isEmpty || !unstaged.files.isEmpty
 		}
 
 		init(repositoryPath: String) {
 			self.repositoryPath = repositoryPath
+			self.diffViewer = FileDiffViewer.State(repositoryPath: repositoryPath)
+			self.mergeStatus = MergeStatus.State(repositoryPath: repositoryPath)
+			self.staged = FileChangeList.State(repositoryPath: repositoryPath, listType: .staged)
+			self.unstaged = FileChangeList.State(repositoryPath: repositoryPath, listType: .unstaged)
 		}
 	}
 
 	enum Action: Sendable {
 		case cancelButtonTapped
-		case deleteUntrackedFiles([FileChange])
-		case discardFileChanges([FileChange])
-		case discardHunk(FileChange, DiffHunk)
-		case finishMergeButtonTapped
+		case deleteFilesCompleted([FileChange])
+		case discardFilesCompleted([FileChange])
+		case diffViewer(FileDiffViewer.Action)
 		case loadChanges
 		case loadChangesResponse(GitFileChanges)
-		case loadMergeStatusResponse(Bool)
-		case openFileInIDE(FileChange)
+		case mergeStatus(MergeStatus.Action)
 		case openTerminalButtonTapped
 		case selectFile(FileChange, isStaged: Bool)
-		case selectFileDiffResponse(FileDiff?)
-		case spaceKeyPressed
-		case stageFiles([FileChange])
-		case unstageFiles([FileChange])
-		case stageHunk(FileChange, DiffHunk)
-		case unstageHunk(FileChange, DiffHunk)
-		case updateSelection(Set<String>, isStaged: Bool)
+		case staged(FileChangeList.Action)
+		case stageFilesCompleted([FileChange])
+		case unstaged(FileChangeList.Action)
+		case unstageFilesCompleted([FileChange])
 		case operationCompleted(Result<Void, Error>)
 	}
 
 	private nonisolated enum CancellableId: Hashable, Sendable {
 		case loadChanges
-		case loadDiff
 	}
 
 	@Dependency(GitStagingClient.self)
@@ -62,242 +55,208 @@ struct RepositoryDetail {
 	@Dependency(\.dismiss)
 	private var dismiss
 
-	@Shared(.androidStudioPath)
-	private var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
-
 	@Shared(.terminalOpeningBehavior)
 	private var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
 	var body: some Reducer<State, Action> {
+		Scope(state: \.staged, action: \.staged) { FileChangeList() }
+		Scope(state: \.unstaged, action: \.unstaged) { FileChangeList() }
+		Scope(state: \.diffViewer, action: \.diffViewer) { FileDiffViewer() }
+		Scope(state: \.mergeStatus, action: \.mergeStatus) { MergeStatus() }
+
 		Reduce { state, action in
 			switch action {
-			case .loadChanges:
+			case .loadChanges,
+			     .operationCompleted(.success):
 				return .merge(
 					.run { [path = state.repositoryPath] send in
 						// Retry logic to handle git index race conditions
 						var changes = await gitStagingClient.fetchFileChanges(path)
-
-						// If we get empty results, retry once after a delay
 						if changes.staged.isEmpty, changes.unstaged.isEmpty {
 							try await Task.sleep(nanoseconds: 200_000_000) // 200ms
 							changes = await gitStagingClient.fetchFileChanges(path)
 						}
-
 						await send(.loadChangesResponse(changes))
 					},
 					.run { [path = state.repositoryPath] send in
 						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-						await send(.loadMergeStatusResponse(isMergeInProgress))
+						await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
 					}
 				)
 				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
 
 			case let .loadChangesResponse(changes):
-				state.isLoadingChanges = false
-				state.stagedChanges = changes.staged
-				state.unstagedChanges = changes.unstaged
-
-				return handleAutoSelection(state: &state, changes: changes)
-
-			case let .loadMergeStatusResponse(isMergeInProgress):
-				state.isMergeInProgress = isMergeInProgress
-				return .none
+				state.staged.isLoading = false
+				state.staged.files = changes.staged
+				state.unstaged.isLoading = false
+				state.unstaged.files = changes.unstaged
+				return handleAutoSelection(state: &state, staged: changes.staged, unstaged: changes.unstaged)
 
 			case let .selectFile(file, isStaged):
-				state.selectedFileId = file.id
-				state.selectedFileIsStaged = isStaged
-
-				// Update multi-selection to match single selection
 				if isStaged {
-					state.selectedStagedFileIds = [file.id]
-					state.selectedUnstagedFileIds = []
+					state.staged.selectedFileIds = [file.id]
+					state.unstaged.selectedFileIds = []
 				}
 				else {
-					state.selectedUnstagedFileIds = [file.id]
-					state.selectedStagedFileIds = []
+					state.unstaged.selectedFileIds = [file.id]
+					state.staged.selectedFileIds = []
 				}
+				return .send(.diffViewer(.load(file, isStaged: isStaged)))
 
-				return .run { [path = state.repositoryPath] send in
-					let diff = await gitStagingClient.fetchFileDiff(path, file, isStaged)
-					await send(.selectFileDiffResponse(diff))
-				}
-				.cancellable(id: CancellableId.loadDiff, cancelInFlight: true)
-
-			case let .selectFileDiffResponse(diff):
-				state.selectedFileDiff = diff
-				return .none
-
-			case let .stageFiles(files):
+			case let .unstaged(.delegate(.toggleAll(files))):
 				guard !files.isEmpty else {
 					return .none
 				}
 
-				state.lastActionedFileId = files.last?.id
-				state.wasStaging = true
-				// Track the index of the last actioned file in the unstaged list
-				if let lastFileId = files.last?.id {
-					state.lastActionedFileIndex = state.unstagedChanges.firstIndex(where: { $0.id == lastFileId })
-				}
-
-				let filePaths = files.map(\.path)
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await gitStagingClient.stageFiles(path, filePaths)
+				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
+				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
+					do {
+						try await gitStagingClient.stageFiles(path, paths)
+						await send(.stageFilesCompleted(files))
 					}
-					await send(.operationCompleted(result))
+					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case let .unstageFiles(files):
+			case let .stageFilesCompleted(files):
+				moveFiles(
+					files,
+					from: \.unstaged.files,
+					to: \.staged.files,
+					statusTransform: { $0 == .untracked ? .added : $0 },
+					state: &state
+				)
+				return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
+
+			case let .staged(.delegate(.toggleAll(files))):
 				guard !files.isEmpty else {
 					return .none
 				}
 
-				state.lastActionedFileId = files.last?.id
-				state.wasStaging = false
-				// Track the index of the last actioned file in the staged list
-				if let lastFileId = files.last?.id {
-					state.lastActionedFileIndex = state.stagedChanges.firstIndex(where: { $0.id == lastFileId })
-				}
-
-				let filePaths = files.map(\.path)
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await gitStagingClient.unstageFiles(path, filePaths)
+				trackLastActioned(files, wasStaging: false, sourceList: state.staged.files, state: &state)
+				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
+					do {
+						try await gitStagingClient.unstageFiles(path, paths)
+						await send(.unstageFilesCompleted(files))
 					}
-					await send(.operationCompleted(result))
+					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case let .stageHunk(file, hunk):
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await gitStagingClient.stageHunk(path, file, hunk)
-					}
-					await send(.operationCompleted(result))
-				}
+			case let .unstageFilesCompleted(files):
+				moveFiles(
+					files,
+					from: \.staged.files,
+					to: \.unstaged.files,
+					statusTransform: { $0 == .added ? .untracked : $0 },
+					state: &state
+				)
+				return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
 
-			case let .unstageHunk(file, hunk):
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await gitStagingClient.unstageHunk(path, file, hunk)
-					}
-					await send(.operationCompleted(result))
-				}
-
-			case let .discardHunk(file, hunk):
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await gitStagingClient.discardHunk(path, file, hunk)
-					}
-					await send(.operationCompleted(result))
-				}
-
-			case let .discardFileChanges(files):
+			case let .unstaged(.delegate(.discardChanges(files))):
 				guard !files.isEmpty else {
 					return .none
 				}
 
-				let filePaths = files.map(\.path)
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await gitStagingClient.discardFileChanges(path, filePaths)
+				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
+				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
+					do {
+						try await gitStagingClient.discardFileChanges(path, paths)
+						await send(.discardFilesCompleted(files))
 					}
-					await send(.operationCompleted(result))
+					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case let .deleteUntrackedFiles(files):
+			case let .deleteFilesCompleted(files),
+			     let .discardFilesCompleted(files):
+				return removeFromUnstaged(files, state: &state)
+
+			case let .unstaged(.delegate(.deleteUntracked(files))):
 				guard !files.isEmpty else {
 					return .none
 				}
 
-				let filePaths = files.map(\.path)
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await gitStagingClient.deleteUntrackedFiles(path, filePaths)
+				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
+				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
+					do {
+						try await gitStagingClient.deleteUntrackedFiles(path, paths)
+						await send(.deleteFilesCompleted(files))
 					}
-					await send(.operationCompleted(result))
+					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case .operationCompleted(.success):
-				return .send(.loadChanges)
+			case let .diffViewer(.delegate(.fileHasNoChanges(fileId, isStaged))):
+				let list = isStaged ? state.staged.files : state.unstaged.files
+				state.lastActionedFileId = fileId
+				state.lastActionedFileIndex = list.firstIndex { $0.id == fileId }
+				state.wasStaging = !isStaged
+				if isStaged {
+					state.staged.files.removeAll { $0.id == fileId }
+				}
+				else {
+					state.unstaged.files.removeAll { $0.id == fileId }
+				}
+				return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
+
+			case let .diffViewer(.delegate(.stageHunk(file, hunk))):
+				return .run { [path = state.repositoryPath] send in
+					await send(.operationCompleted(Result { try await gitStagingClient.stageHunk(path, file, hunk) }))
+				}
+
+			case let .diffViewer(.delegate(.unstageHunk(file, hunk))):
+				return .run { [path = state.repositoryPath] send in
+					await send(.operationCompleted(Result { try await gitStagingClient.unstageHunk(path, file, hunk) }))
+				}
+
+			case let .diffViewer(.delegate(.discardHunk(file, hunk))):
+				return .run { [path = state.repositoryPath] send in
+					await send(.operationCompleted(Result { try await gitStagingClient.discardHunk(path, file, hunk) }))
+				}
+
+			// selection — child already updated its own selectedFileIds via Scope;
+			// parent clears the other list and triggers diff load
+			case let .staged(.updateSelection(ids)):
+				state.unstaged.selectedFileIds = []
+				guard
+					let firstId = ids.first,
+					let file = state.staged.files.first(where: { $0.id == firstId })
+				else {
+					state.diffViewer.fileId = nil
+					state.diffViewer.fileIsStaged = nil
+					state.diffViewer.fileDiff = nil
+					return .none
+				}
+
+				return .send(.diffViewer(.load(file, isStaged: true)))
+
+			case let .unstaged(.updateSelection(ids)):
+				state.staged.selectedFileIds = []
+				guard
+					let firstId = ids.first,
+					let file = state.unstaged.files.first(where: { $0.id == firstId })
+				else {
+					state.diffViewer.fileId = nil
+					state.diffViewer.fileIsStaged = nil
+					state.diffViewer.fileDiff = nil
+					return .none
+				}
+
+				return .send(.diffViewer(.load(file, isStaged: false)))
+
+			case let .mergeStatus(.delegate(.operationCompleted(result))):
+				return .send(.operationCompleted(result))
 
 			case let .operationCompleted(.failure(error)):
 				print("Operation failed: \(error)")
 				return .none
 
-			case let .openFileInIDE(file):
-				return .run { [path = state.repositoryPath, studioPath = androidStudioPath] _ in
-					do {
-						try await FileOpener.openFileInIDE(
-							filePath: file.path,
-							repositoryPath: path,
-							androidStudioPath: studioPath
-						)
-					}
-					catch {
-						print("Failed to open file in IDE: \(error)")
-					}
-				}
-
 			case .cancelButtonTapped:
-				return .run { _ in
-					await dismiss()
-				}
+				return .run { _ in await dismiss() }
 
 			case .openTerminalButtonTapped:
 				return .run { [path = state.repositoryPath, behavior = terminalOpeningBehavior] _ in
 					await TerminalLauncher.openTerminal(at: path, behavior: behavior)
 				}
 
-			case .finishMergeButtonTapped:
-				return .run { [path = state.repositoryPath] send in
-					let result = await Result {
-						try await GitMergeHelper.finishMerge(at: path)
-					}
-					await send(.operationCompleted(result))
-				}
-
-			case let .updateSelection(selectedIds, isStaged):
-				if isStaged {
-					state.selectedStagedFileIds = selectedIds
-					state.selectedUnstagedFileIds = []
-				}
-				else {
-					state.selectedUnstagedFileIds = selectedIds
-					state.selectedStagedFileIds = []
-				}
-
-				// Update diff view to show first selected file
-				guard
-					let firstId = selectedIds.first,
-					let file = (isStaged ? state.stagedChanges : state.unstagedChanges)
-						.first(where: { $0.id == firstId })
-				else {
-					state.selectedFileId = nil
-					state.selectedFileIsStaged = nil
-					state.selectedFileDiff = nil
-					return .none
-				}
-
-				state.selectedFileId = file.id
-				state.selectedFileIsStaged = isStaged
-
-				return .run { [path = state.repositoryPath] send in
-					let diff = await gitStagingClient.fetchFileDiff(path, file, isStaged)
-					await send(.selectFileDiffResponse(diff))
-				}
-				.cancellable(id: CancellableId.loadDiff, cancelInFlight: true)
-
-			case .spaceKeyPressed:
-				if !state.selectedUnstagedFileIds.isEmpty {
-					let filesToStage = state.unstagedChanges.filter { state.selectedUnstagedFileIds.contains($0.id) }
-					state.selectedUnstagedFileIds.removeAll()
-					return .send(.stageFiles(filesToStage))
-				}
-				else if !state.selectedStagedFileIds.isEmpty {
-					let filesToUnstage = state.stagedChanges.filter { state.selectedStagedFileIds.contains($0.id) }
-					state.selectedStagedFileIds.removeAll()
-					return .send(.unstageFiles(filesToUnstage))
-				}
+			default:
 				return .none
 			}
 		}
@@ -305,71 +264,98 @@ struct RepositoryDetail {
 
 	// MARK: - Helpers
 
+	private func trackLastActioned(
+		_ files: [FileChange],
+		wasStaging: Bool,
+		sourceList: [FileChange],
+		state: inout State
+	) {
+		state.wasStaging = wasStaging
+		if let lastId = files.last?.id {
+			state.lastActionedFileId = lastId
+			state.lastActionedFileIndex = sourceList.firstIndex { $0.id == lastId }
+		}
+	}
+
+	private func moveFiles(
+		_ files: [FileChange],
+		from source: WritableKeyPath<State, [FileChange]>,
+		to target: WritableKeyPath<State, [FileChange]>,
+		statusTransform: (FileChangeStatus) -> FileChangeStatus,
+		state: inout State
+	) {
+		let fileIds = Set(files.map(\.id))
+		state[keyPath: source].removeAll { fileIds.contains($0.id) }
+		let existingIds = Set(state[keyPath: target].map(\.id))
+		let newFiles = files
+			.filter { !existingIds.contains($0.id) }
+			.map { FileChange(path: $0.path, status: statusTransform($0.status), oldPath: $0.oldPath) }
+		state[keyPath: target].append(contentsOf: newFiles)
+		state[keyPath: target].sort { $0.path < $1.path }
+	}
+
+	private func removeFromUnstaged(_ files: [FileChange], state: inout State) -> Effect<Action> {
+		let fileIds = Set(files.map(\.id))
+		state.unstaged.files.removeAll { fileIds.contains($0.id) }
+		return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
+	}
+
 	private func handleAutoSelection(
 		state: inout State,
-		changes: GitFileChanges
+		staged: [FileChange],
+		unstaged: [FileChange]
 	) -> Effect<Action> {
 		guard state.lastActionedFileId != nil else {
-			// No previous action - check if we need initial selection
-			if let selectedFileId = state.selectedFileId, let wasStaged = state.selectedFileIsStaged {
-				// Refresh diff if file still exists
-				if wasStaged, let file = changes.staged.first(where: { $0.id == selectedFileId }) {
+			if let selectedFileId = state.diffViewer.fileId, let wasStaged = state.diffViewer.fileIsStaged {
+				if wasStaged, let file = staged.first(where: { $0.id == selectedFileId }) {
 					return .send(.selectFile(file, isStaged: true))
 				}
-				else if !wasStaged, let file = changes.unstaged.first(where: { $0.id == selectedFileId }) {
+				else if !wasStaged, let file = unstaged.first(where: { $0.id == selectedFileId }) {
 					return .send(.selectFile(file, isStaged: false))
 				}
 				else {
-					state.selectedFileId = nil
-					state.selectedFileIsStaged = nil
-					state.selectedFileDiff = nil
+					state.diffViewer.fileId = nil
+					state.diffViewer.fileIsStaged = nil
+					state.diffViewer.fileDiff = nil
 				}
 			}
 			else {
-				// Initial load - select first unstaged file, or first staged file if no unstaged files
-				if let firstUnstaged = changes.unstaged.first {
+				if let firstUnstaged = unstaged.first {
 					return .send(.selectFile(firstUnstaged, isStaged: false))
 				}
-				else if let firstStaged = changes.staged.first {
+				else if let firstStaged = staged.first {
 					return .send(.selectFile(firstStaged, isStaged: true))
 				}
 			}
 			return .none
 		}
 
-		// Clear tracking state
 		state.lastActionedFileId = nil
 		let actionedIndex = state.lastActionedFileIndex
 		state.lastActionedFileIndex = nil
-		state.selectedUnstagedFileIds.removeAll()
-		state.selectedStagedFileIds.removeAll()
+		state.unstaged.selectedFileIds.removeAll()
+		state.staged.selectedFileIds.removeAll()
 
-		// Determine which list to select from (the source list, where the file came from)
 		let (sourceList, targetList, isStaged) = state.wasStaging
-			? (changes.unstaged, changes.staged, false)
-			: (changes.staged, changes.unstaged, true)
+			? (unstaged, staged, false)
+			: (staged, unstaged, true)
 
-		// Try to select file at the same index in the source list
 		if let index = actionedIndex {
-			// Try same index
 			if index < sourceList.count {
 				return .send(.selectFile(sourceList[index], isStaged: isStaged))
 			}
-			// Try previous file if we're at the end
 			else if index > 0, !sourceList.isEmpty {
 				return .send(.selectFile(sourceList[sourceList.count - 1], isStaged: isStaged))
 			}
 		}
 
-		// No files in source list, try first file in target list
 		if let firstTarget = targetList.first {
 			return .send(.selectFile(firstTarget, isStaged: !isStaged))
 		}
 
-		// No files at all, clear selection
-		state.selectedFileId = nil
-		state.selectedFileIsStaged = nil
-		state.selectedFileDiff = nil
+		state.diffViewer.fileId = nil
+		state.diffViewer.fileIsStaged = nil
+		state.diffViewer.fileDiff = nil
 		return .none
 	}
 }
