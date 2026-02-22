@@ -4,7 +4,8 @@ import SwiftUI
 // MARK: - Tuist Button View
 
 struct TuistButtonView: View {
-	let store: StoreOf<TuistButtonReducer>
+	@Bindable
+	var store: StoreOf<TuistButtonReducer>
 
 	var body: some View {
 		Group {
@@ -48,7 +49,9 @@ struct TuistButtonView: View {
 			}
 		}
 		.fixedSize()
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
+		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
+			ScrollableAlertView(store: alertStore)
+		}
 	}
 
 	// MARK: - Helper Methods

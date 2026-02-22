@@ -16,7 +16,7 @@ struct TuistButtonReducer {
 		@Shared(.tuistCacheType)
 		var tuistCacheType = TuistCacheType.externalOnly
 		@Presents
-		var alert: AlertState<Action.Alert>?
+		var alert: GitAlertReducer.State?
 
 		var isProcessing: Bool {
 			runningAction != nil
@@ -29,11 +29,7 @@ struct TuistButtonReducer {
 		case cacheTapped
 		case editTapped
 		case actionCompleted(TuistAction, Result<String, Error>)
-		case alert(PresentationAction<Alert>)
-
-		enum Alert: Equatable {
-			case dismissError
-		}
+		case alert(PresentationAction<GitAlertReducer.Action>)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -142,15 +138,11 @@ struct TuistButtonReducer {
 						case .cache: "Tuist Cache Failed"
 						case .edit: "Tuist Edit Failed"
 						}
-					state.alert = AlertState {
-						TextState(title)
-					} actions: {
-						ButtonState(role: .cancel, action: .dismissError) {
-							TextState("OK")
-						}
-					} message: {
-						TextState(error.localizedDescription)
-					}
+					state.alert = .init(
+						title: title,
+						message: error.localizedDescription,
+						isError: true
+					)
 					return .none
 				}
 
@@ -158,6 +150,8 @@ struct TuistButtonReducer {
 				return .none
 			}
 		}
-		.ifLet(\.$alert, action: \.alert)
+		.ifLet(\.$alert, action: \.alert) {
+			GitAlertReducer()
+		}
 	}
 }
