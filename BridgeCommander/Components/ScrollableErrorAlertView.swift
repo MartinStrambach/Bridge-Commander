@@ -1,24 +1,51 @@
+import ComposableArchitecture
 import SwiftUI
 
-private struct ScrollableAlertView: View {
-	private let title: String
-	private let message: String
-	private let isError: Bool
-	private let onDismiss: () -> Void
+// MARK: - GitAlertReducer
+
+@Reducer
+struct GitAlertReducer {
+	@ObservableState
+	struct State: Equatable {
+		let title: String
+		let message: String
+		let isError: Bool
+	}
+
+	enum Action: Equatable {
+		case dismissTapped
+	}
+
+	@Dependency(\.dismiss) var dismiss
+
+	var body: some Reducer<State, Action> {
+		Reduce { state, action in
+			switch action {
+			case .dismissTapped:
+				return .run { _ in await dismiss() }
+			}
+		}
+	}
+}
+
+// MARK: - ScrollableAlertView
+
+struct ScrollableAlertView: View {
+	let store: StoreOf<GitAlertReducer>
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			HStack(alignment: .center, spacing: 12) {
-				Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-					.foregroundStyle(isError ? .red : .green)
+				Image(systemName: store.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+					.foregroundStyle(store.isError ? .red : .green)
 					.font(.system(size: 32))
-				Text(title)
+				Text(store.title)
 					.font(.headline)
 			}
 
 			ScrollView {
-				Text(message)
-					.font(.system(.body, design: isError ? .monospaced : .default))
+				Text(store.message)
+					.font(.system(.body, design: store.isError ? .monospaced : .default))
 					.textSelection(.enabled)
 					.frame(maxWidth: .infinity, alignment: .leading)
 					.padding(8)
@@ -34,7 +61,7 @@ private struct ScrollableAlertView: View {
 			HStack {
 				Spacer()
 				Button("OK") {
-					onDismiss()
+					store.send(.dismissTapped)
 				}
 				.keyboardShortcut(.defaultAction)
 			}
@@ -42,76 +69,38 @@ private struct ScrollableAlertView: View {
 		.padding(24)
 		.frame(width: 440)
 	}
-
-	init(title: String, message: String, isError: Bool, onDismiss: @escaping () -> Void) {
-		self.title = title
-		self.message = message
-		self.isError = isError
-		self.onDismiss = onDismiss
-	}
-}
-
-// MARK: - View Modifier
-
-private struct ScrollableAlertModifier: ViewModifier {
-	@State
-	private var isPresented = false
-	@State
-	private var displayedAlert: GitAlert?
-
-	private let alert: GitAlert?
-
-	init(alert: GitAlert?) {
-		self.alert = alert
-	}
-
-	func body(content: Content) -> some View {
-		content
-			.sheet(isPresented: $isPresented) {
-				if let displayedAlert {
-					ScrollableAlertView(
-						title: displayedAlert.title,
-						message: displayedAlert.message,
-						isError: displayedAlert.isError,
-						onDismiss: { isPresented = false }
-					)
-				}
-			}
-			.onChange(of: alert) { _, newAlert in
-				if let newAlert {
-					displayedAlert = newAlert
-					isPresented = true
-				}
-			}
-	}
-}
-
-extension View {
-	func scrollableAlert(_ alert: GitAlert?) -> some View {
-		modifier(ScrollableAlertModifier(alert: alert))
-	}
 }
 
 #Preview("Error") {
 	ScrollableAlertView(
-		title: "Pull Failed",
-		message: """
-		error: Your local changes to the following files would be overwritten by merge:
-		\tsome/very/long/path/to/a/file.swift
-		\tanother/path/to/file.swift
-		Please commit your changes or stash them before you merge.
-		Aborting
-		""",
-		isError: true,
-		onDismiss: {}
+		store: Store(
+			initialState: GitAlertReducer.State(
+				title: "Pull Failed",
+				message: """
+				error: Your local changes to the following files would be overwritten by merge:
+				\tsome/very/long/path/to/a/file.swift
+				\tanother/path/to/file.swift
+				Please commit your changes or stash them before you merge.
+				Aborting
+				""",
+				isError: true
+			)
+		) {
+			GitAlertReducer()
+		}
 	)
 }
 
 #Preview("Success") {
 	ScrollableAlertView(
-		title: "Pull Successful",
-		message: "Successfully pulled 3 commits from remote branch.",
-		isError: false,
-		onDismiss: {}
+		store: Store(
+			initialState: GitAlertReducer.State(
+				title: "Pull Successful",
+				message: "Successfully pulled 3 commits from remote branch.",
+				isError: false
+			)
+		) {
+			GitAlertReducer()
+		}
 	)
 }

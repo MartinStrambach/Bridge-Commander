@@ -9,7 +9,6 @@ struct FetchButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isFetching = false
-		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
@@ -39,26 +38,9 @@ struct FetchButtonReducer {
 					}
 				}
 
-			case let .fetchCompleted(result, error):
+			case .fetchCompleted:
 				state.isFetching = false
-				if let error {
-					state.alert = GitAlert(title: "Fetch Failed", message: error.localizedDescription, isError: true)
-				}
-				else if let result {
-					let message =
-						if result.isAlreadyUpToDate {
-							"Already up to date. No new remote changes found."
-						}
-						else if result.fetchedBranches > 0 {
-							"Successfully fetched updates for \(result.fetchedBranches) branch\(result.fetchedBranches == 1 ? "" : "es")."
-						}
-						else {
-							"Fetch completed successfully."
-						}
-					state.alert = GitAlert(title: "Fetch Successful", message: message, isError: false)
-				}
 				return .none
-
 			}
 		}
 	}

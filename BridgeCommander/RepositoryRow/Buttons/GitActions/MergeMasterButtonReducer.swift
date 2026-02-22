@@ -8,7 +8,6 @@ struct MergeMasterButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		var isMergingMaster = false
-		var alert: GitAlert?
 
 		fileprivate let repositoryPath: String
 
@@ -44,20 +43,9 @@ struct MergeMasterButtonReducer {
 					}
 				}
 
-			case let .mergeMasterCompleted(result):
+			case .mergeMasterCompleted:
 				state.isMergingMaster = false
-				switch result {
-				case let .success(mergeResult):
-					let (title, message) = mergeResult.commitsMerged
-						? ("Merge Successful", "Successfully merged commits from master.")
-						: ("Already Up to Date", "Branch is already up to date with master. No commits were merged.")
-					state.alert = GitAlert(title: title, message: message, isError: false)
-
-				case let .failure(error):
-					state.alert = GitAlert(title: "Merge Failed", message: error.localizedDescription, isError: true)
-				}
 				return .none
-
 			}
 		}
 	}

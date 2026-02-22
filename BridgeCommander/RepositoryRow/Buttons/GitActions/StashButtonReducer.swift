@@ -11,7 +11,6 @@ struct StashButtonReducer {
 		var hasStash = false
 		var hasChanges = false
 		var isProcessing = false
-		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
@@ -39,19 +38,8 @@ struct StashButtonReducer {
 					}
 				}
 
-			case let .stashCompleted(success, error):
+			case .stashCompleted:
 				state.isProcessing = false
-				if let error {
-					state.alert = GitAlert(title: "Stash Failed", message: error, isError: true)
-				}
-				else if success {
-					state.alert = GitAlert(
-						title: "Stash Successful",
-						message: "Changes have been stashed successfully.",
-						isError: false
-					)
-					return .send(.checkStashStatus)
-				}
 				return .none
 
 			case .stashPopTapped:
@@ -66,19 +54,8 @@ struct StashButtonReducer {
 					}
 				}
 
-			case let .stashPopCompleted(success, error):
+			case .stashPopCompleted:
 				state.isProcessing = false
-				if let error {
-					state.alert = GitAlert(title: "Stash Pop Failed", message: error, isError: true)
-				}
-				else if success {
-					state.alert = GitAlert(
-						title: "Stash Pop Successful",
-						message: "Stashed changes have been restored successfully.",
-						isError: false
-					)
-					return .send(.checkStashStatus)
-				}
 				return .none
 
 			case .checkStashStatus:
@@ -95,7 +72,6 @@ struct StashButtonReducer {
 			case let .updateHasChanges(hasChanges):
 				state.hasChanges = hasChanges
 				return .none
-
 			}
 		}
 	}

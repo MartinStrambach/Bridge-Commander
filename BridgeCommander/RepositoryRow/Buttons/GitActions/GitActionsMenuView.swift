@@ -4,7 +4,8 @@ import SwiftUI
 // MARK: - Git Actions Menu View
 
 struct GitActionsMenuView: View {
-	let store: StoreOf<GitActionsMenuReducer>
+	@Bindable
+	var store: StoreOf<GitActionsMenuReducer>
 
 	var body: some View {
 		Group {
@@ -84,12 +85,9 @@ struct GitActionsMenuView: View {
 			}
 		}
 		.fixedSize()
-		.scrollableAlert(store.fetchButton.alert)
-		.scrollableAlert(store.pullButton.alert)
-		.scrollableAlert(store.pushButton.alert)
-		.scrollableAlert(store.mergeMasterButton.alert)
-		.scrollableAlert(store.abortMergeButton.alert)
-		.scrollableAlert(store.stashButton.alert)
+		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
+			ScrollableAlertView(store: alertStore)
+		}
 		.task {
 			store.send(.onAppear)
 		}

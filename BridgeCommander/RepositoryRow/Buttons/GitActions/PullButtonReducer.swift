@@ -9,7 +9,6 @@ struct PullButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isPulling = false
-		var alert: GitAlert?
 	}
 
 	enum Action: Equatable {
@@ -39,26 +38,9 @@ struct PullButtonReducer {
 					}
 				}
 
-			case let .pullCompleted(result, error):
+			case .pullCompleted:
 				state.isPulling = false
-				if let error {
-					state.alert = GitAlert(title: "Pull Failed", message: error.localizedDescription, isError: true)
-				}
-				else if let result {
-					let message =
-						if result.isAlreadyUpToDate {
-							"Your branch is already up to date with the remote branch."
-						}
-						else if result.commitCount > 0 {
-							"Successfully pulled \(result.commitCount) commit\(result.commitCount == 1 ? "" : "s") from remote branch."
-						}
-						else {
-							"Pull completed successfully."
-						}
-					state.alert = GitAlert(title: "Pull Successful", message: message, isError: false)
-				}
 				return .none
-
 			}
 		}
 	}
