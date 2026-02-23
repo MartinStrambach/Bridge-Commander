@@ -4,7 +4,8 @@ import SwiftUI
 // MARK: - Xcode Project Button View
 
 struct XcodeProjectButtonView: View {
-	let store: StoreOf<XcodeProjectButtonReducer>
+	@Bindable
+	var store: StoreOf<XcodeProjectButtonReducer>
 
 	private var buttonLabel: String {
 		switch store.projectState {
@@ -66,7 +67,7 @@ struct XcodeProjectButtonView: View {
 			tint: store.projectPath == nil ? .orange : nil,
 			action: { store.send(.openProject) }
 		)
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
+		.alert($store.scope(state: \.alert, action: \.alert))
 		.task {
 			store.send(.onAppear)
 		}

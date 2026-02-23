@@ -32,7 +32,7 @@ struct SettingsView: View {
 			.padding()
 		}
 		.frame(minWidth: 500, idealWidth: 600, minHeight: 600, idealHeight: 800)
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
+		.alert($store.scope(state: \.alert, action: \.alert))
 	}
 
 	private var terminalBehaviorSection: some View {

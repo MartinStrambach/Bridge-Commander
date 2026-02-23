@@ -1,16 +1,17 @@
 import SwiftUI
 
-/// A reusable colored banner with an icon, title, optional subtitle, an optional action button, and an optional dismiss button.
+/// A reusable colored banner with an icon, title, optional subtitle, an optional action button, and an optional dismiss
+/// button.
 struct BannerView: View {
 	let icon: String
 	let title: String
-	var subtitle: String? = nil
+	var subtitle: String?
 	var color: Color = .orange
-	var actionLabel: String? = nil
-	var actionSystemImage: String? = nil
-	var actionHelp: String? = nil
-	var onAction: (() -> Void)? = nil
-	var onDismiss: (() -> Void)? = nil
+	var actionLabel: String?
+	var actionSystemImage: String?
+	var actionHelp: String?
+	var onAction: (() -> Void)?
+	var onDismiss: (() -> Void)?
 
 	var body: some View {
 		HStack(spacing: 8) {
@@ -35,7 +36,8 @@ struct BannerView: View {
 				Button(action: onAction) {
 					if let actionSystemImage {
 						Label(actionLabel, systemImage: actionSystemImage)
-					} else {
+					}
+					else {
 						Text(actionLabel)
 					}
 				}

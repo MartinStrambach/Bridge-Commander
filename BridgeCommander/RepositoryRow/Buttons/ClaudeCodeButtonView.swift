@@ -4,7 +4,8 @@ import SwiftUI
 // MARK: - Claude Code Button View
 
 struct ClaudeCodeButtonView: View {
-	let store: StoreOf<ClaudeCodeButtonReducer>
+	@Bindable
+	var store: StoreOf<ClaudeCodeButtonReducer>
 
 	private var buttonTooltip: String {
 		if store.isLaunching {
@@ -24,7 +25,7 @@ struct ClaudeCodeButtonView: View {
 			tint: store.isLaunching ? .purple : nil,
 			action: { store.send(.launchClaudeCodeButtonTapped) }
 		)
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
+		.alert($store.scope(state: \.alert, action: \.alert))
 	}
 
 }

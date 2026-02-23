@@ -4,7 +4,8 @@ import SwiftUI
 // MARK: - Android Studio Button View
 
 struct AndroidStudioButtonView: View {
-	let store: StoreOf<AndroidStudioButtonReducer>
+	@Bindable
+	var store: StoreOf<AndroidStudioButtonReducer>
 
 	private var buttonTooltip: String {
 		if store.isOpening {
@@ -24,7 +25,7 @@ struct AndroidStudioButtonView: View {
 			tint: store.isOpening ? .green : nil,
 			action: { store.send(.openAndroidStudioButtonTapped) }
 		)
-		.alert(store: store.scope(state: \.$alert, action: \.alert))
+		.alert($store.scope(state: \.alert, action: \.alert))
 	}
 
 }

@@ -23,7 +23,7 @@ struct DeleteWorktreeButtonView: View {
 		.sheet(isPresented: $store.showingConfirmationSheet) {
 			DeleteWorktreeConfirmationView(store: store)
 		}
-		.alert(store: store.scope(state: \.$errorAlert, action: \.errorAlert))
+		.alert($store.scope(state: \.errorAlert, action: \.errorAlert))
 	}
 }
 
