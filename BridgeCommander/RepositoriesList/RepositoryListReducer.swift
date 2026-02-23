@@ -12,27 +12,46 @@ enum SortMode: String, Equatable, Sendable {
 struct RepositoryListReducer {
 	@ObservableState
 	struct State: Equatable {
-		var repositories: IdentifiedArrayOf<RepositoryRowReducer.State> = []
-		var isScanning = false
-		var selectedDirectory: String?
+		fileprivate(set) var repositories: IdentifiedArrayOf<RepositoryRowReducer.State> = []
+		fileprivate(set) var isScanning = false
+		fileprivate(set) var selectedDirectory: String?
 
-		var sortMode: SortMode = .state
+		fileprivate(set) var sortMode: SortMode = .state
 
 		@Shared(.periodicRefreshInterval)
-		var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
+		fileprivate(set) var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
+
+		fileprivate var isSystemEventsPermissionGranted: Bool?
+		fileprivate var isPermissionWarningDismissed = false
+
+		var showPermissionDialog: Bool {
+			isSystemEventsPermissionGranted == false && !isPermissionWarningDismissed
+		}
 	}
 
-	enum Action: Sendable {
-		case clearResults
+	enum Action: ViewAction, Sendable {
+		case view(ViewAction)
+		case checkSystemEventsPermission
+		case didReceiveSystemEventsPermission(Bool)
 		case didScanRepositories([ScannedRepository])
-		case scanFailed
-		case setDirectory(String)
-		case startScan
 		case refreshRepositories
 		case repositories(IdentifiedActionOf<RepositoryRowReducer>)
+		case scanFailed
 		case startPeriodicRefresh
+		case startScan
 		case stopPeriodicRefresh
-		case toggleSortMode
+
+		enum ViewAction: Sendable {
+			case clearButtonTapped
+			case directorySelected(String)
+			case dismissPermissionWarningButtonTapped
+			case onAppear
+			case onDisappear
+			case openAutomationSettingsButtonTapped
+			case periodicRefreshIntervalChanged
+			case refreshButtonTapped
+			case sortModeButtonTapped
+		}
 	}
 
 	private nonisolated enum CancellableId: Hashable, Sendable {
@@ -45,12 +64,55 @@ struct RepositoryListReducer {
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
-			case let .setDirectory(directory):
-				lastOpenedDirectoryClient.save(directory)
-				state.selectedDirectory = directory
+			case .view(.onAppear):
+				return .merge(.send(.startScan), .send(.startPeriodicRefresh))
+
+			case .view(.periodicRefreshIntervalChanged):
+				return .concatenate(.send(.stopPeriodicRefresh), .send(.startPeriodicRefresh))
+
+			case .view(.sortModeButtonTapped):
+				withAnimation {
+					switch state.sortMode {
+					case .state:
+						state.sortMode = .ticket
+					case .ticket:
+						state.sortMode = .branch
+					case .branch:
+						state.sortMode = .state
+					}
+					sortRepositoriesInState(in: &state)
+				}
 				return .none
 
-			case .startScan:
+			case .view(.clearButtonTapped):
+				state.repositories.removeAll()
+				state.selectedDirectory = nil
+				state.isScanning = false
+				lastOpenedDirectoryClient.clear()
+				return .cancel(id: CancellableId.periodicRefresh)
+
+			case let .view(.directorySelected(directory)):
+				lastOpenedDirectoryClient.save(directory)
+				state.selectedDirectory = directory
+				return .send(.startScan)
+
+			case .view(.openAutomationSettingsButtonTapped):
+				return .run { _ in
+					if
+						let url =
+						URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+					{
+						NSWorkspace.shared.open(url)
+					}
+				}
+
+			case .view(.dismissPermissionWarningButtonTapped):
+				state.isPermissionWarningDismissed = true
+				return .none
+
+			case .repositories(.element(_, .worktreeCreated)),
+			     .repositories(.element(_, .worktreeDeleted)),
+			     .startScan:
 				// Only load from service if no directory is set
 				if state.selectedDirectory == nil {
 					state.selectedDirectory = lastOpenedDirectoryClient.load()
@@ -62,16 +124,19 @@ struct RepositoryListReducer {
 
 				state.isScanning = true
 
-				return .run { send in
-					do {
-						let scanned = try await scanRepositories(in: directory)
-						await send(.didScanRepositories(scanned))
+				return .merge(
+					.send(.checkSystemEventsPermission),
+					.run { send in
+						do {
+							let scanned = try await scanRepositories(in: directory)
+							await send(.didScanRepositories(scanned))
+						}
+						catch {
+							print("Scan failed: \(error.localizedDescription)")
+							await send(.scanFailed)
+						}
 					}
-					catch {
-						print("Scan failed: \(error.localizedDescription)")
-						await send(.scanFailed)
-					}
-				}
+				)
 
 			case let .didScanRepositories(scannedRepos):
 				state.isScanning = false
@@ -81,6 +146,10 @@ struct RepositoryListReducer {
 			case .scanFailed:
 				state.isScanning = false
 				return .none
+
+			case .view(.refreshButtonTapped):
+				state.isSystemEventsPermissionGranted = nil
+				return .send(.refreshRepositories)
 
 			case .refreshRepositories:
 				guard !state.repositories.isEmpty else {
@@ -103,34 +172,23 @@ struct RepositoryListReducer {
 				}
 				.cancellable(id: CancellableId.periodicRefresh, cancelInFlight: true)
 
-			case .stopPeriodicRefresh:
+			case .stopPeriodicRefresh,
+			     .view(.onDisappear):
 				return .cancel(id: CancellableId.periodicRefresh)
 
-			case .clearResults:
-				state.repositories.removeAll()
-				state.selectedDirectory = nil
-				state.isScanning = false
-				lastOpenedDirectoryClient.clear()
-				return .cancel(id: CancellableId.periodicRefresh)
-
-			case .toggleSortMode:
-				withAnimation {
-					// Cycle through sort modes: state -> ticket -> branch -> state
-					switch state.sortMode {
-					case .state:
-						state.sortMode = .ticket
-					case .ticket:
-						state.sortMode = .branch
-					case .branch:
-						state.sortMode = .state
-					}
-					sortRepositoriesInState(in: &state)
+			case .checkSystemEventsPermission:
+				guard state.isSystemEventsPermissionGranted == nil else {
+					return .none
 				}
-				return .none
 
-			case .repositories(.element(_, .worktreeCreated)),
-			     .repositories(.element(_, .worktreeDeleted)):
-				return .send(.startScan)
+				return .run { send in
+					let granted = await PermissionChecker.isSystemEventsAutomationPermitted()
+					await send(.didReceiveSystemEventsPermission(granted))
+				}
+
+			case let .didReceiveSystemEventsPermission(granted):
+				state.isSystemEventsPermissionGranted = granted
+				return .none
 
 			case .repositories(.element(_, .didFetchYouTrack)):
 				// Re-sort when ticket state is fetched (if sorting by state)

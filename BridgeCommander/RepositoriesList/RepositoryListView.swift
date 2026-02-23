@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import SwiftUI
 
+@ViewAction(for: RepositoryListReducer.self)
 struct RepositoryListView: View {
 	let store: StoreOf<RepositoryListReducer>
 
@@ -33,6 +34,10 @@ struct RepositoryListView: View {
 
 			Divider()
 
+			if store.showPermissionDialog {
+				permissionWarningBanner
+			}
+
 			if store.repositories.isEmpty {
 				emptyStateView
 			}
@@ -42,15 +47,13 @@ struct RepositoryListView: View {
 		}
 		.frame(minWidth: 600, minHeight: 400)
 		.onAppear {
-			store.send(.startScan)
-			store.send(.startPeriodicRefresh)
+			send(.onAppear)
 		}
 		.onDisappear {
-			store.send(.stopPeriodicRefresh)
+			send(.onDisappear)
 		}
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
-			store.send(.stopPeriodicRefresh)
-			store.send(.startPeriodicRefresh)
+			send(.periodicRefreshIntervalChanged)
 		}
 	}
 
@@ -81,7 +84,7 @@ struct RepositoryListView: View {
 					HeaderButton(
 						icon: sortModeIcon,
 						tooltip: sortModeTooltip,
-						action: { store.send(.toggleSortMode) }
+						action: { send(.sortModeButtonTapped) }
 					)
 
 					Spacer()
@@ -100,7 +103,7 @@ struct RepositoryListView: View {
 								icon: "arrow.clockwise",
 								tooltip: "Refresh repository status (⌘R)",
 								color: .blue,
-								action: { store.send(.refreshRepositories) }
+								action: { send(.refreshButtonTapped) }
 							)
 							.keyboardShortcut("r", modifiers: .command)
 						}
@@ -108,7 +111,7 @@ struct RepositoryListView: View {
 						HeaderButton(
 							icon: "xmark.circle.fill",
 							tooltip: "Clear results",
-							action: { store.send(.clearResults) }
+							action: { send(.clearButtonTapped) }
 						)
 					}
 				}
@@ -118,6 +121,19 @@ struct RepositoryListView: View {
 			}
 		}
 		.padding()
+	}
+
+	// MARK: - Permission Warning Banner
+
+	private var permissionWarningBanner: some View {
+		BannerView(
+			icon: "exclamationmark.triangle.fill",
+			title: "Automation permission required",
+			subtitle: "Some features may not work correctly.",
+			actionLabel: "Open System Settings",
+			onAction: { send(.openAutomationSettingsButtonTapped) },
+			onDismiss: { send(.dismissPermissionWarningButtonTapped) }
+		)
 	}
 
 	// MARK: - Scanning View
@@ -183,8 +199,7 @@ struct RepositoryListView: View {
 		panel.message = "Select a directory to scan for repositories"
 
 		if panel.runModal() == .OK, let url = panel.url {
-			store.send(.setDirectory(url.path))
-			store.send(.startScan)
+			send(.directorySelected(url.path))
 		}
 	}
 
