@@ -8,7 +8,7 @@ struct XcodeProjectButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
-		var projectState: XcodeProjectState = .checking
+		var projectState: XcodeProjectState = .idle
 		var projectPath: String?
 		@Shared(.iosSubfolderPath)
 		var iosSubfolderPath = "ios/FlashScore"
@@ -41,6 +41,9 @@ struct XcodeProjectButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .onAppear:
+				guard !state.projectState.isProcessing else {
+					return .none
+				}
 				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
 					let projectPath = await xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
 					await send(.foundProjectPath(projectPath))
