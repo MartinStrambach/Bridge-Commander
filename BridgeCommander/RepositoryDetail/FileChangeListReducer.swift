@@ -34,6 +34,7 @@ struct FileChangeList {
 			case toggleAll([FileChange])
 			case discardChanges([FileChange])
 			case deleteUntracked([FileChange])
+			case deleteConflicted([FileChange])
 		}
 	}
 

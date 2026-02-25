@@ -10,6 +10,8 @@ struct RepositoryDetail {
 		var mergeStatus: MergeStatus.State
 		var staged: FileChangeList.State
 		var unstaged: FileChangeList.State
+		@Presents
+		var alert: GitAlertReducer.State?
 
 		var lastActionedFileId: String?
 		var lastActionedFileIndex: Int?
@@ -29,6 +31,7 @@ struct RepositoryDetail {
 	}
 
 	enum Action: Sendable {
+		case alert(PresentationAction<GitAlertReducer.Action>)
 		case cancelButtonTapped
 		case deleteFilesCompleted([FileChange])
 		case discardFilesCompleted([FileChange])
@@ -183,6 +186,22 @@ struct RepositoryDetail {
 					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
+			case let .unstaged(.delegate(.deleteConflicted(files))):
+				guard !files.isEmpty else {
+					return .none
+				}
+
+				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
+				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
+					do {
+						try await gitStagingClient.deleteConflictedFiles(path, paths)
+						await send(.deleteFilesCompleted(files))
+					}
+					catch {
+						await send(.operationCompleted(.failure(error)))
+					}
+				}
+
 			case let .diffViewer(.delegate(.fileHasNoChanges(fileId, isStaged))):
 				let list = isStaged ? state.staged.files : state.unstaged.files
 				state.lastActionedFileId = fileId
@@ -245,7 +264,11 @@ struct RepositoryDetail {
 				return .send(.operationCompleted(result))
 
 			case let .operationCompleted(.failure(error)):
-				print("Operation failed: \(error)")
+				state.alert = GitAlertReducer.State(
+					title: "Finish Merge Failed",
+					message: error.localizedDescription,
+					isError: true
+				)
 				return .none
 
 			case .cancelButtonTapped:
@@ -259,6 +282,9 @@ struct RepositoryDetail {
 			default:
 				return .none
 			}
+		}
+		.ifLet(\.$alert, action: \.alert) {
+			GitAlertReducer()
 		}
 	}
 

@@ -103,6 +103,11 @@ struct FileChangeListView: View {
 						store.send(.delegate(.deleteUntracked([file])))
 					}
 				}
+				else if file.status == .conflicted {
+					Button("Delete File", role: .destructive) {
+						store.send(.delegate(.deleteConflicted([file])))
+					}
+				}
 				else {
 					Button("Discard Changes", role: .destructive) {
 						store.send(.delegate(.discardChanges([file])))

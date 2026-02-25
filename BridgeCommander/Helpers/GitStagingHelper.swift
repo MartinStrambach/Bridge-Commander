@@ -153,6 +153,20 @@ nonisolated enum GitStagingHelper {
 		}
 	}
 
+	// MARK: - Delete Conflicted Files
+
+	static func deleteConflictedFiles(at repositoryPath: String, filePaths: [String]) async throws {
+		guard !filePaths.isEmpty else {
+			return
+		}
+
+		let arguments = ["rm", "--force", "--"] + filePaths
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
+			throw GitError.stagingFailed("Failed to delete conflicted files")
+		}
+	}
+
 	// MARK: - Delete Untracked Files
 
 	static func deleteUntrackedFiles(at repositoryPath: String, filePaths: [String]) async throws {
@@ -256,8 +270,12 @@ nonisolated enum GitStagingHelper {
 		)
 		let untrackedOutput = untrackedResult.success ? untrackedResult.outputString : ""
 
-		// Parse modified/deleted files
-		var changes = parseGitStatusOutput(diffOutput)
+		// Get unmerged/conflicted files
+		let unmergedFiles = await fetchUnmergedFiles(at: path)
+		let unmergedPaths = Set(unmergedFiles.map(\.path))
+
+		// Parse modified/deleted files, skipping those already in unmerged list
+		var changes = parseGitStatusOutput(diffOutput).filter { !unmergedPaths.contains($0.path) }
 
 		// Parse untracked files
 		let untrackedLines = untrackedOutput.split(separator: "\n").map(String.init)
@@ -265,7 +283,36 @@ nonisolated enum GitStagingHelper {
 			changes.append(FileChange(path: filePath, status: .untracked))
 		}
 
+		// Append conflicted files
+		changes.append(contentsOf: unmergedFiles)
+
 		return changes.sorted { $0.path < $1.path }
+	}
+
+	private static func fetchUnmergedFiles(at path: String) async -> [FileChange] {
+		let result = await ProcessRunner.runGit(arguments: ["ls-files", "--unmerged"], at: path)
+		guard result.success else {
+			return []
+		}
+
+		// Each line: <mode> <hash> <stage> <tab> <path>
+		// Multiple stage entries per file — collect unique paths
+		var seen = Set<String>()
+		var changes: [FileChange] = []
+		for line in result.outputString.split(separator: "\n") {
+			let parts = line.split(separator: "\t", maxSplits: 1)
+			guard parts.count == 2 else {
+				continue
+			}
+
+			let filePath = String(parts[1])
+			guard !filePath.isEmpty, seen.insert(filePath).inserted else {
+				continue
+			}
+
+			changes.append(FileChange(path: filePath, status: .conflicted))
+		}
+		return changes
 	}
 
 	private static func parseGitStatusOutput(_ output: String) -> [FileChange] {
@@ -442,4 +489,3 @@ nonisolated enum GitStagingHelper {
 	}
 
 }
-

@@ -10,6 +10,7 @@ enum FileChangeStatus: String, Equatable, Sendable {
 	case copied = "C"
 	case untracked = "?"
 	case typeChanged = "T"
+	case conflicted = "U"
 
 	var displayName: String {
 		switch self {
@@ -20,6 +21,7 @@ enum FileChangeStatus: String, Equatable, Sendable {
 		case .copied: "Copied"
 		case .untracked: "Untracked"
 		case .typeChanged: "Type Changed"
+		case .conflicted: "Conflicted"
 		}
 	}
 
@@ -32,6 +34,7 @@ enum FileChangeStatus: String, Equatable, Sendable {
 		case .copied: "doc.on.doc.fill"
 		case .untracked: "questionmark.circle.fill"
 		case .typeChanged: "arrow.left.arrow.right.circle.fill"
+		case .conflicted: "exclamationmark.triangle.fill"
 		}
 	}
 }

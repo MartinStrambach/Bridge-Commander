@@ -66,6 +66,9 @@ struct RepositoryDetailView: View {
 		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
 			store.send(.loadChanges)
 		}
+		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
+			ScrollableAlertView(store: alertStore)
+		}
 	}
 }
 

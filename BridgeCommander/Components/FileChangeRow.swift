@@ -21,6 +21,8 @@ struct FileChangeRow: View {
 			.blue
 		case .typeChanged:
 			.purple
+		case .conflicted:
+			.yellow
 		}
 	}
 
