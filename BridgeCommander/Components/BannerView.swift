@@ -10,6 +10,7 @@ struct BannerView: View {
 	var actionLabel: String?
 	var actionSystemImage: String?
 	var actionHelp: String?
+	var isLoading = false
 	var onAction: (() -> Void)?
 	var onDismiss: (() -> Void)?
 
@@ -32,7 +33,11 @@ struct BannerView: View {
 
 			Spacer()
 
-			if let actionLabel, let onAction {
+			if isLoading {
+				ProgressView()
+					.scaleEffect(0.7)
+			}
+			else if let actionLabel, let onAction {
 				Button(action: onAction) {
 					if let actionSystemImage {
 						Label(actionLabel, systemImage: actionSystemImage)

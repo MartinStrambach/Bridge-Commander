@@ -11,6 +11,7 @@ struct MergeStatusBannerView: View {
 			actionLabel: "Finish Merge",
 			actionSystemImage: "checkmark.circle",
 			actionHelp: "Complete merge with git commit --no-edit",
+			isLoading: store.isLoading,
 			onAction: { store.send(.finishMergeButtonTapped) }
 		)
 	}

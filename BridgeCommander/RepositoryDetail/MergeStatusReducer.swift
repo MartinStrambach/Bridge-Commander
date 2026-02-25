@@ -7,10 +7,12 @@ struct MergeStatus {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isMergeInProgress = false
+		var isLoading = false
 	}
 
 	enum Action: Sendable {
 		case finishMergeButtonTapped
+		case finishMergeCompleted(Result<Void, Error>)
 		case loadStatusResponse(Bool)
 		case delegate(Delegate)
 
@@ -27,9 +29,14 @@ struct MergeStatus {
 				return .none
 
 			case .finishMergeButtonTapped:
+				state.isLoading = true
 				return .run { [path = state.repositoryPath] send in
-					await send(.delegate(.operationCompleted(Result { try await GitMergeHelper.finishMerge(at: path) })))
+					await send(.finishMergeCompleted(Result { try await GitMergeHelper.finishMerge(at: path) }))
 				}
+
+			case let .finishMergeCompleted(result):
+				state.isLoading = false
+				return .send(.delegate(.operationCompleted(result)))
 
 			case .delegate:
 				return .none
