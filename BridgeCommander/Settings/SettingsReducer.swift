@@ -23,6 +23,9 @@ struct SettingsReducer {
 		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 
+		@Shared(.deleteDerivedDataOnWorktreeDelete)
+		var deleteDerivedDataOnWorktreeDelete = true
+
 		@Shared(.tuistCacheType)
 		var tuistCacheType = TuistCacheType.externalOnly
 
@@ -46,6 +49,7 @@ struct SettingsReducer {
 		case setTicketIdRegex(String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
+		case setDeleteDerivedDataOnWorktreeDelete(Bool)
 		case setTuistCacheType(TuistCacheType)
 		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
@@ -84,6 +88,10 @@ struct SettingsReducer {
 
 			case let .setOpenXcodeAfterGenerate(shouldOpen):
 				state.$openXcodeAfterGenerate.withLock { $0 = shouldOpen }
+				return .none
+
+			case let .setDeleteDerivedDataOnWorktreeDelete(value):
+				state.$deleteDerivedDataOnWorktreeDelete.withLock { $0 = value }
 				return .none
 
 			case let .setTuistCacheType(cacheType):

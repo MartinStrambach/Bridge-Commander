@@ -28,6 +28,7 @@ struct SettingsView: View {
 					claudeCodeBehaviorSection
 				}
 				androidStudioPathSection
+				worktreeOptionsSection
 			}
 			.padding()
 		}
@@ -234,6 +235,26 @@ struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var worktreeOptionsSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Worktree Options")
+				.font(.headline)
+
+			Toggle(
+				"Delete Xcode DerivedData when removing worktree",
+				isOn: $store.deleteDerivedDataOnWorktreeDelete
+					.sending(\.setDeleteDerivedDataOnWorktreeDelete)
+			)
+
+			Text("Automatically deletes the associated Xcode DerivedData folder when a worktree is removed.")
+				.font(.caption)
+				.foregroundColor(.secondary)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))

@@ -1,35 +1,9 @@
 import ComposableArchitecture
 import SwiftUI
 
-struct DeleteWorktreeButtonView: View {
+struct DeleteWorktreeConfirmationView: View {
 	@Bindable
-	var store: StoreOf<DeleteWorktreeButtonReducer>
-
-	var body: some View {
-		Group {
-			if store.isRemoving {
-				ProgressView()
-					.scaleEffect(0.5)
-			}
-			else {
-				ActionButton(
-					icon: .systemImage("trash"),
-					tooltip: "Remove worktree",
-					color: .red,
-					action: { store.send(.showConfirmation) }
-				)
-			}
-		}
-		.sheet(isPresented: $store.showingConfirmationSheet) {
-			DeleteWorktreeConfirmationView(store: store)
-		}
-		.alert($store.scope(state: \.errorAlert, action: \.errorAlert))
-	}
-}
-
-private struct DeleteWorktreeConfirmationView: View {
-	@Bindable
-	var store: StoreOf<DeleteWorktreeButtonReducer>
+	var store: StoreOf<DeleteWorktreeConfirmationReducer>
 
 	var body: some View {
 		VStack(spacing: 20) {
@@ -69,13 +43,13 @@ private struct DeleteWorktreeConfirmationView: View {
 
 			HStack(spacing: 12) {
 				Button("Cancel") {
-					store.send(.cancelRemoval)
+					store.send(.cancelTapped)
 				}
 				.keyboardShortcut(.cancelAction)
 				.buttonStyle(.bordered)
 
 				Button("Remove", role: .destructive) {
-					store.send(.confirmRemoval)
+					store.send(.confirmTapped(forceRemoval: store.forceRemoval))
 				}
 				.keyboardShortcut(.defaultAction)
 				.buttonStyle(.borderedProminent)

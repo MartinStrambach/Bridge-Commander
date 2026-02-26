@@ -35,7 +35,7 @@ struct BannerView: View {
 
 			if isLoading {
 				ProgressView()
-					.scaleEffect(0.7)
+					.scaleEffect(0.5)
 			}
 			else if let actionLabel, let onAction {
 				Button(action: onAction) {

@@ -35,6 +35,10 @@ extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var openXcodeAfterGenerate: Self {
 		appStorage("openXcodeAfterGenerate")
 	}
+
+	static var deleteDerivedDataOnWorktreeDelete: Self {
+		appStorage("deleteDerivedDataOnWorktreeDelete")
+	}
 }
 
 extension SharedReaderKey where Self == AppStorageKey<TuistCacheType> {
