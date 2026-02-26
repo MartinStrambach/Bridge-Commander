@@ -16,6 +16,15 @@ struct RepositoryDetailView: View {
 
 				Spacer()
 
+				if !store.staged.files.isEmpty {
+					Button {
+						store.send(.commitButtonTapped)
+					} label: {
+						Label("Commit", systemImage: "checkmark.circle")
+					}
+					.help("Commit staged changes")
+				}
+
 				Button {
 					store.send(.openTerminalButtonTapped)
 				} label: {
@@ -68,6 +77,9 @@ struct RepositoryDetailView: View {
 		}
 		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
+		}
+		.sheet(item: $store.scope(state: \.commitSheet, action: \.commitSheet)) { commitStore in
+			CommitView(store: commitStore)
 		}
 	}
 }

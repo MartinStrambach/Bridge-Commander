@@ -19,6 +19,7 @@ nonisolated struct GitStagingClient: Sendable {
 	var discardFileChanges: @Sendable (_ at: String, _ filePaths: [String]) async throws -> Void
 	var deleteUntrackedFiles: @Sendable (_ at: String, _ filePaths: [String]) async throws -> Void
 	var deleteConflictedFiles: @Sendable (_ at: String, _ filePaths: [String]) async throws -> Void
+	var commit: @Sendable (_ at: String, _ message: String) async throws -> Void
 }
 
 // MARK: - File Changes Result
@@ -61,6 +62,9 @@ extension GitStagingClient: DependencyKey {
 		},
 		deleteConflictedFiles: { at, filePaths in
 			try await GitStagingHelper.deleteConflictedFiles(at: at, filePaths: filePaths)
+		},
+		commit: { at, message in
+			try await GitStagingHelper.commit(at: at, message: message)
 		}
 	)
 }

@@ -13,6 +13,7 @@ enum GitError: LocalizedError, Equatable, Sendable {
 	case worktreeRemovalFailed(String)
 	case stagingFailed(String)
 	case projectGenerationFailed(String)
+	case commitFailed(String)
 	case fileOperationFailed(String)
 
 	var errorDescription: String? {
@@ -39,6 +40,8 @@ enum GitError: LocalizedError, Equatable, Sendable {
 			"Operation failed: \(message)"
 		case let .projectGenerationFailed(message):
 			"Failed to generate project: \(message)"
+		case let .commitFailed(message):
+			"Failed to commit: \(message)"
 		case let .fileOperationFailed(message):
 			"File operation failed: \(message)"
 		}

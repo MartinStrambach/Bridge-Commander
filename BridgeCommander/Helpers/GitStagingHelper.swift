@@ -167,6 +167,16 @@ nonisolated enum GitStagingHelper {
 		}
 	}
 
+	// MARK: - Commit
+
+	static func commit(at path: String, message: String) async throws {
+		let result = await ProcessRunner.runGit(arguments: ["commit", "-m", message], at: path)
+		guard result.success else {
+			let errMsg = result.errorString.isEmpty ? result.outputString : result.errorString
+			throw GitError.commitFailed(errMsg)
+		}
+	}
+
 	// MARK: - Delete Untracked Files
 
 	static func deleteUntrackedFiles(at repositoryPath: String, filePaths: [String]) async throws {

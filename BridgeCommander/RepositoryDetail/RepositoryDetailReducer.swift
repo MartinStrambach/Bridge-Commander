@@ -12,6 +12,8 @@ struct RepositoryDetail {
 		var unstaged: FileChangeList.State
 		@Presents
 		var alert: GitAlertReducer.State?
+		@Presents
+		var commitSheet: CommitReducer.State?
 
 		var lastActionedFileId: String?
 		var lastActionedFileIndex: Int?
@@ -33,6 +35,8 @@ struct RepositoryDetail {
 	enum Action: Sendable {
 		case alert(PresentationAction<GitAlertReducer.Action>)
 		case cancelButtonTapped
+		case commitButtonTapped
+		case commitSheet(PresentationAction<CommitReducer.Action>)
 		case deleteFilesCompleted([FileChange])
 		case discardFilesCompleted([FileChange])
 		case diffViewer(FileDiffViewer.Action)
@@ -271,6 +275,13 @@ struct RepositoryDetail {
 				)
 				return .none
 
+			case .commitButtonTapped:
+				state.commitSheet = CommitReducer.State(repositoryPath: state.repositoryPath)
+				return .none
+
+			case .commitSheet(.presented(.delegate(.commitSucceeded))):
+				return .send(.operationCompleted(.success(())))
+
 			case .cancelButtonTapped:
 				return .run { _ in await dismiss() }
 
@@ -285,6 +296,9 @@ struct RepositoryDetail {
 		}
 		.ifLet(\.$alert, action: \.alert) {
 			GitAlertReducer()
+		}
+		.ifLet(\.$commitSheet, action: \.commitSheet) {
+			CommitReducer()
 		}
 	}
 
