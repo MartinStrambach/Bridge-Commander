@@ -3,9 +3,11 @@ import SwiftUI
 struct HunkView: View {
 	let hunk: DiffHunk
 	let isStaged: Bool
+	let selectedLineIDs: Set<DiffLine.ID>
 	let onStage: () -> Void
 	let onUnstage: () -> Void
 	let onDiscard: () -> Void
+	let onLineTap: (DiffLine, EventModifiers) -> Void
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 0) {
@@ -42,7 +44,9 @@ struct HunkView: View {
 				DiffLineView(
 					line: line,
 					oldLineNumber: lineNumbers.oldLine,
-					newLineNumber: lineNumbers.newLine
+					newLineNumber: lineNumbers.newLine,
+					isSelected: selectedLineIDs.contains(line.id),
+					onTap: { modifiers in onLineTap(line, modifiers) }
 				)
 			}
 		}

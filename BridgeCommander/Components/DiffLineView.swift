@@ -4,6 +4,8 @@ struct DiffLineView: View {
 	let line: DiffLine
 	let oldLineNumber: Int?
 	let newLineNumber: Int?
+	let isSelected: Bool
+	let onTap: (EventModifiers) -> Void
 
 	private var linePrefix: String {
 		switch line.type {
@@ -66,6 +68,15 @@ struct DiffLineView: View {
 			.padding(.vertical, 1)
 			.padding(.trailing, 8)
 			.background(backgroundColor)
+		}
+		.background(isSelected ? Color.accentColor.opacity(0.35) : Color.clear)
+		.contentShape(Rectangle())
+		.onTapGesture {
+			let modifiers = NSApp.currentEvent?.modifierFlags ?? []
+			var swiftModifiers: EventModifiers = []
+			if modifiers.contains(.shift) { swiftModifiers.insert(.shift) }
+			if modifiers.contains(.command) { swiftModifiers.insert(.command) }
+			onTap(swiftModifiers)
 		}
 		.textSelection(.enabled)
 	}
