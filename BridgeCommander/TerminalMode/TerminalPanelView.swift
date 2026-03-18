@@ -11,6 +11,7 @@ struct TerminalPanelView: View {
     let onStatusChange: @Sendable (String, TerminalSessionStatus) -> Void
     let onRetry: (String) -> Void
     let onKill: () -> Void
+    @State private var showKillConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,12 +89,19 @@ struct TerminalPanelView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
 
-            Button(action: onKill) {
+            Button(action: { showKillConfirmation = true }) {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .tint(.red)
             .help("Kill terminal")
+            .confirmationDialog("Kill Terminal?", isPresented: $showKillConfirmation) {
+                Button("Kill Terminal", role: .destructive, action: onKill)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will terminate the terminal session.")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

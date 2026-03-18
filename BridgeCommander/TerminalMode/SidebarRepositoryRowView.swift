@@ -8,6 +8,7 @@ struct SidebarRepositoryRowView: View {
     let sessionStatus: TerminalSessionStatus?
     let onTap: () -> Void
     var onKill: (() -> Void)? = nil
+    @State private var showKillConfirmation = false
 
     var hasTerminalSession: Bool { sessionStatus != nil }
 
@@ -59,9 +60,19 @@ struct SidebarRepositoryRowView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            if hasTerminalSession, let onKill {
+            if hasTerminalSession, onKill != nil {
+                Button("Kill Terminal", role: .destructive) {
+                    showKillConfirmation = true
+                }
+            }
+        }
+        .confirmationDialog("Kill Terminal?", isPresented: $showKillConfirmation) {
+            if let onKill {
                 Button("Kill Terminal", role: .destructive, action: onKill)
             }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will terminate the terminal session.")
         }
     }
 }
