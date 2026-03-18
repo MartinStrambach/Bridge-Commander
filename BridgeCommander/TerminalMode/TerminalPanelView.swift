@@ -94,25 +94,20 @@ struct TerminalPanelView: View {
 
     // MARK: - Terminal Content
 
-    // All session terminal views are kept in the hierarchy simultaneously.
-    // Only the active one is visible. This prevents NSView detach/reattach
-    // on every repo switch, preserving each terminal's scroll history and
-    // PTY process across switches and across hide/show cycles.
+    // A single NSView container hosts all terminal sessions as direct subviews
+    // and shows/hides them via isHidden. This keeps every LocalProcessTerminalView
+    // in a stable position in the view hierarchy across repo switches and
+    // hide/show cycles, preventing the zero-frame setFrameSize that would
+    // send a spurious SIGWINCH and cause zsh to clear visible terminal output.
     @ViewBuilder
     private var terminalContent: some View {
         ZStack {
-            ForEach(sessions) { session in
-                switch session.status {
-                case .launching, .active:
-                    TerminalViewRepresentable(
-                        terminalView: terminalViewStore.view(for: session, onStatusChange: onStatusChange)
-                    )
-                    .opacity(session.repositoryPath == store.activeRepositoryPath ? 1 : 0)
-                    .allowsHitTesting(session.repositoryPath == store.activeRepositoryPath)
-                case .failed:
-                    EmptyView()
-                }
-            }
+            TerminalContainerRepresentable(
+                terminalViewStore: terminalViewStore,
+                sessions: sessions,
+                activeRepositoryPath: store.activeRepositoryPath,
+                onStatusChange: onStatusChange
+            )
 
             if let activePath = store.activeRepositoryPath,
                let session = sessions[id: activePath],
