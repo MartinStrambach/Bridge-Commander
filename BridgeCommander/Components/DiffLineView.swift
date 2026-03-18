@@ -67,5 +67,6 @@ struct DiffLineView: View {
 			.padding(.trailing, 8)
 			.background(backgroundColor)
 		}
+		.textSelection(.enabled)
 	}
 }
