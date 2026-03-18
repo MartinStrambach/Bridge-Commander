@@ -6,9 +6,8 @@ struct TerminalLayoutView: View {
     @Bindable var store: StoreOf<TerminalLayoutReducer>
     let repositories: IdentifiedArrayOf<RepositoryRowReducer.State>
     let sessions: IdentifiedArrayOf<TerminalSession>
+    let terminalViewStore: TerminalViewStore
     let onStatusChange: @Sendable (String, TerminalSessionStatus) -> Void
-
-    @State private var terminalViewStore = TerminalViewStore()
 
     var body: some View {
         HStack(spacing: 0) {

@@ -94,29 +94,39 @@ struct TerminalPanelView: View {
 
     // MARK: - Terminal Content
 
+    // All session terminal views are kept in the hierarchy simultaneously.
+    // Only the active one is visible. This prevents NSView detach/reattach
+    // on every repo switch, preserving each terminal's scroll history and
+    // PTY process across switches and across hide/show cycles.
     @ViewBuilder
     private var terminalContent: some View {
-        if let activePath = store.activeRepositoryPath {
-            if let session = sessions[id: activePath] {
+        ZStack {
+            ForEach(sessions) { session in
                 switch session.status {
                 case .launching, .active:
                     TerminalViewRepresentable(
                         terminalView: terminalViewStore.view(for: session, onStatusChange: onStatusChange)
                     )
-                    .id(activePath)
-
-                case let .failed(message):
-                    terminalErrorView(message: message, repositoryPath: activePath)
+                    .opacity(session.repositoryPath == store.activeRepositoryPath ? 1 : 0)
+                    .allowsHitTesting(session.repositoryPath == store.activeRepositoryPath)
+                case .failed:
+                    EmptyView()
                 }
-            } else {
-                Color(NSColor.textBackgroundColor)
             }
-        } else {
-            VStack {
-                Spacer()
-                Text("Select a repository from the sidebar")
-                    .foregroundColor(.secondary)
-                Spacer()
+
+            if let activePath = store.activeRepositoryPath,
+               let session = sessions[id: activePath],
+               case let .failed(message) = session.status {
+                terminalErrorView(message: message, repositoryPath: activePath)
+            }
+
+            if store.activeRepositoryPath == nil {
+                VStack {
+                    Spacer()
+                    Text("Select a repository from the sidebar")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
             }
         }
     }

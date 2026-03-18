@@ -4,6 +4,7 @@ import SwiftUI
 @ViewAction(for: RepositoryListReducer.self)
 struct RepositoryListView: View {
 	let store: StoreOf<RepositoryListReducer>
+	@State private var terminalViewStore = TerminalViewStore()
 
 	private var sortModeIcon: String {
 		switch store.sortMode {
@@ -37,6 +38,7 @@ struct RepositoryListView: View {
 					store: terminalLayoutStore,
 					repositories: store.repositories,
 					sessions: store.terminalSessions,
+					terminalViewStore: terminalViewStore,
 					onStatusChange: { path, status in
 						MainActor.assumeIsolated {
 							_ = store.send(.terminalLayout(.sessionStatusChanged(repositoryPath: path, status: status)))
