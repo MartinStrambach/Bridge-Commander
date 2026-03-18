@@ -226,6 +226,17 @@ struct RepositoryListReducer {
 				state.terminalLayout = nil
 				return .none
 
+			case let .terminalLayout(.killSession(repositoryPath)):
+				state.terminalSessions.remove(id: repositoryPath)
+				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
+					if let next = state.terminalSessions.first {
+						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
+					} else {
+						state.terminalLayout = nil
+					}
+				}
+				return .none
+
 			case let .terminalLayout(.sessionStatusChanged(repositoryPath, status)):
 				state.terminalSessions[id: repositoryPath]?.status = status
 				return .none

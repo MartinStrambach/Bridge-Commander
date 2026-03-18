@@ -7,6 +7,9 @@ struct SidebarRepositoryRowView: View {
     let isActive: Bool
     let sessionStatus: TerminalSessionStatus?
     let onTap: () -> Void
+    var onKill: (() -> Void)? = nil
+
+    var hasTerminalSession: Bool { sessionStatus != nil }
 
     var body: some View {
         Button(action: onTap) {
@@ -55,5 +58,10 @@ struct SidebarRepositoryRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if hasTerminalSession, let onKill {
+                Button("Kill Terminal", role: .destructive, action: onKill)
+            }
+        }
     }
 }

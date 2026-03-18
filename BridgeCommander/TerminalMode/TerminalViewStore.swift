@@ -45,6 +45,15 @@ final class TerminalViewStore {
         views.removeValue(forKey: repositoryPath)
     }
 
+    func killSession(for repositoryPath: String) {
+        if let view = views[repositoryPath] {
+            view.processDelegate = nil   // prevent spurious .failed callback
+            view.removeFromSuperview()   // remove from NSView container
+        }
+        views.removeValue(forKey: repositoryPath)
+        // Process gets SIGHUP when PTY closes on deallocation
+    }
+
     func killAll() {
         // Removing references lets ARC release LocalProcessTerminalView instances,
         // whose deinit cleans up the underlying PTY. The OS also reclaims child

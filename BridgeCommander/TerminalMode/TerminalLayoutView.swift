@@ -25,6 +25,11 @@ struct TerminalLayoutView: View {
                 onRetry: { repositoryPath in
                     terminalViewStore.removeSession(for: repositoryPath)
                     store.send(.sessionStatusChanged(repositoryPath: repositoryPath, status: .launching))
+                },
+                onKill: {
+                    guard let path = store.activeRepositoryPath else { return }
+                    terminalViewStore.killSession(for: path)
+                    store.send(.killSession(repositoryPath: path))
                 }
             )
         }
@@ -52,6 +57,10 @@ struct TerminalLayoutView: View {
                             sessionStatus: sessions[id: rowState.path]?.status,
                             onTap: {
                                 store.send(.selectRepo(repositoryPath: rowState.path))
+                            },
+                            onKill: {
+                                terminalViewStore.killSession(for: rowState.path)
+                                store.send(.killSession(repositoryPath: rowState.path))
                             }
                         )
                         .padding(.horizontal, 4)

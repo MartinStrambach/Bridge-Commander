@@ -17,6 +17,7 @@ struct TerminalLayoutReducer {
         case stagingButtonTapped(repositoryPath: String)
         case stagingDetail(PresentationAction<RepositoryDetail.Action>)
         case sessionStatusChanged(repositoryPath: String, status: TerminalSessionStatus)
+        case killSession(repositoryPath: String)
     }
 
     var body: some Reducer<State, Action> {
@@ -41,6 +42,10 @@ struct TerminalLayoutReducer {
                 return .none
 
             case .sessionStatusChanged:
+                // Forwarded up to RepositoryListReducer
+                return .none
+
+            case .killSession:
                 // Forwarded up to RepositoryListReducer
                 return .none
             }

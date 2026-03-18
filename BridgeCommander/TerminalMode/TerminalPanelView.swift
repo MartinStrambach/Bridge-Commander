@@ -10,6 +10,7 @@ struct TerminalPanelView: View {
     let sessions: IdentifiedArrayOf<TerminalSession>
     let onStatusChange: @Sendable (String, TerminalSessionStatus) -> Void
     let onRetry: (String) -> Void
+    let onKill: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,6 +87,13 @@ struct TerminalPanelView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+
+            Button(action: onKill) {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Kill terminal")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
