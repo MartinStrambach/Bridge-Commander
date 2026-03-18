@@ -103,6 +103,7 @@ struct TerminalPanelView: View {
                     TerminalViewRepresentable(
                         terminalView: terminalViewStore.view(for: session, onStatusChange: onStatusChange)
                     )
+                    .id(activePath)
 
                 case let .failed(message):
                     terminalErrorView(message: message, repositoryPath: activePath)
