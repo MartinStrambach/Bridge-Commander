@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 93351C4A2ECF9BAE006D4609 /* ComposableArchitecture */; };
+		933DE50A2F6AB3920045D622 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 933DE5092F6AB3920045D622 /* SwiftTerm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				933DE50A2F6AB3920045D622 /* SwiftTerm in Frameworks */,
 				93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -71,6 +73,7 @@
 			name = BridgeCommander;
 			packageProductDependencies = (
 				93351C4A2ECF9BAE006D4609 /* ComposableArchitecture */,
+				933DE5092F6AB3920045D622 /* SwiftTerm */,
 			);
 			productName = BridgeCommander;
 			productReference = 93351BB42ECD3F1A006D4609 /* BridgeCommander.app */;
@@ -102,6 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				93351C492ECF9BAD006D4609 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 93351BB52ECD3F1A006D4609 /* Products */;
@@ -358,6 +362,14 @@
 				minimumVersion = 1.23.1;
 			};
 		};
+		933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = exactVersion;
+				version = 1.12.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -365,6 +377,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 93351C492ECF9BAD006D4609 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
+		};
+		933DE5092F6AB3920045D622 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
