@@ -11,14 +11,13 @@ nonisolated enum GitWorktreeRemover {
 	static func removeWorktree(name: String, path: String, force: Bool = false) async throws {
 		let forceFlag = force ? "--force" : ""
 		let script = """
-		branch="\(name)"
-		folder="../${branch//\\//_}"
+		folder="\(path)"
 
-		if git worktree list | grep -q "$folder"; then
+		if git worktree list | grep -qF "$folder"; then
 		  echo "→ Removing worktree at: $folder"
 		  git worktree remove \(forceFlag) "$folder"
 		else
-		  echo "❌ No worktree found for: $branch ($folder)" >&2
+		  echo "❌ No worktree found at: $folder" >&2
 		  exit 1
 		fi
 		"""
