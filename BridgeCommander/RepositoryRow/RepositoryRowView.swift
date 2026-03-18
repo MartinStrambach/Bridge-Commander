@@ -5,6 +5,8 @@ struct RepositoryRowView: View {
 	@Bindable
 	var store: StoreOf<RepositoryRowReducer>
 
+	var hasTerminalSession: Bool = false
+
 	private var backgroundColorForState: Color {
 		if let ticketState = store.ticketState {
 			switch ticketState {
@@ -29,6 +31,11 @@ struct RepositoryRowView: View {
 
 	var body: some View {
 		HStack(alignment: .center, spacing: 16) {
+			if hasTerminalSession {
+				Circle()
+					.fill(Color.green)
+					.frame(width: 6, height: 6)
+			}
 			RepositoryIcon(
 				isWorktree: store.isWorktree,
 				isMergeInProgress: store.gitActionsMenu.isMergeInProgress

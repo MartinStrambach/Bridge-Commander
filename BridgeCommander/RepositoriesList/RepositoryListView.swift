@@ -197,7 +197,10 @@ struct RepositoryListView: View {
 
 	private var repositoryListView: some View {
 		List(store.scope(state: \.repositories, action: \.repositories)) { rowStore in
-			RepositoryRowView(store: rowStore)
+			RepositoryRowView(
+				store: rowStore,
+				hasTerminalSession: store.terminalSessions[id: rowStore.path] != nil
+			)
 		}
 		.listStyle(.plain)
 	}
