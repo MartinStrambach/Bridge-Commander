@@ -18,6 +18,9 @@ struct RepositoryListReducer {
 
 		fileprivate(set) var sortMode: SortMode = .state
 
+		var terminalSessions: IdentifiedArrayOf<TerminalSession> = []
+		var terminalLayout: TerminalLayoutReducer.State?
+
 		@Shared(.periodicRefreshInterval)
 		fileprivate(set) var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
@@ -40,6 +43,7 @@ struct RepositoryListReducer {
 		case startPeriodicRefresh
 		case startScan
 		case stopPeriodicRefresh
+		case terminalLayout(TerminalLayoutReducer.Action)
 
 		enum ViewAction: Sendable {
 			case clearButtonTapped
@@ -109,6 +113,8 @@ struct RepositoryListReducer {
 			case .view(.dismissPermissionWarningButtonTapped):
 				state.isPermissionWarningDismissed = true
 				return .none
+
+			// NOTE: .openTerminalForRepo intercept will be added after Task 5 adds the action to RepositoryRowReducer
 
 			case .repositories(.element(_, .worktreeCreated)),
 			     .repositories(.element(_, .worktreeDeleted)),
@@ -200,12 +206,33 @@ struct RepositoryListReducer {
 				}
 				return .none
 
+			case let .terminalLayout(.selectRepo(repositoryPath)):
+				// Create session if not yet open
+				if state.terminalSessions[id: repositoryPath] == nil {
+					state.terminalSessions.append(TerminalSession(repositoryPath: repositoryPath))
+				}
+				return .none
+
+			case .terminalLayout(.hideTerminalMode):
+				state.terminalLayout = nil
+				return .none
+
+			case let .terminalLayout(.sessionStatusChanged(repositoryPath, status)):
+				state.terminalSessions[id: repositoryPath]?.status = status
+				return .none
+
+			case .terminalLayout:
+				return .none
+
 			case .repositories:
 				return .none
 			}
 		}
 		.forEach(\.repositories, action: \.repositories) {
 			RepositoryRowReducer()
+		}
+		.ifLet(\.terminalLayout, action: \.terminalLayout) {
+			TerminalLayoutReducer()
 		}
 	}
 
