@@ -99,6 +99,7 @@ struct RepositoryRowReducer {
 		case didFetchRemoteBranch(Bool)
 		case didFetchYouTrack(IssueDetails)
 		case openRepositoryDetail
+		case openTerminalForRepo
 		case repositoryDetail(PresentationAction<RepositoryDetail.Action>)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
@@ -218,6 +219,9 @@ struct RepositoryRowReducer {
 				if case .didCreateSuccessfully = action {
 					return .send(.worktreeCreated)
 				}
+				return .none
+
+			case .openTerminalForRepo:
 				return .none
 
 			case let .gitActionsMenu(action):

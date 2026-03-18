@@ -44,7 +44,7 @@ struct RepositoryRowView: View {
 		.simultaneousGesture(
 			TapGesture(count: 2)
 				.onEnded {
-					store.send(.openRepositoryDetail)
+					store.send(.openTerminalForRepo)
 				}
 		)
 		.task {

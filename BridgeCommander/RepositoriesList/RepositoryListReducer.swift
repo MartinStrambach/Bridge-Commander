@@ -114,7 +114,16 @@ struct RepositoryListReducer {
 				state.isPermissionWarningDismissed = true
 				return .none
 
-			// NOTE: .openTerminalForRepo intercept will be added after Task 5 adds the action to RepositoryRowReducer
+			case let .repositories(.element(id: repositoryPath, action: .openTerminalForRepo)):
+				if state.terminalSessions[id: repositoryPath] == nil {
+					state.terminalSessions.append(TerminalSession(repositoryPath: repositoryPath))
+				}
+				if state.terminalLayout == nil {
+					state.terminalLayout = TerminalLayoutReducer.State(activeRepositoryPath: repositoryPath)
+				} else {
+					state.terminalLayout?.activeRepositoryPath = repositoryPath
+				}
+				return .none
 
 			case .repositories(.element(_, .worktreeCreated)),
 			     .repositories(.element(_, .worktreeDeleted)),
