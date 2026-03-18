@@ -89,6 +89,11 @@ struct TerminalLayoutView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(NSColor.controlBackgroundColor))
+        .background {
+            Button("") { store.send(.hideTerminalMode) }
+                .keyboardShortcut("§", modifiers: .command)
+                .hidden()
+        }
     }
 
     // MARK: - Helpers
