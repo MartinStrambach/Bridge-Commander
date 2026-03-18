@@ -241,8 +241,8 @@ struct RepositoryListReducer {
 
 			case let .terminalLayout(.newTabRequested):
 				guard let path = state.terminalLayout?.activeRepositoryPath else { return .none }
-				let existingCount = state.terminalSessions.filter { $0.repositoryPath == path }.count
-				let session = TerminalSession(repositoryPath: path, tabIndex: existingCount + 1)
+				let maxIndex = state.terminalSessions.filter { $0.repositoryPath == path }.map(\.tabIndex).max() ?? 0
+				let session = TerminalSession(repositoryPath: path, tabIndex: maxIndex + 1)
 				state.terminalSessions.append(session)
 				state.terminalLayout?.activeSessionId = session.id
 				return .none
