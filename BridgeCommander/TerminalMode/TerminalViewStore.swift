@@ -20,21 +20,20 @@ final class TerminalViewStore {
 
         let terminalView = LocalProcessTerminalView(frame: .zero)
 
-        // Escape single quotes in path for shell safety
-        let escapedPath = session.repositoryPath.replacingOccurrences(of: "'", with: "'\\''")
-
         terminalView.processDelegate = TerminalProcessDelegate(
             repositoryPath: session.repositoryPath,
-            onConnected: { onStatusChange(session.repositoryPath, .active) },
             onFailed: { message in onStatusChange(session.repositoryPath, .failed(message)) }
         )
 
         terminalView.startProcess(
             executable: "/bin/zsh",
-            args: ["-c", "cd '\(escapedPath)' && exec zsh"],
+            args: [],
             environment: nil,
-            execName: "zsh"
+            execName: nil,
+            currentDirectory: session.repositoryPath
         )
+
+        onStatusChange(session.repositoryPath, .active)
 
         views[session.repositoryPath] = terminalView
         return terminalView
@@ -56,30 +55,20 @@ final class TerminalViewStore {
 
 final class TerminalProcessDelegate: LocalProcessTerminalViewDelegate {
     private let repositoryPath: String
-    private let onConnected: () -> Void
-    private let onFailed: (String) -> Void
-    private var hasConnected = false
+    private let onFailed: @Sendable (String) -> Void
 
-    init(repositoryPath: String, onConnected: @escaping () -> Void, onFailed: @escaping (String) -> Void) {
+    init(repositoryPath: String, onFailed: @escaping @Sendable (String) -> Void) {
         self.repositoryPath = repositoryPath
-        self.onConnected = onConnected
         self.onFailed = onFailed
     }
 
     func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
 
-    func setTerminalTitle(source: LocalProcessTerminalView, title: String) {
-        if !hasConnected {
-            hasConnected = true
-            DispatchQueue.main.async { self.onConnected() }
-        }
-    }
+    func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
 
     func processTerminated(source: TerminalView, exitCode: Int32?) {
-        if !hasConnected {
-            DispatchQueue.main.async {
-                self.onFailed("Process exited with code \(exitCode ?? -1)")
-            }
+        DispatchQueue.main.async {
+            self.onFailed("Terminal process exited (code \(exitCode ?? -1))")
         }
     }
 
