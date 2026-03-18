@@ -116,10 +116,11 @@ struct TerminalPanelView: View {
                 Button(action: onNewTab) {
                     Image(systemName: "plus")
                         .font(.system(size: 11))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
                 .help("New Tab")
                 .keyboardShortcut("t", modifiers: .command)
 
