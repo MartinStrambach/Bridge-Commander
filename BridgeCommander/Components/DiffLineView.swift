@@ -78,6 +78,5 @@ struct DiffLineView: View {
 			if modifiers.contains(.command) { swiftModifiers.insert(.command) }
 			onTap(swiftModifiers)
 		}
-		.textSelection(.enabled)
 	}
 }
