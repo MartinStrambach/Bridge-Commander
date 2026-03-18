@@ -28,30 +28,43 @@ struct RepositoryListView: View {
 	}
 
 	var body: some View {
-		VStack(spacing: 0) {
-			// Header
-			headerView
-
-			Divider()
-
-			if store.showPermissionDialog {
-				permissionWarningBanner
-			}
-
-			if store.repositories.isEmpty {
-				emptyStateView
-			}
-			else {
-				repositoryListView
+		Group {
+			if let terminalLayoutStore = store.scope(
+				state: \.terminalLayout,
+				action: \.terminalLayout
+			) {
+				TerminalLayoutView(
+					store: terminalLayoutStore,
+					repositories: store.repositories,
+					sessions: store.terminalSessions,
+					onStatusChange: { path, status in
+						MainActor.assumeIsolated {
+							_ = store.send(.terminalLayout(.sessionStatusChanged(repositoryPath: path, status: status)))
+						}
+					}
+				)
+				.windowMinSize(width: 800, height: 400)
+				.transition(.opacity.combined(with: .move(edge: .trailing)))
+			} else {
+				VStack(spacing: 0) {
+					headerView
+					Divider()
+					if store.showPermissionDialog {
+						permissionWarningBanner
+					}
+					if store.repositories.isEmpty {
+						emptyStateView
+					} else {
+						repositoryListView
+					}
+				}
+				.windowMinSize(width: 600, height: 400)
+				.transition(.opacity.combined(with: .move(edge: .leading)))
 			}
 		}
-		.frame(minWidth: 600, minHeight: 400)
-		.onAppear {
-			send(.onAppear)
-		}
-		.onDisappear {
-			send(.onDisappear)
-		}
+		.animation(.spring(duration: 0.3), value: store.terminalLayout != nil)
+		.onAppear { send(.onAppear) }
+		.onDisappear { send(.onDisappear) }
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
 			send(.periodicRefreshIntervalChanged)
 		}
