@@ -17,8 +17,8 @@ import SwiftTerm
 struct TerminalContainerRepresentable: NSViewRepresentable {
     let terminalViewStore: TerminalViewStore
     let sessions: IdentifiedArrayOf<TerminalSession>
-    let activeRepositoryPath: String?
-    let onStatusChange: @Sendable (String, TerminalSessionStatus) -> Void
+    let activeSessionId: UUID?
+    let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
     func makeNSView(context: Context) -> NSView {
         NSView(frame: .zero)
@@ -39,7 +39,7 @@ struct TerminalContainerRepresentable: NSViewRepresentable {
                         termView.trailingAnchor.constraint(equalTo: nsView.trailingAnchor),
                     ])
                 }
-                termView.isHidden = session.repositoryPath != activeRepositoryPath
+                termView.isHidden = session.id != activeSessionId
             case .failed:
                 break
             }

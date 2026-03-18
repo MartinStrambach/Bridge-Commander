@@ -39,9 +39,9 @@ struct RepositoryListView: View {
 					repositories: store.repositories,
 					sessions: store.terminalSessions,
 					terminalViewStore: terminalViewStore,
-					onStatusChange: { path, status in
+					onStatusChange: { sessionId, status in
 						MainActor.assumeIsolated {
-							_ = store.send(.terminalLayout(.sessionStatusChanged(repositoryPath: path, status: status)))
+							_ = store.send(.terminalLayout(.sessionStatusChanged(sessionId: sessionId, status: status)))
 						}
 					}
 				)
@@ -201,7 +201,7 @@ struct RepositoryListView: View {
 		List(store.scope(state: \.repositories, action: \.repositories)) { rowStore in
 			RepositoryRowView(
 				store: rowStore,
-				terminalSessionStatus: store.terminalSessions[id: rowStore.path]?.status
+				terminalSessionStatus: store.terminalSessions.first(where: { $0.repositoryPath == rowStore.path })?.status
 			)
 		}
 		.listStyle(.plain)

@@ -9,12 +9,15 @@ enum TerminalSessionStatus: Equatable {
 }
 
 struct TerminalSession: Identifiable, Equatable {
-    var id: String { repositoryPath }
+    let id: UUID
     let repositoryPath: String
+    var tabIndex: Int
     var status: TerminalSessionStatus
 
-    init(repositoryPath: String) {
+    init(repositoryPath: String, tabIndex: Int = 1) {
+        self.id = UUID()
         self.repositoryPath = repositoryPath
+        self.tabIndex = tabIndex
         self.status = .launching
     }
 }

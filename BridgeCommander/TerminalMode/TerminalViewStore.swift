@@ -7,27 +7,28 @@ import SwiftTerm
 @MainActor
 @Observable
 final class TerminalViewStore {
-	private var views: [String: ClaudeAwareTerminalView] = [:]
+	private var views: [UUID: ClaudeAwareTerminalView] = [:]
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one.
 	func view(
 		for session: TerminalSession,
-		onStatusChange: @escaping @Sendable (String, TerminalSessionStatus) -> Void
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) -> ClaudeAwareTerminalView {
-		if let existing = views[session.repositoryPath] {
+		if let existing = views[session.id] {
 			return existing
 		}
 
 		let terminalView = ClaudeAwareTerminalView(frame: .zero)
 		terminalView.repositoryPath = session.repositoryPath
+		terminalView.sessionId = session.id
 		terminalView.onStatusChange = onStatusChange
 		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.
 		// Users can toggle back to Meta mode with Option+Command+O if needed.
 		terminalView.optionAsMetaKey = false
 
+		let sessionId = session.id
 		terminalView.processDelegate = TerminalProcessDelegate(
-			repositoryPath: session.repositoryPath,
-			onFailed: { message in onStatusChange(session.repositoryPath, .failed(message)) }
+			onFailed: { message in onStatusChange(sessionId, .failed(message)) }
 		)
 
 		terminalView.startProcess(
@@ -38,23 +39,32 @@ final class TerminalViewStore {
 			currentDirectory: session.repositoryPath
 		)
 
-		onStatusChange(session.repositoryPath, .active)
+		onStatusChange(session.id, .active)
 
-		views[session.repositoryPath] = terminalView
+		views[session.id] = terminalView
 		return terminalView
 	}
 
-	func removeSession(for repositoryPath: String) {
-		views.removeValue(forKey: repositoryPath)
+	func removeSession(sessionId: UUID) {
+		views.removeValue(forKey: sessionId)
 	}
 
-	func killSession(for repositoryPath: String) {
-		if let view = views[repositoryPath] {
+	func killSession(sessionId: UUID) {
+		if let view = views[sessionId] {
 			view.processDelegate = nil // prevent spurious .failed callback
 			view.removeFromSuperview() // remove from NSView container
 		}
-		views.removeValue(forKey: repositoryPath)
+		views.removeValue(forKey: sessionId)
 		// Process gets SIGHUP when PTY closes on deallocation
+	}
+
+	func killAllSessions(for repositoryPath: String) {
+		let sessionIds = views.compactMap { (id, view) -> UUID? in
+			view.repositoryPath == repositoryPath ? id : nil
+		}
+		for id in sessionIds {
+			killSession(sessionId: id)
+		}
 	}
 
 	func killAll() {
@@ -73,7 +83,8 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	private static let claudePromptCharacter: Character = "❯" // U+276F
 
 	var repositoryPath: String = ""
-	var onStatusChange: (@Sendable (String, TerminalSessionStatus) -> Void)?
+	var sessionId: UUID = UUID()
+	var onStatusChange: (@Sendable (UUID, TerminalSessionStatus) -> Void)?
 
 	private var currentStatus: TerminalSessionStatus = .active
 	private var debounceWorkItem: DispatchWorkItem?
@@ -140,18 +151,16 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		}
 
 		currentStatus = status
-		onStatusChange?(repositoryPath, status)
+		onStatusChange?(sessionId, status)
 	}
 }
 
 // MARK: - TerminalProcessDelegate
 
 final class TerminalProcessDelegate: LocalProcessTerminalViewDelegate {
-	private let repositoryPath: String
 	private let onFailed: @Sendable (String) -> Void
 
-	init(repositoryPath: String, onFailed: @escaping @Sendable (String) -> Void) {
-		self.repositoryPath = repositoryPath
+	init(onFailed: @escaping @Sendable (String) -> Void) {
 		self.onFailed = onFailed
 	}
 

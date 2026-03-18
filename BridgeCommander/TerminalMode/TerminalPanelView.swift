@@ -8,15 +8,21 @@ struct TerminalPanelView: View {
     let activeRowState: RepositoryRowReducer.State?
     let terminalViewStore: TerminalViewStore
     let sessions: IdentifiedArrayOf<TerminalSession>
-    let onStatusChange: @Sendable (String, TerminalSessionStatus) -> Void
-    let onRetry: (String) -> Void
-    let onKill: () -> Void
-    @State private var showKillConfirmation = false
+    let activeSessionId: UUID?
+    let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+    let onRetry: (UUID) -> Void
+    let onNewTab: () -> Void
+    let onSelectTab: (UUID) -> Void
+    let onKillTab: (UUID) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
+            if store.activeRepositoryPath != nil {
+                tabBar
+                Divider()
+            }
             terminalContent
         }
         .sheet(
@@ -88,24 +94,74 @@ struct TerminalPanelView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-
-            Button(action: { showKillConfirmation = true }) {
-                Image(systemName: "xmark")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(.red)
-            .help("Kill terminal")
-            .confirmationDialog("Kill Terminal?", isPresented: $showKillConfirmation) {
-                Button("Kill Terminal", role: .destructive, action: onKill)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will terminate the terminal session.")
-            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    // MARK: - Tab Bar
+
+    private var tabBar: some View {
+        let repoSessions = store.activeRepositoryPath.map { path in
+            sessions.filter { $0.repositoryPath == path }
+        } ?? []
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(repoSessions) { session in
+                    tabPill(session: session, totalCount: repoSessions.count)
+                }
+
+                Button(action: onNewTab) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .help("New Tab")
+                .keyboardShortcut("t", modifiers: .command)
+
+                // Hidden buttons for Cmd+1…Cmd+9 tab switching
+                ForEach(Array(repoSessions.prefix(9).enumerated()), id: \.offset) { index, session in
+                    let key = KeyEquivalent(Character(String(index + 1)))
+                    Button("") { onSelectTab(session.id) }
+                        .keyboardShortcut(key, modifiers: .command)
+                        .hidden()
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+        }
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private func tabPill(session: TerminalSession, totalCount: Int) -> some View {
+        let isActive = session.id == activeSessionId
+        return HStack(spacing: 4) {
+            Text("Terminal \(session.tabIndex)")
+                .font(.caption)
+                .fontWeight(isActive ? .semibold : .regular)
+
+            if totalCount > 1 {
+                Button(action: { onKillTab(session.id) }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8))
+                        .padding(4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
+        .cornerRadius(6)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelectTab(session.id)
+        }
     }
 
     // MARK: - Terminal Content
@@ -121,14 +177,14 @@ struct TerminalPanelView: View {
             TerminalContainerRepresentable(
                 terminalViewStore: terminalViewStore,
                 sessions: sessions,
-                activeRepositoryPath: store.activeRepositoryPath,
+                activeSessionId: activeSessionId,
                 onStatusChange: onStatusChange
             )
 
-            if let activePath = store.activeRepositoryPath,
-               let session = sessions[id: activePath],
+            if let activeId = activeSessionId,
+               let session = sessions[id: activeId],
                case let .failed(message) = session.status {
-                terminalErrorView(message: message, repositoryPath: activePath)
+                terminalErrorView(message: message, sessionId: activeId)
             }
 
             if store.activeRepositoryPath == nil {
@@ -144,7 +200,7 @@ struct TerminalPanelView: View {
 
     // MARK: - Error View
 
-    private func terminalErrorView(message: String, repositoryPath: String) -> some View {
+    private func terminalErrorView(message: String, sessionId: UUID) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
@@ -155,7 +211,7 @@ struct TerminalPanelView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             Button("Retry") {
-                onRetry(repositoryPath)
+                onRetry(sessionId)
             }
             .buttonStyle(.borderedProminent)
         }

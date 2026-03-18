@@ -6,6 +6,7 @@ struct TerminalLayoutReducer {
     @ObservableState
     struct State: Equatable {
         var activeRepositoryPath: String?
+        var activeSessionId: UUID?
 
         @Presents
         var stagingDetail: RepositoryDetail.State?
@@ -16,8 +17,12 @@ struct TerminalLayoutReducer {
         case hideTerminalMode
         case stagingButtonTapped(repositoryPath: String)
         case stagingDetail(PresentationAction<RepositoryDetail.Action>)
-        case sessionStatusChanged(repositoryPath: String, status: TerminalSessionStatus)
-        case killSession(repositoryPath: String)
+        case sessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
+        case killTab(sessionId: UUID)
+        case killRepo(repositoryPath: String)
+        case newTabRequested
+        case selectTab(sessionId: UUID)
+        case retryTab(sessionId: UUID)
     }
 
     var body: some Reducer<State, Action> {
@@ -45,7 +50,23 @@ struct TerminalLayoutReducer {
                 // Forwarded up to RepositoryListReducer
                 return .none
 
-            case .killSession:
+            case .killTab:
+                // Forwarded up to RepositoryListReducer
+                return .none
+
+            case .killRepo:
+                // Forwarded up to RepositoryListReducer
+                return .none
+
+            case .newTabRequested:
+                // Forwarded up to RepositoryListReducer
+                return .none
+
+            case .selectTab:
+                // Forwarded up to RepositoryListReducer
+                return .none
+
+            case .retryTab:
                 // Forwarded up to RepositoryListReducer
                 return .none
             }

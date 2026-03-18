@@ -7,7 +7,7 @@ struct TerminalLayoutView: View {
     let repositories: IdentifiedArrayOf<RepositoryRowReducer.State>
     let sessions: IdentifiedArrayOf<TerminalSession>
     let terminalViewStore: TerminalViewStore
-    let onStatusChange: @Sendable (String, TerminalSessionStatus) -> Void
+    let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -21,15 +21,21 @@ struct TerminalLayoutView: View {
                 activeRowState: activeRowState,
                 terminalViewStore: terminalViewStore,
                 sessions: sessions,
+                activeSessionId: store.activeSessionId,
                 onStatusChange: onStatusChange,
-                onRetry: { repositoryPath in
-                    terminalViewStore.removeSession(for: repositoryPath)
-                    store.send(.sessionStatusChanged(repositoryPath: repositoryPath, status: .launching))
+                onRetry: { sessionId in
+                    terminalViewStore.killSession(sessionId: sessionId)
+                    store.send(.retryTab(sessionId: sessionId))
                 },
-                onKill: {
-                    guard let path = store.activeRepositoryPath else { return }
-                    terminalViewStore.killSession(for: path)
-                    store.send(.killSession(repositoryPath: path))
+                onNewTab: {
+                    store.send(.newTabRequested)
+                },
+                onSelectTab: { sessionId in
+                    store.send(.selectTab(sessionId: sessionId))
+                },
+                onKillTab: { sessionId in
+                    terminalViewStore.killSession(sessionId: sessionId)
+                    store.send(.killTab(sessionId: sessionId))
                 }
             )
         }
@@ -54,13 +60,13 @@ struct TerminalLayoutView: View {
                         SidebarRepositoryRowView(
                             rowState: rowState,
                             isActive: store.activeRepositoryPath == rowState.path,
-                            sessionStatus: sessions[id: rowState.path]?.status,
+                            sessionStatus: sessions.first(where: { $0.repositoryPath == rowState.path })?.status,
                             onTap: {
                                 store.send(.selectRepo(repositoryPath: rowState.path))
                             },
                             onKill: {
-                                terminalViewStore.killSession(for: rowState.path)
-                                store.send(.killSession(repositoryPath: rowState.path))
+                                terminalViewStore.killAllSessions(for: rowState.path)
+                                store.send(.killRepo(repositoryPath: rowState.path))
                             }
                         )
                         .padding(.horizontal, 4)

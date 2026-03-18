@@ -115,13 +115,22 @@ struct RepositoryListReducer {
 				return .none
 
 			case let .repositories(.element(id: repositoryPath, action: .openTerminalForRepo)):
-				if state.terminalSessions[id: repositoryPath] == nil {
-					state.terminalSessions.append(TerminalSession(repositoryPath: repositoryPath))
+				let existingSession = state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
+				let session: TerminalSession
+				if let existing = existingSession {
+					session = existing
+				} else {
+					session = TerminalSession(repositoryPath: repositoryPath)
+					state.terminalSessions.append(session)
 				}
 				if state.terminalLayout == nil {
-					state.terminalLayout = TerminalLayoutReducer.State(activeRepositoryPath: repositoryPath)
+					state.terminalLayout = TerminalLayoutReducer.State(
+						activeRepositoryPath: repositoryPath,
+						activeSessionId: session.id
+					)
 				} else {
 					state.terminalLayout?.activeRepositoryPath = repositoryPath
+					state.terminalLayout?.activeSessionId = session.id
 				}
 				return .none
 
@@ -216,9 +225,13 @@ struct RepositoryListReducer {
 				return .none
 
 			case let .terminalLayout(.selectRepo(repositoryPath)):
-				// Create session if not yet open
-				if state.terminalSessions[id: repositoryPath] == nil {
-					state.terminalSessions.append(TerminalSession(repositoryPath: repositoryPath))
+				// Create session if not yet open for this repo
+				if let existing = state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath }) {
+					state.terminalLayout?.activeSessionId = existing.id
+				} else {
+					let session = TerminalSession(repositoryPath: repositoryPath)
+					state.terminalSessions.append(session)
+					state.terminalLayout?.activeSessionId = session.id
 				}
 				return .none
 
@@ -226,19 +239,65 @@ struct RepositoryListReducer {
 				state.terminalLayout = nil
 				return .none
 
-			case let .terminalLayout(.killSession(repositoryPath)):
-				state.terminalSessions.remove(id: repositoryPath)
-				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
-					if let next = state.terminalSessions.first {
+			case let .terminalLayout(.newTabRequested):
+				guard let path = state.terminalLayout?.activeRepositoryPath else { return .none }
+				let existingCount = state.terminalSessions.filter { $0.repositoryPath == path }.count
+				let session = TerminalSession(repositoryPath: path, tabIndex: existingCount + 1)
+				state.terminalSessions.append(session)
+				state.terminalLayout?.activeSessionId = session.id
+				return .none
+
+			case let .terminalLayout(.selectTab(sessionId)):
+				if let session = state.terminalSessions[id: sessionId] {
+					state.terminalLayout?.activeRepositoryPath = session.repositoryPath
+					state.terminalLayout?.activeSessionId = sessionId
+				}
+				return .none
+
+			case let .terminalLayout(.killTab(sessionId)):
+				guard let session = state.terminalSessions[id: sessionId] else { return .none }
+				let repoPath = session.repositoryPath
+				state.terminalSessions.remove(id: sessionId)
+				// If we killed the active tab, switch to another session
+				if state.terminalLayout?.activeSessionId == sessionId {
+					if let next = state.terminalSessions.first(where: { $0.repositoryPath == repoPath }) {
+						state.terminalLayout?.activeSessionId = next.id
+					} else if let next = state.terminalSessions.first {
 						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
+						state.terminalLayout?.activeSessionId = next.id
 					} else {
 						state.terminalLayout = nil
 					}
 				}
 				return .none
 
-			case let .terminalLayout(.sessionStatusChanged(repositoryPath, status)):
-				state.terminalSessions[id: repositoryPath]?.status = status
+			case let .terminalLayout(.killRepo(repositoryPath)):
+				let toRemove = state.terminalSessions.filter { $0.repositoryPath == repositoryPath }.map { $0.id }
+				for id in toRemove {
+					state.terminalSessions.remove(id: id)
+				}
+				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
+					if let next = state.terminalSessions.first {
+						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
+						state.terminalLayout?.activeSessionId = next.id
+					} else {
+						state.terminalLayout = nil
+					}
+				}
+				return .none
+
+			case let .terminalLayout(.retryTab(sessionId)):
+				guard let old = state.terminalSessions[id: sessionId] else { return .none }
+				let repoPath = old.repositoryPath
+				let tabIndex = old.tabIndex
+				state.terminalSessions.remove(id: sessionId)
+				let newSession = TerminalSession(repositoryPath: repoPath, tabIndex: tabIndex)
+				state.terminalSessions.append(newSession)
+				state.terminalLayout?.activeSessionId = newSession.id
+				return .none
+
+			case let .terminalLayout(.sessionStatusChanged(sessionId, status)):
+				state.terminalSessions[id: sessionId]?.status = status
 				return .none
 
 			case .terminalLayout:
