@@ -54,6 +54,7 @@ struct SidebarRepositoryRowView: View {
             .padding(.vertical, 6)
             .background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
             .cornerRadius(6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
