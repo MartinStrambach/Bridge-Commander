@@ -7,18 +7,20 @@ import SwiftTerm
 @MainActor
 @Observable
 final class TerminalViewStore {
-    private var views: [String: LocalProcessTerminalView] = [:]
+    private var views: [String: ClaudeAwareTerminalView] = [:]
 
     /// Returns the existing terminal view for a session, or creates and starts a new one.
     func view(
         for session: TerminalSession,
         onStatusChange: @escaping @Sendable (String, TerminalSessionStatus) -> Void
-    ) -> LocalProcessTerminalView {
+    ) -> ClaudeAwareTerminalView {
         if let existing = views[session.repositoryPath] {
             return existing
         }
 
-        let terminalView = LocalProcessTerminalView(frame: .zero)
+        let terminalView = ClaudeAwareTerminalView(frame: .zero)
+        terminalView.repositoryPath = session.repositoryPath
+        terminalView.onStatusChange = onStatusChange
 
         terminalView.processDelegate = TerminalProcessDelegate(
             repositoryPath: session.repositoryPath,
@@ -48,6 +50,75 @@ final class TerminalViewStore {
         // whose deinit cleans up the underlying PTY. The OS also reclaims child
         // processes when the app exits.
         views.removeAll()
+    }
+}
+
+// MARK: - ClaudeAwareTerminalView
+
+/// Subclass of LocalProcessTerminalView that monitors terminal content for the
+/// Claude Code waiting-for-input prompt (❯, U+276F) and reports status changes.
+final class ClaudeAwareTerminalView: LocalProcessTerminalView {
+    var repositoryPath: String = ""
+    var onStatusChange: (@Sendable (String, TerminalSessionStatus) -> Void)?
+
+    private var currentStatus: TerminalSessionStatus = .active
+    private var debounceWorkItem: DispatchWorkItem?
+    private static let claudePromptCharacter: Character = "❯"  // U+276F
+
+    // MARK: - Data-flow based detection
+
+    /// Called by LocalProcess whenever the child process writes bytes to the terminal.
+    /// We use the silence between writes as the signal: if no data arrives for
+    /// `idleThreshold` seconds AND the Claude prompt character is visible,
+    /// the session is waiting for user input.
+    override func dataReceived(slice: ArraySlice<UInt8>) {
+        super.dataReceived(slice: slice)
+        // Data is flowing → Claude is working, not waiting.
+        if currentStatus == .waitingForInput {
+            reportStatus(.active)
+        }
+        scheduleIdleCheck()
+    }
+
+    /// Called when the user sends keystrokes to the process.
+    override func send(source: TerminalView, data: ArraySlice<UInt8>) {
+        super.send(source: source, data: data)
+        if currentStatus == .waitingForInput {
+            reportStatus(.active)
+        }
+    }
+
+    private func scheduleIdleCheck() {
+        debounceWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.checkIfWaiting()
+        }
+        debounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: workItem)
+    }
+
+    /// After 1.5 s of silence from the process, check whether the Claude prompt
+    /// character is visible — if so, Claude is waiting for input.
+    private func checkIfWaiting() {
+        guard let t = terminal else { return }
+        let buf = t.buffer
+        for row in 0..<t.rows {
+            for col in 0..<t.cols {
+                if buf.getChar(at: Position(col: col, row: row)).getCharacter() == Self.claudePromptCharacter {
+                    reportStatus(.waitingForInput)
+                    return
+                }
+            }
+        }
+        // No prompt visible — terminal is idle but not at Claude's input.
+        reportStatus(.active)
+    }
+
+    private func reportStatus(_ status: TerminalSessionStatus) {
+        guard status != currentStatus else { return }
+        currentStatus = status
+        onStatusChange?(repositoryPath, status)
     }
 }
 

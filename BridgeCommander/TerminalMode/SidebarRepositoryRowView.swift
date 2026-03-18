@@ -5,16 +5,14 @@ import SwiftUI
 struct SidebarRepositoryRowView: View {
     let rowState: RepositoryRowReducer.State
     let isActive: Bool
-    let hasTerminalSession: Bool
+    let sessionStatus: TerminalSessionStatus?
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 // Terminal-active indicator dot
-                Circle()
-                    .fill(hasTerminalSession ? Color.green : Color.clear)
-                    .frame(width: 6, height: 6)
+                TerminalStatusDotView(status: sessionStatus)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(rowState.formattedBranchName)

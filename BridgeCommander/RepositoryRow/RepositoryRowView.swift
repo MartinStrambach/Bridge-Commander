@@ -5,7 +5,7 @@ struct RepositoryRowView: View {
 	@Bindable
 	var store: StoreOf<RepositoryRowReducer>
 
-	var hasTerminalSession: Bool = false
+	var terminalSessionStatus: TerminalSessionStatus? = nil
 
 	private var backgroundColorForState: Color {
 		if let ticketState = store.ticketState {
@@ -31,11 +31,7 @@ struct RepositoryRowView: View {
 
 	var body: some View {
 		HStack(alignment: .center, spacing: 16) {
-			if hasTerminalSession {
-				Circle()
-					.fill(Color.green)
-					.frame(width: 6, height: 6)
-			}
+			TerminalStatusDotView(status: terminalSessionStatus)
 			RepositoryIcon(
 				isWorktree: store.isWorktree,
 				isMergeInProgress: store.gitActionsMenu.isMergeInProgress
@@ -340,6 +336,7 @@ struct RepositoryRowView: View {
 		NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
 	}
 }
+
 
 #Preview {
 	RepositoryRowView(

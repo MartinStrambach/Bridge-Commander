@@ -49,7 +49,7 @@ struct TerminalLayoutView: View {
                         SidebarRepositoryRowView(
                             rowState: rowState,
                             isActive: store.activeRepositoryPath == rowState.path,
-                            hasTerminalSession: sessions[id: rowState.path] != nil,
+                            sessionStatus: sessions[id: rowState.path]?.status,
                             onTap: {
                                 store.send(.selectRepo(repositoryPath: rowState.path))
                             }

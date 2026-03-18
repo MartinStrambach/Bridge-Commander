@@ -27,7 +27,7 @@ struct TerminalContainerRepresentable: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         for session in sessions {
             switch session.status {
-            case .launching, .active:
+            case .launching, .active, .waitingForInput:
                 let termView = terminalViewStore.view(for: session, onStatusChange: onStatusChange)
                 if termView.superview !== nsView {
                     termView.translatesAutoresizingMaskIntoConstraints = false

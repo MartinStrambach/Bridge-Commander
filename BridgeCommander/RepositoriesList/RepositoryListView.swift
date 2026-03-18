@@ -201,7 +201,7 @@ struct RepositoryListView: View {
 		List(store.scope(state: \.repositories, action: \.repositories)) { rowStore in
 			RepositoryRowView(
 				store: rowStore,
-				hasTerminalSession: store.terminalSessions[id: rowStore.path] != nil
+				terminalSessionStatus: store.terminalSessions[id: rowStore.path]?.status
 			)
 		}
 		.listStyle(.plain)

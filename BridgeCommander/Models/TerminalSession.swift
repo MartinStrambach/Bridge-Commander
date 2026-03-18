@@ -4,6 +4,7 @@ import Foundation
 enum TerminalSessionStatus: Equatable {
     case launching
     case active
+    case waitingForInput
     case failed(String)
 }
 
