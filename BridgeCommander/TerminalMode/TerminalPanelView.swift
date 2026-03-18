@@ -125,7 +125,7 @@ struct TerminalPanelView: View {
                 .keyboardShortcut("t", modifiers: .command)
 
                 // Hidden buttons for Cmd+1…Cmd+9 tab switching
-                ForEach(Array(repoSessions.prefix(9).enumerated()), id: \.offset) { index, session in
+                ForEach(Array(repoSessions.prefix(9).enumerated()), id: \.element.id) { index, session in
                     let key = KeyEquivalent(Character(String(index + 1)))
                     Button("") { onSelectTab(session.id) }
                         .keyboardShortcut(key, modifiers: .command)
