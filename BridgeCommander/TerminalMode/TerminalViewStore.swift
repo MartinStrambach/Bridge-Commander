@@ -27,7 +27,7 @@ final class TerminalViewStore {
 
         terminalView.startProcess(
             executable: "/bin/zsh",
-            args: [],
+            args: ["-l"],
             environment: nil,
             execName: nil,
             currentDirectory: session.repositoryPath
