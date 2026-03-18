@@ -37,7 +37,7 @@ struct CommitView: View {
 
 				if store.isCommitting {
 					ProgressView()
-						.scaleEffect(0.7)
+						.scaleEffect(0.35)
 				}
 				else {
 					Button("Commit") {

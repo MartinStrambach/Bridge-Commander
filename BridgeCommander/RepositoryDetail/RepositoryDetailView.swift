@@ -25,6 +25,21 @@ struct RepositoryDetailView: View {
 					.help("Commit staged changes")
 				}
 
+				if store.isPushing {
+					ProgressView()
+						.scaleEffect(0.4)
+						.help("Pushing commits to remote…")
+				}
+				else if store.unpushedCommitsCount > 0 {
+					Button {
+						store.send(.pushButtonTapped)
+					} label: {
+						Label("Push (\(store.unpushedCommitsCount))", systemImage: "arrow.up.circle.fill")
+					}
+					.tint(.orange)
+					.help("Push \(store.unpushedCommitsCount) unpushed commit(s) to remote")
+				}
+
 				Button {
 					store.send(.openTerminalButtonTapped)
 				} label: {

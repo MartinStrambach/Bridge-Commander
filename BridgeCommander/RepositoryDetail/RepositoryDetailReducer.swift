@@ -14,6 +14,8 @@ struct RepositoryDetail {
 		var alert: GitAlertReducer.State?
 		@Presents
 		var commitSheet: CommitReducer.State?
+		var unpushedCommitsCount: Int = 0
+		var isPushing: Bool = false
 
 		var lastActionedFileId: String?
 		var lastActionedFileIndex: Int?
@@ -37,6 +39,9 @@ struct RepositoryDetail {
 		case cancelButtonTapped
 		case commitButtonTapped
 		case commitSheet(PresentationAction<CommitReducer.Action>)
+		case pushButtonTapped
+		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
+		case loadUnpushedCountResponse(Int)
 		case deleteFilesCompleted([FileChange])
 		case discardFilesCompleted([FileChange])
 		case diffViewer(FileDiffViewer.Action)
@@ -58,6 +63,9 @@ struct RepositoryDetail {
 
 	@Dependency(GitStagingClient.self)
 	private var gitStagingClient
+
+	@Dependency(GitClient.self)
+	private var gitClient
 
 	@Dependency(\.dismiss)
 	private var dismiss
@@ -88,6 +96,10 @@ struct RepositoryDetail {
 					.run { [path = state.repositoryPath] send in
 						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
 						await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
+					},
+					.run { [path = state.repositoryPath] send in
+						let count = await gitClient.countUnpushedCommits(path)
+						await send(.loadUnpushedCountResponse(count))
 					}
 				)
 				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
@@ -274,6 +286,37 @@ struct RepositoryDetail {
 					isError: true
 				)
 				return .none
+
+			case let .loadUnpushedCountResponse(count):
+				state.unpushedCommitsCount = count
+				return .none
+
+			case .pushButtonTapped:
+				state.isPushing = true
+				return .run { [path = state.repositoryPath] send in
+					do {
+						let result = try await GitPushHelper.push(at: path)
+						await send(.pushCompleted(result: result, error: nil))
+					}
+					catch let error as GitError {
+						await send(.pushCompleted(result: nil, error: error))
+					}
+					catch {
+						await send(.pushCompleted(result: nil, error: nil))
+					}
+				}
+
+			case let .pushCompleted(result: _, error: error):
+				state.isPushing = false
+				if let error {
+					state.alert = GitAlertReducer.State(
+						title: "Push Failed",
+						message: error.localizedDescription,
+						isError: true
+					)
+					return .none
+				}
+				return .send(.loadChanges)
 
 			case .commitButtonTapped:
 				state.commitSheet = CommitReducer.State(repositoryPath: state.repositoryPath)
