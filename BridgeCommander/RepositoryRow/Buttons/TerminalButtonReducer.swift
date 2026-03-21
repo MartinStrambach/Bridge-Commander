@@ -11,6 +11,9 @@ struct TerminalButtonReducer {
 
 		@Shared(.terminalOpeningBehavior)
 		var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
+
+		@Shared(.mobileSubfolderPath)
+		var mobileSubfolderPath = ""
 	}
 
 	enum Action: Equatable {
@@ -21,8 +24,9 @@ struct TerminalButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .openTerminalButtonTapped:
-				.run { [path = state.repositoryPath, behavior = state.terminalOpeningBehavior] _ in
-					await TerminalLauncher.openTerminal(at: path, behavior: behavior)
+				.run { [path = state.repositoryPath, subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")), behavior = state.terminalOpeningBehavior] _ in
+					let targetPath = subfolder.isEmpty ? path : "\(path)/\(subfolder)"
+					await TerminalLauncher.openTerminal(at: targetPath, behavior: behavior)
 				}
 			}
 		}

@@ -11,6 +11,9 @@ struct ClaudeCodeButtonReducer {
 		@Shared(.claudeCodeOpeningBehavior)
 		var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
 
+		@Shared(.mobileSubfolderPath)
+		var mobileSubfolderPath = ""
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -29,9 +32,10 @@ struct ClaudeCodeButtonReducer {
 			switch action {
 			case .launchClaudeCodeButtonTapped:
 				state.isLaunching = true
-				return .run { [path = state.repositoryPath, behavior = state.claudeCodeOpeningBehavior] send in
+				return .run { [path = state.repositoryPath, subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")), behavior = state.claudeCodeOpeningBehavior] send in
+					let targetPath = subfolder.isEmpty ? path : "\(path)/\(subfolder)"
 					do {
-						try await ClaudeCodeLauncher.runClaudeCode(at: path, behavior: behavior)
+						try await ClaudeCodeLauncher.runClaudeCode(at: targetPath, behavior: behavior)
 						await send(.didLaunchClaudeCode)
 					}
 					catch {

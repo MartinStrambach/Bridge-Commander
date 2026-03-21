@@ -24,6 +24,9 @@ struct RepositoryListReducer {
 		@Shared(.periodicRefreshInterval)
 		fileprivate(set) var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
+		@Shared(.mobileSubfolderPath)
+		fileprivate(set) var mobileSubfolderPath = ""
+
 		fileprivate var isSystemEventsPermissionGranted: Bool?
 		fileprivate var isPermissionWarningDismissed = false
 
@@ -120,7 +123,9 @@ struct RepositoryListReducer {
 				if let existing = existingSession {
 					session = existing
 				} else {
-					session = TerminalSession(repositoryPath: repositoryPath)
+					let subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+					let startingDirectory = subfolder.isEmpty ? repositoryPath : "\(repositoryPath)/\(subfolder)"
+					session = TerminalSession(repositoryPath: repositoryPath, startingDirectory: startingDirectory)
 					state.terminalSessions.append(session)
 				}
 				if state.terminalLayout == nil {

@@ -36,7 +36,7 @@ final class TerminalViewStore {
 			args: ["-l"],
 			environment: nil,
 			execName: nil,
-			currentDirectory: session.repositoryPath
+			currentDirectory: session.startingDirectory
 		)
 
 		onStatusChange(session.id, .active)
