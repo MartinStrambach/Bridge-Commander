@@ -39,7 +39,11 @@ struct TerminalContainerRepresentable: NSViewRepresentable {
                         termView.trailingAnchor.constraint(equalTo: nsView.trailingAnchor),
                     ])
                 }
-                termView.isHidden = session.id != activeSessionId
+                let isActive = session.id == activeSessionId
+                termView.isHidden = !isActive
+                if isActive {
+                    termView.window?.makeFirstResponder(termView)
+                }
             case .failed:
                 break
             }
