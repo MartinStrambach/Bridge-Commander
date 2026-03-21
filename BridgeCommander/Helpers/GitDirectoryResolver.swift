@@ -34,6 +34,16 @@ nonisolated enum GitDirectoryResolver {
 		return nil
 	}
 
+	/// Checks if a directory is a Git repository or worktree
+	/// - Parameter url: The directory URL to check
+	/// - Returns: A tuple indicating if it's a repo and if it's a worktree
+	static func isGitRepository(at url: URL) -> (isRepo: Bool, isWorktree: Bool) {
+		guard resolveGitDirectory(at: url.path) != nil else {
+			return (false, false)
+		}
+		return (true, isWorktree(at: url.path))
+	}
+
 	/// Checks if a path points to a git worktree (as opposed to a regular repository)
 	/// - Parameter path: The path to check
 	/// - Returns: true if it's a worktree, false otherwise

@@ -32,7 +32,10 @@ nonisolated enum GitWorktreeCreator {
 		else
 		  temp="${base_branch//\\//_}"
 		fi
-		folder="../${temp//./_}"
+		reponame=$(basename "$PWD")
+		worktrees_dir="../worktrees/$reponame"
+		mkdir -p "$worktrees_dir"
+		folder="$worktrees_dir/${temp//./_}"
 
 		# Check if worktree already exists (exact match)
 		if git worktree list | grep -qw "$folder"; then

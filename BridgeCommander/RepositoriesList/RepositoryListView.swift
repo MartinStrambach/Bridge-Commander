@@ -81,7 +81,7 @@ struct RepositoryListView: View {
 					.font(.title2)
 					.fontWeight(.bold)
 
-				if let directory = store.selectedDirectory {
+				if let directory = store.selectedRepository {
 					Text(directory)
 						.font(.caption)
 						.foregroundColor(.secondary)
@@ -89,7 +89,7 @@ struct RepositoryListView: View {
 						.truncationMode(.middle)
 				}
 				else {
-					Text("No directory selected")
+					Text("No repository selected")
 						.font(.caption)
 						.foregroundColor(.secondary)
 				}
@@ -177,14 +177,14 @@ struct RepositoryListView: View {
 					.font(.title3)
 					.fontWeight(.semibold)
 
-				Text("Select a directory to scan for Git repositories and worktrees")
+				Text("Select a Git repository to view its worktrees")
 					.font(.body)
 					.foregroundColor(.secondary)
 					.multilineTextAlignment(.center)
 			}
 
-			Button(action: selectDirectory) {
-				Label("Select Directory", systemImage: "folder")
+			Button(action: selectRepository) {
+				Label("Select Repository", systemImage: "folder")
 					.padding(.horizontal, 8)
 			}
 			.buttonStyle(.borderedProminent)
@@ -207,17 +207,17 @@ struct RepositoryListView: View {
 		.listStyle(.plain)
 	}
 
-	// MARK: - Directory Selection
+	// MARK: - Repository Selection
 
-	private func selectDirectory() {
+	private func selectRepository() {
 		let panel = NSOpenPanel()
 		panel.canChooseFiles = false
 		panel.canChooseDirectories = true
 		panel.allowsMultipleSelection = false
-		panel.message = "Select a directory to scan for repositories"
+		panel.message = "Select a Git repository"
 
 		if panel.runModal() == .OK, let url = panel.url {
-			send(.directorySelected(url.path))
+			send(.repositorySelected(url.path))
 		}
 	}
 

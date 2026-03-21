@@ -14,7 +14,7 @@ struct RepositoryListReducer {
 	struct State: Equatable {
 		fileprivate(set) var repositories: IdentifiedArrayOf<RepositoryRowReducer.State> = []
 		fileprivate(set) var isScanning = false
-		fileprivate(set) var selectedDirectory: String?
+		fileprivate(set) var selectedRepository: String?
 
 		fileprivate(set) var sortMode: SortMode = .state
 
@@ -47,7 +47,7 @@ struct RepositoryListReducer {
 
 		enum ViewAction: Sendable {
 			case clearButtonTapped
-			case directorySelected(String)
+			case repositorySelected(String)
 			case dismissPermissionWarningButtonTapped
 			case onAppear
 			case onDisappear
@@ -90,14 +90,14 @@ struct RepositoryListReducer {
 
 			case .view(.clearButtonTapped):
 				state.repositories.removeAll()
-				state.selectedDirectory = nil
+				state.selectedRepository = nil
 				state.isScanning = false
 				lastOpenedDirectoryClient.clear()
 				return .cancel(id: CancellableId.periodicRefresh)
 
-			case let .view(.directorySelected(directory)):
+			case let .view(.repositorySelected(directory)):
 				lastOpenedDirectoryClient.save(directory)
-				state.selectedDirectory = directory
+				state.selectedRepository = directory
 				return .send(.startScan)
 
 			case .view(.openAutomationSettingsButtonTapped):
@@ -137,12 +137,12 @@ struct RepositoryListReducer {
 			case .repositories(.element(_, .worktreeCreated)),
 			     .repositories(.element(_, .worktreeDeleted)),
 			     .startScan:
-				// Only load from service if no directory is set
-				if state.selectedDirectory == nil {
-					state.selectedDirectory = lastOpenedDirectoryClient.load()
+				// Only load from service if no repository is set
+				if state.selectedRepository == nil {
+					state.selectedRepository = lastOpenedDirectoryClient.load()
 				}
 
-				guard let directory = state.selectedDirectory else {
+				guard let directory = state.selectedRepository else {
 					return .none
 				}
 
@@ -152,7 +152,7 @@ struct RepositoryListReducer {
 					.send(.checkSystemEventsPermission),
 					.run { send in
 						do {
-							let scanned = try await scanRepositories(in: directory)
+							let scanned = try await scanRepository(directory)
 							await send(.didScanRepositories(scanned))
 						}
 						catch {
@@ -325,23 +325,8 @@ struct RepositoryListReducer {
 
 // MARK: - Private Helpers
 
-private func scanRepositories(in directory: String) async throws -> [ScannedRepository] {
-	let url = URL(fileURLWithPath: directory)
-	let repositories = await GitDetector.scanForRepositories(at: url)
-
-	return repositories.map { repo in
-		let repoURL = URL(fileURLWithPath: repo.path)
-		let parentDirectory = repoURL.deletingLastPathComponent().path
-
-		return ScannedRepository(
-			path: repo.path,
-			name: repo.name,
-			directory: parentDirectory,
-			isWorktree: repo.isWorktree,
-			branchName: repo.branchName,
-			isMergeInProgress: repo.isMergeInProgress
-		)
-	}
+private func scanRepository(_ path: String) async throws -> [ScannedRepository] {
+	await GitWorktreeScanner.listWorktrees(forRepo: path)
 }
 
 private func mergeRepositories(
