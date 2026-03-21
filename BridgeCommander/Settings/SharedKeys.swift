@@ -27,6 +27,10 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<String> {
 	static var androidStudioPath: Self {
 		appStorage("androidStudioPath")
 	}
+
+	static var worktreeBasePath: Self {
+		appStorage("worktreeBasePath")
+	}
 }
 
 extension SharedReaderKey where Self == AppStorageKey<PeriodicRefreshInterval> {

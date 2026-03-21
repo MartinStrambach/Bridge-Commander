@@ -13,7 +13,8 @@ nonisolated enum GitWorktreeCreator {
 		branchName: String,
 		baseBranch: String,
 		repositoryPath: String,
-		createNewBranch: Bool = true
+		createNewBranch: Bool = true,
+		worktreeBasePath: String = "../worktrees"
 	) async throws {
 		let script = """
 		set -e
@@ -25,6 +26,7 @@ nonisolated enum GitWorktreeCreator {
 		branch="$1";
 		base_branch="$2";
 		create_new_branch="$3";
+		worktree_base="$4";
 
 		# Sanitize name for folder (replace / and . with _)
 		if [ "$create_new_branch" = "true" ]; then
@@ -33,7 +35,7 @@ nonisolated enum GitWorktreeCreator {
 		  temp="${base_branch//\\//_}"
 		fi
 		reponame=$(basename "$PWD")
-		worktrees_dir="../worktrees/$reponame"
+		worktrees_dir="$worktree_base/$reponame"
 		mkdir -p "$worktrees_dir"
 		folder="$worktrees_dir/${temp//./_}"
 
@@ -85,7 +87,7 @@ nonisolated enum GitWorktreeCreator {
 
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/bin/sh"),
-			arguments: ["-c", script, "-s", branchName, baseBranch, createNewBranch ? "true" : "false"],
+			arguments: ["-c", script, "-s", branchName, baseBranch, createNewBranch ? "true" : "false", worktreeBasePath],
 			currentDirectory: URL(fileURLWithPath: repositoryPath),
 			environment: GitEnvironmentHelper.setupEnvironment()
 		)

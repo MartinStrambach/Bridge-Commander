@@ -41,6 +41,9 @@ struct SettingsReducer {
 		@Shared(.androidStudioPath)
 		var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
 
+		@Shared(.worktreeBasePath)
+		var worktreeBasePath = "../worktrees"
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -58,6 +61,7 @@ struct SettingsReducer {
 		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
 		case setAndroidStudioPath(String)
+		case setWorktreeBasePath(String)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -116,6 +120,10 @@ struct SettingsReducer {
 
 			case let .setAndroidStudioPath(path):
 				state.$androidStudioPath.withLock { $0 = path }
+				return .none
+
+			case let .setWorktreeBasePath(path):
+				state.$worktreeBasePath.withLock { $0 = path }
 				return .none
 
 			case .clearTokenButtonTapped:

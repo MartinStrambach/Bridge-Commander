@@ -6,6 +6,8 @@ struct CreateWorktreeButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
+		@Shared(.worktreeBasePath)
+		var worktreeBasePath = "../worktrees"
 		var isCreating: Bool = false
 		var showCreateDialog: Bool = false
 		var branchName: String = ""
@@ -80,14 +82,16 @@ struct CreateWorktreeButtonReducer {
 					branchName = state.branchName,
 					baseBranch = state.selectedBaseBranch,
 					path = state.repositoryPath,
-					createNewBranch = state.createNewBranch
+					createNewBranch = state.createNewBranch,
+					worktreeBasePath = state.worktreeBasePath
 				] send in
 					do {
 						try await GitWorktreeCreator.createWorktree(
 							branchName: branchName,
 							baseBranch: baseBranch,
 							repositoryPath: path,
-							createNewBranch: createNewBranch
+							createNewBranch: createNewBranch,
+							worktreeBasePath: worktreeBasePath
 						)
 						await send(.didCreateSuccessfully)
 					}

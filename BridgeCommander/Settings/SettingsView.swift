@@ -17,6 +17,7 @@ struct SettingsView: View {
 				youtrackAuthenticationSection
 				repositoryRefreshSection
 				iosSubfolderSection
+				mobileSubfolderSection
 				ticketIdRegexSection
 				branchNameRegexSection
 				HStack(alignment: .top) {
@@ -27,7 +28,6 @@ struct SettingsView: View {
 					terminalBehaviorSection
 					claudeCodeBehaviorSection
 				}
-				mobileSubfolderSection
 				androidStudioPathSection
 				worktreeOptionsSection
 			}
@@ -254,6 +254,21 @@ struct SettingsView: View {
 			)
 
 			Text("Automatically deletes the associated Xcode DerivedData folder when a worktree is removed.")
+				.font(.caption)
+				.foregroundColor(.secondary)
+
+			Text("Worktree Base Path")
+				.font(.subheadline)
+				.padding(.top, 4)
+
+			TextField(
+				"Worktree Base Path",
+				text: $store.worktreeBasePath.sending(\.setWorktreeBasePath)
+			)
+			.textFieldStyle(.roundedBorder)
+			.font(.system(.body, design: .monospaced))
+
+			Text("Path where new worktrees are created. Can be relative to the repository (e.g. ../worktrees) or absolute.")
 				.font(.caption)
 				.foregroundColor(.secondary)
 		}
