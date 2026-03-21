@@ -42,7 +42,13 @@ struct TerminalContainerRepresentable: NSViewRepresentable {
                 let isActive = session.id == activeSessionId
                 termView.isHidden = !isActive
                 if isActive {
-                    termView.window?.makeFirstResponder(termView)
+                    if termView.window != nil {
+                        termView.window?.makeFirstResponder(termView)
+                    } else {
+                        DispatchQueue.main.async {
+                            termView.window?.makeFirstResponder(termView)
+                        }
+                    }
                 }
             case .failed:
                 break
