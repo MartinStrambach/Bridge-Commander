@@ -72,7 +72,7 @@ struct SidebarRepositoryRowView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will terminate the terminal session.")
+            Text("This will terminate the terminal session for \"\(rowState.name)\".")
         }
     }
 }
