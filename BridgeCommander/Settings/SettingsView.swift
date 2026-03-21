@@ -27,6 +27,7 @@ struct SettingsView: View {
 					terminalBehaviorSection
 					claudeCodeBehaviorSection
 				}
+				mobileSubfolderSection
 				androidStudioPathSection
 				worktreeOptionsSection
 			}
@@ -255,6 +256,26 @@ struct SettingsView: View {
 			Text("Automatically deletes the associated Xcode DerivedData folder when a worktree is removed.")
 				.font(.caption)
 				.foregroundColor(.secondary)
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var mobileSubfolderSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Mobile Project Subfolder")
+				.font(.headline)
+
+			Text(
+				"Specify the subfolder path within repositories where Android Studio should be opened (e.g., 'android/App')."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
+			TextField("Mobile Subfolder Path", text: $store.mobileSubfolderPath.sending(\.setMobileSubfolderPath))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))

@@ -7,6 +7,8 @@ struct AndroidStudioButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isOpening: Bool = false
+		@Shared(.mobileSubfolderPath)
+		var mobileSubfolderPath = "ios/FlashScore"
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
@@ -25,9 +27,10 @@ struct AndroidStudioButtonReducer {
 			switch action {
 			case .openAndroidStudioButtonTapped:
 				state.isOpening = true
-				return .run { [path = state.repositoryPath] send in
+				return .run { [path = state.repositoryPath, subfolder = state.mobileSubfolderPath] send in
+					let targetPath = subfolder.isEmpty ? path : "\(path)/\(subfolder)"
 					do {
-						try await AndroidStudioLauncher.openInAndroidStudio(at: path)
+						try await AndroidStudioLauncher.openInAndroidStudio(at: targetPath)
 						await send(.didOpenAndroidStudio)
 					}
 					catch {

@@ -12,6 +12,10 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<String> {
 		appStorage("iosSubfolderPath")
 	}
 
+	static var mobileSubfolderPath: Self {
+		appStorage("mobileSubfolderPath")
+	}
+
 	static var ticketIdRegex: Self {
 		appStorage("ticketIdRegex")
 	}
