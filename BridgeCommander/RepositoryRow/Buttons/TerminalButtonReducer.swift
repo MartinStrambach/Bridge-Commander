@@ -24,8 +24,12 @@ struct TerminalButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .openTerminalButtonTapped:
-				.run { [path = state.repositoryPath, subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")), behavior = state.terminalOpeningBehavior] _ in
-					let targetPath = subfolder.isEmpty ? path : "\(path)/\(subfolder)"
+				.run { [
+					path = state.repositoryPath,
+					subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+					behavior = state.terminalOpeningBehavior
+				] _ in
+					let targetPath = (path as NSString).appendingPathComponent(subfolder)
 					await TerminalLauncher.openTerminal(at: targetPath, behavior: behavior)
 				}
 			}

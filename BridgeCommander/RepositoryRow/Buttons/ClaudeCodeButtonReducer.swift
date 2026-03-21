@@ -32,8 +32,12 @@ struct ClaudeCodeButtonReducer {
 			switch action {
 			case .launchClaudeCodeButtonTapped:
 				state.isLaunching = true
-				return .run { [path = state.repositoryPath, subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")), behavior = state.claudeCodeOpeningBehavior] send in
-					let targetPath = subfolder.isEmpty ? path : "\(path)/\(subfolder)"
+				return .run { [
+					path = state.repositoryPath,
+					subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+					behavior = state.claudeCodeOpeningBehavior
+				] send in
+					let targetPath = (path as NSString).appendingPathComponent(subfolder)
 					do {
 						try await ClaudeCodeLauncher.runClaudeCode(at: targetPath, behavior: behavior)
 						await send(.didLaunchClaudeCode)

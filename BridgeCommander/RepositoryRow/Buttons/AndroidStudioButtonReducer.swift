@@ -27,8 +27,11 @@ struct AndroidStudioButtonReducer {
 			switch action {
 			case .openAndroidStudioButtonTapped:
 				state.isOpening = true
-				return .run { [path = state.repositoryPath, subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))] send in
-					let targetPath = subfolder.isEmpty ? path : "\(path)/\(subfolder)"
+				return .run { [
+					path = state.repositoryPath,
+					subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+				] send in
+					let targetPath = (path as NSString).appendingPathComponent(subfolder)
 					do {
 						try await AndroidStudioLauncher.openInAndroidStudio(at: targetPath)
 						await send(.didOpenAndroidStudio)
