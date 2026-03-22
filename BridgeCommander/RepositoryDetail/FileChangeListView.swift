@@ -88,9 +88,14 @@ struct FileChangeListView: View {
 					}
 				}
 			}
+			Button("Reveal in Finder (\(store.selectedFileIds.count) files)") {
+				let selected = store.files.filter { store.selectedFileIds.contains($0.id) }
+				openInFinder(selected)
+			}
 		}
 		else {
 			Button("Open in IDE") { store.send(.openInIDE(file)) }
+			Button("Reveal in Finder") { openInFinder([file]) }
 
 			if store.listType == .staged {
 				Button("Unstage") { store.send(.delegate(.toggleAll([file]))) }
@@ -115,5 +120,12 @@ struct FileChangeListView: View {
 				}
 			}
 		}
+	}
+
+	private func openInFinder(_ files: [FileChange]) {
+		let urls = files.map { file in
+			URL(fileURLWithPath: store.repositoryPath).appendingPathComponent(file.path)
+		}
+		NSWorkspace.shared.activateFileViewerSelecting(urls)
 	}
 }
