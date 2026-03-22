@@ -237,7 +237,9 @@ struct RepositoryListReducer {
 					state.terminalLayout?.activeSessionId = existing.id
 				}
 				else {
-					let session = TerminalSession(repositoryPath: repositoryPath)
+					let subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+					let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
+					let session = TerminalSession(repositoryPath: repositoryPath, startingDirectory: startingDirectory)
 					state.terminalSessions.append(session)
 					state.terminalLayout?.activeSessionId = session.id
 				}
@@ -247,7 +249,7 @@ struct RepositoryListReducer {
 				state.terminalLayout = nil
 				return .none
 
-			case let .terminalLayout(.newTabRequested):
+			case .terminalLayout(.newTabRequested):
 				guard let path = state.terminalLayout?.activeRepositoryPath else {
 					return .none
 				}
