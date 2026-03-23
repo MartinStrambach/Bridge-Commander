@@ -32,7 +32,7 @@ struct RepositoryListView: View {
 	/// Flattened list of all rows across all groups (used for terminal sidebar).
 	private var allRows: IdentifiedArrayOf<RepositoryRowReducer.State> {
 		IdentifiedArrayOf(
-			uniqueElements: store.repositoryGroups.flatMap { $0.rows }
+			uniqueElements: store.repositoryGroups.flatMap { [$0.header] + $0.worktrees }
 		)
 	}
 

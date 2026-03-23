@@ -8,9 +8,10 @@ struct RepoGroupReducer {
 		/// Normalized root repo path — used as the unique ID.
 		let id: String
 		var isCollapsed: Bool
-		/// rows[0] is always the main repo (isWorktree == false).
-		/// rows[1...] are worktrees, sorted by the active sortMode.
-		var rows: IdentifiedArrayOf<RepositoryRowReducer.State>
+		/// The main (non-worktree) repository row.
+		var header: RepositoryRowReducer.State
+		/// Worktree rows, sorted by the active sortMode.
+		var worktrees: IdentifiedArrayOf<RepositoryRowReducer.State>
 	}
 
 	enum Action {
@@ -18,25 +19,26 @@ struct RepoGroupReducer {
 		case toggleCollapse
 		/// Signals intent to remove this group. RepositoryListReducer intercepts and handles removal.
 		case remove
-		/// Delegates to child row reducers.
-		case rows(IdentifiedActionOf<RepositoryRowReducer>)
+		/// Delegates to the header row reducer.
+		case header(RepositoryRowReducer.Action)
+		/// Delegates to child worktree row reducers.
+		case worktrees(IdentifiedActionOf<RepositoryRowReducer>)
 	}
 
 	var body: some Reducer<State, Action> {
+		Scope(state: \.header, action: \.header) {
+			RepositoryRowReducer()
+		}
 		Reduce { state, action in
 			switch action {
 			case .toggleCollapse:
 				state.isCollapsed.toggle()
 				return .none
-			case .remove:
-				// Handled by parent RepositoryListReducer via the intercept pattern
-				return .none
-			case .rows:
-				// Handled by .forEach below; explicit case required by exhaustive switch
+			case .remove, .header, .worktrees:
 				return .none
 			}
 		}
-		.forEach(\.rows, action: \.rows) {
+		.forEach(\.worktrees, action: \.worktrees) {
 			RepositoryRowReducer()
 		}
 	}

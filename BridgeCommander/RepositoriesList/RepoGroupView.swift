@@ -7,29 +7,23 @@ struct RepoGroupView: View {
 
 	var body: some View {
 		Section {
-			ForEach(store.scope(state: \.rows, action: \.rows)) { rowStore in
-				if rowStore.isWorktree {
-					RepositoryRowView(
-						store: rowStore,
-						terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status
-					)
-					.padding(.leading, 20)
-					.listRowInsets(EdgeInsets())
-					.listRowSeparator(.hidden)
-				}
+			ForEach(store.scope(state: \.worktrees, action: \.worktrees)) { rowStore in
+				RepositoryRowView(
+					store: rowStore,
+					terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status
+				)
+				.padding(.leading, 20)
+				.listRowInsets(EdgeInsets())
+				.listRowSeparator(.hidden)
 			}
 		} header: {
-			ForEach(store.scope(state: \.rows, action: \.rows)) { rowStore in
-				if !rowStore.isWorktree {
-					RepositoryRowView(
-						store: rowStore,
-						terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status,
-						isGroupCollapsed: store.isCollapsed,
-						onToggleCollapse: { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } },
-						onRemove: { store.send(.remove) }
-					)
-				}
-			}
+			RepositoryRowView(
+				store: store.scope(state: \.header, action: \.header),
+				terminalSessionStatus: sessions.first(where: { $0.repositoryPath == store.header.path })?.status,
+				isGroupCollapsed: store.isCollapsed,
+				onToggleCollapse: { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } },
+				onRemove: { store.send(.remove) }
+			)
 		}
 		.listSectionSeparator(.hidden)
 	}
@@ -54,7 +48,8 @@ struct RepoGroupView: View {
 				initialState: RepoGroupReducer.State(
 					id: "/projects/myapp",
 					isCollapsed: false,
-					rows: IdentifiedArrayOf(uniqueElements: [mainRow, worktreeRow])
+					header: mainRow,
+					worktrees: IdentifiedArrayOf(uniqueElements: [worktreeRow])
 				),
 				reducer: { RepoGroupReducer() }
 			),

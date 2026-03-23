@@ -166,13 +166,14 @@ struct RepositoryListReducer {
 			case let .addRepositorySucceeded(rootPath, scanned):
 				state.isScanning = false
 				state.$trackedRepoPaths.withLock { $0.append(rootPath) }
-				let group = buildGroup(
+				if let group = buildGroup(
 					rootPath: rootPath,
 					scanned: scanned,
 					collapsedPaths: Set(state.collapsedRepoPaths),
 					sortMode: state.sortMode
-				)
-				state.repositoryGroups.append(group)
+				) {
+					state.repositoryGroups.append(group)
+				}
 				return .none
 
 			// MARK: - Full Scan (all tracked repos)
@@ -209,8 +210,8 @@ struct RepositoryListReducer {
 
 			// MARK: - Per-group scan (worktree added/removed)
 
-			case let .repositoryGroups(.element(id: groupId, action: .rows(.element(_, .worktreeCreated)))),
-			     let .repositoryGroups(.element(id: groupId, action: .rows(.element(_, .worktreeDeleted)))):
+			case let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated)))),
+			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeDeleted)))):
 				state.isScanning = true
 				return .run { [groupId] send in
 					let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
@@ -227,13 +228,14 @@ struct RepositoryListReducer {
 					mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
 				} else if !scanned.isEmpty {
 					// New group (e.g., from migration path on first launch)
-					let group = buildGroup(
+					if let group = buildGroup(
 						rootPath: rootPath,
 						scanned: scanned,
 						collapsedPaths: Set(state.collapsedRepoPaths),
 						sortMode: state.sortMode
-					)
-					state.repositoryGroups.append(group)
+					) {
+						state.repositoryGroups.append(group)
+					}
 				}
 				return .none
 
@@ -249,15 +251,19 @@ struct RepositoryListReducer {
 
 			case .refreshRepositories:
 				guard !state.repositoryGroups.isEmpty else { return .none }
-				let refreshEffects = state.repositoryGroups.flatMap { group in
-					group.rows.map { row in
+				let refreshEffects = state.repositoryGroups.flatMap { group -> [Effect<Action>] in
+					let headerEffect = Effect<Action>.send(
+						.repositoryGroups(.element(id: group.id, action: .header(.refresh)))
+					)
+					let worktreeEffects = group.worktrees.map { row in
 						Effect<Action>.send(
 							.repositoryGroups(.element(
 								id: group.id,
-								action: .rows(.element(id: row.id, action: .refresh))
+								action: .worktrees(.element(id: row.id, action: .refresh))
 							))
 						)
 					}
+					return [headerEffect] + worktreeEffects
 				}
 				return .concatenate(.send(.startScan), .merge(refreshEffects))
 
@@ -273,32 +279,12 @@ struct RepositoryListReducer {
 
 			// MARK: - Terminal
 
-			case let .repositoryGroups(.element(id: _, action: .rows(.element(id: repositoryPath, action: .openTerminalForRepo)))):
-				let existingSession = state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
-				let session: TerminalSession
-				if let existing = existingSession {
-					session = existing
-				} else {
-					let subfolder = state.mobileSubfolderPath.trimmingCharacters(
-						in: CharacterSet(charactersIn: "/")
-					)
-					let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
-					session = TerminalSession(
-						repositoryPath: repositoryPath,
-						startingDirectory: startingDirectory
-					)
-					state.terminalSessions.append(session)
-				}
-				if state.terminalLayout == nil {
-					state.terminalLayout = TerminalLayoutReducer.State(
-						activeRepositoryPath: repositoryPath,
-						activeSessionId: session.id
-					)
-				} else {
-					state.terminalLayout?.activeRepositoryPath = repositoryPath
-					state.terminalLayout?.activeSessionId = session.id
-				}
-				return .none
+			case let .repositoryGroups(.element(id: groupId, action: .header(.openTerminalForRepo))):
+				guard let repositoryPath = state.repositoryGroups[id: groupId]?.header.path else { return .none }
+				return openTerminal(for: repositoryPath, in: &state)
+
+			case let .repositoryGroups(.element(id: _, action: .worktrees(.element(id: repositoryPath, action: .openTerminalForRepo)))):
+				return openTerminal(for: repositoryPath, in: &state)
 
 			// MARK: - Collapse Persistence
 
@@ -325,7 +311,8 @@ struct RepositoryListReducer {
 
 			// MARK: - Re-sort on YouTrack fetch
 
-			case .repositoryGroups(.element(_, .rows(.element(_, .didFetchYouTrack)))):
+			case .repositoryGroups(.element(_, .header(.didFetchYouTrack))),
+			     .repositoryGroups(.element(_, .worktrees(.element(_, .didFetchYouTrack)))):
 				if state.sortMode == .state {
 					withAnimation {
 						sortGroupsInState(in: &state)
@@ -463,13 +450,9 @@ struct RepositoryListReducer {
 
 private func sortGroupsInState(in state: inout RepositoryListReducer.State) {
 	for groupId in state.repositoryGroups.ids {
-		guard let group = state.repositoryGroups[id: groupId],
-		      let mainRow = group.rows.first(where: { !$0.isWorktree }) else { continue }
-		let worktrees = Array(group.rows.filter { $0.isWorktree })
-		let sorted = sortRepositories(worktrees, sortMode: state.sortMode)
-		state.repositoryGroups[id: groupId]?.rows = IdentifiedArrayOf(
-			uniqueElements: [mainRow] + sorted
-		)
+		guard let group = state.repositoryGroups[id: groupId] else { continue }
+		let sorted = sortRepositories(Array(group.worktrees), sortMode: state.sortMode)
+		state.repositoryGroups[id: groupId]?.worktrees = IdentifiedArrayOf(uniqueElements: sorted)
 	}
 }
 
@@ -477,12 +460,39 @@ private func normalizePath(_ path: String) -> String {
 	URL(fileURLWithPath: path).standardizedFileURL.path
 }
 
+@discardableResult
+private func openTerminal(
+	for repositoryPath: String,
+	in state: inout RepositoryListReducer.State
+) -> Effect<RepositoryListReducer.Action> {
+	let existingSession = state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
+	let session: TerminalSession
+	if let existing = existingSession {
+		session = existing
+	} else {
+		let subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+		let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
+		session = TerminalSession(repositoryPath: repositoryPath, startingDirectory: startingDirectory)
+		state.terminalSessions.append(session)
+	}
+	if state.terminalLayout == nil {
+		state.terminalLayout = TerminalLayoutReducer.State(
+			activeRepositoryPath: repositoryPath,
+			activeSessionId: session.id
+		)
+	} else {
+		state.terminalLayout?.activeRepositoryPath = repositoryPath
+		state.terminalLayout?.activeSessionId = session.id
+	}
+	return .none
+}
+
 private func buildGroup(
 	rootPath: String,
 	scanned: [ScannedRepository],
 	collapsedPaths: Set<String>,
 	sortMode: SortMode
-) -> RepoGroupReducer.State {
+) -> RepoGroupReducer.State? {
 	let isCollapsed = collapsedPaths.contains(rootPath)
 	let allRows = scanned.map { repo in
 		RepositoryRowReducer.State(
@@ -492,18 +502,13 @@ private func buildGroup(
 			isWorktree: repo.isWorktree
 		)
 	}
-	guard let mainRow = allRows.first(where: { !$0.isWorktree }) else {
-		return RepoGroupReducer.State(
-			id: rootPath,
-			isCollapsed: isCollapsed,
-			rows: IdentifiedArrayOf(uniqueElements: allRows)
-		)
-	}
+	guard let header = allRows.first(where: { !$0.isWorktree }) else { return nil }
 	let worktrees = sortRepositories(allRows.filter { $0.isWorktree }, sortMode: sortMode)
 	return RepoGroupReducer.State(
 		id: rootPath,
 		isCollapsed: isCollapsed,
-		rows: IdentifiedArrayOf(uniqueElements: [mainRow] + worktrees)
+		header: header,
+		worktrees: IdentifiedArrayOf(uniqueElements: worktrees)
 	)
 }
 
@@ -514,8 +519,8 @@ private func mergeGroupRows(
 ) {
 	guard let group = state.repositoryGroups[id: rootPath] else { return }
 
-	var currentByPath: [String: RepositoryRowReducer.State] = [:]
-	for row in group.rows {
+	var currentByPath: [String: RepositoryRowReducer.State] = [group.header.path: group.header]
+	for row in group.worktrees {
 		currentByPath[row.path] = row
 	}
 
@@ -537,14 +542,10 @@ private func mergeGroupRows(
 		}
 	}
 
-	guard let mainRow = updated.first(where: { !$0.isWorktree }) else {
-		state.repositoryGroups[id: rootPath]?.rows = IdentifiedArrayOf(uniqueElements: updated)
-		return
-	}
+	guard let newHeader = updated.first(where: { !$0.isWorktree }) else { return }
 	let worktrees = sortRepositories(updated.filter { $0.isWorktree }, sortMode: state.sortMode)
-	state.repositoryGroups[id: rootPath]?.rows = IdentifiedArrayOf(
-		uniqueElements: [mainRow] + worktrees
-	)
+	state.repositoryGroups[id: rootPath]?.header = newHeader
+	state.repositoryGroups[id: rootPath]?.worktrees = IdentifiedArrayOf(uniqueElements: worktrees)
 }
 
 // MARK: - Sorting
