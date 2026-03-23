@@ -10,8 +10,11 @@ final class TerminalViewStore {
 	private var views: [UUID: ClaudeAwareTerminalView] = [:]
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one.
+	/// The caller is responsible for creating `processDelegate` and keeping a strong reference
+	/// to it (e.g. in an NSViewRepresentable Coordinator).
 	func view(
 		for session: TerminalSession,
+		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) -> ClaudeAwareTerminalView {
 		if let existing = views[session.id] {
@@ -31,10 +34,7 @@ final class TerminalViewStore {
 		terminalView.nativeForegroundColor = theme.foregroundColor
 		terminalView.nativeBackgroundColor = theme.backgroundColor
 
-		let sessionId = session.id
-		terminalView.processDelegate = TerminalProcessDelegate(
-			onFailed: { message in onStatusChange(sessionId, .failed(message)) }
-		)
+		terminalView.processDelegate = processDelegate
 
 		terminalView.startProcess(
 			executable: "/bin/zsh",
@@ -44,9 +44,14 @@ final class TerminalViewStore {
 			currentDirectory: session.startingDirectory
 		)
 
+		// Store the view before calling onStatusChange to prevent re-entrancy:
+		// onStatusChange triggers a TCA state mutation that can cause updateNSView to fire
+		// again synchronously; if views[id] were still nil at that point, a second
+		// ClaudeAwareTerminalView would be created for the same session.
+		views[session.id] = terminalView
+
 		onStatusChange(session.id, .active)
 
-		views[session.id] = terminalView
 		return terminalView
 	}
 
