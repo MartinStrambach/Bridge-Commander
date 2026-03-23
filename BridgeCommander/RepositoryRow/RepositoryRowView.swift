@@ -45,9 +45,10 @@ struct RepositoryRowView: View {
 					Image(systemName: collapsed ? "chevron.right" : "chevron.down")
 						.font(.caption)
 						.foregroundColor(.secondary)
-						.frame(width: 14)
+						.frame(width: 20, height: 20)
 				}
 				.buttonStyle(.plain)
+				.contentShape(Rectangle())
 			}
 			TerminalStatusDotView(status: terminalSessionStatus)
 			RepositoryIcon(
