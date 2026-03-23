@@ -457,22 +457,21 @@ struct RepositoryListReducer {
 		}
 	}
 
-	// MARK: - Private Methods
-
-	private func sortGroupsInState(in state: inout State) {
-		for groupId in state.repositoryGroups.ids {
-			guard let group = state.repositoryGroups[id: groupId],
-			      let mainRow = group.rows.first(where: { !$0.isWorktree }) else { continue }
-			let worktrees = Array(group.rows.filter { $0.isWorktree })
-			let sorted = sortRepositories(worktrees, sortMode: state.sortMode)
-			state.repositoryGroups[id: groupId]?.rows = IdentifiedArrayOf(
-				uniqueElements: [mainRow] + sorted
-			)
-		}
-	}
 }
 
 // MARK: - Private Free Functions
+
+private func sortGroupsInState(in state: inout RepositoryListReducer.State) {
+	for groupId in state.repositoryGroups.ids {
+		guard let group = state.repositoryGroups[id: groupId],
+		      let mainRow = group.rows.first(where: { !$0.isWorktree }) else { continue }
+		let worktrees = Array(group.rows.filter { $0.isWorktree })
+		let sorted = sortRepositories(worktrees, sortMode: state.sortMode)
+		state.repositoryGroups[id: groupId]?.rows = IdentifiedArrayOf(
+			uniqueElements: [mainRow] + sorted
+		)
+	}
+}
 
 private func normalizePath(_ path: String) -> String {
 	URL(fileURLWithPath: path).standardizedFileURL.path
