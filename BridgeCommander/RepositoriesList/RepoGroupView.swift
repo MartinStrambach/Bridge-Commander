@@ -23,7 +23,6 @@ struct RepoGroupView: View {
 				)
 				.padding(.leading, 20)
 				.listRowInsets(EdgeInsets())
-				.listRowSeparator(.hidden)
 			}
 		} header: {
 			RepositoryRowView(
