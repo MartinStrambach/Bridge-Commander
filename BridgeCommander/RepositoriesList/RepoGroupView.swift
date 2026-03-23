@@ -11,20 +11,17 @@ struct RepoGroupView: View {
 		ForEach(store.scope(state: \.rows, action: \.rows)) { rowStore in
 			let isHeader = !rowStore.isWorktree
 
-			if isHeader || !store.isCollapsed {
-				RepositoryRowView(
-					store: rowStore,
-					terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status,
-					isGroupCollapsed: isHeader ? store.isCollapsed : nil,
-					onToggleCollapse: isHeader ? { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } } : nil,
-					onRemove: isHeader ? { store.send(.remove) } : nil
-				)
-				.padding(.leading, isHeader ? 0 : 20)
-				.transition(.asymmetric(
-					insertion: .move(edge: .top).combined(with: .opacity),
-					removal: .move(edge: .top).combined(with: .opacity)
-				))
-			}
+			RepositoryRowView(
+				store: rowStore,
+				terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status,
+				isGroupCollapsed: isHeader ? store.isCollapsed : nil,
+				onToggleCollapse: isHeader ? { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } } : nil,
+				onRemove: isHeader ? { store.send(.remove) } : nil
+			)
+			.padding(.leading, isHeader ? 0 : 20)
+			.frame(height: (!isHeader && store.isCollapsed) ? 0 : nil, alignment: .top)
+			.opacity(!isHeader && store.isCollapsed ? 0 : 1)
+			.clipped()
 		}
 	}
 }
