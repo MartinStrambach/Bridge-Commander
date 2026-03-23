@@ -28,6 +28,13 @@ struct RepositoryListView: View {
 		}
 	}
 
+	/// Flattened list of all rows across all groups (used for terminal sidebar).
+	private var allRows: IdentifiedArrayOf<RepositoryRowReducer.State> {
+		IdentifiedArrayOf(
+			uniqueElements: store.repositoryGroups.flatMap { $0.rows }
+		)
+	}
+
 	var body: some View {
 		Group {
 			if let terminalLayoutStore = store.scope(
@@ -36,7 +43,7 @@ struct RepositoryListView: View {
 			) {
 				TerminalLayoutView(
 					store: terminalLayoutStore,
-					repositories: store.repositories,
+					repositories: allRows,
 					sessions: store.terminalSessions,
 					terminalViewStore: terminalViewStore,
 					onStatusChange: { sessionId, status in
@@ -54,7 +61,7 @@ struct RepositoryListView: View {
 					if store.showPermissionDialog {
 						permissionWarningBanner
 					}
-					if store.repositories.isEmpty {
+					if store.repositoryGroups.isEmpty {
 						emptyStateView
 					} else {
 						repositoryListView
@@ -80,21 +87,8 @@ struct RepositoryListView: View {
 				Text("Bridge Commander")
 					.font(.title2)
 					.fontWeight(.bold)
-
-				if let directory = store.selectedRepository {
-					Text(directory)
-						.font(.caption)
-						.foregroundColor(.secondary)
-						.lineLimit(1)
-						.truncationMode(.middle)
-				}
-				else {
-					Text("No repository selected")
-						.font(.caption)
-						.foregroundColor(.secondary)
-				}
 			}
-			if !store.repositories.isEmpty {
+			if !store.repositoryGroups.isEmpty {
 				HStack(spacing: 8) {
 					HeaderButton(
 						icon: sortModeIcon,
@@ -105,15 +99,15 @@ struct RepositoryListView: View {
 					Spacer()
 
 					HStack(spacing: 12) {
-						Text("\(store.repositories.count) repositories")
+						let repoCount = store.repositoryGroups.count
+						Text("\(repoCount) \(repoCount == 1 ? "repository" : "repositories")")
 							.font(.subheadline)
 							.foregroundColor(.secondary)
 
 						if store.isScanning {
 							ProgressView()
 								.scaleEffect(0.7)
-						}
-						else {
+						} else {
 							HeaderButton(
 								icon: "arrow.clockwise",
 								tooltip: "Refresh repository status (⌘R)",
@@ -130,8 +124,7 @@ struct RepositoryListView: View {
 						)
 					}
 				}
-			}
-			else {
+			} else {
 				Spacer()
 			}
 		}
@@ -151,19 +144,6 @@ struct RepositoryListView: View {
 		)
 	}
 
-	// MARK: - Scanning View
-
-	private var scanningView: some View {
-		VStack(spacing: 16) {
-			ProgressView()
-			Text("Scanning repositories...")
-				.font(.headline)
-				.foregroundColor(.secondary)
-		}
-		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.background(Color(.controlBackgroundColor))
-	}
-
 	// MARK: - Empty State View
 
 	private var emptyStateView: some View {
@@ -177,14 +157,14 @@ struct RepositoryListView: View {
 					.font(.title3)
 					.fontWeight(.semibold)
 
-				Text("Select a Git repository to view its worktrees")
+				Text("Add a Git repository to get started")
 					.font(.body)
 					.foregroundColor(.secondary)
 					.multilineTextAlignment(.center)
 			}
 
-			Button(action: selectRepository) {
-				Label("Select Repository", systemImage: "folder")
+			Button(action: addRepository) {
+				Label("Add Repository", systemImage: "folder.badge.plus")
 					.padding(.horizontal, 8)
 			}
 			.buttonStyle(.borderedProminent)
@@ -198,18 +178,20 @@ struct RepositoryListView: View {
 	// MARK: - Repository List View
 
 	private var repositoryListView: some View {
-		List(store.scope(state: \.repositories, action: \.repositories)) { rowStore in
-			RepositoryRowView(
-				store: rowStore,
-				terminalSessionStatus: store.terminalSessions.first(where: { $0.repositoryPath == rowStore.path })?.status
-			)
+		List {
+			ForEach(store.scope(state: \.repositoryGroups, action: \.repositoryGroups)) { groupStore in
+				RepoGroupView(
+					store: groupStore,
+					sessions: store.terminalSessions
+				)
+			}
 		}
 		.listStyle(.plain)
 	}
 
 	// MARK: - Repository Selection
 
-	private func selectRepository() {
+	private func addRepository() {
 		let panel = NSOpenPanel()
 		panel.canChooseFiles = false
 		panel.canChooseDirectories = true
@@ -217,7 +199,7 @@ struct RepositoryListView: View {
 		panel.message = "Select a Git repository"
 
 		if panel.runModal() == .OK, let url = panel.url {
-			send(.repositorySelected(url.path))
+			send(.addRepository(url.path))
 		}
 	}
 
