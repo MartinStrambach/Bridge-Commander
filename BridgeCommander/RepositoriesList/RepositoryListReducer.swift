@@ -31,7 +31,8 @@ struct RepositoryListReducer {
 		@Shared(.mobileSubfolderPath)
 		fileprivate(set) var mobileSubfolderPath = ""
 
-		@Presents var alert: AlertState<Action.Alert>?
+		@Presents
+		var alert: AlertState<Action.Alert>?
 
 		fileprivate var isSystemEventsPermissionGranted: Bool?
 		fileprivate var isPermissionWarningDismissed = false
@@ -87,13 +88,13 @@ struct RepositoryListReducer {
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
-
 			// MARK: - View Actions
 
 			case .view(.onAppear):
 				return .merge(.send(.startScan), .send(.startPeriodicRefresh))
 
-			case .view(.onDisappear), .stopPeriodicRefresh:
+			case .stopPeriodicRefresh,
+			     .view(.onDisappear):
 				return .cancel(id: CancellableId.periodicRefresh)
 
 			case .view(.periodicRefreshIntervalChanged):
@@ -122,9 +123,11 @@ struct RepositoryListReducer {
 
 			case .view(.openAutomationSettingsButtonTapped):
 				return .run { _ in
-					if let url = URL(
-						string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
-					) {
+					if
+						let url = URL(
+							string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
+						)
+					{
 						NSWorkspace.shared.open(url)
 					}
 				}
@@ -141,13 +144,17 @@ struct RepositoryListReducer {
 
 			case let .addRepository(path):
 				let normalized = normalizePath(path)
-				guard !state.trackedRepoPaths.contains(normalized) else { return .none }
+				guard !state.trackedRepoPaths.contains(normalized) else {
+					return .none
+				}
+
 				state.isScanning = true
 				return .run { [normalized] send in
 					let rows = await GitWorktreeScanner.listWorktrees(forRepo: normalized)
 					if rows.isEmpty {
 						await send(.addRepositoryFailed(normalized))
-					} else {
+					}
+					else {
 						await send(.addRepositorySucceeded(rootPath: normalized, scanned: rows))
 					}
 				}
@@ -166,12 +173,14 @@ struct RepositoryListReducer {
 			case let .addRepositorySucceeded(rootPath, scanned):
 				state.isScanning = false
 				state.$trackedRepoPaths.withLock { $0.append(rootPath) }
-				if let group = buildGroup(
-					rootPath: rootPath,
-					scanned: scanned,
-					collapsedPaths: Set(state.collapsedRepoPaths),
-					sortMode: state.sortMode
-				) {
+				if
+					let group = buildGroup(
+						rootPath: rootPath,
+						scanned: scanned,
+						collapsedPaths: Set(state.collapsedRepoPaths),
+						sortMode: state.sortMode
+					)
+				{
 					state.repositoryGroups.append(group)
 				}
 				return .none
@@ -186,7 +195,10 @@ struct RepositoryListReducer {
 						state.$trackedRepoPaths.withLock { $0 = [normalizePath(legacy)] }
 					}
 				}
-				guard !state.trackedRepoPaths.isEmpty else { return .none }
+				guard !state.trackedRepoPaths.isEmpty else {
+					return .none
+				}
+
 				state.isScanning = true
 				let paths = Array(state.trackedRepoPaths)
 				return .merge(
@@ -226,31 +238,34 @@ struct RepositoryListReducer {
 				if state.repositoryGroups[id: rootPath] != nil {
 					// Existing group: merge rows, preserving cached PR/ticket data
 					mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
-				} else if !scanned.isEmpty {
+				}
+				else if !scanned.isEmpty {
 					// New group (e.g., from migration path on first launch)
-					if let group = buildGroup(
-						rootPath: rootPath,
-						scanned: scanned,
-						collapsedPaths: Set(state.collapsedRepoPaths),
-						sortMode: state.sortMode
-					) {
+					if
+						let group = buildGroup(
+							rootPath: rootPath,
+							scanned: scanned,
+							collapsedPaths: Set(state.collapsedRepoPaths),
+							sortMode: state.sortMode
+						)
+					{
 						state.repositoryGroups.append(group)
 					}
 				}
 				return .none
 
-			case .scanCompleted:
-				state.isScanning = false
-				return .none
-
-			case .scanFailed:
+			case .scanCompleted,
+			     .scanFailed:
 				state.isScanning = false
 				return .none
 
 			// MARK: - Refresh
 
 			case .refreshRepositories:
-				guard !state.repositoryGroups.isEmpty else { return .none }
+				guard !state.repositoryGroups.isEmpty else {
+					return .none
+				}
+
 				let refreshEffects = state.repositoryGroups.flatMap { group -> [Effect<Action>] in
 					let headerEffect = Effect<Action>.send(
 						.repositoryGroups(.element(id: group.id, action: .header(.refresh)))
@@ -280,10 +295,16 @@ struct RepositoryListReducer {
 			// MARK: - Terminal
 
 			case let .repositoryGroups(.element(id: groupId, action: .header(.openTerminalForRepo))):
-				guard let repositoryPath = state.repositoryGroups[id: groupId]?.header.path else { return .none }
+				guard let repositoryPath = state.repositoryGroups[id: groupId]?.header.path else {
+					return .none
+				}
+
 				return openTerminal(for: repositoryPath, in: &state)
 
-			case let .repositoryGroups(.element(id: _, action: .worktrees(.element(id: repositoryPath, action: .openTerminalForRepo)))):
+			case let .repositoryGroups(.element(
+				id: _,
+				action: .worktrees(.element(id: repositoryPath, action: .openTerminalForRepo))
+			)):
 				return openTerminal(for: repositoryPath, in: &state)
 
 			// MARK: - Collapse Persistence
@@ -294,7 +315,8 @@ struct RepositoryListReducer {
 					var collapsed = Set(state.collapsedRepoPaths)
 					if group.isCollapsed {
 						collapsed.insert(groupId)
-					} else {
+					}
+					else {
 						collapsed.remove(groupId)
 					}
 					state.$collapsedRepoPaths.withLock { $0 = collapsed.sorted() }
@@ -323,11 +345,14 @@ struct RepositoryListReducer {
 			// MARK: - Terminal Layout
 
 			case let .terminalLayout(.selectRepo(repositoryPath)):
-				if let existing = state.terminalSessions.first(where: {
-					$0.repositoryPath == repositoryPath
-				}) {
+				if
+					let existing = state.terminalSessions.first(where: {
+						$0.repositoryPath == repositoryPath
+					})
+				{
 					state.terminalLayout?.activeSessionId = existing.id
-				} else {
+				}
+				else {
 					let subfolder = state.mobileSubfolderPath.trimmingCharacters(
 						in: CharacterSet(charactersIn: "/")
 					)
@@ -346,7 +371,10 @@ struct RepositoryListReducer {
 				return .none
 
 			case .terminalLayout(.newTabRequested):
-				guard let path = state.terminalLayout?.activeRepositoryPath else { return .none }
+				guard let path = state.terminalLayout?.activeRepositoryPath else {
+					return .none
+				}
+
 				let maxIndex = state.terminalSessions
 					.filter { $0.repositoryPath == path }
 					.map(\.tabIndex)
@@ -364,16 +392,21 @@ struct RepositoryListReducer {
 				return .none
 
 			case let .terminalLayout(.killTab(sessionId)):
-				guard let session = state.terminalSessions[id: sessionId] else { return .none }
+				guard let session = state.terminalSessions[id: sessionId] else {
+					return .none
+				}
+
 				let repoPath = session.repositoryPath
 				state.terminalSessions.remove(id: sessionId)
 				if state.terminalLayout?.activeSessionId == sessionId {
 					if let next = state.terminalSessions.first(where: { $0.repositoryPath == repoPath }) {
 						state.terminalLayout?.activeSessionId = next.id
-					} else if let next = state.terminalSessions.first {
+					}
+					else if let next = state.terminalSessions.first {
 						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
 						state.terminalLayout?.activeSessionId = next.id
-					} else {
+					}
+					else {
 						state.terminalLayout = nil
 					}
 				}
@@ -383,19 +416,25 @@ struct RepositoryListReducer {
 				let toRemove = state.terminalSessions
 					.filter { $0.repositoryPath == repositoryPath }
 					.map(\.id)
-				for id in toRemove { state.terminalSessions.remove(id: id) }
+				for id in toRemove {
+					state.terminalSessions.remove(id: id)
+				}
 				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
 					if let next = state.terminalSessions.first {
 						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
 						state.terminalLayout?.activeSessionId = next.id
-					} else {
+					}
+					else {
 						state.terminalLayout = nil
 					}
 				}
 				return .none
 
 			case let .terminalLayout(.retryTab(sessionId)):
-				guard let old = state.terminalSessions[id: sessionId] else { return .none }
+				guard let old = state.terminalSessions[id: sessionId] else {
+					return .none
+				}
+
 				let repoPath = old.repositoryPath
 				let tabIndex = old.tabIndex
 				state.terminalSessions.remove(id: sessionId)
@@ -414,7 +453,10 @@ struct RepositoryListReducer {
 			// MARK: - Permissions
 
 			case .checkSystemEventsPermission:
-				guard state.isSystemEventsPermissionGranted == nil else { return .none }
+				guard state.isSystemEventsPermissionGranted == nil else {
+					return .none
+				}
+
 				return .run { send in
 					let granted = await PermissionChecker.isSystemEventsAutomationPermitted()
 					await send(.didReceiveSystemEventsPermission(granted))
@@ -450,7 +492,10 @@ struct RepositoryListReducer {
 
 private func sortGroupsInState(in state: inout RepositoryListReducer.State) {
 	for groupId in state.repositoryGroups.ids {
-		guard let group = state.repositoryGroups[id: groupId] else { continue }
+		guard let group = state.repositoryGroups[id: groupId] else {
+			continue
+		}
+
 		let sorted = sortRepositories(Array(group.worktrees), sortMode: state.sortMode)
 		state.repositoryGroups[id: groupId]?.worktrees = IdentifiedArrayOf(uniqueElements: sorted)
 	}
@@ -469,7 +514,8 @@ private func openTerminal(
 	let session: TerminalSession
 	if let existing = existingSession {
 		session = existing
-	} else {
+	}
+	else {
 		let subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 		let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
 		session = TerminalSession(repositoryPath: repositoryPath, startingDirectory: startingDirectory)
@@ -480,7 +526,8 @@ private func openTerminal(
 			activeRepositoryPath: repositoryPath,
 			activeSessionId: session.id
 		)
-	} else {
+	}
+	else {
 		state.terminalLayout?.activeRepositoryPath = repositoryPath
 		state.terminalLayout?.activeSessionId = session.id
 	}
@@ -502,8 +549,11 @@ private func buildGroup(
 			isWorktree: repo.isWorktree
 		)
 	}
-	guard let header = allRows.first(where: { !$0.isWorktree }) else { return nil }
-	let worktrees = sortRepositories(allRows.filter { $0.isWorktree }, sortMode: sortMode)
+	guard let header = allRows.first(where: { !$0.isWorktree }) else {
+		return nil
+	}
+
+	let worktrees = sortRepositories(allRows.filter(\.isWorktree), sortMode: sortMode)
 	return RepoGroupReducer.State(
 		id: rootPath,
 		isCollapsed: isCollapsed,
@@ -517,7 +567,9 @@ private func mergeGroupRows(
 	rootPath: String,
 	scanned: [ScannedRepository]
 ) {
-	guard let group = state.repositoryGroups[id: rootPath] else { return }
+	guard let group = state.repositoryGroups[id: rootPath] else {
+		return
+	}
 
 	var currentByPath: [String: RepositoryRowReducer.State] = [group.header.path: group.header]
 	for row in group.worktrees {
@@ -532,7 +584,8 @@ private func mergeGroupRows(
 			existing.isWorktree = repo.isWorktree
 			existing.branchName = repo.branchName
 			updated.append(existing)
-		} else {
+		}
+		else {
 			updated.append(RepositoryRowReducer.State(
 				path: repo.path,
 				name: repo.name,
@@ -542,8 +595,11 @@ private func mergeGroupRows(
 		}
 	}
 
-	guard let newHeader = updated.first(where: { !$0.isWorktree }) else { return }
-	let worktrees = sortRepositories(updated.filter { $0.isWorktree }, sortMode: state.sortMode)
+	guard let newHeader = updated.first(where: { !$0.isWorktree }) else {
+		return
+	}
+
+	let worktrees = sortRepositories(updated.filter(\.isWorktree), sortMode: state.sortMode)
 	state.repositoryGroups[id: rootPath]?.header = newHeader
 	state.repositoryGroups[id: rootPath]?.worktrees = IdentifiedArrayOf(uniqueElements: worktrees)
 }
@@ -556,12 +612,14 @@ private func sortRepositories(
 ) -> [RepositoryRowReducer.State] {
 	repositories.sorted { r1, r2 in
 		switch sortMode {
-		case .state: return sortByState(r1, r2)
+		case .state: sortByState(r1, r2)
+
 		case .ticket:
-			return (r1.ticketId ?? "")
+			(r1.ticketId ?? "")
 				.localizedCaseInsensitiveCompare(r2.ticketId ?? "") == .orderedDescending
+
 		case .branch:
-			return (r1.branchName ?? "")
+			(r1.branchName ?? "")
 				.localizedCaseInsensitiveCompare(r2.branchName ?? "") == .orderedAscending
 		}
 	}
@@ -573,18 +631,24 @@ private func sortByState(
 ) -> Bool {
 	let p1 = stateSortPriority(r1.ticketState)
 	let p2 = stateSortPriority(r2.ticketState)
-	if p1 != p2 { return p1 < p2 }
+	if p1 != p2 {
+		return p1 < p2
+	}
 	return (r1.ticketId ?? "").localizedCaseInsensitiveCompare(r2.ticketId ?? "") == .orderedDescending
 }
 
 private func stateSortPriority(_ state: TicketState?) -> Int {
-	guard let state else { return 4 }
+	guard let state else {
+		return 4
+	}
+
 	switch state {
 	case .inProgress: return 0
 	case .waitingToCodeReview: return 1
 	case .waitingForTesting: return 2
 	case .open: return 3
-	case .accepted, .waitingToAcceptation: return 5
+	case .accepted,
+	     .waitingToAcceptation: return 5
 	case .done: return 6
 	}
 }

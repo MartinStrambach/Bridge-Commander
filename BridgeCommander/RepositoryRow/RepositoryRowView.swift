@@ -348,13 +348,12 @@ struct RepositoryRowView: View {
 			}
 			.frame(width: 20, height: 20)
 			if let remove = onRemove {
-				Button(action: remove) {
-					Image(systemName: "xmark.circle")
-						.font(.caption)
-						.foregroundColor(.red.opacity(0.7))
-				}
-				.buttonStyle(.plain)
-				.help("Remove from list")
+				ActionButton(
+					icon: .systemImage("xmark.circle"),
+					tooltip: "Remove from list",
+					color: .red,
+					action: remove
+				)
 			}
 		}
 	}
