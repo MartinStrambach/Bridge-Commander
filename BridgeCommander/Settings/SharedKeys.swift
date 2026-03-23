@@ -64,3 +64,9 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalOpenin
 		appStorage("claudeCodeOpeningBehavior")
 	}
 }
+
+nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalColorTheme> {
+	static var terminalColorTheme: Self {
+		appStorage("terminalColorTheme")
+	}
+}

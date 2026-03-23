@@ -28,6 +28,7 @@ struct SettingsView: View {
 					terminalBehaviorSection
 					claudeCodeBehaviorSection
 				}
+				terminalColorThemeSection
 				androidStudioPathSection
 				worktreeOptionsSection
 			}
@@ -76,6 +77,30 @@ struct SettingsView: View {
 			) {
 				ForEach(TerminalOpeningBehavior.allCases, id: \.self) { behavior in
 					Text(behavior.displayName).tag(behavior)
+				}
+			}
+			.pickerStyle(.segmented)
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var terminalColorThemeSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Terminal Color Theme")
+				.font(.headline)
+
+			Text("Choose the color theme for the built-in terminal. Applies to newly opened terminals.")
+				.font(.caption)
+				.foregroundColor(.secondary)
+
+			Picker(
+				"Color Theme",
+				selection: $store.terminalColorTheme.sending(\.setTerminalColorTheme)
+			) {
+				ForEach(TerminalColorTheme.allCases, id: \.self) { theme in
+					Text(theme.displayName).tag(theme)
 				}
 			}
 			.pickerStyle(.segmented)

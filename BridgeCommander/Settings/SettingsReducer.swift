@@ -44,11 +44,14 @@ struct SettingsReducer {
 		@Shared(.worktreeBasePath)
 		var worktreeBasePath = "../worktrees"
 
+		@Shared(.terminalColorTheme)
+		var terminalColorTheme = TerminalColorTheme.basicDark
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 	}
 
-	enum Action: Sendable {
+	enum Action {
 		case setYouTrackToken(String)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setIosSubfolderPath(String)
@@ -62,11 +65,12 @@ struct SettingsReducer {
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
 		case setAndroidStudioPath(String)
 		case setWorktreeBasePath(String)
+		case setTerminalColorTheme(TerminalColorTheme)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
 		@CasePathable
-		enum Alert: Sendable {
+		enum Alert {
 			case confirmClearToken
 		}
 	}
@@ -124,6 +128,10 @@ struct SettingsReducer {
 
 			case let .setWorktreeBasePath(path):
 				state.$worktreeBasePath.withLock { $0 = path }
+				return .none
+
+			case let .setTerminalColorTheme(theme):
+				state.$terminalColorTheme.withLock { $0 = theme }
 				return .none
 
 			case .clearTokenButtonTapped:

@@ -26,6 +26,11 @@ final class TerminalViewStore {
 		// Users can toggle back to Meta mode with Option+Command+O if needed.
 		terminalView.optionAsMetaKey = false
 
+		let rawTheme = UserDefaults.standard.string(forKey: "terminalColorTheme") ?? ""
+		let theme = TerminalColorTheme(rawValue: rawTheme) ?? .basicDark
+		terminalView.nativeForegroundColor = theme.foregroundColor
+		terminalView.nativeBackgroundColor = theme.backgroundColor
+
 		let sessionId = session.id
 		terminalView.processDelegate = TerminalProcessDelegate(
 			onFailed: { message in onStatusChange(sessionId, .failed(message)) }
@@ -59,7 +64,7 @@ final class TerminalViewStore {
 	}
 
 	func killAllSessions(for repositoryPath: String) {
-		let sessionIds = views.compactMap { (id, view) -> UUID? in
+		let sessionIds = views.compactMap { id, view -> UUID? in
 			view.repositoryPath == repositoryPath ? id : nil
 		}
 		for id in sessionIds {
@@ -83,7 +88,7 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	private static let claudePromptCharacter: Character = "❯" // U+276F
 
 	var repositoryPath: String = ""
-	var sessionId: UUID = UUID()
+	var sessionId: UUID = .init()
 	var onStatusChange: (@Sendable (UUID, TerminalSessionStatus) -> Void)?
 
 	private var currentStatus: TerminalSessionStatus = .active
