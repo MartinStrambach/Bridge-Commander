@@ -47,6 +47,7 @@ struct RepositoryRowView: View {
 						.foregroundColor(.secondary)
 						.frame(maxHeight: .infinity)
 						.padding(.horizontal, 4)
+						.background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
 						.contentShape(Rectangle())
 				}
 				.buttonStyle(.plain)
