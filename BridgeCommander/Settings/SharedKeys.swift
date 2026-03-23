@@ -70,3 +70,13 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalColorT
 		appStorage("terminalColorTheme")
 	}
 }
+
+extension SharedReaderKey where Self == FileStorageKey<[String]> {
+	static var trackedRepoPaths: Self {
+		.fileStorage(.documentsDirectory.appending(component: "trackedRepoPaths.json"))
+	}
+
+	static var collapsedRepoPaths: Self {
+		.fileStorage(.documentsDirectory.appending(component: "collapsedRepoPaths.json"))
+	}
+}
