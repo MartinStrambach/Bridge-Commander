@@ -63,8 +63,8 @@ struct CreateWorktreeDialogView: View {
 			}
 			.padding()
 		}
+		.padding(24)
 		.frame(width: 400)
-		.padding()
 	}
 }
 
