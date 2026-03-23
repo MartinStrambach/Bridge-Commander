@@ -10,6 +10,7 @@ struct RepositoryRowView: View {
 	/// Non-nil when this row is a repo group section header.
 	/// Drives the disclosure chevron on the left.
 	var isGroupCollapsed: Bool? = nil
+	/// Called when the disclosure chevron is tapped. Required when `isGroupCollapsed` is non-nil.
 	var onToggleCollapse: (() -> Void)? = nil
 	/// Non-nil when this row is a repo group section header.
 	/// Renders a remove button in the action bar.
