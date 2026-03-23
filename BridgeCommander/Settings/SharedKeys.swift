@@ -71,12 +71,17 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalColorT
 	}
 }
 
-extension SharedReaderKey where Self == FileStorageKey<[String]> {
+nonisolated extension SharedReaderKey where Self == FileStorageKey<[String]> {
 	static var trackedRepoPaths: Self {
-		.fileStorage(.documentsDirectory.appending(component: "trackedRepoPaths.json"))
+		.fileStorage(applicationSupportURL(name: "trackedRepoPaths.json"))
 	}
 
 	static var collapsedRepoPaths: Self {
-		.fileStorage(.documentsDirectory.appending(component: "collapsedRepoPaths.json"))
+		.fileStorage(applicationSupportURL(name: "collapsedRepoPaths.json"))
 	}
+}
+
+private nonisolated func applicationSupportURL(name: String) -> URL {
+	let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+	return appSupport.appending(component: name)
 }
