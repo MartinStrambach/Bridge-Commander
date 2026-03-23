@@ -16,6 +16,17 @@ struct RepositoryListReducer {
 		fileprivate(set) var isScanning = false
 		fileprivate(set) var sortMode: SortMode = .state
 
+		var searchText: String = ""
+
+		var filteredRepositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> {
+			guard !searchText.isEmpty else { return repositoryGroups }
+			return repositoryGroups.filter { group in
+				let query = searchText
+				if group.header.branchName?.localizedCaseInsensitiveContains(query) == true { return true }
+				return group.worktrees.contains { $0.branchName?.localizedCaseInsensitiveContains(query) == true }
+			}
+		}
+
 		var terminalSessions: IdentifiedArrayOf<TerminalSession> = []
 		var terminalLayout: TerminalLayoutReducer.State?
 
@@ -69,6 +80,7 @@ struct RepositoryListReducer {
 			case openAutomationSettingsButtonTapped
 			case periodicRefreshIntervalChanged
 			case refreshButtonTapped
+			case searchTextChanged(String)
 			case sortModeButtonTapped
 		}
 
@@ -109,6 +121,10 @@ struct RepositoryListReducer {
 					}
 					sortGroupsInState(in: &state)
 				}
+				return .none
+
+			case let .view(.searchTextChanged(text)):
+				state.searchText = text
 				return .none
 
 			case .view(.clearButtonTapped):

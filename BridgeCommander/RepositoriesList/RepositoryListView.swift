@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct RepositoryListView: View {
 	@Bindable var store: StoreOf<RepositoryListReducer>
 	@State private var terminalViewStore = TerminalViewStore()
+	@FocusState private var isSearchFocused: Bool
 
 	private var sortModeIcon: String {
 		switch store.sortMode {
@@ -65,6 +66,8 @@ struct RepositoryListView: View {
 					if store.repositoryGroups.isEmpty {
 						emptyStateView
 					} else {
+						searchBarView
+						Divider()
 						repositoryListView
 					}
 				}
@@ -73,6 +76,7 @@ struct RepositoryListView: View {
 			}
 		}
 		.animation(.spring(duration: 0.3), value: store.terminalLayout != nil)
+		.background { focusSearchShortcut }
 		.onAppear { send(.onAppear) }
 		.onDisappear { send(.onDisappear) }
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
@@ -183,11 +187,41 @@ struct RepositoryListView: View {
 		.background(Color(.controlBackgroundColor))
 	}
 
+	// MARK: - Search Bar
+
+	private var focusSearchShortcut: some View {
+		Button("") { isSearchFocused = true }
+			.keyboardShortcut("f", modifiers: .command)
+			.hidden()
+	}
+
+	private var searchBarView: some View {
+		HStack(spacing: 6) {
+			Image(systemName: "magnifyingglass")
+				.foregroundStyle(.secondary)
+			TextField("Filter by branch name…", text: Binding(get: { store.searchText }, set: { send(.searchTextChanged($0)) }))
+				.textFieldStyle(.plain)
+				.focused($isSearchFocused)
+			if !store.searchText.isEmpty {
+				Button {
+					send(.searchTextChanged(""))
+				} label: {
+					Image(systemName: "xmark.circle.fill")
+						.foregroundStyle(.secondary)
+						.contentShape(Rectangle())
+				}
+				.buttonStyle(.plain)
+			}
+		}
+		.padding(.horizontal, 12)
+		.padding(.vertical, 7)
+	}
+
 	// MARK: - Repository List View
 
 	private var repositoryListView: some View {
 		List {
-			ForEach(store.scope(state: \.repositoryGroups, action: \.repositoryGroups)) { groupStore in
+			ForEach(store.scope(state: \.filteredRepositoryGroups, action: \.repositoryGroups)) { groupStore in
 				RepoGroupView(
 					store: groupStore,
 					sessions: store.terminalSessions
