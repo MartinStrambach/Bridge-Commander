@@ -6,7 +6,16 @@ struct RepoGroupView: View {
 	let sessions: IdentifiedArrayOf<TerminalSession>
 
 	var body: some View {
-		Section {
+		let isExpanded = Binding(
+			get: { !store.isCollapsed },
+			set: { newValue in
+				if newValue != !store.isCollapsed {
+					store.send(.toggleCollapse)
+				}
+			}
+		)
+
+		Section(isExpanded: isExpanded) {
 			ForEach(store.scope(state: \.worktrees, action: \.worktrees)) { rowStore in
 				RepositoryRowView(
 					store: rowStore,
@@ -21,7 +30,7 @@ struct RepoGroupView: View {
 				store: store.scope(state: \.header, action: \.header),
 				terminalSessionStatus: sessions.first(where: { $0.repositoryPath == store.header.path })?.status,
 				isGroupCollapsed: store.isCollapsed,
-				onToggleCollapse: { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } },
+				onToggleCollapse: { isExpanded.wrappedValue = !isExpanded.wrappedValue },
 				onRemove: { store.send(.remove) }
 			)
 		}

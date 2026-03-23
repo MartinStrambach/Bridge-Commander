@@ -17,6 +17,9 @@ struct RepositoryRowView: View {
 	var onRemove: (() -> Void)? = nil
 
 	private var backgroundColorForState: Color {
+		if isGroupCollapsed != nil {
+			return Color.primary.opacity(0.1)
+		}
 		if let ticketState = store.ticketState {
 			switch ticketState {
 			case .done:
