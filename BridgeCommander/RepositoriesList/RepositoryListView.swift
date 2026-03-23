@@ -108,7 +108,7 @@ struct RepositoryListView: View {
 
 						if store.isScanning {
 							ProgressView()
-								.scaleEffect(0.7)
+								.scaleEffect(0.55)
 						} else {
 							HeaderButton(
 								icon: "arrow.clockwise",
