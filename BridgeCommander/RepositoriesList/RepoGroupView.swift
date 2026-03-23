@@ -14,9 +14,6 @@ struct RepoGroupView: View {
 						terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status
 					)
 					.padding(.leading, 20)
-					.frame(height: store.isCollapsed ? 0 : nil, alignment: .top)
-					.opacity(store.isCollapsed ? 0 : 1)
-					.clipped()
 					.listRowInsets(EdgeInsets())
 					.listRowSeparator(.hidden)
 				}
