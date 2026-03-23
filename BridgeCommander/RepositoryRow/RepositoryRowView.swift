@@ -99,7 +99,7 @@ struct RepositoryRowView: View {
 			HStack(spacing: 12) {
 				VStack(alignment: .leading, spacing: 2) {
 					HStack(spacing: 8) {
-						Text(store.formattedBranchName)
+						Text(isGroupCollapsed != nil ? store.name : store.formattedBranchName)
 							.font(.headline)
 							.lineLimit(1)
 						changesIndicator
