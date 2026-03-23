@@ -20,8 +20,13 @@ struct RepoGroupView: View {
 					onRemove: isHeader ? { store.send(.remove) } : nil
 				)
 				.padding(.leading, isHeader ? 0 : 20)
+				.transition(.asymmetric(
+					insertion: .move(edge: .top).combined(with: .opacity),
+					removal: .move(edge: .top).combined(with: .opacity)
+				))
 			}
 		}
+		.animation(.easeInOut(duration: 0.2), value: store.isCollapsed)
 	}
 }
 

@@ -42,9 +42,11 @@ struct RepositoryRowView: View {
 		HStack(alignment: .center, spacing: 16) {
 			if let collapsed = isGroupCollapsed, let toggle = onToggleCollapse {
 				Button(action: toggle) {
-					Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+					Image(systemName: "chevron.right")
 						.font(.caption)
 						.foregroundColor(.secondary)
+						.rotationEffect(.degrees(collapsed ? 0 : 90))
+						.animation(.easeInOut(duration: 0.2), value: collapsed)
 						.frame(maxHeight: .infinity)
 						.padding(.horizontal, 4)
 						.background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
