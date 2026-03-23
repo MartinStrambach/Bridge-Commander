@@ -16,7 +16,7 @@ struct RepoGroupView: View {
 					store: rowStore,
 					terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status,
 					isGroupCollapsed: isHeader ? store.isCollapsed : nil,
-					onToggleCollapse: isHeader ? { withAnimation(.easeInOut(duration: 0.2)) { store.send(.toggleCollapse) } } : nil,
+					onToggleCollapse: isHeader ? { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } } : nil,
 					onRemove: isHeader ? { store.send(.remove) } : nil
 				)
 				.padding(.leading, isHeader ? 0 : 20)
