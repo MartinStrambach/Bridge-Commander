@@ -1,9 +1,10 @@
 import ComposableArchitecture
 import SwiftUI
+import UniformTypeIdentifiers
 
 @ViewAction(for: RepositoryListReducer.self)
 struct RepositoryListView: View {
-	let store: StoreOf<RepositoryListReducer>
+	@Bindable var store: StoreOf<RepositoryListReducer>
 	@State private var terminalViewStore = TerminalViewStore()
 
 	private var sortModeIcon: String {
@@ -77,6 +78,7 @@ struct RepositoryListView: View {
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
 			send(.periodicRefreshIntervalChanged)
 		}
+		.alert($store.scope(state: \.alert, action: \.alert))
 	}
 
 	// MARK: - Header View
@@ -116,6 +118,12 @@ struct RepositoryListView: View {
 							)
 							.keyboardShortcut("r", modifiers: .command)
 						}
+
+						HeaderButton(
+							icon: "plus",
+							tooltip: "Add repository",
+							action: addRepository
+						)
 
 						HeaderButton(
 							icon: "xmark.circle.fill",
@@ -184,9 +192,12 @@ struct RepositoryListView: View {
 					store: groupStore,
 					sessions: store.terminalSessions
 				)
+				.listRowInsets(EdgeInsets())
+				.listRowSeparator(.hidden)
 			}
 		}
 		.listStyle(.plain)
+		.onDrop(of: [UTType.folder], isTargeted: nil, perform: handleDrop)
 	}
 
 	// MARK: - Repository Selection
@@ -201,6 +212,22 @@ struct RepositoryListView: View {
 		if panel.runModal() == .OK, let url = panel.url {
 			send(.addRepository(url.path))
 		}
+	}
+
+	// MARK: - Drag & Drop
+
+	@discardableResult
+	private func handleDrop(providers: [NSItemProvider]) -> Bool {
+		for provider in providers {
+			_ = provider.loadObject(ofClass: URL.self) { url, _ in
+				if let url {
+					DispatchQueue.main.async {
+						send(.addRepository(url.path))
+					}
+				}
+			}
+		}
+		return true
 	}
 
 }

@@ -439,15 +439,6 @@ struct RepositoryListReducer {
 
 			// MARK: - Alert
 
-			case .alert(.presented(.dismiss)):
-				state.alert = nil
-				return .none
-
-			case .alert(.dismiss):
-				// System dismiss (e.g. background tap)
-				state.alert = nil
-				return .none
-
 			case .alert:
 				return .none
 
@@ -522,10 +513,10 @@ private func mergeGroupRows(
 	rootPath: String,
 	scanned: [ScannedRepository]
 ) {
-	guard state.repositoryGroups[id: rootPath] != nil else { return }
+	guard let group = state.repositoryGroups[id: rootPath] else { return }
 
 	var currentByPath: [String: RepositoryRowReducer.State] = [:]
-	for row in state.repositoryGroups[id: rootPath]!.rows {
+	for row in group.rows {
 		currentByPath[row.path] = row
 	}
 
