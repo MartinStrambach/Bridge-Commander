@@ -7,6 +7,14 @@ struct RepositoryRowView: View {
 
 	var terminalSessionStatus: TerminalSessionStatus? = nil
 
+	/// Non-nil when this row is a repo group section header.
+	/// Drives the disclosure chevron on the left.
+	var isGroupCollapsed: Bool? = nil
+	var onToggleCollapse: (() -> Void)? = nil
+	/// Non-nil when this row is a repo group section header.
+	/// Renders a remove button in the action bar.
+	var onRemove: (() -> Void)? = nil
+
 	private var backgroundColorForState: Color {
 		if let ticketState = store.ticketState {
 			switch ticketState {
@@ -31,6 +39,15 @@ struct RepositoryRowView: View {
 
 	var body: some View {
 		HStack(alignment: .center, spacing: 16) {
+			if let collapsed = isGroupCollapsed, let toggle = onToggleCollapse {
+				Button(action: toggle) {
+					Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+						.font(.caption)
+						.foregroundColor(.secondary)
+						.frame(width: 14)
+				}
+				.buttonStyle(.plain)
+			}
 			TerminalStatusDotView(status: terminalSessionStatus)
 			RepositoryIcon(
 				isWorktree: store.isWorktree,
@@ -321,6 +338,15 @@ struct RepositoryRowView: View {
 				}
 			}
 			.frame(width: 20, height: 20)
+			if let remove = onRemove {
+				Button(action: remove) {
+					Image(systemName: "xmark.circle")
+						.font(.caption)
+						.foregroundColor(.red.opacity(0.7))
+				}
+				.buttonStyle(.plain)
+				.help("Remove from list")
+			}
 		}
 	}
 
