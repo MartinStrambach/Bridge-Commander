@@ -39,6 +39,8 @@ struct RepositoryRowReducer {
 		var createWorktreeButton: CreateWorktreeButtonReducer.State
 		var gitActionsMenu: GitActionsMenuReducer.State
 
+		var isLoaded = false
+
 		@Presents
 		var repositoryDetail: RepositoryDetail.State?
 
@@ -167,17 +169,13 @@ struct RepositoryRowReducer {
 				state.repositoryDetail = RepositoryDetail.State(repositoryPath: state.path)
 				return .none
 
-			case .onAppear,
-			     .refresh:
-				return .merge(
-					fetchBranch(for: state),
-					fetchUnpushed(for: state),
-					fetchCommitsBehind(for: state),
-					fetchRemoteBranch(for: state),
-					fetchYouTrack(for: state),
-					.send(.gitActionsMenu(.onAppear)),
-					.send(.xcodeButton(.onAppear))
-				)
+			case .onAppear:
+				guard !state.isLoaded else { return .none }
+				state.isLoaded = true
+				return fetchAll(for: state)
+
+			case .refresh:
+				return fetchAll(for: state)
 
 			case let .didFetchBranch(branch, unstaged, staged):
 				state.branchName = branch
@@ -189,7 +187,7 @@ struct RepositoryRowReducer {
 
 			case let .didFetchUnpushedCount(count):
 				state.unpushedCommitCount = count
-				return .none
+				return .send(.gitActionsMenu(.setUnpushedCount(count)))
 
 			case let .didFetchCommitsBehind(count):
 				state.commitsBehindCount = count
@@ -197,7 +195,7 @@ struct RepositoryRowReducer {
 
 			case let .didFetchRemoteBranch(hasRemote):
 				state.hasRemoteBranch = hasRemote
-				return .none
+				return .send(.gitActionsMenu(.setHasRemoteBranch(hasRemote)))
 
 			case let .didFetchYouTrack(details):
 				state.prUrl = details.prUrl
@@ -259,6 +257,18 @@ struct RepositoryRowReducer {
 	}
 
 	// MARK: - Private Effect Builders
+
+	private func fetchAll(for state: State) -> Effect<Action> {
+		.merge(
+			fetchBranch(for: state),
+			fetchUnpushed(for: state),
+			fetchCommitsBehind(for: state),
+			fetchRemoteBranch(for: state),
+			fetchYouTrack(for: state),
+			.send(.gitActionsMenu(.onAppear)),
+			.send(.xcodeButton(.onAppear))
+		)
+	}
 
 	private func fetchBranch(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in

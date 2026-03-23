@@ -35,7 +35,9 @@ struct GitActionsMenuReducer {
 
 	enum Action: Equatable {
 		case onAppear
-		case didCheckGitStatus(hasRemoteBranch: Bool, isMergeInProgress: Bool, unpushedCommitsCount: Int)
+		case setHasRemoteBranch(Bool)
+		case setUnpushedCount(Int)
+		case didCheckGitStatus(isMergeInProgress: Bool)
 		case fetchButton(FetchButtonReducer.Action)
 		case pullButton(PullButtonReducer.Action)
 		case pushButton(PushButtonReducer.Action)
@@ -193,10 +195,16 @@ struct GitActionsMenuReducer {
 			case .onAppear:
 				return checkStatusEffect(path: state.repositoryPath)
 
-			case let .didCheckGitStatus(hasRemote, isMergeInProgress, unpushedCount):
+			case let .setHasRemoteBranch(hasRemote):
 				state.hasRemoteBranch = hasRemote
+				return .none
+
+			case let .setUnpushedCount(count):
+				state.unpushedCommitsCount = count
+				return .none
+
+			case let .didCheckGitStatus(isMergeInProgress):
 				state.isMergeInProgress = isMergeInProgress
-				state.unpushedCommitsCount = unpushedCount
 				return .none
 
 			default:
@@ -211,14 +219,8 @@ struct GitActionsMenuReducer {
 	private func checkStatusEffect(path: String) -> Effect<Action> {
 		.merge(
 			.run { send in
-				let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
 				let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-				let unpushedCount = await GitBranchDetector.countUnpushedCommits(at: path)
-				await send(.didCheckGitStatus(
-					hasRemoteBranch: hasRemote,
-					isMergeInProgress: isMergeInProgress,
-					unpushedCommitsCount: unpushedCount
-				))
+				await send(.didCheckGitStatus(isMergeInProgress: isMergeInProgress))
 			},
 			.send(.stashButton(.checkStashStatus))
 		)
