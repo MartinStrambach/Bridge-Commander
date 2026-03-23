@@ -6,23 +6,35 @@ struct RepoGroupView: View {
 	let sessions: IdentifiedArrayOf<TerminalSession>
 
 	var body: some View {
-		// TCA's @ObservableState generates dynamic member lookup, so rowStore.isWorktree
-		// and rowStore.path are valid reads within the ForEach observation context.
-		ForEach(store.scope(state: \.rows, action: \.rows)) { rowStore in
-			let isHeader = !rowStore.isWorktree
-
-			RepositoryRowView(
-				store: rowStore,
-				terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status,
-				isGroupCollapsed: isHeader ? store.isCollapsed : nil,
-				onToggleCollapse: isHeader ? { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } } : nil,
-				onRemove: isHeader ? { store.send(.remove) } : nil
-			)
-			.padding(.leading, isHeader ? 0 : 20)
-			.frame(height: (!isHeader && store.isCollapsed) ? 0 : nil, alignment: .top)
-			.opacity(!isHeader && store.isCollapsed ? 0 : 1)
-			.clipped()
+		Section {
+			ForEach(store.scope(state: \.rows, action: \.rows)) { rowStore in
+				if rowStore.isWorktree {
+					RepositoryRowView(
+						store: rowStore,
+						terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status
+					)
+					.padding(.leading, 20)
+					.frame(height: store.isCollapsed ? 0 : nil, alignment: .top)
+					.opacity(store.isCollapsed ? 0 : 1)
+					.clipped()
+					.listRowInsets(EdgeInsets())
+					.listRowSeparator(.hidden)
+				}
+			}
+		} header: {
+			ForEach(store.scope(state: \.rows, action: \.rows)) { rowStore in
+				if !rowStore.isWorktree {
+					RepositoryRowView(
+						store: rowStore,
+						terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status,
+						isGroupCollapsed: store.isCollapsed,
+						onToggleCollapse: { withAnimation(.easeInOut(duration: 0.2)) { _ = store.send(.toggleCollapse) } },
+						onRemove: { store.send(.remove) }
+					)
+				}
+			}
 		}
+		.listSectionSeparator(.hidden)
 	}
 }
 
@@ -39,15 +51,18 @@ struct RepoGroupView: View {
 		branchName: "MOB-123_feature",
 		isWorktree: true
 	)
-	RepoGroupView(
-		store: Store(
-			initialState: RepoGroupReducer.State(
-				id: "/projects/myapp",
-				isCollapsed: false,
-				rows: IdentifiedArrayOf(uniqueElements: [mainRow, worktreeRow])
+	List {
+		RepoGroupView(
+			store: Store(
+				initialState: RepoGroupReducer.State(
+					id: "/projects/myapp",
+					isCollapsed: false,
+					rows: IdentifiedArrayOf(uniqueElements: [mainRow, worktreeRow])
+				),
+				reducer: { RepoGroupReducer() }
 			),
-			reducer: { RepoGroupReducer() }
-		),
-		sessions: []
-	)
+			sessions: []
+		)
+	}
+	.listStyle(.plain)
 }

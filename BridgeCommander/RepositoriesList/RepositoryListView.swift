@@ -192,8 +192,6 @@ struct RepositoryListView: View {
 					store: groupStore,
 					sessions: store.terminalSessions
 				)
-				.listRowInsets(EdgeInsets())
-				.listRowSeparator(.hidden)
 			}
 		}
 		.listStyle(.plain)
