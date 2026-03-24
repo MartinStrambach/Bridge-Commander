@@ -45,6 +45,16 @@ struct TerminalPanelView: View {
     private var toolbar: some View {
         HStack(spacing: 8) {
             if let rowState = activeRowState {
+                if let ticketId = rowState.ticketId {
+                    Text(ticketId)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+                }
+
                 Text(rowState.formattedBranchName)
                     .font(.subheadline)
                     .fontWeight(.semibold)
