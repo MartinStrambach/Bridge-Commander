@@ -73,20 +73,20 @@ struct CreateWorktreeButtonView: View {
 	var store: StoreOf<CreateWorktreeButtonReducer>
 
 	var body: some View {
-		Group {
+		ActionButton(
+			icon: .systemImage("plus.square.on.square"),
+			tooltip: "Create new worktree",
+			color: .green,
+			action: { store.send(.showDialog) }
+		)
+		.opacity(store.isCreating ? 0 : 1)
+		.overlay {
 			if store.isCreating {
 				ProgressView()
 					.scaleEffect(0.5)
 			}
-			else {
-				ActionButton(
-					icon: .systemImage("plus.square.on.square"),
-					tooltip: "Create new worktree",
-					color: .green,
-					action: { store.send(.showDialog) }
-				)
-			}
 		}
+		.disabled(store.isCreating)
 		.sheet(isPresented: $store.showCreateDialog) {
 			CreateWorktreeDialogView(store: store)
 		}

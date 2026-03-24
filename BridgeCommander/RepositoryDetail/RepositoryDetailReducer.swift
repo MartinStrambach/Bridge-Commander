@@ -16,6 +16,7 @@ struct RepositoryDetail {
 		var commitSheet: CommitReducer.State?
 		var unpushedCommitsCount: Int = 0
 		var isPushing: Bool = false
+		var isLoadingChanges: Bool = false
 
 		var lastActionedFileId: String?
 		var lastActionedFileIndex: Int?
@@ -84,6 +85,7 @@ struct RepositoryDetail {
 			switch action {
 			case .loadChanges,
 			     .operationCompleted(.success):
+				state.isLoadingChanges = true
 				return .merge(
 					.merge(
 						.run { [path = state.repositoryPath] send in
@@ -109,6 +111,7 @@ struct RepositoryDetail {
 				)
 
 			case let .loadChangesResponse(changes):
+				state.isLoadingChanges = false
 				state.staged.isLoading = false
 				state.staged.files = changes.staged
 				state.unstaged.isLoading = false

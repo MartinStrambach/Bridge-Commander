@@ -33,11 +33,7 @@ struct BannerView: View {
 
 			Spacer()
 
-			if isLoading {
-				ProgressView()
-					.scaleEffect(0.5)
-			}
-			else if let actionLabel, let onAction {
+			if let actionLabel, let onAction {
 				Button(action: onAction) {
 					if let actionSystemImage {
 						Label(actionLabel, systemImage: actionSystemImage)
@@ -49,6 +45,14 @@ struct BannerView: View {
 				.buttonStyle(.bordered)
 				.tint(color)
 				.help(actionHelp ?? "")
+				.opacity(isLoading ? 0 : 1)
+				.overlay {
+					if isLoading {
+						ProgressView()
+							.scaleEffect(0.5)
+					}
+				}
+				.disabled(isLoading)
 			}
 
 			if let onDismiss {

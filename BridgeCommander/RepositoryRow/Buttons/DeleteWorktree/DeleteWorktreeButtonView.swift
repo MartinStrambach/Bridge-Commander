@@ -6,20 +6,20 @@ struct DeleteWorktreeButtonView: View {
 	var store: StoreOf<DeleteWorktreeButtonReducer>
 
 	var body: some View {
-		Group {
+		ActionButton(
+			icon: .systemImage("trash"),
+			tooltip: "Remove worktree",
+			color: .red,
+			action: { store.send(.showConfirmation) }
+		)
+		.opacity(store.isRemoving ? 0 : 1)
+		.overlay {
 			if store.isRemoving {
 				ProgressView()
 					.scaleEffect(0.5)
 			}
-			else {
-				ActionButton(
-					icon: .systemImage("trash"),
-					tooltip: "Remove worktree",
-					color: .red,
-					action: { store.send(.showConfirmation) }
-				)
-			}
 		}
+		.disabled(store.isRemoving)
 		.sheet(item: $store.scope(state: \.confirmationSheet, action: \.confirmationSheet)) { confirmStore in
 			DeleteWorktreeConfirmationView(store: confirmStore)
 		}

@@ -111,19 +111,21 @@ struct RepositoryListView: View {
 							.font(.subheadline)
 							.foregroundColor(.secondary)
 
-						if store.isScanning {
-							ProgressView()
-								.scaleEffect(0.55)
+						HeaderButton(
+							icon: "arrow.clockwise",
+							tooltip: "Refresh repository status (⌘R)",
+							color: .blue,
+							action: { send(.refreshButtonTapped) }
+						)
+						.keyboardShortcut("r", modifiers: .command)
+						.opacity(store.isScanning ? 0 : 1)
+						.overlay {
+							if store.isScanning {
+								ProgressView()
+									.scaleEffect(0.55)
+							}
 						}
-						else {
-							HeaderButton(
-								icon: "arrow.clockwise",
-								tooltip: "Refresh repository status (⌘R)",
-								color: .blue,
-								action: { send(.refreshButtonTapped) }
-							)
-							.keyboardShortcut("r", modifiers: .command)
-						}
+						.disabled(store.isScanning)
 
 						HeaderButton(
 							icon: "plus",

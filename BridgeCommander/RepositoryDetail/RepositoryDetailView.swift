@@ -25,19 +25,22 @@ struct RepositoryDetailView: View {
 					.help("Commit staged changes")
 				}
 
-				if store.isPushing {
-					ProgressView()
-						.scaleEffect(0.4)
-						.help("Pushing commits to remote…")
-				}
-				else if store.unpushedCommitsCount > 0 {
+				if store.isPushing || store.unpushedCommitsCount > 0 {
 					Button {
 						store.send(.pushButtonTapped)
 					} label: {
 						Label("Push (\(store.unpushedCommitsCount))", systemImage: "arrow.up.circle.fill")
+							.opacity(store.isPushing ? 0 : 1)
+							.overlay {
+								if store.isPushing {
+									ProgressView()
+										.scaleEffect(0.4)
+								}
+							}
 					}
 					.tint(.orange)
-					.help("Push \(store.unpushedCommitsCount) unpushed commit(s) to remote")
+					.help(store.isPushing ? "Pushing commits to remote…" : "Push \(store.unpushedCommitsCount) unpushed commit(s) to remote")
+					.disabled(store.isPushing)
 				}
 
 				Button {
@@ -51,9 +54,17 @@ struct RepositoryDetailView: View {
 					store.send(.loadChanges)
 				} label: {
 					Image(systemName: "arrow.clockwise")
+						.opacity(store.isLoadingChanges ? 0 : 1)
+						.overlay {
+							if store.isLoadingChanges {
+								ProgressView()
+									.scaleEffect(0.4)
+							}
+						}
 				}
 				.keyboardShortcut("r", modifiers: .command)
-				.help("Refresh changes (⌘R)")
+				.help(store.isLoadingChanges ? "Refreshing changes…" : "Refresh changes (⌘R)")
+				.disabled(store.isLoadingChanges)
 
 				Button("Close") {
 					store.send(.cancelButtonTapped)
