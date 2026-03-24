@@ -19,11 +19,22 @@ struct SidebarRepositoryRowView: View {
                 TerminalStatusDotView(status: sessionStatus)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(rowState.formattedBranchName)
-                        .font(.caption)
-                        .fontWeight(isActive ? .semibold : .regular)
-                        .lineLimit(1)
-                        .foregroundColor(isActive ? .primary : .secondary)
+                    HStack(spacing: 4) {
+                        if let ticketId = rowState.ticketId {
+                            Text(ticketId)
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
+                        }
+                        Text(rowState.formattedBranchName)
+                            .font(.caption)
+                            .fontWeight(isActive ? .semibold : .regular)
+                            .lineLimit(1)
+                            .foregroundColor(isActive ? .primary : .secondary)
+                    }
 
                     Text(rowState.name)
                         .font(.caption2)
