@@ -28,8 +28,10 @@ private struct WindowMinSizeHelper: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        let size = NSSize(width: minWidth, height: minHeight)
+        guard nsView.window?.minSize != size else { return }
         DispatchQueue.main.async {
-            nsView.window?.minSize = NSSize(width: minWidth, height: minHeight)
+            nsView.window?.minSize = size
         }
     }
 }

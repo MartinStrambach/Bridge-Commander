@@ -66,6 +66,7 @@ struct RepositoryListReducer {
 		case repositoryGroups(IdentifiedActionOf<RepoGroupReducer>)
 		case scanCompleted
 		case scanFailed
+		case performDebouncedSort
 		case startPeriodicRefresh
 		case startScan
 		case stopPeriodicRefresh
@@ -92,6 +93,7 @@ struct RepositoryListReducer {
 	private nonisolated enum CancellableId: Hashable {
 		case periodicRefresh
 		case scan
+		case sortAfterFetch
 	}
 
 	@Dependency(LastOpenedDirectoryClient.self)
@@ -352,11 +354,16 @@ struct RepositoryListReducer {
 
 			case .repositoryGroups(.element(_, .header(.didFetchYouTrack))),
 			     .repositoryGroups(.element(_, .worktrees(.element(_, .didFetchYouTrack)))):
-				if state.sortMode == .state {
-					withAnimation {
-						sortGroupsInState(in: &state)
-					}
+				guard state.sortMode == .state else { return .none }
+				// Debounce: many rows fetch in parallel — sort once after the burst settles
+				return .run { send in
+					try await Task.sleep(nanoseconds: 300_000_000)
+					await send(.performDebouncedSort)
 				}
+				.cancellable(id: CancellableId.sortAfterFetch, cancelInFlight: true)
+
+			case .performDebouncedSort:
+				sortGroupsInState(in: &state)
 				return .none
 
 			// MARK: - Terminal Layout
