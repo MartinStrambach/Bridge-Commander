@@ -33,6 +33,7 @@ struct StashButtonView: View {
 			store: Store(
 				initialState: StashButtonReducer.State(
 					repositoryPath: "/Users/test/projects/my-project",
+					currentBranch: "branch",
 					hasStash: false
 				),
 				reducer: {
@@ -45,6 +46,7 @@ struct StashButtonView: View {
 			store: Store(
 				initialState: StashButtonReducer.State(
 					repositoryPath: "/Users/test/projects/my-project",
+					currentBranch: "branch",
 					hasStash: true
 				),
 				reducer: {

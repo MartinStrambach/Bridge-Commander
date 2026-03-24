@@ -88,9 +88,6 @@ struct GitActionsMenuView: View {
 		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
-		.task {
-			store.send(.onAppear)
-		}
 	}
 }
 

@@ -95,10 +95,7 @@ struct RepositoryRowReducer {
 	enum Action {
 		case onAppear
 		case refresh
-		case didFetchBranch(String, Int, Int)
-		case didFetchUnpushedCount(Int)
-		case didFetchCommitsBehind(Int)
-		case didFetchRemoteBranch(Bool)
+		case didFetchStatus(GitPorcelainStatus, Bool)
 		case didFetchYouTrack(IssueDetails)
 		case openRepositoryDetail
 		case openTerminalForRepo
@@ -170,32 +167,42 @@ struct RepositoryRowReducer {
 				return .none
 
 			case .onAppear:
-				guard !state.isLoaded else { return .none }
+				guard !state.isLoaded else {
+					return .none
+				}
+
 				state.isLoaded = true
-				return fetchAll(for: state)
+				return .merge(
+					fetchBranchInfo(for: state),
+					fetchYouTrack(for: state),
+					.send(.gitActionsMenu(.onAppear)),
+					.send(.xcodeButton(.onAppear))
+				)
 
 			case .refresh:
-				return fetchAll(for: state)
+				return .merge(
+					fetchBranchInfo(for: state),
+					fetchYouTrack(for: state),
+					.send(.gitActionsMenu(.refresh)),
+					.send(.xcodeButton(.refresh))
+				)
 
-			case let .didFetchBranch(branch, unstaged, staged):
+			case let .didFetchStatus(status, isMerge):
+				let branch = status.branch ?? "unknown"
+				let unstaged = isMerge ? 0 : status.unstagedCount
+				let staged = isMerge ? 0 : status.stagedCount
 				state.branchName = branch
 				state.unstagedChangesCount = unstaged
 				state.stagedChangesCount = staged
 				state.gitActionsMenu.currentBranch = branch
+				state.commitsBehindCount = status.behindCount
+				state.hasRemoteBranch = status.hasRemoteBranch
+				state.unpushedCommitCount = status.unpushedCount
 				let hasChanges = unstaged > 0 || staged > 0
-				return .send(.gitActionsMenu(.stashButton(.updateHasChanges(hasChanges))))
-
-			case let .didFetchUnpushedCount(count):
-				state.unpushedCommitCount = count
-				return .send(.gitActionsMenu(.setUnpushedCount(count)))
-
-			case let .didFetchCommitsBehind(count):
-				state.commitsBehindCount = count
+				state.gitActionsMenu.stashButton.hasChanges = hasChanges
+				state.gitActionsMenu.unpushedCommitsCount = status.unpushedCount
+				state.gitActionsMenu.hasRemoteBranch = status.hasRemoteBranch
 				return .none
-
-			case let .didFetchRemoteBranch(hasRemote):
-				state.hasRemoteBranch = hasRemote
-				return .send(.gitActionsMenu(.setHasRemoteBranch(hasRemote)))
 
 			case let .didFetchYouTrack(details):
 				state.prUrl = details.prUrl
@@ -219,9 +226,6 @@ struct RepositoryRowReducer {
 				}
 				return .none
 
-			case .openTerminalForRepo:
-				return .none
-
 			case let .gitActionsMenu(action):
 				switch action {
 				case .abortMergeButton(.abortMergeCompleted),
@@ -241,9 +245,6 @@ struct RepositoryRowReducer {
 				// Refresh when detail view is closed to pick up any staging changes
 				return .send(.refresh)
 
-			case .repositoryDetail:
-				return .none
-
 			default:
 				return .none
 			}
@@ -258,23 +259,11 @@ struct RepositoryRowReducer {
 
 	// MARK: - Private Effect Builders
 
-	private func fetchAll(for state: State) -> Effect<Action> {
-		.merge(
-			fetchBranchInfo(for: state),
-			fetchYouTrack(for: state),
-			.send(.gitActionsMenu(.refresh)),
-			.send(.xcodeButton(.refresh))
-		)
-	}
-
 	private func fetchBranchInfo(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
 			let info = await gitClient.getCurrentBranch(at: path)
 			let isMerge = GitMergeDetector.isGitOperationInProgress(at: path)
-			await send(.didFetchBranch(info.branch ?? "unknown", isMerge ? 0 : info.unstagedCount, isMerge ? 0 : info.stagedCount))
-			await send(.didFetchUnpushedCount(info.unpushedCount))
-			await send(.didFetchCommitsBehind(info.behindCount))
-			await send(.didFetchRemoteBranch(info.hasRemoteBranch))
+			await send(.didFetchStatus(info, isMerge))
 		}
 	}
 

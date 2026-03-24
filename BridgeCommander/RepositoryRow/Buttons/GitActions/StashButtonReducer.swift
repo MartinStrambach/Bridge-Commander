@@ -8,6 +8,7 @@ struct StashButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
+		let currentBranch: String
 		var hasStash = false
 		var hasChanges = false
 		var isProcessing = false
@@ -20,7 +21,6 @@ struct StashButtonReducer {
 		case stashPopCompleted(success: Bool, error: String?)
 		case checkStashStatus
 		case didCheckStashStatus(hasStash: Bool)
-		case updateHasChanges(Bool)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -38,10 +38,6 @@ struct StashButtonReducer {
 					}
 				}
 
-			case .stashCompleted:
-				state.isProcessing = false
-				return .none
-
 			case .stashPopTapped:
 				state.isProcessing = true
 				return .run { [path = state.repositoryPath] send in
@@ -54,23 +50,19 @@ struct StashButtonReducer {
 					}
 				}
 
-			case .stashPopCompleted:
+			case .stashCompleted,
+			     .stashPopCompleted:
 				state.isProcessing = false
 				return .none
 
 			case .checkStashStatus:
-				return .run { [path = state.repositoryPath] send in
-					let currentBranch = await GitStashHelper.getCurrentBranch(at: path)
+				return .run { [path = state.repositoryPath, currentBranch = state.currentBranch] send in
 					let hasStash = await GitStashHelper.checkHasStashOnBranch(at: path, branch: currentBranch)
 					await send(.didCheckStashStatus(hasStash: hasStash))
 				}
 
 			case let .didCheckStashStatus(hasStash):
 				state.hasStash = hasStash
-				return .none
-
-			case let .updateHasChanges(hasChanges):
-				state.hasChanges = hasChanges
 				return .none
 			}
 		}

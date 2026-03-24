@@ -31,22 +31,6 @@ nonisolated enum GitStashHelper {
 		}
 	}
 
-	/// Gets the current branch name
-	/// - Parameter path: The path to the Git repository
-	/// - Returns: The current branch name, or empty string if unable to determine
-	static func getCurrentBranch(at path: String) async -> String {
-		let result = await ProcessRunner.runGit(
-			arguments: ["branch", "--show-current"],
-			at: path
-		)
-
-		guard result.success else {
-			return ""
-		}
-
-		return result.trimmedOutput
-	}
-
 	/// Checks if there is a stash on the specified branch
 	/// - Parameters:
 	///   - path: The path to the Git repository

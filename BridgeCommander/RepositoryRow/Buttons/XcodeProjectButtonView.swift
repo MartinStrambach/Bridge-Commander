@@ -68,9 +68,6 @@ struct XcodeProjectButtonView: View {
 			action: { store.send(.openProject) }
 		)
 		.alert($store.scope(state: \.alert, action: \.alert))
-		.task {
-			store.send(.onAppear)
-		}
 	}
 
 }

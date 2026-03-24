@@ -31,15 +31,13 @@ struct GitActionsMenuReducer {
 			self.pushButton = PushButtonReducer.State(repositoryPath: repositoryPath)
 			self.mergeMasterButton = MergeMasterButtonReducer.State(repositoryPath: repositoryPath)
 			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
-			self.stashButton = StashButtonReducer.State(repositoryPath: repositoryPath)
+			self.stashButton = StashButtonReducer.State(repositoryPath: repositoryPath, currentBranch: currentBranch)
 		}
 	}
 
 	enum Action: Equatable {
 		case onAppear
 		case refresh
-		case setHasRemoteBranch(Bool)
-		case setUnpushedCount(Int)
 		case didCheckGitStatus(isMergeInProgress: Bool)
 		case fetchButton(FetchButtonReducer.Action)
 		case pullButton(PullButtonReducer.Action)
@@ -196,20 +194,15 @@ struct GitActionsMenuReducer {
 				return .send(.stashButton(.checkStashStatus))
 
 			case .onAppear:
-				guard !state.isLoaded else { return .none }
+				guard !state.isLoaded else {
+					return .none
+				}
+
 				state.isLoaded = true
 				return checkStatusEffect(path: state.repositoryPath)
 
 			case .refresh:
 				return checkStatusEffect(path: state.repositoryPath)
-
-			case let .setHasRemoteBranch(hasRemote):
-				state.hasRemoteBranch = hasRemote
-				return .none
-
-			case let .setUnpushedCount(count):
-				state.unpushedCommitsCount = count
-				return .none
 
 			case let .didCheckGitStatus(isMergeInProgress):
 				state.isMergeInProgress = isMergeInProgress

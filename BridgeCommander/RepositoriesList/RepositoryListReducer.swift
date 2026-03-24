@@ -18,15 +18,6 @@ struct RepositoryListReducer {
 
 		var searchText: String = ""
 
-		var filteredRepositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> {
-			guard !searchText.isEmpty else { return repositoryGroups }
-			return repositoryGroups.filter { group in
-				let query = searchText
-				if group.header.branchName?.localizedCaseInsensitiveContains(query) == true { return true }
-				return group.worktrees.contains { $0.branchName?.localizedCaseInsensitiveContains(query) == true }
-			}
-		}
-
 		var terminalSessions: IdentifiedArrayOf<TerminalSession> = []
 		var terminalLayout: TerminalLayoutReducer.State?
 
@@ -47,6 +38,20 @@ struct RepositoryListReducer {
 
 		fileprivate var isSystemEventsPermissionGranted: Bool?
 		fileprivate var isPermissionWarningDismissed = false
+
+		var filteredRepositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> {
+			guard !searchText.isEmpty else {
+				return repositoryGroups
+			}
+
+			return repositoryGroups.filter { group in
+				let query = searchText
+				if group.header.branchName?.localizedCaseInsensitiveContains(query) == true {
+					return true
+				}
+				return group.worktrees.contains { $0.branchName?.localizedCaseInsensitiveContains(query) == true }
+			}
+		}
 
 		var showPermissionDialog: Bool {
 			isSystemEventsPermissionGranted == false && !isPermissionWarningDismissed
@@ -300,9 +305,9 @@ struct RepositoryListReducer {
 					return [headerEffect] + worktreeEffects
 				}
 				// Use concatenate instead of merge to stagger row refreshes.
-			// Merging all effects at once spawns 7×N git processes simultaneously (thundering herd).
-			// Concatenating serializes them so git load ramps up gradually.
-			return .concatenate([.send(.startScan)] + refreshEffects)
+				// Merging all effects at once spawns 7×N git processes simultaneously (thundering herd).
+				// Concatenating serializes them so git load ramps up gradually.
+				return .concatenate([.send(.startScan)] + refreshEffects)
 
 			case .startPeriodicRefresh:
 				let interval = state.periodicRefreshInterval.timeInterval
@@ -357,13 +362,16 @@ struct RepositoryListReducer {
 
 			case .repositoryGroups(.element(_, .header(.didFetchYouTrack))),
 			     .repositoryGroups(.element(_, .worktrees(.element(_, .didFetchYouTrack)))):
-				guard state.sortMode == .state else { return .none }
-				// Debounce: many rows fetch in parallel — sort once after the burst settles
-				return .run { send in
-					try await Task.sleep(nanoseconds: 300_000_000)
-					await send(.performDebouncedSort)
+				guard state.sortMode == .state else {
+					return .none
 				}
-				.cancellable(id: CancellableId.sortAfterFetch, cancelInFlight: true)
+
+				@Dependency(\.mainQueue)
+				var mainQueue
+				
+				// Debounce: many rows fetch in parallel — sort once after the burst settles
+				return .send(.performDebouncedSort)
+					.debounce(id: CancellableId.sortAfterFetch, for: .milliseconds(300), scheduler: mainQueue)
 
 			case .performDebouncedSort:
 				sortGroupsInState(in: &state)
