@@ -232,17 +232,13 @@ struct RepositoryListView: View {
 
 	// MARK: - Repository List View
 
-	@ViewBuilder
 	private var repositoryListView: some View {
-		let filteredIds = Set(store.filteredRepositoryGroups.ids)
 		List {
-			ForEach(store.scope(state: \.repositoryGroups, action: \.repositoryGroups)) { groupStore in
-				if filteredIds.contains(groupStore.id) {
-					RepoGroupView(
-						store: groupStore,
-						sessions: store.terminalSessions
-					)
-				}
+			ForEach(store.scope(state: \.filteredRepositoryGroups, action: \.repositoryGroups)) { groupStore in
+				RepoGroupView(
+					store: groupStore,
+					sessions: store.terminalSessions
+				)
 			}
 		}
 		.listStyle(.plain)
