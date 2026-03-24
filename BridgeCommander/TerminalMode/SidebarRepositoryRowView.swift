@@ -25,6 +25,7 @@ struct SidebarRepositoryRowView: View {
                                 .font(.caption2)
                                 .fontWeight(.medium)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
                                 .background(.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
