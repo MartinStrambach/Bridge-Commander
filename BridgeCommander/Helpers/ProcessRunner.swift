@@ -28,14 +28,12 @@ nonisolated enum ProcessRunner {
 	///   - arguments: Command line arguments
 	///   - currentDirectory: Working directory (optional)
 	///   - environment: Environment variables (optional)
-	///   - timeout: Maximum time to wait for the process, in seconds. Defaults to 15.
 	/// - Returns: ProcessResult containing exit code and captured streams
 	static func run(
 		executableURL: URL,
 		arguments: [String],
 		currentDirectory: URL? = nil,
-		environment: [String: String]? = nil,
-		timeout: TimeInterval = 15
+		environment: [String: String]? = nil
 	) async -> ProcessResult {
 		await withCheckedContinuation { continuation in
 			let process = Process()
@@ -70,17 +68,7 @@ nonisolated enum ProcessRunner {
 				errorCollector.append(data)
 			}
 
-			// Schedule termination if process exceeds the timeout
-			let timeoutTask = Task {
-				try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-				guard !Task.isCancelled else { return }
-				if process.isRunning {
-					process.terminate()
-				}
-			}
-
 			process.terminationHandler = { proc in
-				timeoutTask.cancel()
 
 				// Stop reading from pipes
 				outputPipe.fileHandleForReading.readabilityHandler = nil
