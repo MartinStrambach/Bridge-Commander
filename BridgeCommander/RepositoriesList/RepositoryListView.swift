@@ -4,9 +4,13 @@ import UniformTypeIdentifiers
 
 @ViewAction(for: RepositoryListReducer.self)
 struct RepositoryListView: View {
-	@Bindable var store: StoreOf<RepositoryListReducer>
-	@State private var terminalViewStore = TerminalViewStore()
-	@FocusState private var isSearchFocused: Bool
+	@Bindable
+	var store: StoreOf<RepositoryListReducer>
+
+	@State
+	private var terminalViewStore = TerminalViewStore()
+	@FocusState
+	private var isSearchFocused: Bool
 
 	private var sortModeIcon: String {
 		switch store.sortMode {
@@ -39,10 +43,12 @@ struct RepositoryListView: View {
 
 	var body: some View {
 		Group {
-			if let terminalLayoutStore = store.scope(
-				state: \.terminalLayout,
-				action: \.terminalLayout
-			) {
+			if
+				let terminalLayoutStore = store.scope(
+					state: \.terminalLayout,
+					action: \.terminalLayout
+				)
+			{
 				TerminalLayoutView(
 					store: terminalLayoutStore,
 					repositories: allRows,
@@ -56,7 +62,8 @@ struct RepositoryListView: View {
 				)
 				.windowMinSize(width: 800, height: 400)
 				.transition(.opacity.combined(with: .move(edge: .trailing)))
-			} else {
+			}
+			else {
 				VStack(spacing: 0) {
 					headerView
 					Divider()
@@ -65,7 +72,8 @@ struct RepositoryListView: View {
 					}
 					if store.repositoryGroups.isEmpty {
 						emptyStateView
-					} else {
+					}
+					else {
 						searchBarView
 						Divider()
 						repositoryListView
@@ -113,7 +121,8 @@ struct RepositoryListView: View {
 						if store.isScanning {
 							ProgressView()
 								.scaleEffect(0.55)
-						} else {
+						}
+						else {
 							HeaderButton(
 								icon: "arrow.clockwise",
 								tooltip: "Refresh repository status (⌘R)",
@@ -136,7 +145,8 @@ struct RepositoryListView: View {
 						)
 					}
 				}
-			} else {
+			}
+			else {
 				Spacer()
 			}
 		}
@@ -199,9 +209,12 @@ struct RepositoryListView: View {
 		HStack(spacing: 6) {
 			Image(systemName: "magnifyingglass")
 				.foregroundStyle(.secondary)
-			TextField("Filter by branch name…", text: Binding(get: { store.searchText }, set: { send(.searchTextChanged($0)) }))
-				.textFieldStyle(.plain)
-				.focused($isSearchFocused)
+			TextField(
+				"Filter by branch name…",
+				text: Binding(get: { store.searchText }, set: { send(.searchTextChanged($0)) })
+			)
+			.textFieldStyle(.plain)
+			.focused($isSearchFocused)
 			if !store.searchText.isEmpty {
 				Button {
 					send(.searchTextChanged(""))
@@ -219,13 +232,17 @@ struct RepositoryListView: View {
 
 	// MARK: - Repository List View
 
+	@ViewBuilder
 	private var repositoryListView: some View {
+		let filteredIds = Set(store.filteredRepositoryGroups.ids)
 		List {
-			ForEach(store.scope(state: \.filteredRepositoryGroups, action: \.repositoryGroups)) { groupStore in
-				RepoGroupView(
-					store: groupStore,
-					sessions: store.terminalSessions
-				)
+			ForEach(store.scope(state: \.repositoryGroups, action: \.repositoryGroups)) { groupStore in
+				if filteredIds.contains(groupStore.id) {
+					RepoGroupView(
+						store: groupStore,
+						sessions: store.terminalSessions
+					)
+				}
 			}
 		}
 		.listStyle(.plain)

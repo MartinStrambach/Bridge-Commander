@@ -238,7 +238,8 @@ struct RepositoryListReducer {
 
 			// MARK: - Per-group scan (worktree added/removed)
 
-			case let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated)))),
+			case let .repositoryGroups(.element(id: groupId, action: .header(.worktreeCreated))),
+			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated)))),
 			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeDeleted)))):
 				state.isScanning = true
 				return .run { [groupId] send in
