@@ -259,7 +259,7 @@ struct RepositoryRowReducer {
 
 	// MARK: - Private Effect Builders
 
-	private func fetchBranchInfo(for state: State) -> Effect<Action> {
+	private func fetchBranchInfo(for state: State) -> EffectOf<RepositoryRowReducer> {
 		.run { [path = state.path] send in
 			let info = await gitClient.getCurrentBranch(at: path)
 			let isMerge = GitMergeDetector.isGitOperationInProgress(at: path)
@@ -267,7 +267,7 @@ struct RepositoryRowReducer {
 		}
 	}
 
-	private func fetchYouTrack(for state: State) -> Effect<Action> {
+	private func fetchYouTrack(for state: State) -> EffectOf<RepositoryRowReducer> {
 		guard let ticketId = state.ticketId else {
 			return .none
 		}

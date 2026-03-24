@@ -290,12 +290,12 @@ struct RepositoryListReducer {
 					return .none
 				}
 
-				let refreshEffects = state.repositoryGroups.flatMap { group -> [Effect<Action>] in
-					let headerEffect = Effect<Action>.send(
+				let refreshEffects = state.repositoryGroups.flatMap { group -> [EffectOf<RepositoryListReducer>] in
+					let headerEffect = EffectOf<RepositoryListReducer>.send(
 						.repositoryGroups(.element(id: group.id, action: .header(.refresh)))
 					)
 					let worktreeEffects = group.worktrees.map { row in
-						Effect<Action>.send(
+						EffectOf<RepositoryListReducer>.send(
 							.repositoryGroups(.element(
 								id: group.id,
 								action: .worktrees(.element(id: row.id, action: .refresh))
@@ -544,7 +544,7 @@ private func normalizePath(_ path: String) -> String {
 private func openTerminal(
 	for repositoryPath: String,
 	in state: inout RepositoryListReducer.State
-) -> Effect<RepositoryListReducer.Action> {
+) -> EffectOf<RepositoryListReducer> {
 	let existingSession = state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
 	let session: TerminalSession
 	if let existing = existingSession {

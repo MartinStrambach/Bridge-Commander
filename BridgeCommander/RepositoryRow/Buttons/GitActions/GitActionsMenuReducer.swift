@@ -217,7 +217,7 @@ struct GitActionsMenuReducer {
 		}
 	}
 
-	private func checkStatusEffect(path: String) -> Effect<Action> {
+	private func checkStatusEffect(path: String) -> EffectOf<GitActionsMenuReducer> {
 		.merge(
 			.run { send in
 				let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)

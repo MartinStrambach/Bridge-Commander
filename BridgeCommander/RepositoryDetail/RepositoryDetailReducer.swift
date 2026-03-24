@@ -384,7 +384,7 @@ struct RepositoryDetail {
 		state[keyPath: target].sort { $0.path < $1.path }
 	}
 
-	private func removeFromUnstaged(_ files: [FileChange], state: inout State) -> Effect<Action> {
+	private func removeFromUnstaged(_ files: [FileChange], state: inout State) -> EffectOf<RepositoryDetail> {
 		let fileIds = Set(files.map(\.id))
 		state.unstaged.files.removeAll { fileIds.contains($0.id) }
 		return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
@@ -394,7 +394,7 @@ struct RepositoryDetail {
 		state: inout State,
 		staged: [FileChange],
 		unstaged: [FileChange]
-	) -> Effect<Action> {
+	) -> EffectOf<RepositoryDetail> {
 		guard state.lastActionedFileId != nil else {
 			if let selectedFileId = state.diffViewer.fileId, let wasStaged = state.diffViewer.fileIsStaged {
 				if wasStaged, let file = staged.first(where: { $0.id == selectedFileId }) {

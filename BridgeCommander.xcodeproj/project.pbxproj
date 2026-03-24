@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 100;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -26,12 +26,10 @@
 /* Begin PBXFrameworksBuildPhase section */
 		93351BB12ECD3F1A006D4609 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 				933DE50A2F6AB3920045D622 /* SwiftTerm in Frameworks */,
 				93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -64,8 +62,6 @@
 				93351BB22ECD3F1A006D4609 /* Resources */,
 			);
 			buildRules = (
-			);
-			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
 				93351BB62ECD3F1A006D4609 /* BridgeCommander */,
@@ -120,25 +116,21 @@
 /* Begin PBXResourcesBuildPhase section */
 		93351BB22ECD3F1A006D4609 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		93351BB02ECD3F1A006D4609 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
 			files = (
 			);
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		93351BBD2ECD3F1B006D4609 /* Debug */ = {
+		93351BBD2ECD3F1B006D4609 /* Debug configuration for PBXProject "BridgeCommander" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -202,7 +194,7 @@
 			};
 			name = Debug;
 		};
-		93351BBE2ECD3F1B006D4609 /* Release */ = {
+		93351BBE2ECD3F1B006D4609 /* Release configuration for PBXProject "BridgeCommander" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -259,7 +251,7 @@
 			};
 			name = Release;
 		};
-		93351BC02ECD3F1B006D4609 /* Debug */ = {
+		93351BC02ECD3F1B006D4609 /* Debug configuration for PBXNativeTarget "BridgeCommander" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -294,7 +286,7 @@
 			};
 			name = Debug;
 		};
-		93351BC12ECD3F1B006D4609 /* Release */ = {
+		93351BC12ECD3F1B006D4609 /* Release configuration for PBXNativeTarget "BridgeCommander" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -336,19 +328,17 @@
 		93351BAF2ECD3F1A006D4609 /* Build configuration list for PBXProject "BridgeCommander" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				93351BBD2ECD3F1B006D4609 /* Debug */,
-				93351BBE2ECD3F1B006D4609 /* Release */,
+				93351BBD2ECD3F1B006D4609 /* Debug configuration for PBXProject "BridgeCommander" */,
+				93351BBE2ECD3F1B006D4609 /* Release configuration for PBXProject "BridgeCommander" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		93351BBF2ECD3F1B006D4609 /* Build configuration list for PBXNativeTarget "BridgeCommander" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				93351BC02ECD3F1B006D4609 /* Debug */,
-				93351BC12ECD3F1B006D4609 /* Release */,
+				93351BC02ECD3F1B006D4609 /* Debug configuration for PBXNativeTarget "BridgeCommander" */,
+				93351BC12ECD3F1B006D4609 /* Release configuration for PBXNativeTarget "BridgeCommander" */,
 			);
-			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
@@ -359,8 +349,11 @@
 			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture.git";
 			requirement = {
 				kind = exactVersion;
-				version = 1.24.1;
+				version = 1.25.2;
 			};
+			traits = (
+				ComposableArchitecture2Deprecations,
+			);
 		};
 		933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
 			isa = XCRemoteSwiftPackageReference;

@@ -152,7 +152,7 @@ struct XcodeProjectButtonReducer {
 		.ifLet(\.$alert, action: \.alert)
 	}
 
-	private func findProjectEffect(state: inout State) -> Effect<Action> {
+	private func findProjectEffect(state: inout State) -> EffectOf<XcodeProjectButtonReducer> {
 		guard !state.projectState.isProcessing else { return .none }
 		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
 			let projectPath = await xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
