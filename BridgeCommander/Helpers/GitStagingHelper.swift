@@ -4,12 +4,19 @@ nonisolated enum GitStagingHelper {
 	// MARK: - Fetch File Changes
 
 	static func fetchFileChanges(at path: String) async -> GitFileChanges {
-		async let staged = fetchStagedFiles(at: path)
-		async let unstaged = fetchUnstagedFiles(at: path)
+		let result = await ProcessRunner.runGit(
+			arguments: ["status", "--porcelain=v2"],
+			at: path
+		)
 
-		return await GitFileChanges(
-			staged: staged,
-			unstaged: unstaged
+		guard result.success else {
+			return GitFileChanges(staged: [], unstaged: [])
+		}
+
+		let status = GitPorcelainStatus(parsing: result.outputString)
+		return GitFileChanges(
+			staged: status.staged.sorted { $0.path < $1.path },
+			unstaged: status.unstaged.sorted { $0.path < $1.path }
 		)
 	}
 
@@ -258,102 +265,6 @@ nonisolated enum GitStagingHelper {
 			let detail = result.errorString.isEmpty ? "Unknown error" : result.errorString
 			throw GitError.stagingFailed("\(errorMessage): \(detail)")
 		}
-	}
-
-	private static func fetchStagedFiles(at path: String) async -> [FileChange] {
-		let result = await ProcessRunner.runGit(arguments: ["diff", "--cached", "--name-status"], at: path)
-		guard result.success else {
-			return []
-		}
-
-		return parseGitStatusOutput(result.outputString).sorted { $0.path < $1.path }
-	}
-
-	private static func fetchUnstagedFiles(at path: String) async -> [FileChange] {
-		// Get modified/deleted files (unstaged)
-		let diffResult = await ProcessRunner.runGit(arguments: ["diff", "--name-status"], at: path)
-		let diffOutput = diffResult.success ? diffResult.outputString : ""
-
-		// Get untracked files
-		let untrackedResult = await ProcessRunner.runGit(
-			arguments: ["ls-files", "--others", "--exclude-standard"],
-			at: path
-		)
-		let untrackedOutput = untrackedResult.success ? untrackedResult.outputString : ""
-
-		// Get unmerged/conflicted files
-		let unmergedFiles = await fetchUnmergedFiles(at: path)
-		let unmergedPaths = Set(unmergedFiles.map(\.path))
-
-		// Parse modified/deleted files, skipping those already in unmerged list
-		var changes = parseGitStatusOutput(diffOutput).filter { !unmergedPaths.contains($0.path) }
-
-		// Parse untracked files
-		let untrackedLines = untrackedOutput.split(separator: "\n").map(String.init)
-		for filePath in untrackedLines where !filePath.isEmpty {
-			changes.append(FileChange(path: filePath, status: .untracked))
-		}
-
-		// Append conflicted files
-		changes.append(contentsOf: unmergedFiles)
-
-		return changes.sorted { $0.path < $1.path }
-	}
-
-	private static func fetchUnmergedFiles(at path: String) async -> [FileChange] {
-		let result = await ProcessRunner.runGit(arguments: ["ls-files", "--unmerged"], at: path)
-		guard result.success else {
-			return []
-		}
-
-		// Each line: <mode> <hash> <stage> <tab> <path>
-		// Multiple stage entries per file — collect unique paths
-		var seen = Set<String>()
-		var changes: [FileChange] = []
-		for line in result.outputString.split(separator: "\n") {
-			let parts = line.split(separator: "\t", maxSplits: 1)
-			guard parts.count == 2 else {
-				continue
-			}
-
-			let filePath = String(parts[1])
-			guard !filePath.isEmpty, seen.insert(filePath).inserted else {
-				continue
-			}
-
-			changes.append(FileChange(path: filePath, status: .conflicted))
-		}
-		return changes
-	}
-
-	private static func parseGitStatusOutput(_ output: String) -> [FileChange] {
-		let lines = output.split(separator: "\n")
-		var changes: [FileChange] = []
-
-		for line in lines {
-			let components = line.split(separator: "\t", maxSplits: 2)
-			guard components.count >= 2 else {
-				continue
-			}
-
-			let statusStr = String(components[0])
-			let filePath = String(components[1])
-
-			guard let status = FileChangeStatus(rawValue: statusStr) else {
-				continue
-			}
-
-			// Handle renames
-			if status == .renamed, components.count == 3 {
-				let newPath = String(components[2])
-				changes.append(FileChange(path: newPath, status: status, oldPath: filePath))
-			}
-			else {
-				changes.append(FileChange(path: filePath, status: status))
-			}
-		}
-
-		return changes
 	}
 
 	private static func parseDiffIntoHunks(

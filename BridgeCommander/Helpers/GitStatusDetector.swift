@@ -1,59 +1,120 @@
 import Foundation
 
-struct GitBranchAndChanges: Sendable {
+/// Parsed result of `git status --porcelain=v2 [--branch]`.
+nonisolated struct GitPorcelainStatus: Sendable {
+	// MARK: - Branch (populated only when run with --branch)
 	let branch: String?
-	let unstagedCount: Int
-	let stagedCount: Int
+	let hasRemoteBranch: Bool
+	let unpushedCount: Int
+	let behindCount: Int
+
+	// MARK: - File changes
+	let staged: [FileChange]
+	let unstaged: [FileChange]
+
+	var stagedCount: Int { staged.count }
+	var unstagedCount: Int { unstaged.count }
+
+	// MARK: - Init
+
+	init(parsing output: String) {
+		var branch: String?
+		var hasRemoteBranch = false
+		var unpushedCount = 0
+		var behindCount = 0
+		var staged: [FileChange] = []
+		var unstaged: [FileChange] = []
+
+		for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
+			if line.hasPrefix("# branch.head ") {
+				let name = String(line.dropFirst("# branch.head ".count))
+				if name != "(detached)" { branch = name }
+
+			} else if line.hasPrefix("# branch.upstream ") {
+				hasRemoteBranch = true
+
+			} else if line.hasPrefix("# branch.ab ") {
+				// "# branch.ab +N -M" — N ahead (unpushed), M behind
+				let parts = String(line.dropFirst("# branch.ab ".count)).split(separator: " ")
+				if parts.count == 2 {
+					unpushedCount = Int(parts[0].dropFirst()) ?? 0  // drop "+"
+					behindCount = Int(parts[1].dropFirst()) ?? 0    // drop "-"
+				}
+
+			} else if line.hasPrefix("? ") {
+				// Untracked — "? path"
+				let filePath = String(line.dropFirst(2))
+				if !filePath.isEmpty {
+					unstaged.append(FileChange(path: filePath, status: .untracked))
+				}
+
+			} else if line.hasPrefix("u ") {
+				// Unmerged (conflicted) — "u XY sub m1 m2 m3 mW h1 h2 h3 path"
+				let parts = line.split(separator: " ", maxSplits: 10)
+				guard parts.count == 11 else { continue }
+				let filePath = String(parts[10])
+				if !filePath.isEmpty {
+					unstaged.append(FileChange(path: filePath, status: .conflicted))
+				}
+
+			} else if line.hasPrefix("1 ") {
+				// Ordinary changed — "1 XY sub mH mI mW hH hI path"
+				let parts = line.split(separator: " ", maxSplits: 8)
+				guard parts.count == 9 else { continue }
+				let xy = parts[1]
+				guard xy.count == 2 else { continue }
+				let x = xy[xy.startIndex]
+				let y = xy[xy.index(after: xy.startIndex)]
+				let filePath = String(parts[8])
+				guard !filePath.isEmpty else { continue }
+
+				if x != ".", let status = FileChangeStatus(rawValue: String(x)) {
+					staged.append(FileChange(path: filePath, status: status))
+				}
+				if y != ".", let status = FileChangeStatus(rawValue: String(y)) {
+					unstaged.append(FileChange(path: filePath, status: status))
+				}
+
+			} else if line.hasPrefix("2 ") {
+				// Renamed/copied — "2 XY sub mH mI mW mR hH hI score newPath\torigPath"
+				let parts = line.split(separator: " ", maxSplits: 10)
+				guard parts.count == 11 else { continue }
+				let xy = parts[1]
+				guard xy.count == 2 else { continue }
+				let x = xy[xy.startIndex]
+				let y = xy[xy.index(after: xy.startIndex)]
+				let pathField = parts[10]
+				let paths = pathField.split(separator: "\t", maxSplits: 1)
+				guard let newPath = paths.first.map(String.init), !newPath.isEmpty else { continue }
+				let origPath = paths.count > 1 ? String(paths[1]) : newPath
+
+				if x != ".", let status = FileChangeStatus(rawValue: String(x)) {
+					staged.append(FileChange(path: newPath, status: status, oldPath: origPath))
+				}
+				if y != ".", let status = FileChangeStatus(rawValue: String(y)) {
+					unstaged.append(FileChange(path: newPath, status: status))
+				}
+			}
+		}
+
+		self.branch = branch
+		self.hasRemoteBranch = hasRemoteBranch
+		self.unpushedCount = unpushedCount
+		self.behindCount = behindCount
+		self.staged = staged
+		self.unstaged = unstaged
+	}
 }
 
-nonisolated enum GitStatusDetector {
+// MARK: -
 
-	/// Returns branch name, staged count, and unstaged count in a single git invocation.
-	/// Uses `git status --porcelain=v2 --branch` which outputs both branch info and file status.
-	/// - Parameter path: The path to the Git repository
-	/// - Returns: A GitBranchAndChanges struct with branch name and both counts
-	static func getBranchAndChanges(at path: String) async -> GitBranchAndChanges {
+nonisolated enum GitStatusDetector {
+	/// Runs `git status --porcelain=v2 --branch` and returns the parsed result.
+	static func getStatus(at path: String) async -> GitPorcelainStatus {
 		let result = await ProcessRunner.runGit(
 			arguments: ["status", "--porcelain=v2", "--branch"],
 			at: path
 		)
-
-		guard result.success else {
-			return GitBranchAndChanges(branch: nil, unstagedCount: 0, stagedCount: 0)
-		}
-
-		var branch: String?
-		var unstagedCount = 0
-		var stagedCount = 0
-
-		for line in result.outputString.split(separator: "\n", omittingEmptySubsequences: true) {
-			if line.hasPrefix("# branch.head ") {
-				let name = String(line.dropFirst("# branch.head ".count))
-				if name != "(detached)" {
-					branch = name
-				}
-			} else if line.hasPrefix("1 ") || line.hasPrefix("2 ") {
-				// Ordinary changed entry: "1 XY ..."
-				// XY = two-letter status: X = staged, Y = unstaged
-				// Each character is one of ' ', 'M', 'A', 'D', 'R', 'C', 'U'
-				let parts = line.split(separator: " ", maxSplits: 2)
-				guard parts.count >= 2 else { continue }
-				let xy = parts[1]
-				guard xy.count >= 2 else { continue }
-				let x = xy[xy.startIndex]  // staged status
-				let y = xy[xy.index(after: xy.startIndex)]  // unstaged status
-				if x != "." { stagedCount += 1 }
-				if y != "." { unstagedCount += 1 }
-			} else if line.hasPrefix("? ") {
-				// Untracked file
-				unstagedCount += 1
-			} else if line.hasPrefix("u ") {
-				// Unmerged entry — counts as unstaged
-				unstagedCount += 1
-			}
-		}
-
-		return GitBranchAndChanges(branch: branch, unstagedCount: unstagedCount, stagedCount: stagedCount)
+		return GitPorcelainStatus(parsing: result.success ? result.outputString : "")
 	}
-
 }

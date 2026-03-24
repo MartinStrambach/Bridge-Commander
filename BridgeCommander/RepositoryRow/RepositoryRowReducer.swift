@@ -260,41 +260,21 @@ struct RepositoryRowReducer {
 
 	private func fetchAll(for state: State) -> Effect<Action> {
 		.merge(
-			fetchBranch(for: state),
-			fetchUnpushed(for: state),
-			fetchCommitsBehind(for: state),
-			fetchRemoteBranch(for: state),
+			fetchBranchInfo(for: state),
 			fetchYouTrack(for: state),
 			.send(.gitActionsMenu(.refresh)),
 			.send(.xcodeButton(.refresh))
 		)
 	}
 
-	private func fetchBranch(for state: State) -> Effect<Action> {
+	private func fetchBranchInfo(for state: State) -> Effect<Action> {
 		.run { [path = state.path] send in
-			let (branch, unstaged, staged) = await gitClient.getCurrentBranch(at: path)
-			await send(.didFetchBranch(branch, unstaged, staged))
-		}
-	}
-
-	private func fetchUnpushed(for state: State) -> Effect<Action> {
-		.run { [path = state.path] send in
-			let count = await gitClient.countUnpushedCommits(at: path)
-			await send(.didFetchUnpushedCount(count))
-		}
-	}
-
-	private func fetchCommitsBehind(for state: State) -> Effect<Action> {
-		.run { [path = state.path] send in
-			let count = await gitClient.countCommitsBehind(at: path)
-			await send(.didFetchCommitsBehind(count))
-		}
-	}
-
-	private func fetchRemoteBranch(for state: State) -> Effect<Action> {
-		.run { [path = state.path] send in
-			let hasRemote = await GitRemoteBranchDetector.hasRemoteBranch(at: path)
-			await send(.didFetchRemoteBranch(hasRemote))
+			let info = await gitClient.getCurrentBranch(at: path)
+			let isMerge = GitMergeDetector.isGitOperationInProgress(at: path)
+			await send(.didFetchBranch(info.branch ?? "unknown", isMerge ? 0 : info.unstagedCount, isMerge ? 0 : info.stagedCount))
+			await send(.didFetchUnpushedCount(info.unpushedCount))
+			await send(.didFetchCommitsBehind(info.behindCount))
+			await send(.didFetchRemoteBranch(info.hasRemoteBranch))
 		}
 	}
 

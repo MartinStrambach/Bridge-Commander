@@ -102,8 +102,8 @@ struct RepositoryDetail {
 					)
 					.cancellable(id: CancellableId.loadChanges, cancelInFlight: true),
 					.run { [path = state.repositoryPath] send in
-						let count = await gitClient.countUnpushedCommits(at: path)
-						await send(.loadUnpushedCountResponse(count))
+						let info = await GitStatusDetector.getStatus(at: path)
+						await send(.loadUnpushedCountResponse(info.unpushedCount))
 					}
 					.cancellable(id: CancellableId.loadUnpushedCount, cancelInFlight: true)
 				)
