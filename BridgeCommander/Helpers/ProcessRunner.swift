@@ -95,7 +95,6 @@ nonisolated enum ProcessRunner {
 				try process.run()
 			}
 			catch {
-				timeoutTask.cancel()
 				// If process fails to start, return a failure result
 				let result = ProcessResult(
 					exitCode: -1,
