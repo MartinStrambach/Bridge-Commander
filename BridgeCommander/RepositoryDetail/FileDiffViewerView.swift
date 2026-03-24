@@ -13,6 +13,7 @@ struct FileDiffViewerView: View {
 				onUnstageHunk: { store.send(.unstageHunk($0)) },
 				onDiscardHunk: { store.send(.discardHunk($0)) }
 			)
+			.id(diff.fileChange.id)
 		}
 		else {
 			EmptyStateView(

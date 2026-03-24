@@ -222,13 +222,14 @@ nonisolated enum GitStagingHelper {
 
 		let diffLines = lines.map { "+" + $0 }
 		let lineCount = diffLines.count
+		let hunkHeader = "@@ -0,0 +1,\(lineCount) @@"
 		let hunk = DiffHunk(
-			header: "@@ -0,0 +1,\(lineCount) @@",
+			header: hunkHeader,
 			oldStart: 0,
 			oldCount: 0,
 			newStart: 1,
 			newCount: lineCount,
-			lines: diffLines.map { DiffLine(rawLine: String($0)) }
+			lines: makeNumberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: 0, newStart: 1)
 		)
 
 		return FileDiff(fileChange: file, hunks: [hunk], isBinary: false)
@@ -383,13 +384,16 @@ nonisolated enum GitStagingHelper {
 
 			let lineCount = diffLines.count
 			let isAdded = fileStatus == .added
+			let hunkHeader = isAdded ? "@@ -0,0 +1,\(lineCount) @@" : "@@ -1,\(lineCount) +0,0 @@"
+			let oldStart = isAdded ? 0 : 1
+			let newStart = isAdded ? 1 : 0
 			let hunk = DiffHunk(
-				header: isAdded ? "@@ -0,0 +1,\(lineCount) @@" : "@@ -1,\(lineCount) +0,0 @@",
-				oldStart: isAdded ? 0 : 1,
+				header: hunkHeader,
+				oldStart: oldStart,
 				oldCount: isAdded ? 0 : lineCount,
-				newStart: isAdded ? 1 : 0,
+				newStart: newStart,
 				newCount: isAdded ? lineCount : 0,
-				lines: diffLines.map { DiffLine(rawLine: $0) }
+				lines: makeNumberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: oldStart, newStart: newStart)
 			)
 
 			return [hunk]
@@ -405,7 +409,12 @@ nonisolated enum GitStagingHelper {
 				return
 			}
 
-			let diffLines = currentHunkLines.map { DiffLine(rawLine: $0) }
+			let diffLines = makeNumberedDiffLines(
+				currentHunkLines,
+				hunkHeader: header,
+				oldStart: parts.oldStart,
+				newStart: parts.newStart
+			)
 			hunks.append(
 				DiffHunk(
 					header: header,
@@ -439,13 +448,58 @@ nonisolated enum GitStagingHelper {
 		return hunks
 	}
 
+	private static func makeNumberedDiffLines(
+		_ rawLines: [String],
+		hunkHeader: String,
+		oldStart: Int,
+		newStart: Int
+	) -> [DiffLine] {
+		var oldLine = oldStart
+		var newLine = newStart
+		var result: [DiffLine] = []
+		result.reserveCapacity(rawLines.count)
+
+		for (index, rawLine) in rawLines.enumerated() {
+			let oldNum: Int?
+			let newNum: Int?
+
+			if rawLine.hasPrefix("+") {
+				oldNum = nil
+				newNum = newLine
+				newLine += 1
+			}
+			else if rawLine.hasPrefix("-") {
+				oldNum = oldLine
+				newNum = nil
+				oldLine += 1
+			}
+			else {
+				oldNum = oldLine
+				newNum = newLine
+				oldLine += 1
+				newLine += 1
+			}
+
+			result.append(DiffLine(
+				rawLine: rawLine,
+				id: "\(hunkHeader):\(index)",
+				oldLineNumber: oldNum,
+				newLineNumber: newNum
+			))
+		}
+
+		return result
+	}
+
+	private static let hunkHeaderRegex = try? NSRegularExpression(
+		pattern: #"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@"#
+	)
+
 	private static func parseHunkHeader(_ header: String) -> (
 		oldStart: Int, oldCount: Int, newStart: Int, newCount: Int
 	) {
-		// Parse: @@ -oldStart,oldCount +newStart,newCount @@
-		let pattern = #"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@"#
 		guard
-			let regex = try? NSRegularExpression(pattern: pattern),
+			let regex = Self.hunkHeaderRegex,
 			let match = regex.firstMatch(
 				in: header,
 				range: NSRange(header.startIndex..., in: header)

@@ -39,15 +39,16 @@ struct HunkView: View {
 			.background(Color(nsColor: .controlBackgroundColor))
 
 			// Hunk Lines
-			ForEach(Array(hunk.lines.enumerated()), id: \.element.id) { index, line in
-				let lineNumbers = calculateLineNumbers(for: index)
-				DiffLineView(
-					line: line,
-					oldLineNumber: lineNumbers.oldLine,
-					newLineNumber: lineNumbers.newLine,
-					isSelected: selectedLineIDs.contains(line.id),
-					onTap: { modifiers in onLineTap(line, modifiers) }
-				)
+			LazyVStack(spacing: 0) {
+				ForEach(hunk.lines) { line in
+					DiffLineView(
+						line: line,
+						oldLineNumber: line.oldLineNumber,
+						newLineNumber: line.newLineNumber,
+						isSelected: selectedLineIDs.contains(line.id),
+						onTap: { modifiers in onLineTap(line, modifiers) }
+					)
+				}
 			}
 		}
 		.background(Color(nsColor: .textBackgroundColor))
@@ -60,33 +61,4 @@ struct HunkView: View {
 		.padding(.vertical, 8)
 	}
 
-	private func calculateLineNumbers(for index: Int) -> (oldLine: Int?, newLine: Int?) {
-		var oldLine = hunk.oldStart
-		var newLine = hunk.newStart
-
-		for i in 0 ..< index {
-			let line = hunk.lines[i]
-			switch line.type {
-			case .context:
-				oldLine += 1
-				newLine += 1
-
-			case .deletion:
-				oldLine += 1
-
-			case .addition:
-				newLine += 1
-			}
-		}
-
-		let currentLine = hunk.lines[index]
-		switch currentLine.type {
-		case .context:
-			return (oldLine, newLine)
-		case .deletion:
-			return (oldLine, nil)
-		case .addition:
-			return (nil, newLine)
-		}
-	}
 }

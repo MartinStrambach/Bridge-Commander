@@ -102,10 +102,14 @@ nonisolated struct DiffLine: Identifiable, Equatable, Sendable {
 	let rawLine: String
 	let type: LineType
 	let content: String
+	let oldLineNumber: Int?
+	let newLineNumber: Int?
 
-	init(rawLine: String) {
-		self.id = UUID().uuidString
+	init(rawLine: String, id: String, oldLineNumber: Int?, newLineNumber: Int?) {
+		self.id = id
 		self.rawLine = rawLine
+		self.oldLineNumber = oldLineNumber
+		self.newLineNumber = newLineNumber
 
 		if rawLine.hasPrefix("+") {
 			self.type = .addition
