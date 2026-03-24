@@ -21,6 +21,8 @@ struct GitActionsMenuReducer {
 		@Presents
 		var alert: GitAlertReducer.State?
 
+		fileprivate var isLoaded = false
+
 		init(repositoryPath: String, currentBranch: String) {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch
@@ -35,6 +37,7 @@ struct GitActionsMenuReducer {
 
 	enum Action: Equatable {
 		case onAppear
+		case refresh
 		case setHasRemoteBranch(Bool)
 		case setUnpushedCount(Int)
 		case didCheckGitStatus(isMergeInProgress: Bool)
@@ -193,6 +196,11 @@ struct GitActionsMenuReducer {
 				return .send(.stashButton(.checkStashStatus))
 
 			case .onAppear:
+				guard !state.isLoaded else { return .none }
+				state.isLoaded = true
+				return checkStatusEffect(path: state.repositoryPath)
+
+			case .refresh:
 				return checkStatusEffect(path: state.repositoryPath)
 
 			case let .setHasRemoteBranch(hasRemote):

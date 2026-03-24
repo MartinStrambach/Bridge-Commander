@@ -265,8 +265,8 @@ struct RepositoryRowReducer {
 			fetchCommitsBehind(for: state),
 			fetchRemoteBranch(for: state),
 			fetchYouTrack(for: state),
-			.send(.gitActionsMenu(.onAppear)),
-			.send(.xcodeButton(.onAppear))
+			.send(.gitActionsMenu(.refresh)),
+			.send(.xcodeButton(.refresh))
 		)
 	}
 

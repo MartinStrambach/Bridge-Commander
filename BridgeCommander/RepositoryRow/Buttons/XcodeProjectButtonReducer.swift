@@ -16,10 +16,17 @@ struct XcodeProjectButtonReducer {
 		var openXcodeAfterGenerate = true
 		@Presents
 		var alert: AlertState<Action.Alert>?
+		
+		fileprivate var isLoaded = false
+
+		init(repositoryPath: String) {
+			self.repositoryPath = repositoryPath
+		}
 	}
 
 	enum Action {
 		case onAppear
+		case refresh
 		case foundProjectPath(String?)
 		case openProject
 		case didOpenProject
@@ -41,17 +48,16 @@ struct XcodeProjectButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .onAppear:
-				guard !state.projectState.isProcessing else {
-					return .none
-				}
-				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
-					let projectPath = await xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
-					await send(.foundProjectPath(projectPath))
-				}
+				guard !state.isLoaded else { return .none }
+				return findProjectEffect(state: &state)
+
+			case .refresh:
+				return findProjectEffect(state: &state)
 
 			case let .foundProjectPath(path):
 				state.projectState = .idle
 				state.projectPath = path
+				state.isLoaded = true
 				return .none
 
 			case .openProject:
@@ -144,5 +150,13 @@ struct XcodeProjectButtonReducer {
 			}
 		}
 		.ifLet(\.$alert, action: \.alert)
+	}
+
+	private func findProjectEffect(state: inout State) -> Effect<Action> {
+		guard !state.projectState.isProcessing else { return .none }
+		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+			let projectPath = await xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
+			await send(.foundProjectPath(projectPath))
+		}
 	}
 }
