@@ -59,6 +59,7 @@ struct RepositoryDetail {
 
 	private nonisolated enum CancellableId: Hashable, Sendable {
 		case loadChanges
+		case loadUnpushedCount
 	}
 
 	@Dependency(GitStagingClient.self)
@@ -84,25 +85,28 @@ struct RepositoryDetail {
 			case .loadChanges,
 			     .operationCompleted(.success):
 				return .merge(
-					.run { [path = state.repositoryPath] send in
-						// Retry logic to handle git index race conditions
-						var changes = await gitStagingClient.fetchFileChanges(path)
-						if changes.staged.isEmpty, changes.unstaged.isEmpty {
-							try await Task.sleep(nanoseconds: 200_000_000) // 200ms
-							changes = await gitStagingClient.fetchFileChanges(path)
+					.merge(
+						.run { [path = state.repositoryPath] send in
+							// Retry logic to handle git index race conditions
+							var changes = await gitStagingClient.fetchFileChanges(path)
+							if changes.staged.isEmpty, changes.unstaged.isEmpty {
+								try await Task.sleep(nanoseconds: 200_000_000) // 200ms
+								changes = await gitStagingClient.fetchFileChanges(path)
+							}
+							await send(.loadChangesResponse(changes))
+						},
+						.run { [path = state.repositoryPath] send in
+							let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
+							await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
 						}
-						await send(.loadChangesResponse(changes))
-					},
+					)
+					.cancellable(id: CancellableId.loadChanges, cancelInFlight: true),
 					.run { [path = state.repositoryPath] send in
-						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-						await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
-					},
-					.run { [path = state.repositoryPath] send in
-						let count = await gitClient.countUnpushedCommits(path)
+						let count = await gitClient.countUnpushedCommits(at: path)
 						await send(.loadUnpushedCountResponse(count))
 					}
+					.cancellable(id: CancellableId.loadUnpushedCount, cancelInFlight: true)
 				)
-				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
 
 			case let .loadChangesResponse(changes):
 				state.staged.isLoading = false
