@@ -34,13 +34,6 @@ struct RepositoryListView: View {
 		}
 	}
 
-	/// Flattened list of all rows across all groups (used for terminal sidebar).
-	private var allRows: IdentifiedArrayOf<RepositoryRowReducer.State> {
-		IdentifiedArrayOf(
-			uniqueElements: store.repositoryGroups.flatMap { [$0.header] + $0.worktrees }
-		)
-	}
-
 	var body: some View {
 		Group {
 			if
@@ -51,7 +44,7 @@ struct RepositoryListView: View {
 			{
 				TerminalLayoutView(
 					store: terminalLayoutStore,
-					repositories: allRows,
+					repositoryGroups: store.repositoryGroups,
 					sessions: store.terminalSessions,
 					terminalViewStore: terminalViewStore,
 					onStatusChange: { sessionId, status in
