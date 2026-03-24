@@ -2,43 +2,6 @@ import Foundation
 
 nonisolated enum GitBranchDetector {
 
-	/// Gets the current branch name for a Git repository
-	/// - Parameter path: The path to the Git repository
-	/// - Returns: The current branch name, or nil if not available
-	static func getCurrentBranch(at path: String) -> String? {
-		// Resolve the actual git directory (handles both regular repos and worktrees)
-		guard let actualGitPath = GitDirectoryResolver.resolveGitDirectory(at: path) else {
-			print("No .git found at \(path)")
-			return nil
-		}
-
-		// Read the HEAD file
-		let actualGitHeadPath = (actualGitPath as NSString).appendingPathComponent("HEAD")
-		guard let headContent = try? String(contentsOfFile: actualGitHeadPath, encoding: .utf8) else {
-			print("Failed to read HEAD file at \(actualGitHeadPath)")
-			return nil
-		}
-
-		let trimmed = headContent.trimmingCharacters(in: .whitespacesAndNewlines)
-
-		// Parse "ref: refs/heads/branch-name" or just a commit hash
-		if trimmed.hasPrefix("ref:") {
-			let refPath = trimmed.replacingOccurrences(of: "ref:", with: "")
-				.trimmingCharacters(in: .whitespaces)
-
-			// Extract branch name from refs/heads/branch-name
-			if refPath.hasPrefix("refs/heads/") {
-				let branchName = refPath.replacingOccurrences(of: "refs/heads/", with: "")
-				print("Detected branch '\(branchName)' for \(path)")
-				return branchName
-			}
-		}
-
-		// If it's a detached HEAD (just a commit hash), return nil
-		print("Repository at \(path) is in detached HEAD state")
-		return nil
-	}
-
 	/// Extracts a ticket ID from a branch name using a regex pattern
 	/// - Parameters:
 	///   - branchName: The Git branch name

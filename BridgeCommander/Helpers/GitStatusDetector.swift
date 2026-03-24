@@ -1,10 +1,5 @@
 import Foundation
 
-struct GitChanges: Sendable {
-	let unstagedCount: Int
-	let stagedCount: Int
-}
-
 struct GitBranchAndChanges: Sendable {
 	let branch: String?
 	let unstagedCount: Int
@@ -61,12 +56,4 @@ nonisolated enum GitStatusDetector {
 		return GitBranchAndChanges(branch: branch, unstagedCount: unstagedCount, stagedCount: stagedCount)
 	}
 
-	/// Detects both staged and unstaged changes in a repository
-	/// Uses `git status --porcelain=v2 --branch` for a single git invocation.
-	/// - Parameter path: The path to the Git repository
-	/// - Returns: A GitChanges struct with both counts
-	static func getChangesCount(at path: String) async -> GitChanges {
-		let result = await getBranchAndChanges(at: path)
-		return GitChanges(unstagedCount: result.unstagedCount, stagedCount: result.stagedCount)
-	}
 }
