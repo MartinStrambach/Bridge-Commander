@@ -34,7 +34,9 @@ nonisolated enum GitWorktreeScanner {
 			let name = url.lastPathComponent
 			let directory = url.deletingLastPathComponent().path
 
-			let branchName = GitBranchDetector.getCurrentBranch(at: worktreePath)
+			// Branch name is available directly in the porcelain block as
+			// "branch refs/heads/<name>" — no extra file I/O needed.
+			let branchName = extractBranch(from: trimmed)
 			let mergeInProgress = GitMergeDetector.isGitOperationInProgress(at: worktreePath)
 
 			let repo = ScannedRepository(
@@ -58,5 +60,18 @@ nonisolated enum GitWorktreeScanner {
 			}
 		}
 		return nil
+	}
+
+	/// Parses the branch name from a `git worktree list --porcelain` block.
+	/// Returns nil if the worktree is in detached HEAD state.
+	private static func extractBranch(from block: String) -> String? {
+		guard let ref = extractValue(from: block, prefix: "branch ") else {
+			return nil
+		}
+		let headsPrefix = "refs/heads/"
+		guard ref.hasPrefix(headsPrefix) else {
+			return nil
+		}
+		return String(ref.dropFirst(headsPrefix.count))
 	}
 }

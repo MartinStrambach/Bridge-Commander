@@ -38,29 +38,24 @@ nonisolated enum GitDirectoryResolver {
 	/// - Parameter url: The directory URL to check
 	/// - Returns: A tuple indicating if it's a repo and if it's a worktree
 	static func isGitRepository(at url: URL) -> (isRepo: Bool, isWorktree: Bool) {
-		guard resolveGitDirectory(at: url.path) != nil else {
+		let expectedGitDir = (url.path as NSString).appendingPathComponent(".git")
+		guard let resolvedGitDir = resolveGitDirectory(at: url.path) else {
 			return (false, false)
 		}
-		return (true, isWorktree(at: url.path))
+		// If the resolved git dir differs from the canonical .git directory path, it followed
+		// a gitdir: pointer — meaning this is a worktree, not a regular repository.
+		let worktree = resolvedGitDir != expectedGitDir
+		return (true, worktree)
 	}
 
 	/// Checks if a path points to a git worktree (as opposed to a regular repository)
 	/// - Parameter path: The path to check
 	/// - Returns: true if it's a worktree, false otherwise
 	static func isWorktree(at path: String) -> Bool {
-		let gitPath = (path as NSString).appendingPathComponent(".git")
-		var isDirectory: ObjCBool = false
-		let exists = FileManager.default.fileExists(atPath: gitPath, isDirectory: &isDirectory)
-
-		guard exists, !isDirectory.boolValue else {
+		let expectedGitDir = (path as NSString).appendingPathComponent(".git")
+		guard let resolvedGitDir = resolveGitDirectory(at: path) else {
 			return false
 		}
-
-		// .git file exists, verify it contains gitdir: pointer
-		guard let contents = try? String(contentsOf: URL(fileURLWithPath: gitPath), encoding: .utf8) else {
-			return false
-		}
-
-		return contents.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("gitdir:")
+		return resolvedGitDir != expectedGitDir
 	}
 }

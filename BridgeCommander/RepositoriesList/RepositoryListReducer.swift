@@ -299,7 +299,10 @@ struct RepositoryListReducer {
 					}
 					return [headerEffect] + worktreeEffects
 				}
-				return .concatenate(.send(.startScan), .merge(refreshEffects))
+				// Use concatenate instead of merge to stagger row refreshes.
+			// Merging all effects at once spawns 7×N git processes simultaneously (thundering herd).
+			// Concatenating serializes them so git load ramps up gradually.
+			return .concatenate([.send(.startScan)] + refreshEffects)
 
 			case .startPeriodicRefresh:
 				let interval = state.periodicRefreshInterval.timeInterval

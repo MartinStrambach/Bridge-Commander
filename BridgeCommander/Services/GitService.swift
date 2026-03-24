@@ -19,20 +19,15 @@ nonisolated struct GitClient: Sendable {
 extension GitClient: DependencyKey {
 	static let liveValue = GitClient(
 		getCurrentBranch: { at in
-			let branch = GitBranchDetector.getCurrentBranch(at: at) ?? "unknown"
+			// A single git status --porcelain=v2 --branch call returns branch name,
+			// staged count, and unstaged count — replacing separate file reads and
+			// two parallel git invocations.
+			let status = await GitStatusDetector.getBranchAndChanges(at: at)
 			let isMerge = GitMergeDetector.isGitOperationInProgress(at: at)
-			let changes =
-				if isMerge {
-					GitChanges(unstagedCount: 0, stagedCount: 0)
-				}
-				else {
-					await GitStatusDetector.getChangesCount(at: at)
-				}
-
 			return (
-				branch: branch,
-				unstagedCount: changes.unstagedCount,
-				stagedCount: changes.stagedCount
+				branch: status.branch ?? "unknown",
+				unstagedCount: isMerge ? 0 : status.unstagedCount,
+				stagedCount: isMerge ? 0 : status.stagedCount
 			)
 		},
 		countUnpushedCommits: { at in
