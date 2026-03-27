@@ -41,6 +41,12 @@ struct TuistButtonView: View {
 					} label: {
 						Label("Edit", systemImage: "pencil")
 					}
+
+					Button {
+						store.send(.inspectDependenciesTapped)
+					} label: {
+						Label("Inspect", systemImage: "magnifyingglass")
+					}
 				} label: {
 					Text("Tuist")
 						.font(.system(size: 12))
@@ -66,6 +72,8 @@ struct TuistButtonView: View {
 			"Caching..."
 		case .edit:
 			"Opening..."
+		case .inspectDependencies:
+			"Inspecting..."
 		}
 	}
 
@@ -79,6 +87,8 @@ struct TuistButtonView: View {
 			"Caching Tuist targets..."
 		case .edit:
 			"Opening Tuist project for editing..."
+		case .inspectDependencies:
+			"Inspecting implicit dependencies..."
 		}
 	}
 }

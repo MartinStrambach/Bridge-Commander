@@ -28,6 +28,7 @@ struct TuistButtonReducer {
 		case installTapped
 		case cacheTapped
 		case editTapped
+		case inspectDependenciesTapped
 		case actionCompleted(TuistAction, Result<String, Error>)
 		case alert(PresentationAction<GitAlertReducer.Action>)
 	}
@@ -125,10 +126,36 @@ struct TuistButtonReducer {
 					await send(.actionCompleted(.edit, result))
 				}
 
+			case .inspectDependenciesTapped:
+				guard state.runningAction == nil else {
+					return .none
+				}
+
+				state.runningAction = .inspectDependencies
+				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+						in: repositoryPath,
+						iosSubfolderPath: iosSubfolderPath
+					)
+					let result = await TuistCommandHelper.runCommand(
+						.inspectDependencies,
+						at: iosFlashscorePath,
+						shouldOpenXcode: false
+					)
+					await send(.actionCompleted(.inspectDependencies, result))
+				}
+
 			case let .actionCompleted(tuistAction, result):
 				state.runningAction = nil
 				switch result {
-				case .success:
+				case let .success(output):
+					if tuistAction == .inspectDependencies {
+						state.alert = .init(
+							title: "Implicit Dependencies",
+							message: output.isEmpty ? "No implicit dependencies found." : output,
+							isError: false
+						)
+					}
 					return .none
 				case let .failure(error):
 					let title =
@@ -137,6 +164,7 @@ struct TuistButtonReducer {
 						case .install: "Tuist Install Failed"
 						case .cache: "Tuist Cache Failed"
 						case .edit: "Tuist Edit Failed"
+						case .inspectDependencies: "Tuist Inspect Failed"
 						}
 					state.alert = .init(
 						title: title,

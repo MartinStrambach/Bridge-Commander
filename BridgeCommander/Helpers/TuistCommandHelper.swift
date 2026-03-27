@@ -34,6 +34,7 @@ nonisolated enum TuistAction: Equatable {
 	case install
 	case cache(TuistCacheType)
 	case edit
+	case inspectDependencies
 
 	var commandString: String {
 		switch self {
@@ -48,6 +49,9 @@ nonisolated enum TuistAction: Equatable {
 
 		case .edit:
 			"edit"
+
+		case .inspectDependencies:
+			"inspect dependencies --only implicit"
 		}
 	}
 }
@@ -55,6 +59,7 @@ nonisolated enum TuistAction: Equatable {
 // MARK: - Tuist Command Helper
 
 nonisolated enum TuistCommandHelper {
+
 	/// Runs a Tuist command using mise exec at the specified repository path
 	/// - Parameters:
 	///   - action: The Tuist action to run
@@ -82,7 +87,10 @@ nonisolated enum TuistCommandHelper {
 		)
 
 		if result.success {
-			return .success(result.outputString)
+			let combined = [result.outputString, result.errorString]
+				.filter { !$0.isEmpty }
+				.joined(separator: "\n")
+			return .success(combined.trimmingCharacters(in: .whitespacesAndNewlines))
 		}
 		else {
 			let errorMessage = result.errorString.isEmpty
