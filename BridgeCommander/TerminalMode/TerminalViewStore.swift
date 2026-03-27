@@ -99,6 +99,35 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	private var currentStatus: TerminalSessionStatus = .active
 	private var debounceWorkItem: DispatchWorkItem?
 
+	// MARK: - Init
+
+	override init(frame: NSRect) {
+		super.init(frame: frame)
+		registerForDraggedTypes([.fileURL])
+	}
+
+	required init?(coder: NSCoder) {
+		super.init(coder: coder)
+		registerForDraggedTypes([.fileURL])
+	}
+
+	// MARK: - Drag & Drop
+
+	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+		sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+			? .copy : []
+	}
+
+	override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+		let pb = sender.draggingPasteboard
+		guard let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+		      !urls.isEmpty else { return false }
+		let paths = urls.map { $0.path.shellEscaped }.joined(separator: " ")
+		guard let bytes = paths.data(using: .utf8) else { return false }
+		send(source: self, data: ArraySlice(bytes))
+		return true
+	}
+
 	// MARK: - Data-flow based detection
 
 	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
@@ -162,6 +191,24 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 		currentStatus = status
 		onStatusChange?(sessionId, status)
+	}
+}
+
+// MARK: - Shell Escaping
+
+private extension String {
+	/// Backslash-escapes shell-special characters so the path can be used as-is
+	/// at the command line without surrounding quotes.
+	/// e.g. `/foo bar` → `/foo\ bar`, `/it's` → `/it\'s`
+	var shellEscaped: String {
+		let safe = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "/-_.,=@:+"))
+		return unicodeScalars.reduce(into: "") { result, scalar in
+			if safe.contains(scalar) {
+				result.append(Character(scalar))
+			} else {
+				result += "\\\(Character(scalar))"
+			}
+		}
 	}
 }
 
