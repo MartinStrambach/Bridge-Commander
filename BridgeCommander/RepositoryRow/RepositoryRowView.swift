@@ -272,10 +272,12 @@ struct RepositoryRowView: View {
 				action: \.gitActionsMenu
 			))
 
-			TuistButtonView(store: store.scope(
-				state: \.tuistButton,
-				action: \.tuistButton
-			))
+			if store.supportsIOS {
+				TuistButtonView(store: store.scope(
+					state: \.tuistButton,
+					action: \.tuistButton
+				))
+			}
 
 			// Copy path button
 			ActionButton(
@@ -312,20 +314,24 @@ struct RepositoryRowView: View {
 				TicketButtonView(store: ticketButtonStore)
 			}
 
-			AndroidStudioButtonView(store: store.scope(
-				state: \.androidStudioButton,
-				action: \.androidStudioButton
-			))
+			if store.supportsAndroid {
+				AndroidStudioButtonView(store: store.scope(
+					state: \.androidStudioButton,
+					action: \.androidStudioButton
+				))
+			}
 
 			TerminalButtonView(store: store.scope(
 				state: \.terminalButton,
 				action: \.terminalButton
 			))
 
-			XcodeProjectButtonView(store: store.scope(
-				state: \.xcodeButton,
-				action: \.xcodeButton
-			))
+			if store.supportsIOS {
+				XcodeProjectButtonView(store: store.scope(
+					state: \.xcodeButton,
+					action: \.xcodeButton
+				))
+			}
 
 			ClaudeCodeButtonView(store: store.scope(
 				state: \.claudeCodeButton,
