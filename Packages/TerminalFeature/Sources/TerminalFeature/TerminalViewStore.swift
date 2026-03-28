@@ -2,17 +2,20 @@
 import AppKit
 import Foundation
 import Observation
+import Settings
 import SwiftTerm
 
 @MainActor
 @Observable
-final class TerminalViewStore {
+public final class TerminalViewStore {
 	private var views: [UUID: ClaudeAwareTerminalView] = [:]
+
+	public init() {}
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one.
 	/// The caller is responsible for creating `processDelegate` and keeping a strong reference
 	/// to it (e.g. in an NSViewRepresentable Coordinator).
-	func view(
+	public func view(
 		for session: TerminalSession,
 		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
@@ -55,11 +58,11 @@ final class TerminalViewStore {
 		return terminalView
 	}
 
-	func removeSession(sessionId: UUID) {
+	public func removeSession(sessionId: UUID) {
 		views.removeValue(forKey: sessionId)
 	}
 
-	func killSession(sessionId: UUID) {
+	public func killSession(sessionId: UUID) {
 		if let view = views[sessionId] {
 			view.processDelegate = nil // prevent spurious .failed callback
 			view.removeFromSuperview() // remove from NSView container
@@ -68,7 +71,7 @@ final class TerminalViewStore {
 		// Process gets SIGHUP when PTY closes on deallocation
 	}
 
-	func killAllSessions(for repositoryPath: String) {
+	public func killAllSessions(for repositoryPath: String) {
 		let sessionIds = views.compactMap { id, view -> UUID? in
 			view.repositoryPath == repositoryPath ? id : nil
 		}
@@ -77,7 +80,7 @@ final class TerminalViewStore {
 		}
 	}
 
-	func killAll() {
+	public func killAll() {
 		// Removing references lets ARC release LocalProcessTerminalView instances,
 		// whose deinit cleans up the underlying PTY. The OS also reclaims child
 		// processes when the app exits.
@@ -89,37 +92,37 @@ final class TerminalViewStore {
 
 /// Subclass of LocalProcessTerminalView that monitors terminal content for the
 /// Claude Code waiting-for-input prompt (❯, U+276F) and reports status changes.
-final class ClaudeAwareTerminalView: LocalProcessTerminalView {
+public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	private static let claudePromptCharacter: Character = "❯" // U+276F
 
-	var repositoryPath: String = ""
-	var sessionId: UUID = .init()
-	var onStatusChange: (@Sendable (UUID, TerminalSessionStatus) -> Void)?
+	public var repositoryPath: String = ""
+	public var sessionId: UUID = .init()
+	public var onStatusChange: (@Sendable (UUID, TerminalSessionStatus) -> Void)?
 
 	private var currentStatus: TerminalSessionStatus = .active
 	private var debounceWorkItem: DispatchWorkItem?
 
 	// MARK: - Init
 
-	override init(frame: NSRect) {
+	override public init(frame: NSRect) {
 		super.init(frame: frame)
 		registerForDraggedTypes([.fileURL])
 	}
 
-	required init?(coder: NSCoder) {
+	public required init?(coder: NSCoder) {
 		super.init(coder: coder)
 		registerForDraggedTypes([.fileURL])
 	}
 
 	// MARK: - Drag & Drop
 
-	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+	override public func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
 		sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
 			? .copy
 			: []
 	}
 
-	override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+	override public func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
 		let pb = sender.draggingPasteboard
 		guard
 			let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
@@ -143,7 +146,7 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// We use the silence between writes as the signal: if no data arrives for
 	/// `idleThreshold` seconds AND the Claude prompt character is visible,
 	/// the session is waiting for user input.
-	override func dataReceived(slice: ArraySlice<UInt8>) {
+	override public func dataReceived(slice: ArraySlice<UInt8>) {
 		super.dataReceived(slice: slice)
 		// Data is flowing → Claude is working, not waiting.
 		if currentStatus == .waitingForInput {
@@ -153,7 +156,7 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	}
 
 	/// Called when the user sends keystrokes to the process.
-	override func send(source: TerminalView, data: ArraySlice<UInt8>) {
+	override public func send(source: TerminalView, data: ArraySlice<UInt8>) {
 		super.send(source: source, data: data)
 		if currentStatus == .waitingForInput {
 			reportStatus(.active)
@@ -224,22 +227,24 @@ private extension String {
 
 // MARK: - TerminalProcessDelegate
 
-final class TerminalProcessDelegate: LocalProcessTerminalViewDelegate {
+public final class TerminalProcessDelegate: LocalProcessTerminalViewDelegate {
 	private let onFailed: @Sendable (String) -> Void
 
-	init(onFailed: @escaping @Sendable (String) -> Void) {
+	public init(onFailed: @escaping @Sendable (String) -> Void) {
 		self.onFailed = onFailed
 	}
 
-	func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
+	public func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
 
-	func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
+	public func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
 
-	func processTerminated(source: TerminalView, exitCode: Int32?) {
+	public func processTerminated(source: TerminalView, exitCode: Int32?) {
+		let message = "Terminal process exited (code \(exitCode ?? -1))"
+		let callback = onFailed
 		DispatchQueue.main.async {
-			self.onFailed("Terminal process exited (code \(exitCode ?? -1))")
+			callback(message)
 		}
 	}
 
-	func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+	public func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
 }

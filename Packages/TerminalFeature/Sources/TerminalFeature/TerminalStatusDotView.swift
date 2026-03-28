@@ -3,10 +3,14 @@ import SwiftUI
 
 /// A 6pt indicator dot showing terminal session state.
 /// Green for active/launching, amber pulsing for waitingForInput, clear otherwise.
-struct TerminalStatusDotView: View {
-	let status: TerminalSessionStatus?
+public struct TerminalStatusDotView: View {
+	public let status: TerminalSessionStatus?
 
-	var body: some View {
+	public init(status: TerminalSessionStatus?) {
+		self.status = status
+	}
+
+	public var body: some View {
 		switch status {
 		case .active,
 		     .launching:

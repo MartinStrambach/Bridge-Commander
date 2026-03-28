@@ -14,31 +14,43 @@ import SwiftUI
 ///
 /// Auto Layout constraints pin each terminal view to the container's edges, so
 /// the frame resolves from the container's correct bounds in one step.
-struct TerminalContainerRepresentable: NSViewRepresentable {
+public struct TerminalContainerRepresentable: NSViewRepresentable {
 
 	// MARK: - Coordinator
 
 	/// Owns strong references to per-session TerminalProcessDelegate instances.
 	/// SwiftUI manages the coordinator's lifetime — it lives as long as the representable
 	/// is in the view hierarchy, ensuring delegates are released when the terminal panel closes.
-	final class Coordinator {
-		var processDelegates: [UUID: TerminalProcessDelegate] = [:]
+	public final class Coordinator {
+		public var processDelegates: [UUID: TerminalProcessDelegate] = [:]
 	}
 
-	let terminalViewStore: TerminalViewStore
-	let sessions: IdentifiedArrayOf<TerminalSession>
-	let activeSessionId: UUID?
-	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	public let terminalViewStore: TerminalViewStore
+	public let sessions: IdentifiedArrayOf<TerminalSession>
+	public let activeSessionId: UUID?
+	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
-	func makeNSView(context: Context) -> NSView {
+	public init(
+		terminalViewStore: TerminalViewStore,
+		sessions: IdentifiedArrayOf<TerminalSession>,
+		activeSessionId: UUID?,
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
+	) {
+		self.terminalViewStore = terminalViewStore
+		self.sessions = sessions
+		self.activeSessionId = activeSessionId
+		self.onStatusChange = onStatusChange
+	}
+
+	public func makeNSView(context: Context) -> NSView {
 		NSView(frame: .zero)
 	}
 
-	func makeCoordinator() -> Coordinator {
+	public func makeCoordinator() -> Coordinator {
 		Coordinator()
 	}
 
-	func updateNSView(_ nsView: NSView, context: Context) {
+	public func updateNSView(_ nsView: NSView, context: Context) {
 		for session in sessions {
 			switch session.status {
 			case .active,
