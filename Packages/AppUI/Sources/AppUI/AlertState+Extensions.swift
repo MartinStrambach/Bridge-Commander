@@ -1,5 +1,4 @@
 import ComposableArchitecture
-import Foundation
 
 extension AlertState {
 	/// Creates a simple alert with a title, message, and OK button
