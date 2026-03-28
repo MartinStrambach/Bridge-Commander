@@ -74,8 +74,12 @@ struct DiffLineView: View {
 		.onTapGesture {
 			let modifiers = NSApp.currentEvent?.modifierFlags ?? []
 			var swiftModifiers: EventModifiers = []
-			if modifiers.contains(.shift) { swiftModifiers.insert(.shift) }
-			if modifiers.contains(.command) { swiftModifiers.insert(.command) }
+			if modifiers.contains(.shift) {
+				swiftModifiers.insert(.shift)
+			}
+			if modifiers.contains(.command) {
+				swiftModifiers.insert(.command)
+			}
 			onTap(swiftModifiers)
 		}
 	}

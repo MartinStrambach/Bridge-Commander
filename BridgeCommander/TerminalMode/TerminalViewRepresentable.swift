@@ -1,8 +1,8 @@
 // BridgeCommander/TerminalMode/TerminalViewRepresentable.swift
 import AppKit
 import ComposableArchitecture
-import SwiftUI
 import SwiftTerm
+import SwiftUI
 
 /// A single NSView container that hosts all terminal sessions as direct subviews.
 ///
@@ -15,78 +15,90 @@ import SwiftTerm
 /// Auto Layout constraints pin each terminal view to the container's edges, so
 /// the frame resolves from the container's correct bounds in one step.
 struct TerminalContainerRepresentable: NSViewRepresentable {
-    let terminalViewStore: TerminalViewStore
-    let sessions: IdentifiedArrayOf<TerminalSession>
-    let activeSessionId: UUID?
-    let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
-    func makeNSView(context: Context) -> NSView {
-        NSView(frame: .zero)
-    }
+	// MARK: - Coordinator
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+	/// Owns strong references to per-session TerminalProcessDelegate instances.
+	/// SwiftUI manages the coordinator's lifetime — it lives as long as the representable
+	/// is in the view hierarchy, ensuring delegates are released when the terminal panel closes.
+	final class Coordinator {
+		var processDelegates: [UUID: TerminalProcessDelegate] = [:]
+	}
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        for session in sessions {
-            switch session.status {
-            case .launching, .active, .waitingForInput:
-                let sessionId = session.id
+	let terminalViewStore: TerminalViewStore
+	let sessions: IdentifiedArrayOf<TerminalSession>
+	let activeSessionId: UUID?
+	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
-                // Retrieve or create the process delegate, held strongly by the coordinator.
-                // LocalProcessTerminalView.processDelegate is a weak var, so the coordinator
-                // must own the strong reference for callbacks to fire.
-                let delegate: TerminalProcessDelegate
-                if let existing = context.coordinator.processDelegates[sessionId] {
-                    delegate = existing
-                } else {
-                    let newDelegate = TerminalProcessDelegate(
-                        onFailed: { message in onStatusChange(sessionId, .failed(message)) }
-                    )
-                    context.coordinator.processDelegates[sessionId] = newDelegate
-                    delegate = newDelegate
-                }
+	func makeNSView(context: Context) -> NSView {
+		NSView(frame: .zero)
+	}
 
-                let termView = terminalViewStore.view(for: session, processDelegate: delegate, onStatusChange: onStatusChange)
-                if termView.superview !== nsView {
-                    termView.translatesAutoresizingMaskIntoConstraints = false
-                    nsView.addSubview(termView)
-                    NSLayoutConstraint.activate([
-                        termView.topAnchor.constraint(equalTo: nsView.topAnchor),
-                        termView.bottomAnchor.constraint(equalTo: nsView.bottomAnchor),
-                        termView.leadingAnchor.constraint(equalTo: nsView.leadingAnchor),
-                        termView.trailingAnchor.constraint(equalTo: nsView.trailingAnchor),
-                    ])
-                }
-                let isActive = session.id == activeSessionId
-                termView.isHidden = !isActive
-                if isActive {
-                    if termView.window != nil {
-                        termView.window?.makeFirstResponder(termView)
-                    } else {
-                        DispatchQueue.main.async {
-                            termView.window?.makeFirstResponder(termView)
-                        }
-                    }
-                }
-            case .failed:
-                break
-            }
-        }
+	func makeCoordinator() -> Coordinator {
+		Coordinator()
+	}
 
-        // Release delegates for sessions that are no longer present (killed or failed).
-        let activeIds = Set(sessions.map(\.id))
-        context.coordinator.processDelegates = context.coordinator.processDelegates
-            .filter { activeIds.contains($0.key) }
-    }
+	func updateNSView(_ nsView: NSView, context: Context) {
+		for session in sessions {
+			switch session.status {
+			case .active,
+			     .launching,
+			     .waitingForInput:
+				let sessionId = session.id
 
-    // MARK: - Coordinator
+				// Retrieve or create the process delegate, held strongly by the coordinator.
+				// LocalProcessTerminalView.processDelegate is a weak var, so the coordinator
+				// must own the strong reference for callbacks to fire.
+				let delegate: TerminalProcessDelegate
+				if let existing = context.coordinator.processDelegates[sessionId] {
+					delegate = existing
+				}
+				else {
+					let newDelegate = TerminalProcessDelegate(
+						onFailed: { message in onStatusChange(sessionId, .failed(message)) }
+					)
+					context.coordinator.processDelegates[sessionId] = newDelegate
+					delegate = newDelegate
+				}
 
-    /// Owns strong references to per-session TerminalProcessDelegate instances.
-    /// SwiftUI manages the coordinator's lifetime — it lives as long as the representable
-    /// is in the view hierarchy, ensuring delegates are released when the terminal panel closes.
-    final class Coordinator {
-        var processDelegates: [UUID: TerminalProcessDelegate] = [:]
-    }
+				let termView = terminalViewStore.view(
+					for: session,
+					processDelegate: delegate,
+					onStatusChange: onStatusChange
+				)
+				if termView.superview !== nsView {
+					termView.translatesAutoresizingMaskIntoConstraints = false
+					nsView.addSubview(termView)
+					NSLayoutConstraint.activate([
+						termView.topAnchor.constraint(equalTo: nsView.topAnchor),
+						termView.bottomAnchor.constraint(equalTo: nsView.bottomAnchor),
+						termView.leadingAnchor.constraint(equalTo: nsView.leadingAnchor),
+						termView.trailingAnchor.constraint(equalTo: nsView.trailingAnchor),
+					])
+				}
+				let isActive = session.id == activeSessionId
+				termView.isHidden = !isActive
+				if isActive {
+					if termView.window != nil {
+						termView.window?.makeFirstResponder(termView)
+					}
+					else {
+						DispatchQueue.main.async {
+							termView.window?.makeFirstResponder(termView)
+						}
+					}
+				}
+
+			case .failed:
+				break
+			}
+		}
+
+		// Release delegates for sessions that are no longer present (killed or failed).
+		let activeIds = Set(sessions.map(\.id))
+		context.coordinator.processDelegates = context.coordinator
+			.processDelegates
+			.filter { activeIds.contains($0.key) }
+	}
+
 }

@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Tuist Cache Type
 
-nonisolated enum TuistCacheType: String, Equatable, CaseIterable, Sendable {
+nonisolated enum TuistCacheType: String, Equatable, CaseIterable {
 	case externalOnly
 	case all
 

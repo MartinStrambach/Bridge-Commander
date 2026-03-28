@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - YouTrack Service Protocol
 
-nonisolated enum CodeReviewState: String, Sendable, Equatable {
+nonisolated enum CodeReviewState: String, Equatable {
 	case passed = "Passed"
 	case waiting = "Waiting"
 	case notApplicable = "N/A"
@@ -22,7 +22,7 @@ nonisolated enum CodeReviewState: String, Sendable, Equatable {
 	}
 }
 
-nonisolated enum TicketState: String, Sendable, Equatable {
+nonisolated enum TicketState: String, Equatable {
 	case open = "Open"
 	case inProgress = "In Progress"
 	case waitingToCodeReview = "Waiting to code review"
@@ -57,7 +57,7 @@ protocol YouTrackServiceType: Sendable {
 	func fetchIssueDetails(for ticketId: String) async throws -> IssueDetails
 }
 
-struct IssueDetails: Sendable {
+struct IssueDetails {
 	let prUrl: String?
 	let androidCR: CodeReviewState?
 	let iosCR: CodeReviewState?

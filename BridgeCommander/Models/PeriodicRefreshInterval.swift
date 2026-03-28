@@ -1,6 +1,6 @@
 import Foundation
 
-enum PeriodicRefreshInterval: Int, CaseIterable, Equatable, Sendable {
+enum PeriodicRefreshInterval: Int, CaseIterable, Equatable {
 	case tenSeconds = 10
 	case oneMinute = 60
 	case threeMinutes = 180

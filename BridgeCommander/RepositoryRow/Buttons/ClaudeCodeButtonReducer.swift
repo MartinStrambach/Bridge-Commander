@@ -13,14 +13,15 @@ struct ClaudeCodeButtonReducer {
 
 		var mobileSubfolderPath: String
 
+		@Presents
+		var alert: AlertState<Action.Alert>?
+
 		init(repositoryPath: String, mobileSubfolderPath: String = "") {
 			self.repositoryPath = repositoryPath
 			self.mobileSubfolderPath = mobileSubfolderPath
 			self.isLaunching = false
 		}
 
-		@Presents
-		var alert: AlertState<Action.Alert>?
 	}
 
 	enum Action: Equatable {

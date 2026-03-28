@@ -77,7 +77,8 @@ nonisolated extension SharedReaderKey where Self == FileStorageKey<[String: Repo
 
 private nonisolated func applicationSupportURL(name: String) -> URL {
 	let urls = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-	let appSupport = urls.first ?? URL(fileURLWithPath: NSHomeDirectory()).appending(component: "Library/Application Support")
+	let appSupport = urls.first ?? URL(fileURLWithPath: NSHomeDirectory())
+		.appending(component: "Library/Application Support")
 	return appSupport
 		.appending(component: Bundle.main.bundleIdentifier ?? "BridgeCommander")
 		.appending(component: name)

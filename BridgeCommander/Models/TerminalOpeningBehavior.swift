@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum TerminalOpeningBehavior: String, CaseIterable, Equatable, Sendable {
+nonisolated enum TerminalOpeningBehavior: String, CaseIterable, Equatable {
 	case newWindow
 	case newTab
 

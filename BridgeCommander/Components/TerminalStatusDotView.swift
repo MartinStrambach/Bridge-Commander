@@ -4,36 +4,40 @@ import SwiftUI
 /// A 6pt indicator dot showing terminal session state.
 /// Green for active/launching, amber pulsing for waitingForInput, clear otherwise.
 struct TerminalStatusDotView: View {
-    let status: TerminalSessionStatus?
+	let status: TerminalSessionStatus?
 
-    var body: some View {
-        switch status {
-        case .launching, .active:
-            Circle()
-                .fill(Color.green)
-                .frame(width: 6, height: 6)
-        case .waitingForInput:
-            PulsingAmberDot()
-        case .failed, nil:
-            Circle()
-                .fill(Color.clear)
-                .frame(width: 6, height: 6)
-        }
-    }
+	var body: some View {
+		switch status {
+		case .active,
+		     .launching:
+			Circle()
+				.fill(Color.green)
+				.frame(width: 6, height: 6)
+
+		case .waitingForInput:
+			PulsingAmberDot()
+
+		case .failed,
+		     nil:
+			Circle()
+				.fill(Color.clear)
+				.frame(width: 6, height: 6)
+		}
+	}
 }
 
 private struct PulsingAmberDot: View {
-    @State private var pulsing = false
+	@State private var pulsing = false
 
-    var body: some View {
-        Circle()
-            .fill(Color.orange)
-            .frame(width: 6, height: 6)
-            .scaleEffect(pulsing ? 1.4 : 1.0)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
-                    pulsing = true
-                }
-            }
-    }
+	var body: some View {
+		Circle()
+			.fill(Color.orange)
+			.frame(width: 6, height: 6)
+			.scaleEffect(pulsing ? 1.4 : 1.0)
+			.onAppear {
+				withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+					pulsing = true
+				}
+			}
+	}
 }

@@ -5,8 +5,11 @@ import Foundation
 // MARK: - Git Service
 
 @DependencyClient
-nonisolated struct GitClient: Sendable {
-	var getCurrentBranch: @Sendable (_ at: String) async -> GitPorcelainStatus = { _ in GitPorcelainStatus(parsing: "") }
+nonisolated struct GitClient {
+	var getCurrentBranch: @Sendable (_ at: String) async -> GitPorcelainStatus = { _ in
+		GitPorcelainStatus(parsing: "")
+	}
+
 	var mergeMaster: @Sendable (_ at: String) async throws -> GitMergeHelper.MergeResult
 	var pull: @Sendable (_ at: String) async throws -> GitPullHelper.PullResult
 	var fetch: @Sendable (_ at: String) async throws -> GitFetchHelper.FetchResult

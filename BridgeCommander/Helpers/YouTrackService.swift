@@ -197,12 +197,12 @@ private nonisolated struct YouTrackIssue: Decodable {
 	let customFields: [CustomField]?
 }
 
-private struct CustomField: Decodable, Sendable {
+private struct CustomField: Decodable {
 	let name: String?
 	let value: CustomFieldValue?
 }
 
-private struct CustomFieldValue: Decodable, Sendable {
+private struct CustomFieldValue: Decodable {
 	enum CodingKeys: String, CodingKey {
 		case text
 		case name

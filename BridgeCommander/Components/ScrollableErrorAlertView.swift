@@ -19,10 +19,10 @@ struct GitAlertReducer {
 	@Dependency(\.dismiss) var dismiss
 
 	var body: some Reducer<State, Action> {
-		Reduce { state, action in
+		Reduce { _, action in
 			switch action {
 			case .dismissTapped:
-				return .run { _ in await dismiss() }
+				.run { _ in await dismiss() }
 			}
 		}
 	}

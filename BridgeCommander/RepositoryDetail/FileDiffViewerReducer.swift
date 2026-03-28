@@ -15,7 +15,7 @@ struct FileDiffViewer {
 		}
 	}
 
-	enum Action: Sendable {
+	enum Action {
 		case load(FileChange, isStaged: Bool)
 		case loadResponse(FileDiff?)
 		case stageHunk(DiffHunk)
@@ -23,7 +23,7 @@ struct FileDiffViewer {
 		case discardHunk(DiffHunk)
 		case delegate(Delegate)
 
-		enum Delegate: Sendable {
+		enum Delegate {
 			case fileHasNoChanges(fileId: String, isStaged: Bool)
 			case stageHunk(FileChange, DiffHunk)
 			case unstageHunk(FileChange, DiffHunk)
@@ -31,7 +31,7 @@ struct FileDiffViewer {
 		}
 	}
 
-	private nonisolated enum CancellableId: Hashable, Sendable {
+	private nonisolated enum CancellableId: Hashable {
 		case loadDiff
 	}
 

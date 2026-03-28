@@ -68,10 +68,12 @@ nonisolated enum GitWorktreeScanner {
 		guard let ref = extractValue(from: block, prefix: "branch ") else {
 			return nil
 		}
+
 		let headsPrefix = "refs/heads/"
 		guard ref.hasPrefix(headsPrefix) else {
 			return nil
 		}
+
 		return String(ref.dropFirst(headsPrefix.count))
 	}
 }

@@ -39,8 +39,10 @@ struct RepositoryDetailView: View {
 							}
 					}
 					.tint(.orange)
-					.help(store.isPushing ? "Pushing commits to remote…" : "Push \(store.unpushedCommitsCount) unpushed commit(s) to remote")
-					.disabled(store.isPushing)
+					.help(store.isPushing
+						? "Pushing commits to remote…"
+						: "Push \(store.unpushedCommitsCount) unpushed commit(s) to remote")
+						.disabled(store.isPushing)
 				}
 
 				Button {

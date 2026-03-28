@@ -42,6 +42,7 @@ nonisolated enum GitDirectoryResolver {
 		guard let resolvedGitDir = resolveGitDirectory(at: url.path) else {
 			return (false, false)
 		}
+
 		// If the resolved git dir differs from the canonical .git directory path, it followed
 		// a gitdir: pointer — meaning this is a worktree, not a regular repository.
 		let worktree = resolvedGitDir != expectedGitDir
@@ -56,6 +57,7 @@ nonisolated enum GitDirectoryResolver {
 		guard let resolvedGitDir = resolveGitDirectory(at: path) else {
 			return false
 		}
+
 		return resolvedGitDir != expectedGitDir
 	}
 }

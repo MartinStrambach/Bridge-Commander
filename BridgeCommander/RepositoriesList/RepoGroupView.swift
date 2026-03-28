@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RepoGroupView: View {
 	@Bindable var store: StoreOf<RepoGroupReducer>
+
 	let sessions: IdentifiedArrayOf<TerminalSession>
 
 	var body: some View {
@@ -29,7 +30,8 @@ struct RepoGroupView: View {
 				store: store.scope(state: \.header, action: \.header),
 				terminalSessionStatus: sessions.first(where: { $0.repositoryPath == store.header.path })?.status,
 				isGroupCollapsed: store.isCollapsed,
-				onToggleCollapse: store.worktrees.isEmpty ? nil : { isExpanded.wrappedValue = !isExpanded.wrappedValue },
+				onToggleCollapse: store.worktrees
+					.isEmpty ? nil : { isExpanded.wrappedValue = !isExpanded.wrappedValue },
 				onRemove: { store.send(.remove) }
 			)
 		}

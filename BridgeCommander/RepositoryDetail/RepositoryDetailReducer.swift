@@ -35,7 +35,7 @@ struct RepositoryDetail {
 		}
 	}
 
-	enum Action: Sendable {
+	enum Action {
 		case alert(PresentationAction<GitAlertReducer.Action>)
 		case cancelButtonTapped
 		case commitButtonTapped
@@ -58,7 +58,7 @@ struct RepositoryDetail {
 		case operationCompleted(Result<Void, Error>)
 	}
 
-	private nonisolated enum CancellableId: Hashable, Sendable {
+	private nonisolated enum CancellableId: Hashable {
 		case loadChanges
 		case loadUnpushedCount
 	}

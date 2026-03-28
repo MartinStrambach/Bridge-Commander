@@ -1,6 +1,6 @@
 import Foundation
 
-struct BranchInfo: Equatable, Hashable, Sendable {
+struct BranchInfo: Equatable, Hashable {
 	let name: String
 	let existsLocally: Bool
 	let existsRemotely: Bool
@@ -51,7 +51,7 @@ nonisolated enum GitBranchListHelper {
 
 		// Combine into BranchInfo objects
 		let allBranchNames = localBranches.union(remoteBranches)
-		let branchInfos = allBranchNames.map { name in
+		return allBranchNames.map { name in
 			BranchInfo(
 				name: name,
 				existsLocally: localBranches.contains(name),
@@ -59,7 +59,5 @@ nonisolated enum GitBranchListHelper {
 			)
 		}
 		.sorted { $0.name < $1.name }
-
-		return branchInfos
 	}
 }

@@ -85,7 +85,7 @@ nonisolated enum XcodeProjectGenerator {
 
 // MARK: - Error Types
 
-enum ProjectGenerationError: LocalizedError, Sendable {
+enum ProjectGenerationError: LocalizedError {
 	case commandFailed(command: String, message: String)
 	case projectNotFoundAfterGeneration
 	case failedToOpenProject

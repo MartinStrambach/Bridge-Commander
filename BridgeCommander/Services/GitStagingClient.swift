@@ -5,7 +5,7 @@ import Foundation
 // MARK: - Git Staging Client
 
 @DependencyClient
-nonisolated struct GitStagingClient: Sendable {
+nonisolated struct GitStagingClient {
 	var fetchFileChanges: @Sendable (_ at: String) async -> GitFileChanges = { _ in
 		GitFileChanges(staged: [], unstaged: [])
 	}
@@ -24,7 +24,7 @@ nonisolated struct GitStagingClient: Sendable {
 
 // MARK: - File Changes Result
 
-struct GitFileChanges: Equatable, Sendable {
+struct GitFileChanges: Equatable {
 	let staged: [FileChange]
 	let unstaged: [FileChange]
 }

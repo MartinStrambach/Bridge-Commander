@@ -1,7 +1,7 @@
 import Foundation
 
 /// Unified error type for all Git operations
-enum GitError: LocalizedError, Equatable, Sendable {
+enum GitError: LocalizedError, Equatable {
 	case pullFailed(String)
 	case pushFailed(String)
 	case fetchFailed(String)

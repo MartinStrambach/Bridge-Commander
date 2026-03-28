@@ -15,7 +15,7 @@ struct XcodeProjectButtonReducer {
 		var openXcodeAfterGenerate = true
 		@Presents
 		var alert: AlertState<Action.Alert>?
-		
+
 		fileprivate var isLoaded = false
 
 		init(repositoryPath: String, iosSubfolderPath: String = "") {
@@ -48,7 +48,10 @@ struct XcodeProjectButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .onAppear:
-				guard !state.isLoaded else { return .none }
+				guard !state.isLoaded else {
+					return .none
+				}
+
 				return findProjectEffect(state: &state)
 
 			case .refresh:
@@ -153,7 +156,10 @@ struct XcodeProjectButtonReducer {
 	}
 
 	private func findProjectEffect(state: inout State) -> EffectOf<XcodeProjectButtonReducer> {
-		guard !state.projectState.isProcessing else { return .none }
+		guard !state.projectState.isProcessing else {
+			return .none
+		}
+
 		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
 			let projectPath = await xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
 			await send(.foundProjectPath(projectPath))

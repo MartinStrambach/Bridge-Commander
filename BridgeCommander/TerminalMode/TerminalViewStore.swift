@@ -115,15 +115,24 @@ final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
 		sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
-			? .copy : []
+			? .copy
+			: []
 	}
 
 	override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
 		let pb = sender.draggingPasteboard
-		guard let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
-		      !urls.isEmpty else { return false }
-		let paths = urls.map { $0.path.shellEscaped }.joined(separator: " ")
-		guard let bytes = paths.data(using: .utf8) else { return false }
+		guard
+			let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+			!urls.isEmpty
+		else {
+			return false
+		}
+
+		let paths = urls.map(\.path.shellEscaped).joined(separator: " ")
+		guard let bytes = paths.data(using: .utf8) else {
+			return false
+		}
+
 		send(source: self, data: ArraySlice(bytes))
 		return true
 	}
@@ -205,7 +214,8 @@ private extension String {
 		return unicodeScalars.reduce(into: "") { result, scalar in
 			if safe.contains(scalar) {
 				result.append(Character(scalar))
-			} else {
+			}
+			else {
 				result += "\\\(Character(scalar))"
 			}
 		}

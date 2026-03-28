@@ -80,12 +80,13 @@ struct RepositoryRowReducer {
 
 			self.branchName = branchName
 
-			let ticketId: String?
-			if ticketIdRegex.isEmpty {
-				ticketId = nil
-			} else {
-				ticketId = GitBranchDetector.extractTicketId(from: branchName ?? name, pattern: ticketIdRegex)
-			}
+			let ticketId: String? =
+				if ticketIdRegex.isEmpty {
+					nil
+				}
+				else {
+					GitBranchDetector.extractTicketId(from: branchName ?? name, pattern: ticketIdRegex)
+				}
 			self.ticketId = ticketId
 			self.ticketIdRegex = ticketIdRegex
 			self.unstagedChangesCount = 0

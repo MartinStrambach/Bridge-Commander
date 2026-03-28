@@ -20,32 +20,31 @@ nonisolated enum FileOpener {
 			throw FileOpenerError.failedToOpen("File does not exist")
 		}
 
-		let result: ProcessResult
+		let result: ProcessResult =
+			switch fileExtension {
+			case "swift":
+				// For Swift files, use xed command which is specifically for opening in Xcode
+				await ProcessRunner.run(
+					executableURL: URL(filePath: "/usr/bin/xed"),
+					arguments: [fullPath]
+				)
 
-		switch fileExtension {
-		case "swift":
-			// For Swift files, use xed command which is specifically for opening in Xcode
-			result = await ProcessRunner.run(
-				executableURL: URL(filePath: "/usr/bin/xed"),
-				arguments: [fullPath]
-			)
+			case "kt",
+			     "kts":
+				// For Kotlin files, open in Android Studio within the project context
+				// Use Android Studio's command-line launcher to open both project and file
+				await ProcessRunner.run(
+					executableURL: URL(filePath: androidStudioPath),
+					arguments: [repositoryPath, fullPath]
+				)
 
-		case "kt",
-		     "kts":
-			// For Kotlin files, open in Android Studio within the project context
-			// Use Android Studio's command-line launcher to open both project and file
-			result = await ProcessRunner.run(
-				executableURL: URL(filePath: androidStudioPath),
-				arguments: [repositoryPath, fullPath]
-			)
-
-		default:
-			// For other files, use default application
-			result = await ProcessRunner.run(
-				executableURL: URL(filePath: "/usr/bin/open"),
-				arguments: [fullPath]
-			)
-		}
+			default:
+				// For other files, use default application
+				await ProcessRunner.run(
+					executableURL: URL(filePath: "/usr/bin/open"),
+					arguments: [fullPath]
+				)
+			}
 
 		guard result.success else {
 			let errorMsg = result.trimmedError

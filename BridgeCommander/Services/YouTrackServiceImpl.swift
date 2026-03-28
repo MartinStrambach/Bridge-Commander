@@ -6,7 +6,7 @@ import Sharing
 // MARK: - YouTrack Service
 
 @DependencyClient
-nonisolated struct YouTrackClient: Sendable {
+nonisolated struct YouTrackClient {
 	var fetchIssueDetails: @Sendable (_ for: String) async throws -> IssueDetails
 }
 

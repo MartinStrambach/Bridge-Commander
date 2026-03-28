@@ -9,6 +9,7 @@ nonisolated enum GitMergeDetector {
 		guard let actualGitPath = GitDirectoryResolver.resolveGitDirectory(at: path) else {
 			return false
 		}
+
 		return isMergeInProgress(gitPath: actualGitPath) || isRebaseInProgress(gitPath: actualGitPath)
 	}
 

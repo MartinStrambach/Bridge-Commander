@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import Foundation
-import SwiftUI
 internal import OrderedCollections
+import SwiftUI
 
 enum SortMode: String, Equatable {
 	case state = "State"
@@ -126,7 +126,10 @@ struct RepositoryListReducer {
 
 			case .view(.groupSettingsChanged):
 				for (groupId, settings) in state.groupSettings {
-					guard state.repositoryGroups[id: groupId] != nil else { continue }
+					guard state.repositoryGroups[id: groupId] != nil else {
+						continue
+					}
+
 					state.repositoryGroups[id: groupId]?.settings = settings
 					if var header = state.repositoryGroups[id: groupId]?.header {
 						applySettings(settings, to: &header)
@@ -414,13 +417,13 @@ struct RepositoryListReducer {
 				}
 				else {
 					let repoSettings = groupSettings(for: repositoryPath, in: state)
-					let subfolder: String
-					if repoSettings.supportsIOS && repoSettings.supportsAndroid {
-						subfolder = repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-					}
-					else {
-						subfolder = ""
-					}
+					let subfolder: String =
+						if repoSettings.supportsIOS, repoSettings.supportsAndroid {
+							repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+						}
+						else {
+							""
+						}
 					let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
 					let session = TerminalSession(
 						repositoryPath: repositoryPath,
@@ -581,13 +584,13 @@ private func openTerminal(
 	}
 	else {
 		let repoSettings = groupSettings(for: repositoryPath, in: state)
-		let subfolder: String
-		if repoSettings.supportsIOS && repoSettings.supportsAndroid {
-			subfolder = repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-		}
-		else {
-			subfolder = ""
-		}
+		let subfolder: String =
+			if repoSettings.supportsIOS, repoSettings.supportsAndroid {
+				repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+			}
+			else {
+				""
+			}
 		let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
 		session = TerminalSession(repositoryPath: repositoryPath, startingDirectory: startingDirectory)
 		state.terminalSessions.append(session)
@@ -615,7 +618,8 @@ private func buildGroup(
 	let isCollapsed = collapsedPaths.contains(rootPath)
 	let settings = groupSettings[rootPath] ?? RepoGroupSettings()
 	let effectiveMobileSubfolder = (settings.supportsIOS && settings.supportsAndroid)
-		? settings.mobileSubfolderPath : ""
+		? settings.mobileSubfolderPath
+		: ""
 	let allRows = scanned.map { repo in
 		RepositoryRowReducer.State(
 			path: repo.path,
@@ -660,7 +664,8 @@ private func mergeGroupRows(
 
 	let rowSettings = state.groupSettings[rootPath] ?? RepoGroupSettings()
 	let effectiveMobileSubfolder = (rowSettings.supportsIOS && rowSettings.supportsAndroid)
-		? rowSettings.mobileSubfolderPath : ""
+		? rowSettings.mobileSubfolderPath
+		: ""
 
 	var updated: [RepositoryRowReducer.State] = []
 	for repo in scanned {

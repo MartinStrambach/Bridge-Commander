@@ -1,7 +1,7 @@
 import Foundation
 
 /// Result of a process execution with captured output and error streams
-nonisolated struct ProcessResult: Sendable {
+nonisolated struct ProcessResult {
 	let exitCode: Int32
 	let output: Data
 	let error: Data
@@ -69,7 +69,6 @@ nonisolated enum ProcessRunner {
 			}
 
 			process.terminationHandler = { proc in
-
 				// Stop reading from pipes
 				outputPipe.fileHandleForReading.readabilityHandler = nil
 				errorPipe.fileHandleForReading.readabilityHandler = nil

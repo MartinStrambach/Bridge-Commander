@@ -2,18 +2,18 @@ import AppKit
 import SwiftUI
 
 struct DiffViewer: View {
+	@State private var selectedLineIDs: Set<DiffLine.ID> = []
+	@State private var anchorLineID: DiffLine.ID? = nil
+	@FocusState private var isFocused: Bool
+
 	let diff: FileDiff
 	let isStaged: Bool
 	let onStageHunk: (DiffHunk) -> Void
 	let onUnstageHunk: (DiffHunk) -> Void
 	let onDiscardHunk: (DiffHunk) -> Void
 
-	@State private var selectedLineIDs: Set<DiffLine.ID> = []
-	@State private var anchorLineID: DiffLine.ID? = nil
-	@FocusState private var isFocused: Bool
-
 	private var allLines: [DiffLine] {
-		diff.hunks.flatMap { $0.lines }
+		diff.hunks.flatMap(\.lines)
 	}
 
 	var body: some View {
@@ -61,43 +61,13 @@ struct DiffViewer: View {
 		.focused($isFocused)
 		.onTapGesture { isFocused = true }
 		.onKeyPress(.init("c"), phases: .down) { press in
-			guard press.modifiers.contains(.command), !selectedLineIDs.isEmpty else { return .ignored }
+			guard press.modifiers.contains(.command), !selectedLineIDs.isEmpty else {
+				return .ignored
+			}
+
 			copySelectedLines()
 			return .handled
 		}
-	}
-
-	private func handleLineTap(_ line: DiffLine, modifiers: EventModifiers) {
-		isFocused = true
-		if modifiers.contains(.shift), let anchor = anchorLineID {
-			// Range selection from anchor to clicked line
-			let lines = allLines
-			guard
-				let anchorIndex = lines.firstIndex(where: { $0.id == anchor }),
-				let clickedIndex = lines.firstIndex(where: { $0.id == line.id })
-			else { return }
-			let range = min(anchorIndex, clickedIndex)...max(anchorIndex, clickedIndex)
-			selectedLineIDs = Set(lines[range].map { $0.id })
-		} else if modifiers.contains(.command) {
-			// Toggle individual line
-			if selectedLineIDs.contains(line.id) {
-				selectedLineIDs.remove(line.id)
-			} else {
-				selectedLineIDs.insert(line.id)
-			}
-			anchorLineID = line.id
-		} else {
-			// Plain click — select only this line
-			selectedLineIDs = [line.id]
-			anchorLineID = line.id
-		}
-	}
-
-	private func copySelectedLines() {
-		let ordered = allLines.filter { selectedLineIDs.contains($0.id) }
-		let text = ordered.map { $0.content }.joined(separator: "\n")
-		NSPasteboard.general.clearContents()
-		NSPasteboard.general.setString(text, forType: .string)
 	}
 
 	private var fileHeader: some View {
@@ -138,4 +108,44 @@ struct DiffViewer: View {
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.padding(.vertical, 60)
 	}
+
+	private func handleLineTap(_ line: DiffLine, modifiers: EventModifiers) {
+		isFocused = true
+		if modifiers.contains(.shift), let anchor = anchorLineID {
+			// Range selection from anchor to clicked line
+			let lines = allLines
+			guard
+				let anchorIndex = lines.firstIndex(where: { $0.id == anchor }),
+				let clickedIndex = lines.firstIndex(where: { $0.id == line.id })
+			else {
+				return
+			}
+
+			let range = min(anchorIndex, clickedIndex) ... max(anchorIndex, clickedIndex)
+			selectedLineIDs = Set(lines[range].map(\.id))
+		}
+		else if modifiers.contains(.command) {
+			// Toggle individual line
+			if selectedLineIDs.contains(line.id) {
+				selectedLineIDs.remove(line.id)
+			}
+			else {
+				selectedLineIDs.insert(line.id)
+			}
+			anchorLineID = line.id
+		}
+		else {
+			// Plain click — select only this line
+			selectedLineIDs = [line.id]
+			anchorLineID = line.id
+		}
+	}
+
+	private func copySelectedLines() {
+		let ordered = allLines.filter { selectedLineIDs.contains($0.id) }
+		let text = ordered.map(\.content).joined(separator: "\n")
+		NSPasteboard.general.clearContents()
+		NSPasteboard.general.setString(text, forType: .string)
+	}
+
 }

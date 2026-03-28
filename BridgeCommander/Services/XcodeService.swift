@@ -5,7 +5,7 @@ import Foundation
 // MARK: - Xcode Service
 
 @DependencyClient
-nonisolated struct XcodeClient: Sendable {
+nonisolated struct XcodeClient {
 	var hasXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> Bool = { _, _ in false }
 	var findXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> String? = { _, _ in nil }
 }

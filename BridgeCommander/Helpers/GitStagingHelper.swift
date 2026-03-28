@@ -1,6 +1,11 @@
 import Foundation
 
 nonisolated enum GitStagingHelper {
+
+	private static let hunkHeaderRegex = try? NSRegularExpression(
+		pattern: #"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@"#
+	)
+
 	// MARK: - Fetch File Changes
 
 	static func fetchFileChanges(at path: String) async -> GitFileChanges {
@@ -393,15 +398,11 @@ nonisolated enum GitStagingHelper {
 		return result
 	}
 
-	private static let hunkHeaderRegex = try? NSRegularExpression(
-		pattern: #"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@"#
-	)
-
 	private static func parseHunkHeader(_ header: String) -> (
 		oldStart: Int, oldCount: Int, newStart: Int, newCount: Int
 	) {
 		guard
-			let regex = Self.hunkHeaderRegex,
+			let regex = hunkHeaderRegex,
 			let match = regex.firstMatch(
 				in: header,
 				range: NSRange(header.startIndex..., in: header)

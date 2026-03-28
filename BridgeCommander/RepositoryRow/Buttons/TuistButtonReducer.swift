@@ -162,6 +162,7 @@ struct TuistButtonReducer {
 						)
 					}
 					return .none
+
 				case let .failure(error):
 					let title =
 						switch tuistAction {

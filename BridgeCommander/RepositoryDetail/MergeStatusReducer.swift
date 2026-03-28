@@ -10,13 +10,13 @@ struct MergeStatus {
 		var isLoading = false
 	}
 
-	enum Action: Sendable {
+	enum Action {
 		case finishMergeButtonTapped
 		case finishMergeCompleted(Result<Void, Error>)
 		case loadStatusResponse(Bool)
 		case delegate(Delegate)
 
-		enum Delegate: Sendable {
+		enum Delegate {
 			case operationCompleted(Result<Void, Error>)
 		}
 	}

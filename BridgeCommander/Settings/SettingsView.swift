@@ -251,9 +251,11 @@ struct SettingsView: View {
 			.textFieldStyle(.roundedBorder)
 			.font(.system(.body, design: .monospaced))
 
-			Text("Path where new worktrees are created. Can be relative to the repository (e.g. ../worktrees) or absolute.")
-				.font(.caption)
-				.foregroundColor(.secondary)
+			Text(
+				"Path where new worktrees are created. Can be relative to the repository (e.g. ../worktrees) or absolute."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
@@ -293,7 +295,8 @@ struct SettingsView: View {
 				Text("No repositories tracked yet.")
 					.font(.caption)
 					.foregroundColor(.secondary)
-			} else {
+			}
+			else {
 				ForEach(store.trackedRepoPaths, id: \.self) { groupId in
 					repoGroupRow(groupId: groupId)
 				}
@@ -347,7 +350,7 @@ struct SettingsView: View {
 				}
 			}
 
-			if settings.supportsIOS && settings.supportsAndroid {
+			if settings.supportsIOS, settings.supportsAndroid {
 				HStack {
 					Text("Mobile Subfolder Path")
 						.font(.caption)

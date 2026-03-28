@@ -35,7 +35,10 @@ struct RepoGroupReducer {
 			case .toggleCollapse:
 				state.isCollapsed.toggle()
 				return .none
-			case .remove, .header, .worktrees:
+
+			case .header,
+			     .remove,
+			     .worktrees:
 				return .none
 			}
 		}

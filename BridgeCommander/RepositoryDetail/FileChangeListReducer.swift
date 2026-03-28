@@ -3,7 +3,7 @@ import Foundation
 
 @Reducer
 struct FileChangeList {
-	enum ListType: Equatable, Sendable {
+	enum ListType: Equatable {
 		case staged
 		case unstaged
 	}
@@ -22,7 +22,7 @@ struct FileChangeList {
 		}
 	}
 
-	enum Action: Sendable {
+	enum Action {
 		case updateSelection(Set<String>)
 		case toggleSelectedTapped
 		case toggleAllTapped
@@ -30,7 +30,7 @@ struct FileChangeList {
 		case openInIDE(FileChange)
 		case delegate(Delegate)
 
-		enum Delegate: Sendable {
+		enum Delegate {
 			case toggleAll([FileChange])
 			case discardChanges([FileChange])
 			case deleteUntracked([FileChange])
@@ -56,7 +56,10 @@ struct FileChangeList {
 				return .send(.delegate(.toggleAll(state.files)))
 
 			case .spaceKeyPressed:
-				guard !state.selectedFileIds.isEmpty else { return .none }
+				guard !state.selectedFileIds.isEmpty else {
+					return .none
+				}
+
 				let files = state.files.filter { state.selectedFileIds.contains($0.id) }
 				state.selectedFileIds.removeAll()
 				return .send(.delegate(.toggleAll(files)))

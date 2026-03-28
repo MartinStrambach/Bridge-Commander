@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - File Change Status
 
-enum FileChangeStatus: String, Equatable, Sendable {
+enum FileChangeStatus: String, Equatable {
 	case added = "A"
 	case modified = "M"
 	case deleted = "D"
@@ -41,7 +41,7 @@ enum FileChangeStatus: String, Equatable, Sendable {
 
 // MARK: - File Change
 
-nonisolated struct FileChange: Identifiable, Equatable, Sendable {
+nonisolated struct FileChange: Identifiable, Equatable {
 	let id: String
 	let path: String
 	let status: FileChangeStatus
@@ -65,7 +65,7 @@ nonisolated struct FileChange: Identifiable, Equatable, Sendable {
 
 // MARK: - Diff Hunk
 
-nonisolated struct DiffHunk: Identifiable, Equatable, Sendable {
+nonisolated struct DiffHunk: Identifiable, Equatable {
 	let id: String
 	let header: String // e.g., "@@ -1,5 +1,6 @@"
 	let oldStart: Int
@@ -91,8 +91,8 @@ nonisolated struct DiffHunk: Identifiable, Equatable, Sendable {
 
 // MARK: - Diff Line
 
-nonisolated struct DiffLine: Identifiable, Equatable, Sendable {
-	enum LineType: Equatable, Sendable {
+nonisolated struct DiffLine: Identifiable, Equatable {
+	enum LineType: Equatable {
 		case context
 		case addition
 		case deletion
@@ -128,7 +128,7 @@ nonisolated struct DiffLine: Identifiable, Equatable, Sendable {
 
 // MARK: - File Diff
 
-nonisolated struct FileDiff: Equatable, Sendable {
+nonisolated struct FileDiff: Equatable {
 	let fileChange: FileChange
 	let hunks: [DiffHunk]
 	let isBinary: Bool

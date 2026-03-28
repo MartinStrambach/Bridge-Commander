@@ -87,7 +87,15 @@ nonisolated enum GitWorktreeCreator {
 
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/bin/sh"),
-			arguments: ["-c", script, "-s", branchName, baseBranch, createNewBranch ? "true" : "false", worktreeBasePath],
+			arguments: [
+				"-c",
+				script,
+				"-s",
+				branchName,
+				baseBranch,
+				createNewBranch ? "true" : "false",
+				worktreeBasePath
+			],
 			currentDirectory: URL(fileURLWithPath: repositoryPath),
 			environment: GitEnvironmentHelper.setupEnvironment()
 		)

@@ -3,7 +3,7 @@ import DependenciesMacros
 import Foundation
 
 @DependencyClient
-struct LastOpenedDirectoryClient: Sendable {
+struct LastOpenedDirectoryClient {
 	var load: () -> String? = { nil }
 	var save: (_ directory: String) -> Void
 	var clear: () -> Void

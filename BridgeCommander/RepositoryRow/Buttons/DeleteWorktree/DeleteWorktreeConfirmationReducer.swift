@@ -19,7 +19,9 @@ struct DeleteWorktreeConfirmationReducer {
 		BindingReducer()
 		Reduce { _, action in
 			switch action {
-			case .cancelTapped, .confirmTapped, .binding:
+			case .binding,
+			     .cancelTapped,
+			     .confirmTapped:
 				.none
 			}
 		}

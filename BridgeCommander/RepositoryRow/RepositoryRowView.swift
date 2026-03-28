@@ -5,16 +5,16 @@ struct RepositoryRowView: View {
 	@Bindable
 	var store: StoreOf<RepositoryRowReducer>
 
-	var terminalSessionStatus: TerminalSessionStatus? = nil
+	var terminalSessionStatus: TerminalSessionStatus?
 
 	/// Non-nil when this row is a repo group section header.
 	/// Drives the disclosure chevron on the left.
-	var isGroupCollapsed: Bool? = nil
+	var isGroupCollapsed: Bool?
 	/// Called when the disclosure chevron is tapped. Required when `isGroupCollapsed` is non-nil.
-	var onToggleCollapse: (() -> Void)? = nil
+	var onToggleCollapse: (() -> Void)?
 	/// Non-nil when this row is a repo group section header.
 	/// Renders a remove button in the action bar.
-	var onRemove: (() -> Void)? = nil
+	var onRemove: (() -> Void)?
 
 	private var backgroundColorForState: Color {
 		if isGroupCollapsed != nil {
@@ -57,7 +57,8 @@ struct RepositoryRowView: View {
 							.contentShape(Rectangle())
 					}
 					.buttonStyle(.plain)
-				} else {
+				}
+				else {
 					Image(systemName: "chevron.right")
 						.font(.caption)
 						.padding(.horizontal, 4)
@@ -279,7 +280,7 @@ struct RepositoryRowView: View {
 				action: \.gitActionsMenu
 			))
 
-			if store.supportsIOS && store.supportsTuist {
+			if store.supportsIOS, store.supportsTuist {
 				TuistButtonView(store: store.scope(
 					state: \.tuistButton,
 					action: \.tuistButton
@@ -383,7 +384,6 @@ struct RepositoryRowView: View {
 		NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
 	}
 }
-
 
 #Preview {
 	RepositoryRowView(

@@ -95,7 +95,8 @@ struct TerminalPanelView: View {
 								.controlSize(.mini)
 							Text("Pushing…")
 						}
-					} else {
+					}
+					else {
 						Text("Push (\(rowState.unpushedCommitCount))")
 					}
 				}
