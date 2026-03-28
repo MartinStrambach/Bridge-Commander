@@ -7,10 +7,14 @@ struct AndroidStudioButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var isOpening: Bool = false
-		@Shared(.mobileSubfolderPath)
-		var mobileSubfolderPath = "ios/FlashScore"
+		var mobileSubfolderPath: String
 		@Presents
 		var alert: AlertState<Action.Alert>?
+
+		init(repositoryPath: String, mobileSubfolderPath: String = "") {
+			self.repositoryPath = repositoryPath
+			self.mobileSubfolderPath = mobileSubfolderPath
+		}
 	}
 
 	enum Action: Equatable {

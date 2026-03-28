@@ -9,8 +9,7 @@ struct TuistButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 		var runningAction: TuistAction?
-		@Shared(.iosSubfolderPath)
-		var iosSubfolderPath = "ios/FlashScore"
+		var iosSubfolderPath: String
 		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 		@Shared(.tuistCacheType)
@@ -20,6 +19,12 @@ struct TuistButtonReducer {
 
 		var isProcessing: Bool {
 			runningAction != nil
+		}
+
+		init(repositoryPath: String, iosSubfolderPath: String = "") {
+			self.repositoryPath = repositoryPath
+			self.iosSubfolderPath = iosSubfolderPath
+			self.runningAction = nil
 		}
 	}
 

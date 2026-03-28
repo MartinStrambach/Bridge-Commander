@@ -11,8 +11,13 @@ struct ClaudeCodeButtonReducer {
 		@Shared(.claudeCodeOpeningBehavior)
 		var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
 
-		@Shared(.mobileSubfolderPath)
-		var mobileSubfolderPath = ""
+		var mobileSubfolderPath: String
+
+		init(repositoryPath: String, mobileSubfolderPath: String = "") {
+			self.repositoryPath = repositoryPath
+			self.mobileSubfolderPath = mobileSubfolderPath
+			self.isLaunching = false
+		}
 
 		@Presents
 		var alert: AlertState<Action.Alert>?

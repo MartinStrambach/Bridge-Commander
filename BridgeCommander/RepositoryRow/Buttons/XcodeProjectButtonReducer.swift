@@ -10,8 +10,7 @@ struct XcodeProjectButtonReducer {
 		let repositoryPath: String
 		var projectState: XcodeProjectState = .idle
 		var projectPath: String?
-		@Shared(.iosSubfolderPath)
-		var iosSubfolderPath = "ios/FlashScore"
+		var iosSubfolderPath: String
 		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 		@Presents
@@ -19,8 +18,9 @@ struct XcodeProjectButtonReducer {
 		
 		fileprivate var isLoaded = false
 
-		init(repositoryPath: String) {
+		init(repositoryPath: String, iosSubfolderPath: String = "") {
 			self.repositoryPath = repositoryPath
+			self.iosSubfolderPath = iosSubfolderPath
 		}
 	}
 

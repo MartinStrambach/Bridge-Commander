@@ -12,8 +12,12 @@ struct TerminalButtonReducer {
 		@Shared(.terminalOpeningBehavior)
 		var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
-		@Shared(.mobileSubfolderPath)
-		var mobileSubfolderPath = ""
+		var mobileSubfolderPath: String
+
+		init(repositoryPath: String, mobileSubfolderPath: String = "") {
+			self.repositoryPath = repositoryPath
+			self.mobileSubfolderPath = mobileSubfolderPath
+		}
 	}
 
 	enum Action: Equatable {
