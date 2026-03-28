@@ -272,7 +272,7 @@ struct RepositoryRowView: View {
 				action: \.gitActionsMenu
 			))
 
-			if store.supportsIOS {
+			if store.supportsIOS && store.supportsTuist {
 				TuistButtonView(store: store.scope(
 					state: \.tuistButton,
 					action: \.tuistButton
