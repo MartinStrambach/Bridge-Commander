@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-nonisolated enum TerminalColorTheme: String, CaseIterable, Equatable {
+public nonisolated enum TerminalColorTheme: String, CaseIterable, Equatable, Sendable {
 	case basicDark
 	case highContrast
 	case solarizedDark
@@ -10,7 +10,7 @@ nonisolated enum TerminalColorTheme: String, CaseIterable, Equatable {
 	case nord
 	case oneDark
 
-	var displayName: String {
+	public var displayName: String {
 		switch self {
 		case .basicDark: "Basic Dark"
 		case .highContrast: "High Contrast"
@@ -22,7 +22,7 @@ nonisolated enum TerminalColorTheme: String, CaseIterable, Equatable {
 		}
 	}
 
-	var foregroundColor: NSColor {
+	public var foregroundColor: NSColor {
 		switch self {
 		case .basicDark: NSColor(red: 0.831, green: 0.831, blue: 0.831, alpha: 1) // #D4D4D4
 		case .highContrast: .white
@@ -34,7 +34,7 @@ nonisolated enum TerminalColorTheme: String, CaseIterable, Equatable {
 		}
 	}
 
-	var backgroundColor: NSColor {
+	public var backgroundColor: NSColor {
 		switch self {
 		case .basicDark: NSColor(red: 0.118, green: 0.118, blue: 0.118, alpha: 1) // #1E1E1E
 		case .highContrast: .black

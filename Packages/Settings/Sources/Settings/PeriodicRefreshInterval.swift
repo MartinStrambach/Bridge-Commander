@@ -1,6 +1,6 @@
 import Foundation
 
-enum PeriodicRefreshInterval: Int, CaseIterable, Equatable {
+public enum PeriodicRefreshInterval: Int, CaseIterable, Equatable, Sendable {
 	case tenSeconds = 10
 	case oneMinute = 60
 	case threeMinutes = 180
@@ -9,7 +9,7 @@ enum PeriodicRefreshInterval: Int, CaseIterable, Equatable {
 	case fifteenMinutes = 900
 	case thirtyMinutes = 1800
 
-	var displayName: String {
+	public var displayName: String {
 		switch self {
 		case .tenSeconds:
 			"10 seconds"
@@ -28,7 +28,7 @@ enum PeriodicRefreshInterval: Int, CaseIterable, Equatable {
 		}
 	}
 
-	var timeInterval: TimeInterval {
+	public var timeInterval: TimeInterval {
 		TimeInterval(rawValue)
 	}
 }

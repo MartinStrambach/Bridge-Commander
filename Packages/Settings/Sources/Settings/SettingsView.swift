@@ -1,11 +1,15 @@
 import ComposableArchitecture
 import SwiftUI
 
-struct SettingsView: View {
+public struct SettingsView: View {
 	@Bindable
-	var store: StoreOf<SettingsReducer>
+	public var store: StoreOf<SettingsReducer>
 
-	var body: some View {
+	public init(store: StoreOf<SettingsReducer>) {
+		self.store = store
+	}
+
+	public var body: some View {
 		ScrollView {
 			VStack(alignment: .leading, spacing: 16) {
 				Text("Settings")

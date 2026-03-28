@@ -2,53 +2,55 @@ import ComposableArchitecture
 import Foundation
 
 @Reducer
-struct SettingsReducer {
+public struct SettingsReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		@Shared(.youtrackAuthToken)
-		var youtrackAuthToken = ""
+		public var youtrackAuthToken = ""
 
 		@Shared(.periodicRefreshInterval)
-		var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
+		public var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
 		@Shared(.groupSettings)
-		var groupSettings: [String: RepoGroupSettings] = [:]
+		public var groupSettings: [String: RepoGroupSettings] = [:]
 
 		@Shared(.trackedRepoPaths)
-		var trackedRepoPaths: [String] = []
+		public var trackedRepoPaths: [String] = []
 
 		@Shared(.branchNameRegex)
-		var branchNameRegex = "[a-zA-Z]+-\\d+[_/]"
+		public var branchNameRegex = "[a-zA-Z]+-\\d+[_/]"
 
 		@Shared(.openXcodeAfterGenerate)
-		var openXcodeAfterGenerate = true
+		public var openXcodeAfterGenerate = true
 
 		@Shared(.deleteDerivedDataOnWorktreeDelete)
-		var deleteDerivedDataOnWorktreeDelete = true
+		public var deleteDerivedDataOnWorktreeDelete = true
 
 		@Shared(.tuistCacheType)
-		var tuistCacheType = TuistCacheType.externalOnly
+		public var tuistCacheType = TuistCacheType.externalOnly
 
 		@Shared(.terminalOpeningBehavior)
-		var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
+		public var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
 		@Shared(.claudeCodeOpeningBehavior)
-		var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
+		public var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
 
 		@Shared(.androidStudioPath)
-		var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
+		public var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
 
 		@Shared(.worktreeBasePath)
-		var worktreeBasePath = "../worktrees"
+		public var worktreeBasePath = "../worktrees"
 
 		@Shared(.terminalColorTheme)
-		var terminalColorTheme = TerminalColorTheme.basicDark
+		public var terminalColorTheme = TerminalColorTheme.basicDark
 
 		@Presents
-		var alert: AlertState<Action.Alert>?
+		public var alert: AlertState<Action.Alert>?
+
+		public init() {}
 	}
 
-	enum Action {
+	public enum Action {
 		case setYouTrackToken(String)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setGroupSupportsIOS(groupId: String, value: Bool)
@@ -70,12 +72,14 @@ struct SettingsReducer {
 		case alert(PresentationAction<Alert>)
 
 		@CasePathable
-		enum Alert {
+		public enum Alert {
 			case confirmClearToken
 		}
 	}
 
-	var body: some Reducer<State, Action> {
+	public init() {}
+
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case let .setYouTrackToken(token):
