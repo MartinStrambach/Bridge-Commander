@@ -83,6 +83,9 @@ struct RepositoryListView: View {
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
 			send(.periodicRefreshIntervalChanged)
 		}
+		.onChange(of: store.groupSettings) { _, _ in
+			send(.groupSettingsChanged)
+		}
 		.alert($store.scope(state: \.alert, action: \.alert))
 	}
 

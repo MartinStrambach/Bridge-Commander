@@ -82,6 +82,7 @@ struct RepositoryListReducer {
 			case clearButtonTapped
 			case addRepository(String)
 			case dismissPermissionWarningButtonTapped
+			case groupSettingsChanged
 			case onAppear
 			case onDisappear
 			case openAutomationSettingsButtonTapped
@@ -122,6 +123,24 @@ struct RepositoryListReducer {
 					await send(.stopPeriodicRefresh)
 					await send(.startPeriodicRefresh)
 				}
+
+			case .view(.groupSettingsChanged):
+				for (groupId, settings) in state.groupSettings {
+					guard state.repositoryGroups[id: groupId] != nil else { continue }
+					state.repositoryGroups[id: groupId]?.settings = settings
+					if var header = state.repositoryGroups[id: groupId]?.header {
+						applySettings(settings, to: &header)
+						state.repositoryGroups[id: groupId]?.header = header
+					}
+					let worktreeIds = state.repositoryGroups[id: groupId]?.worktrees.ids ?? []
+					for wtId in worktreeIds {
+						if var worktree = state.repositoryGroups[id: groupId]?.worktrees[id: wtId] {
+							applySettings(settings, to: &worktree)
+							state.repositoryGroups[id: groupId]?.worktrees[id: wtId] = worktree
+						}
+					}
+				}
+				return .none
 
 			case .view(.sortModeButtonTapped):
 				withAnimation {
@@ -522,24 +541,6 @@ struct RepositoryListReducer {
 			case .repositoryGroups:
 				return .none
 			}
-		}
-		.onChange(of: \.groupSettings) { _, state in
-			for (groupId, settings) in state.groupSettings {
-				guard state.repositoryGroups[id: groupId] != nil else { continue }
-				state.repositoryGroups[id: groupId]?.settings = settings
-				if var header = state.repositoryGroups[id: groupId]?.header {
-					applySettings(settings, to: &header)
-					state.repositoryGroups[id: groupId]?.header = header
-				}
-				let worktreeIds = state.repositoryGroups[id: groupId]?.worktrees.ids ?? []
-				for wtId in worktreeIds {
-					if var worktree = state.repositoryGroups[id: groupId]?.worktrees[id: wtId] {
-						applySettings(settings, to: &worktree)
-						state.repositoryGroups[id: groupId]?.worktrees[id: wtId] = worktree
-					}
-				}
-			}
-			return .none
 		}
 		.forEach(\.repositoryGroups, action: \.repositoryGroups) {
 			RepoGroupReducer()
