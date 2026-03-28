@@ -11,5 +11,5 @@ nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
     /// Used by Tuist and Xcode. Shown whenever supportsIOS is true.
     var iosSubfolderPath: String = ""
     /// When false, the Tuist button is hidden even if supportsIOS is true.
-    var supportsTuist: Bool = true
+    var supportsTuist: Bool = false
 }

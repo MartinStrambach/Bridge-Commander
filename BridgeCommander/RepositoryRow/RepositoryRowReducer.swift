@@ -68,7 +68,7 @@ struct RepositoryRowReducer {
 			supportsAndroid: Bool = false,
 			mobileSubfolderPath: String = "",
 			iosSubfolderPath: String = "",
-			supportsTuist: Bool = true
+			supportsTuist: Bool = false
 		) {
 			self.id = path
 			self.path = path
