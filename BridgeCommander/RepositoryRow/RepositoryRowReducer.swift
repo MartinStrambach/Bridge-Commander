@@ -41,6 +41,13 @@ struct RepositoryRowReducer {
 
 		var isLoaded = false
 
+		var supportsIOS: Bool
+		var supportsAndroid: Bool
+		/// Empty when not (supportsIOS && supportsAndroid). Passed to Terminal, Claude Code, Android Studio.
+		var mobileSubfolderPath: String
+		/// Passed to Tuist and Xcode. Empty unless supportsIOS.
+		var iosSubfolderPath: String
+
 		@Presents
 		var repositoryDetail: RepositoryDetail.State?
 
@@ -51,7 +58,16 @@ struct RepositoryRowReducer {
 			return BranchNameFormatter.format(branchName, ticketId: ticketId, branchNameRegex: regex)
 		}
 
-		init(path: String, name: String, branchName: String?, isWorktree: Bool = false) {
+		init(
+			path: String,
+			name: String,
+			branchName: String?,
+			isWorktree: Bool = false,
+			supportsIOS: Bool = false,
+			supportsAndroid: Bool = false,
+			mobileSubfolderPath: String = "",
+			iosSubfolderPath: String = ""
+		) {
 			self.id = path
 			self.path = path
 			self.name = name
@@ -72,11 +88,16 @@ struct RepositoryRowReducer {
 			self.commitsBehindCount = 0
 			self.hasRemoteBranch = true
 
-			self.xcodeButton = .init(repositoryPath: path)
-			self.tuistButton = .init(repositoryPath: path)
-			self.terminalButton = .init(repositoryPath: path)
-			self.claudeCodeButton = .init(repositoryPath: path)
-			self.androidStudioButton = .init(repositoryPath: path)
+			self.supportsIOS = supportsIOS
+			self.supportsAndroid = supportsAndroid
+			self.mobileSubfolderPath = mobileSubfolderPath
+			self.iosSubfolderPath = iosSubfolderPath
+
+			self.xcodeButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath)
+			self.tuistButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath)
+			self.terminalButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
+			self.claudeCodeButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
+			self.androidStudioButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
 			if let ticketId {
 				self.ticketButton = .init(ticketId: ticketId)
 			}
