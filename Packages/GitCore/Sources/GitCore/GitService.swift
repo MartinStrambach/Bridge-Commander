@@ -4,6 +4,7 @@ import Foundation
 
 // MARK: - Git Service
 
+// @DependencyClient guarantees all stored closures are @Sendable; @unchecked Sendable is safe here.
 @DependencyClient
 public struct GitClient: @unchecked Sendable {
 	public var getCurrentBranch: @Sendable (_ at: String) async -> GitPorcelainStatus = { _ in

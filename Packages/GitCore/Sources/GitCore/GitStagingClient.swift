@@ -4,6 +4,7 @@ import Foundation
 
 // MARK: - Git Staging Client
 
+// @DependencyClient guarantees all stored closures are @Sendable; @unchecked Sendable is safe here.
 @DependencyClient
 public struct GitStagingClient: @unchecked Sendable {
 	public var fetchFileChanges: @Sendable (_ at: String) async -> GitFileChanges = { _ in
