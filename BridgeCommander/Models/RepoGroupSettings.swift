@@ -38,8 +38,9 @@ nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
     // throwing. Without this, TCA's FileStorageKey resets the entire store to
     // empty on any keyNotFound error, wiping all saved presets.
     //
-    // CONVENTION: when adding a new property, add a corresponding
-    // decodeIfPresent line here with the same default value.
+    // CONVENTION: when adding a new property, add:
+    //   1. A parameter (with the same default) to the memberwise init above.
+    //   2. A corresponding decodeIfPresent line here with the same default value.
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         supportsIOS         = try c.decodeIfPresent(Bool.self,   forKey: .supportsIOS)         ?? false
