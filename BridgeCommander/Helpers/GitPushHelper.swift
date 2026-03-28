@@ -33,4 +33,3 @@ nonisolated enum GitPushHelper {
 		)
 	}
 }
-

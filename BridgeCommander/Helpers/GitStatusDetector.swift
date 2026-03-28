@@ -112,7 +112,7 @@ nonisolated enum GitStatusDetector {
 	/// Runs `git status --porcelain=v2 --branch` and returns the parsed result.
 	static func getStatus(at path: String) async -> GitPorcelainStatus {
 		let result = await ProcessRunner.runGit(
-			arguments: ["status", "--porcelain=v2", "--branch"],
+			arguments: ["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
 			at: path
 		)
 		return GitPorcelainStatus(parsing: result.success ? result.outputString : "")
