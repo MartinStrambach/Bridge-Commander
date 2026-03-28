@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 import SwiftUI
+internal import OrderedCollections
 
 enum SortMode: String, Equatable {
 	case state = "State"
@@ -117,7 +118,10 @@ struct RepositoryListReducer {
 				return .cancel(id: CancellableId.periodicRefresh)
 
 			case .view(.periodicRefreshIntervalChanged):
-				return .concatenate(.send(.stopPeriodicRefresh), .send(.startPeriodicRefresh))
+				return .run { send in
+					await send(.stopPeriodicRefresh)
+					await send(.startPeriodicRefresh)
+				}
 
 			case .view(.sortModeButtonTapped):
 				withAnimation {
@@ -370,7 +374,7 @@ struct RepositoryListReducer {
 
 				@Dependency(\.mainQueue)
 				var mainQueue
-				
+
 				// Debounce: many rows fetch in parallel — sort once after the burst settles
 				return .send(.performDebouncedSort)
 					.debounce(id: CancellableId.sortAfterFetch, for: .milliseconds(300), scheduler: mainQueue)
@@ -519,8 +523,8 @@ struct RepositoryListReducer {
 				return .none
 			}
 		}
-		.onChange(of: \.groupSettings) { state, _, newSettings in
-			for (groupId, settings) in newSettings {
+		.onChange(of: \.groupSettings) { _, state in
+			for (groupId, settings) in state.groupSettings {
 				guard state.repositoryGroups[id: groupId] != nil else { continue }
 				state.repositoryGroups[id: groupId]?.settings = settings
 				if var header = state.repositoryGroups[id: groupId]?.header {
@@ -545,7 +549,6 @@ struct RepositoryListReducer {
 			TerminalLayoutReducer()
 		}
 	}
-
 }
 
 // MARK: - Private Free Functions
