@@ -11,11 +11,11 @@ struct SettingsReducer {
 		@Shared(.periodicRefreshInterval)
 		var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
-		@Shared(.iosSubfolderPath)
-		var iosSubfolderPath = "ios/FlashScore"
+		@Shared(.groupSettings)
+		var groupSettings: [String: RepoGroupSettings] = [:]
 
-		@Shared(.mobileSubfolderPath)
-		var mobileSubfolderPath = "ios/FlashScore"
+		@Shared(.trackedRepoPaths)
+		var trackedRepoPaths: [String] = []
 
 		@Shared(.ticketIdRegex)
 		var ticketIdRegex = "MOB-[0-9]+"
@@ -54,8 +54,10 @@ struct SettingsReducer {
 	enum Action {
 		case setYouTrackToken(String)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
-		case setIosSubfolderPath(String)
-		case setMobileSubfolderPath(String)
+		case setGroupSupportsIOS(groupId: String, value: Bool)
+		case setGroupSupportsAndroid(groupId: String, value: Bool)
+		case setGroupMobileSubfolderPath(groupId: String, path: String)
+		case setGroupIOSSubfolderPath(groupId: String, path: String)
 		case setTicketIdRegex(String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
@@ -86,12 +88,20 @@ struct SettingsReducer {
 				state.$periodicRefreshInterval.withLock { $0 = interval }
 				return .none
 
-			case let .setIosSubfolderPath(path):
-				state.$iosSubfolderPath.withLock { $0 = path }
+			case let .setGroupSupportsIOS(groupId, value):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsIOS = value }
 				return .none
 
-			case let .setMobileSubfolderPath(path):
-				state.$mobileSubfolderPath.withLock { $0 = path }
+			case let .setGroupSupportsAndroid(groupId, value):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsAndroid = value }
+				return .none
+
+			case let .setGroupMobileSubfolderPath(groupId, path):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].mobileSubfolderPath = path }
+				return .none
+
+			case let .setGroupIOSSubfolderPath(groupId, path):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].iosSubfolderPath = path }
 				return .none
 
 			case let .setTicketIdRegex(regex):
