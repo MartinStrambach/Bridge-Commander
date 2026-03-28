@@ -35,13 +35,24 @@ struct CommitView: View {
 				.keyboardShortcut(.cancelAction)
 				.disabled(store.isCommitting)
 
+				Button("Commit & Push") {
+					store.send(.commitAndPushTapped)
+				}
+				.disabled(store.isCommitting || store.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+				.overlay {
+					if store.isCommitting && store.shouldPushAfterCommit {
+						ProgressView()
+							.scaleEffect(0.35)
+					}
+				}
+
 				Button("Commit") {
 					store.send(.commitTapped)
 				}
 				.keyboardShortcut(.defaultAction)
 				.disabled(store.isCommitting || store.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 				.overlay {
-					if store.isCommitting {
+					if store.isCommitting && !store.shouldPushAfterCommit {
 						ProgressView()
 							.scaleEffect(0.35)
 					}
