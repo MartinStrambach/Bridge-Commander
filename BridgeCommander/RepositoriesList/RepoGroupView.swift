@@ -57,7 +57,8 @@ struct RepoGroupView: View {
 					id: "/projects/myapp",
 					isCollapsed: false,
 					header: mainRow,
-					worktrees: IdentifiedArrayOf(uniqueElements: [worktreeRow])
+					worktrees: IdentifiedArrayOf(uniqueElements: [worktreeRow]),
+					settings: RepoGroupSettings()
 				),
 				reducer: { RepoGroupReducer() }
 			),

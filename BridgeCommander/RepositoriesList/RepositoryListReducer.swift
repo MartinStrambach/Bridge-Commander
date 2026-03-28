@@ -30,8 +30,8 @@ struct RepositoryListReducer {
 		@Shared(.periodicRefreshInterval)
 		fileprivate(set) var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
-		@Shared(.mobileSubfolderPath)
-		fileprivate(set) var mobileSubfolderPath = ""
+		@Shared(.groupSettings)
+		fileprivate(set) var groupSettings: [String: RepoGroupSettings] = [:]
 
 		@Presents
 		var alert: AlertState<Action.Alert>?
@@ -201,7 +201,8 @@ struct RepositoryListReducer {
 						rootPath: rootPath,
 						scanned: scanned,
 						collapsedPaths: Set(state.collapsedRepoPaths),
-						sortMode: state.sortMode
+						sortMode: state.sortMode,
+						groupSettings: state.groupSettings
 					)
 				{
 					state.repositoryGroups.append(group)
@@ -270,7 +271,8 @@ struct RepositoryListReducer {
 							rootPath: rootPath,
 							scanned: scanned,
 							collapsedPaths: Set(state.collapsedRepoPaths),
-							sortMode: state.sortMode
+							sortMode: state.sortMode,
+							groupSettings: state.groupSettings
 						)
 					{
 						state.repositoryGroups.append(group)
@@ -388,9 +390,14 @@ struct RepositoryListReducer {
 					state.terminalLayout?.activeSessionId = existing.id
 				}
 				else {
-					let subfolder = state.mobileSubfolderPath.trimmingCharacters(
-						in: CharacterSet(charactersIn: "/")
-					)
+					let repoSettings = groupSettings(for: repositoryPath, in: state)
+					let subfolder: String
+					if repoSettings.supportsIOS && repoSettings.supportsAndroid {
+						subfolder = repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+					}
+					else {
+						subfolder = ""
+					}
 					let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
 					let session = TerminalSession(
 						repositoryPath: repositoryPath,
@@ -512,6 +519,24 @@ struct RepositoryListReducer {
 				return .none
 			}
 		}
+		.onChange(of: \.groupSettings) { state, _, newSettings in
+			for (groupId, settings) in newSettings {
+				guard state.repositoryGroups[id: groupId] != nil else { continue }
+				state.repositoryGroups[id: groupId]?.settings = settings
+				if var header = state.repositoryGroups[id: groupId]?.header {
+					applySettings(settings, to: &header)
+					state.repositoryGroups[id: groupId]?.header = header
+				}
+				let worktreeIds = state.repositoryGroups[id: groupId]?.worktrees.ids ?? []
+				for wtId in worktreeIds {
+					if var worktree = state.repositoryGroups[id: groupId]?.worktrees[id: wtId] {
+						applySettings(settings, to: &worktree)
+						state.repositoryGroups[id: groupId]?.worktrees[id: wtId] = worktree
+					}
+				}
+			}
+			return .none
+		}
 		.forEach(\.repositoryGroups, action: \.repositoryGroups) {
 			RepoGroupReducer()
 		}
@@ -551,7 +576,14 @@ private func openTerminal(
 		session = existing
 	}
 	else {
-		let subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+		let repoSettings = groupSettings(for: repositoryPath, in: state)
+		let subfolder: String
+		if repoSettings.supportsIOS && repoSettings.supportsAndroid {
+			subfolder = repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+		}
+		else {
+			subfolder = ""
+		}
 		let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
 		session = TerminalSession(repositoryPath: repositoryPath, startingDirectory: startingDirectory)
 		state.terminalSessions.append(session)
@@ -573,15 +605,23 @@ private func buildGroup(
 	rootPath: String,
 	scanned: [ScannedRepository],
 	collapsedPaths: Set<String>,
-	sortMode: SortMode
+	sortMode: SortMode,
+	groupSettings: [String: RepoGroupSettings]
 ) -> RepoGroupReducer.State? {
 	let isCollapsed = collapsedPaths.contains(rootPath)
+	let settings = groupSettings[rootPath] ?? RepoGroupSettings()
+	let effectiveMobileSubfolder = (settings.supportsIOS && settings.supportsAndroid)
+		? settings.mobileSubfolderPath : ""
 	let allRows = scanned.map { repo in
 		RepositoryRowReducer.State(
 			path: repo.path,
 			name: repo.name,
 			branchName: repo.branchName,
-			isWorktree: repo.isWorktree
+			isWorktree: repo.isWorktree,
+			supportsIOS: settings.supportsIOS,
+			supportsAndroid: settings.supportsAndroid,
+			mobileSubfolderPath: effectiveMobileSubfolder,
+			iosSubfolderPath: settings.iosSubfolderPath
 		)
 	}
 	guard let header = allRows.first(where: { !$0.isWorktree }) else {
@@ -593,7 +633,8 @@ private func buildGroup(
 		id: rootPath,
 		isCollapsed: isCollapsed,
 		header: header,
-		worktrees: IdentifiedArrayOf(uniqueElements: worktrees)
+		worktrees: IdentifiedArrayOf(uniqueElements: worktrees),
+		settings: settings
 	)
 }
 
@@ -611,6 +652,10 @@ private func mergeGroupRows(
 		currentByPath[row.path] = row
 	}
 
+	let rowSettings = state.groupSettings[rootPath] ?? RepoGroupSettings()
+	let effectiveMobileSubfolder = (rowSettings.supportsIOS && rowSettings.supportsAndroid)
+		? rowSettings.mobileSubfolderPath : ""
+
 	var updated: [RepositoryRowReducer.State] = []
 	for repo in scanned {
 		if var existing = currentByPath[repo.path] {
@@ -625,7 +670,11 @@ private func mergeGroupRows(
 				path: repo.path,
 				name: repo.name,
 				branchName: repo.branchName,
-				isWorktree: repo.isWorktree
+				isWorktree: repo.isWorktree,
+				supportsIOS: rowSettings.supportsIOS,
+				supportsAndroid: rowSettings.supportsAndroid,
+				mobileSubfolderPath: effectiveMobileSubfolder,
+				iosSubfolderPath: rowSettings.iosSubfolderPath
 			))
 		}
 	}
@@ -686,4 +735,34 @@ private func stateSortPriority(_ state: TicketState?) -> Int {
 	     .waitingToAcceptation: return 5
 	case .done: return 6
 	}
+}
+
+private func applySettings(
+	_ settings: RepoGroupSettings,
+	to row: inout RepositoryRowReducer.State
+) {
+	let effectiveMobileSubfolder = (settings.supportsIOS && settings.supportsAndroid)
+		? settings.mobileSubfolderPath
+		: ""
+	row.supportsIOS = settings.supportsIOS
+	row.supportsAndroid = settings.supportsAndroid
+	row.mobileSubfolderPath = effectiveMobileSubfolder
+	row.iosSubfolderPath = settings.iosSubfolderPath
+	row.tuistButton.iosSubfolderPath = settings.iosSubfolderPath
+	row.xcodeButton.iosSubfolderPath = settings.iosSubfolderPath
+	row.androidStudioButton.mobileSubfolderPath = effectiveMobileSubfolder
+	row.terminalButton.mobileSubfolderPath = effectiveMobileSubfolder
+	row.claudeCodeButton.mobileSubfolderPath = effectiveMobileSubfolder
+}
+
+private func groupSettings(
+	for repositoryPath: String,
+	in state: RepositoryListReducer.State
+) -> RepoGroupSettings {
+	for group in state.repositoryGroups {
+		if group.header.path == repositoryPath || group.worktrees[id: repositoryPath] != nil {
+			return state.groupSettings[group.id] ?? RepoGroupSettings()
+		}
+	}
+	return RepoGroupSettings()
 }
