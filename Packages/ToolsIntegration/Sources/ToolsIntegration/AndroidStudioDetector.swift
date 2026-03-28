@@ -1,11 +1,11 @@
 import AppKit
 import Foundation
 
-nonisolated enum AndroidStudioDetector {
+public nonisolated enum AndroidStudioDetector {
 
 	/// Checks if Android Studio is running
 	/// - Returns: true if Android Studio process is found
-	static func isAndroidStudioRunning() -> Bool {
+	public static func isAndroidStudioRunning() -> Bool {
 		let workspace = NSWorkspace.shared
 		for app in workspace.runningApplications {
 			if app.bundleIdentifier == "com.google.android.studio" {
@@ -18,7 +18,7 @@ nonisolated enum AndroidStudioDetector {
 	/// Checks if the specified project is already open in Android Studio
 	/// - Parameter projectPath: The full path to the project directory
 	/// - Returns: true if the project is open in any Android Studio window
-	static func isProjectAlreadyOpen(at projectPath: String) -> Bool {
+	public static func isProjectAlreadyOpen(at projectPath: String) -> Bool {
 		guard
 			let androidStudioApp = NSRunningApplication
 				.runningApplications(withBundleIdentifier: "com.google.android.studio")
@@ -60,7 +60,7 @@ nonisolated enum AndroidStudioDetector {
 	/// Activates (focuses) the Android Studio window containing the specified project
 	/// - Parameter projectPath: The full path to the project directory
 	/// - Returns: true if a window was found and activated
-	static func focusProjectWindow(at projectPath: String) -> Bool {
+	public static func focusProjectWindow(at projectPath: String) -> Bool {
 		guard
 			let androidStudioApp = NSRunningApplication
 				.runningApplications(withBundleIdentifier: "com.google.android.studio")

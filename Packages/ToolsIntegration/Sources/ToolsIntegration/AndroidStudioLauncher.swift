@@ -1,12 +1,13 @@
 import AppKit
 import Foundation
+import GitCore
 
-nonisolated enum AndroidStudioLauncher {
+public nonisolated enum AndroidStudioLauncher {
 
 	/// Opens Android Studio with the specified repository path
 	/// If the project is already open, focuses the existing window instead
 	/// - Parameter path: The directory path to open in Android Studio
-	static func openInAndroidStudio(at path: String) async throws {
+	public static func openInAndroidStudio(at path: String) async throws {
 		// If already open → just focus and return
 		if AndroidStudioDetector.isProjectAlreadyOpen(at: path) {
 			_ = AndroidStudioDetector.focusProjectWindow(at: path)

@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
+import GitCore
 
-nonisolated enum XcodeProjectGenerator {
+public nonisolated enum XcodeProjectGenerator {
 
 	/// Generates Xcode project by running ti and tg commands sequentially in the configured iOS subfolder
 	/// - Parameters:
@@ -10,7 +11,7 @@ nonisolated enum XcodeProjectGenerator {
 	///   - shouldOpenXcode: Controls whether Xcode opens after generation
 	///   - onStateChange: Callback invoked when state changes
 	/// - Returns: Path to the generated Xcode project/workspace, or throws an error
-	static func generateProject(
+	public static func generateProject(
 		at repositoryPath: String,
 		iosSubfolderPath: String,
 		shouldOpenXcode: Bool,
@@ -70,7 +71,7 @@ nonisolated enum XcodeProjectGenerator {
 
 	/// Opens the Xcode project at the specified path
 	/// - Parameter projectPath: Full path to .xcworkspace or .xcodeproj
-	static func openProject(at projectPath: String) async throws {
+	public static func openProject(at projectPath: String) async throws {
 		let result = await ProcessRunner.run(
 			executableURL: URL(filePath: "/usr/bin/open"),
 			arguments: [projectPath]
@@ -85,13 +86,13 @@ nonisolated enum XcodeProjectGenerator {
 
 // MARK: - Error Types
 
-enum ProjectGenerationError: LocalizedError {
+public enum ProjectGenerationError: LocalizedError {
 	case commandFailed(command: String, message: String)
 	case projectNotFoundAfterGeneration
 	case failedToOpenProject
 	case iosSubfolderNotFound(path: String)
 
-	var errorDescription: String? {
+	public var errorDescription: String? {
 		switch self {
 		case let .commandFailed(command, message):
 			"Command '\(command)' failed: \(message)"

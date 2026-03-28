@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum XcodeDerivedDataHelper {
+public nonisolated enum XcodeDerivedDataHelper {
 
 	/// Deletes Xcode DerivedData folders associated with the given worktree path.
 	/// - Parameter path: The path of the worktree whose DerivedData should be removed.
 	/// - Throws: An error if any matching DerivedData folder cannot be removed.
-	static func deleteDerivedData(forWorktreePath path: String) throws {
+	public static func deleteDerivedData(forWorktreePath path: String) throws {
 		let derivedDataURL = FileManager.default
 			.homeDirectoryForCurrentUser
 			.appending(path: "Library/Developer/Xcode/DerivedData", directoryHint: .isDirectory)

@@ -1,15 +1,17 @@
 import Foundation
+import GitCore
+import Settings
 
 // MARK: - Tuist Action
 
-nonisolated enum TuistAction: Equatable {
+public nonisolated enum TuistAction: Equatable {
 	case generate
 	case install
 	case cache(TuistCacheType)
 	case edit
 	case inspectDependencies
 
-	var commandString: String {
+	public var commandString: String {
 		switch self {
 		case .generate:
 			"generate"
@@ -31,7 +33,7 @@ nonisolated enum TuistAction: Equatable {
 
 // MARK: - Tuist Command Helper
 
-nonisolated enum TuistCommandHelper {
+public nonisolated enum TuistCommandHelper {
 
 	/// Runs a Tuist command using mise exec at the specified repository path
 	/// - Parameters:
@@ -39,7 +41,7 @@ nonisolated enum TuistCommandHelper {
 	///   - path: The repository path where the command should be executed
 	///   - shouldOpenXcode: For generate action, controls whether Xcode opens after generation
 	/// - Returns: A Result containing the command output on success or an error on failure
-	static func runCommand(
+	public static func runCommand(
 		_ action: TuistAction,
 		at path: String,
 		shouldOpenXcode: Bool

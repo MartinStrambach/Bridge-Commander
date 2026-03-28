@@ -1,17 +1,18 @@
 import Dependencies
 import DependenciesMacros
 import Foundation
+import Settings
 import Sharing
 
 // MARK: - YouTrack Service
 
 @DependencyClient
-nonisolated struct YouTrackClient {
-	var fetchIssueDetails: @Sendable (_ for: String) async throws -> IssueDetails
+public struct YouTrackClient: @unchecked Sendable {
+	public var fetchIssueDetails: @Sendable (_ for: String) async throws -> IssueDetails
 }
 
 extension YouTrackClient: DependencyKey {
-	static let liveValue = YouTrackClient(
+	public static let liveValue = YouTrackClient(
 		fetchIssueDetails: { ticketId in
 			@Shared(.youtrackAuthToken)
 			var token = ""
@@ -32,5 +33,5 @@ extension YouTrackClient: DependencyKey {
 }
 
 extension YouTrackClient: TestDependencyKey {
-	static let testValue = YouTrackClient()
+	public static let testValue = YouTrackClient()
 }

@@ -1,9 +1,10 @@
 import Foundation
+import GitCore
 
-nonisolated enum PermissionChecker {
+public nonisolated enum PermissionChecker {
 	/// Checks whether Automation permission for System Events is granted by running
 	/// a harmless osascript probe. Returns `true` if permitted, `false` if denied.
-	static func isSystemEventsAutomationPermitted() async -> Bool {
+	public static func isSystemEventsAutomationPermitted() async -> Bool {
 		let script = """
 		tell application "System Events"
 		    get name of processes

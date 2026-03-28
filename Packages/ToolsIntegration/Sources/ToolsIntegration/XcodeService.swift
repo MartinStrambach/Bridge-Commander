@@ -5,13 +5,13 @@ import Foundation
 // MARK: - Xcode Service
 
 @DependencyClient
-nonisolated struct XcodeClient {
-	var hasXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> Bool = { _, _ in false }
-	var findXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> String? = { _, _ in nil }
+public struct XcodeClient: @unchecked Sendable {
+	public var hasXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> Bool = { _, _ in false }
+	public var findXcodeProject: @Sendable (_ in: String, _ iosSubfolderPath: String) -> String? = { _, _ in nil }
 }
 
 extension XcodeClient: DependencyKey {
-	static let liveValue = XcodeClient(
+	public static let liveValue = XcodeClient(
 		hasXcodeProject: { path, iosSubfolderPath in
 			XcodeProjectDetector.hasXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
 		},
@@ -22,5 +22,5 @@ extension XcodeClient: DependencyKey {
 }
 
 extension XcodeClient: TestDependencyKey {
-	static let testValue = XcodeClient()
+	public static let testValue = XcodeClient()
 }

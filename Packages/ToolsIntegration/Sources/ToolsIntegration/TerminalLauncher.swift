@@ -1,9 +1,11 @@
 import AppKit
 import Foundation
+import GitCore
+import Settings
 
-nonisolated enum TerminalLauncher {
+public nonisolated enum TerminalLauncher {
 
-	static func openTerminal(at path: String, behavior: TerminalOpeningBehavior) async {
+	public static func openTerminal(at path: String, behavior: TerminalOpeningBehavior) async {
 		if behavior == .newTab {
 			await openTerminalInNewTab(at: path)
 		}

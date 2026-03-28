@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum YouTrackService {
+public nonisolated enum YouTrackService {
 	private static let baseURL = "https://youtrack.livesport.eu/api"
 
 	/// Fetches PR URL and code review fields from a YouTrack issue
@@ -10,7 +10,7 @@ nonisolated enum YouTrackService {
 	/// - Returns: A tuple containing (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState), any
 	/// of which may
 	/// be nil if not found
-	static func fetchIssueDetails(for ticketId: String, authToken: String) async
+	public static func fetchIssueDetails(for ticketId: String, authToken: String) async
 		-> (
 			prUrl: String?,
 			androidCR: CodeReviewState?,

@@ -3,14 +3,14 @@ import DependenciesMacros
 import Foundation
 
 @DependencyClient
-struct LastOpenedDirectoryClient {
-	var load: () -> String? = { nil }
-	var save: (_ directory: String) -> Void
-	var clear: () -> Void
+public struct LastOpenedDirectoryClient: @unchecked Sendable {
+	public var load: () -> String? = { nil }
+	public var save: (_ directory: String) -> Void
+	public var clear: () -> Void
 }
 
 extension LastOpenedDirectoryClient: DependencyKey {
-	static let liveValue: LastOpenedDirectoryClient = {
+	public static let liveValue: LastOpenedDirectoryClient = {
 		let userDefaults = UserDefaults.standard
 		let key = "lastOpenedDirectory"
 
@@ -29,5 +29,5 @@ extension LastOpenedDirectoryClient: DependencyKey {
 }
 
 extension LastOpenedDirectoryClient: TestDependencyKey {
-	static let testValue = LastOpenedDirectoryClient()
+	public static let testValue = LastOpenedDirectoryClient()
 }

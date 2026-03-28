@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum XcodeProjectDetector {
+public nonisolated enum XcodeProjectDetector {
 
 	/// Finds an Xcode workspace or project in the configured iOS subfolder
 	/// - Parameters:
@@ -8,7 +8,7 @@ nonisolated enum XcodeProjectDetector {
 	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	/// - Returns: Path to .xcworkspace or .xcodeproj, or nil if not found
 	/// - Note: Prioritizes .xcworkspace over .xcodeproj
-	static func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String? {
+	public static func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String? {
 		let fileManager = FileManager.default
 
 		// Build path to iOS subfolder
@@ -46,7 +46,7 @@ nonisolated enum XcodeProjectDetector {
 	///   - repositoryPath: The repository root path
 	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	/// - Returns: True if a project or workspace exists
-	static func hasXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> Bool {
+	public static func hasXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> Bool {
 		findXcodeProject(in: repositoryPath, iosSubfolderPath: iosSubfolderPath) != nil
 	}
 
@@ -55,7 +55,7 @@ nonisolated enum XcodeProjectDetector {
 	///   - repositoryPath: The repository root path
 	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	/// - Returns: Full path to iOS subfolder
-	static func getIosFlashscorePath(in repositoryPath: String, iosSubfolderPath: String) -> String {
+	public static func getIosFlashscorePath(in repositoryPath: String, iosSubfolderPath: String) -> String {
 		(repositoryPath as NSString).appendingPathComponent(iosSubfolderPath)
 	}
 }

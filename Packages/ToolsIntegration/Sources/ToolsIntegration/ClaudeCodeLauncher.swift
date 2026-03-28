@@ -1,13 +1,15 @@
 import AppKit
 import Foundation
+import GitCore
+import Settings
 
-nonisolated enum ClaudeCodeLauncher {
+public nonisolated enum ClaudeCodeLauncher {
 
 	/// Opens Terminal and runs Claude Code at the specified repository path
 	/// - Parameters:
 	///   - path: The directory path to run Claude Code in
 	///   - behavior: The opening behavior (new tab or new window)
-	static func runClaudeCode(at path: String, behavior: TerminalOpeningBehavior) async throws {
+	public static func runClaudeCode(at path: String, behavior: TerminalOpeningBehavior) async throws {
 		switch behavior {
 		case .newTab:
 			try await runClaudeCodeInNewTab(at: path)

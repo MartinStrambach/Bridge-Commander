@@ -1,13 +1,14 @@
 import Foundation
+import GitCore
 
-nonisolated enum FileOpener {
+public nonisolated enum FileOpener {
 
 	/// Opens a file in the appropriate IDE based on its extension
 	/// - Parameters:
 	///   - filePath: Relative path to the file
 	///   - repositoryPath: Absolute path to the repository
 	///   - androidStudioPath: Path to Android Studio executable
-	static func openFileInIDE(
+	public static func openFileInIDE(
 		filePath: String,
 		repositoryPath: String,
 		androidStudioPath: String
@@ -56,10 +57,10 @@ nonisolated enum FileOpener {
 
 // MARK: - Errors
 
-enum FileOpenerError: Error, LocalizedError {
+public enum FileOpenerError: Error, LocalizedError {
 	case failedToOpen(String)
 
-	var errorDescription: String? {
+	public var errorDescription: String? {
 		switch self {
 		case let .failedToOpen(message):
 			"Failed to open file: \(message)"
