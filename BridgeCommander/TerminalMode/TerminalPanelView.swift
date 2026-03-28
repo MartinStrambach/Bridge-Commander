@@ -28,7 +28,7 @@ struct TerminalPanelView: View {
 			terminalContent
 		}
 		.sheet(
-			item: $store.scope(state: \.stagingDetail, action: \.stagingDetail)
+			item: $store.scope(state: \.$stagingDetail, action: \.stagingDetail)
 		) { detailStore in
 			RepositoryDetailView(store: detailStore)
 				.frame(

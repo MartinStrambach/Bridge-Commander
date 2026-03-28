@@ -85,7 +85,7 @@ struct GitActionsMenuView: View {
 			}
 		}
 		.fixedSize()
-		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
+		.sheet(item: $store.scope(state: \.$alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
 	}

@@ -86,7 +86,7 @@ struct RepositoryListView: View {
 		.onChange(of: store.groupSettings) { _, _ in
 			send(.groupSettingsChanged)
 		}
-		.alert($store.scope(state: \.alert, action: \.alert))
+		.alert($store.scope(state: \.$alert, action: \.alert))
 	}
 
 	// MARK: - Header View

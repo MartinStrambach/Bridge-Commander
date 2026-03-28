@@ -103,10 +103,10 @@ struct RepositoryDetailView: View {
 		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
 			store.send(.loadChanges)
 		}
-		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
+		.sheet(item: $store.scope(state: \.$alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
-		.sheet(item: $store.scope(state: \.commitSheet, action: \.commitSheet)) { commitStore in
+		.sheet(item: $store.scope(state: \.$commitSheet, action: \.commitSheet)) { commitStore in
 			CommitView(store: commitStore)
 		}
 	}

@@ -67,7 +67,7 @@ struct XcodeProjectButtonView: View {
 			tint: store.projectPath == nil ? .orange : nil,
 			action: { store.send(.openProject) }
 		)
-		.alert($store.scope(state: \.alert, action: \.alert))
+		.alert($store.scope(state: \.$alert, action: \.alert))
 	}
 
 }

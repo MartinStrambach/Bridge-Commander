@@ -87,7 +87,7 @@ struct RepositoryRowView: View {
 		.task {
 			store.send(.onAppear)
 		}
-		.sheet(item: $store.scope(state: \.repositoryDetail, action: \.repositoryDetail)) { detailStore in
+		.sheet(item: $store.scope(state: \.$repositoryDetail, action: \.repositoryDetail)) { detailStore in
 			RepositoryDetailView(store: detailStore)
 				.frame(
 					minWidth: 1200,

@@ -50,7 +50,7 @@ struct CommitView: View {
 		}
 		.padding(24)
 		.frame(width: 450)
-		.sheet(item: $store.scope(state: \.alert, action: \.alert)) { alertStore in
+		.sheet(item: $store.scope(state: \.$alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
 	}

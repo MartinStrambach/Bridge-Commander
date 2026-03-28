@@ -1,6 +1,6 @@
+internal import OrderedCollections
 import ComposableArchitecture
 import Foundation
-internal import OrderedCollections
 import SwiftUI
 
 enum SortMode: String, Equatable {
