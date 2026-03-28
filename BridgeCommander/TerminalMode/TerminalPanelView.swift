@@ -83,14 +83,26 @@ struct TerminalPanelView: View {
 				.controlSize(.small)
 			}
 
-			if let rowState = activeRowState, rowState.unpushedCommitCount > 0 {
-				Button("Push (\(rowState.unpushedCommitCount))") {
+			if let rowState = activeRowState, rowState.unpushedCommitCount > 0 || store.isPushing {
+				Button {
 					if let path = store.activeRepositoryPath {
-						store.send(.stagingButtonTapped(repositoryPath: path))
+						store.send(.pushButtonTapped(repositoryPath: path))
+					}
+				} label: {
+					if store.isPushing {
+						HStack(spacing: 4) {
+							ProgressView()
+								.controlSize(.mini)
+							Text("Pushing…")
+						}
+					} else {
+						Text("Push (\(rowState.unpushedCommitCount))")
 					}
 				}
 				.buttonStyle(.bordered)
 				.controlSize(.small)
+				.tint(.orange)
+				.disabled(store.isPushing)
 			}
 
 			Button("Staging") {
