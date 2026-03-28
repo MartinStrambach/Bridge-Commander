@@ -344,6 +344,13 @@ struct SettingsView: View {
 					get: { settings.supportsAndroid },
 					set: { store.send(.setGroupSupportsAndroid(groupId: groupId, value: $0)) }
 				))
+
+				if settings.supportsIOS {
+					Toggle("Tuist", isOn: Binding(
+						get: { settings.supportsTuist },
+						set: { store.send(.setGroupSupportsTuist(groupId: groupId, value: $0)) }
+					))
+				}
 			}
 
 			if settings.supportsIOS {
