@@ -758,6 +758,13 @@ private func applySettings(
 	row.iosSubfolderPath = settings.iosSubfolderPath
 	row.supportsTuist = settings.supportsTuist
 	row.ticketIdRegex = settings.ticketIdRegex
+	let newTicketId = settings.ticketIdRegex.isEmpty
+		? nil
+		: GitBranchDetector.extractTicketId(from: row.branchName ?? row.name, pattern: settings.ticketIdRegex)
+	row.ticketId = newTicketId
+	row.ticketButton = newTicketId.map { TicketButtonReducer.State(ticketId: $0) }
+	let newTicketURL = newTicketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? ""
+	row.shareButton.updateTicketURL(newTicketURL)
 	row.tuistButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.xcodeButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.androidStudioButton.mobileSubfolderPath = effectiveMobileSubfolder

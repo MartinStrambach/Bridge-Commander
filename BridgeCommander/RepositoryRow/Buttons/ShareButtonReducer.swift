@@ -25,6 +25,10 @@ struct ShareButtonReducer {
 		mutating func updatePRURL(_ prURL: String?) {
 			self.prURL = prURL
 		}
+
+		mutating func updateTicketURL(_ ticketURL: String) {
+			self.ticketURL = ticketURL
+		}
 	}
 
 	private static func buildShareText(branchName: String?, ticketURL: String?, prURL: String?) -> String {

@@ -9,7 +9,7 @@ struct RepositoryRowReducer {
 	struct State: Equatable, Identifiable {
 		let id: String
 		let path: String
-		let ticketId: String?
+		var ticketId: String?
 
 		var name: String
 		var isWorktree: Bool
@@ -84,7 +84,7 @@ struct RepositoryRowReducer {
 			if ticketIdRegex.isEmpty {
 				ticketId = nil
 			} else {
-				ticketId = GitBranchDetector.extractTicketId(from: name, pattern: ticketIdRegex)
+				ticketId = GitBranchDetector.extractTicketId(from: branchName ?? name, pattern: ticketIdRegex)
 			}
 			self.ticketId = ticketId
 			self.ticketIdRegex = ticketIdRegex
@@ -221,6 +221,12 @@ struct RepositoryRowReducer {
 				let unstaged = isMerge ? 0 : status.unstagedCount
 				let staged = isMerge ? 0 : status.stagedCount
 				state.branchName = branch
+				let newTicketId = state.ticketIdRegex.isEmpty
+					? nil
+					: GitBranchDetector.extractTicketId(from: branch, pattern: state.ticketIdRegex)
+				state.ticketId = newTicketId
+				state.ticketButton = newTicketId.map { TicketButtonReducer.State(ticketId: $0) }
+				state.shareButton.updateTicketURL(newTicketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? "")
 				state.unstagedChangesCount = unstaged
 				state.stagedChangesCount = staged
 				state.gitActionsMenu.currentBranch = branch
