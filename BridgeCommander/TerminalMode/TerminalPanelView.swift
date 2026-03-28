@@ -55,6 +55,7 @@ struct TerminalPanelView: View {
 						.padding(.horizontal, 5)
 						.padding(.vertical, 2)
 						.background(.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+						.layoutPriority(1)
 				}
 
 				Text(rowState.formattedBranchName)
