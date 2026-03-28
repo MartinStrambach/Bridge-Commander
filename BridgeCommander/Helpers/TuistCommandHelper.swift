@@ -1,32 +1,5 @@
 import Foundation
 
-// MARK: - Tuist Cache Type
-
-nonisolated enum TuistCacheType: String, Equatable, CaseIterable {
-	case externalOnly
-	case all
-
-	var displayName: String {
-		switch self {
-		case .externalOnly:
-			"External Only"
-
-		case .all:
-			"All Targets"
-		}
-	}
-
-	var commandFlag: String {
-		switch self {
-		case .externalOnly:
-			"--external-only"
-
-		case .all:
-			""
-		}
-	}
-}
-
 // MARK: - Tuist Action
 
 nonisolated enum TuistAction: Equatable {
