@@ -17,9 +17,6 @@ struct SettingsReducer {
 		@Shared(.trackedRepoPaths)
 		var trackedRepoPaths: [String] = []
 
-		@Shared(.ticketIdRegex)
-		var ticketIdRegex = "MOB-[0-9]+"
-
 		@Shared(.branchNameRegex)
 		var branchNameRegex = "[a-zA-Z]+-\\d+[_/]"
 
@@ -59,7 +56,7 @@ struct SettingsReducer {
 		case setGroupMobileSubfolderPath(groupId: String, path: String)
 		case setGroupIOSSubfolderPath(groupId: String, path: String)
 		case setGroupSupportsTuist(groupId: String, value: Bool)
-		case setTicketIdRegex(String)
+		case setGroupTicketIdRegex(groupId: String, regex: String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
@@ -109,8 +106,8 @@ struct SettingsReducer {
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsTuist = value }
 				return .none
 
-			case let .setTicketIdRegex(regex):
-				state.$ticketIdRegex.withLock { $0 = regex }
+			case let .setGroupTicketIdRegex(groupId, regex):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].ticketIdRegex = regex }
 				return .none
 
 			case let .setBranchNameRegex(regex):

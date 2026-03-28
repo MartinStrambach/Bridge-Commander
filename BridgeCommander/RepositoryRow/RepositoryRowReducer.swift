@@ -48,6 +48,8 @@ struct RepositoryRowReducer {
 		var mobileSubfolderPath: String
 		/// Passed to Tuist and Xcode. Empty unless supportsIOS.
 		var iosSubfolderPath: String
+		/// Regex for extracting ticket IDs from branch names. Empty = no ticket parsing.
+		var ticketIdRegex: String
 
 		@Presents
 		var repositoryDetail: RepositoryDetail.State?
@@ -68,7 +70,8 @@ struct RepositoryRowReducer {
 			supportsAndroid: Bool = false,
 			mobileSubfolderPath: String = "",
 			iosSubfolderPath: String = "",
-			supportsTuist: Bool = false
+			supportsTuist: Bool = false,
+			ticketIdRegex: String = ""
 		) {
 			self.id = path
 			self.path = path
@@ -77,12 +80,14 @@ struct RepositoryRowReducer {
 
 			self.branchName = branchName
 
-			// Access the shared ticketIdRegex setting
-			@Shared(.ticketIdRegex)
-			var regex = "MOB-[0-9]+"
-
-			let ticketId = GitBranchDetector.extractTicketId(from: name, pattern: regex)
+			let ticketId: String?
+			if ticketIdRegex.isEmpty {
+				ticketId = nil
+			} else {
+				ticketId = GitBranchDetector.extractTicketId(from: name, pattern: ticketIdRegex)
+			}
 			self.ticketId = ticketId
+			self.ticketIdRegex = ticketIdRegex
 			self.unstagedChangesCount = 0
 			self.stagedChangesCount = 0
 

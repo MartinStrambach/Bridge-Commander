@@ -626,7 +626,8 @@ private func buildGroup(
 			supportsAndroid: settings.supportsAndroid,
 			mobileSubfolderPath: effectiveMobileSubfolder,
 			iosSubfolderPath: settings.iosSubfolderPath,
-			supportsTuist: settings.supportsTuist
+			supportsTuist: settings.supportsTuist,
+			ticketIdRegex: settings.ticketIdRegex
 		)
 	}
 	guard let header = allRows.first(where: { !$0.isWorktree }) else {
@@ -680,7 +681,8 @@ private func mergeGroupRows(
 				supportsAndroid: rowSettings.supportsAndroid,
 				mobileSubfolderPath: effectiveMobileSubfolder,
 				iosSubfolderPath: rowSettings.iosSubfolderPath,
-				supportsTuist: rowSettings.supportsTuist
+				supportsTuist: rowSettings.supportsTuist,
+				ticketIdRegex: rowSettings.ticketIdRegex
 			))
 		}
 	}
@@ -755,6 +757,7 @@ private func applySettings(
 	row.mobileSubfolderPath = effectiveMobileSubfolder
 	row.iosSubfolderPath = settings.iosSubfolderPath
 	row.supportsTuist = settings.supportsTuist
+	row.ticketIdRegex = settings.ticketIdRegex
 	row.tuistButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.xcodeButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.androidStudioButton.mobileSubfolderPath = effectiveMobileSubfolder

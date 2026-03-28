@@ -8,10 +8,6 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<String> {
 		appStorage("youtrackAuthToken")
 	}
 
-	static var ticketIdRegex: Self {
-		appStorage("ticketIdRegex")
-	}
-
 	static var branchNameRegex: Self {
 		appStorage("branchNameRegex")
 	}

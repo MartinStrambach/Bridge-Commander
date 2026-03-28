@@ -12,4 +12,7 @@ nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
     var iosSubfolderPath: String = ""
     /// When false, the Tuist button is hidden even if supportsIOS is true.
     var supportsTuist: Bool = false
+    /// Regex pattern to extract ticket IDs from branch names (e.g. "MOB-[0-9]+").
+    /// When empty, ticket parsing is disabled — ticket button, YouTrack fetch, and branch formatting are all suppressed.
+    var ticketIdRegex: String = ""
 }

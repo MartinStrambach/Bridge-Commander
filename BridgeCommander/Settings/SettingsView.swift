@@ -16,7 +16,6 @@ struct SettingsView: View {
 
 				youtrackAuthenticationSection
 				repositoryRefreshSection
-				ticketIdRegexSection
 				branchNameRegexSection
 				HStack(alignment: .top) {
 					tuistCacheOptionsSection
@@ -153,26 +152,6 @@ struct SettingsView: View {
 				}
 			}
 			.pickerStyle(.segmented)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	private var ticketIdRegexSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Ticket ID Regex Pattern")
-				.font(.headline)
-
-			Text(
-				"Specify the regular expression pattern to extract ticket IDs from branch names (e.g., 'MOB-[0-9]+', 'JIRA-[0-9]+')."
-			)
-			.font(.caption)
-			.foregroundColor(.secondary)
-
-			TextField("Ticket ID Regex", text: $store.ticketIdRegex.sending(\.setTicketIdRegex))
-				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
@@ -381,6 +360,19 @@ struct SettingsView: View {
 					.textFieldStyle(.roundedBorder)
 					.font(.system(.body, design: .monospaced))
 				}
+			}
+
+			HStack {
+				Text("Ticket ID Regex")
+					.font(.caption)
+					.foregroundColor(.secondary)
+					.frame(width: 140, alignment: .leading)
+				TextField("e.g. MOB-[0-9]+", text: Binding(
+					get: { settings.ticketIdRegex },
+					set: { store.send(.setGroupTicketIdRegex(groupId: groupId, regex: $0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
 			}
 		}
 		.padding(10)
