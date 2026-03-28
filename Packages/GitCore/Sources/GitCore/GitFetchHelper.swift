@@ -1,12 +1,17 @@
 import Foundation
 
-nonisolated enum GitFetchHelper {
-	struct FetchResult: Equatable {
-		let fetchedBranches: Int
-		let isAlreadyUpToDate: Bool
+public nonisolated enum GitFetchHelper {
+	public struct FetchResult: Equatable {
+		public let fetchedBranches: Int
+		public let isAlreadyUpToDate: Bool
+
+		public init(fetchedBranches: Int, isAlreadyUpToDate: Bool) {
+			self.fetchedBranches = fetchedBranches
+			self.isAlreadyUpToDate = isAlreadyUpToDate
+		}
 	}
 
-	static func fetch(at path: String) async throws -> FetchResult {
+	public static func fetch(at path: String) async throws -> FetchResult {
 		let result = await ProcessRunner.runGit(
 			arguments: ["fetch", "--prune", "--verbose"],
 			at: path

@@ -1,10 +1,10 @@
 import Foundation
 
-nonisolated enum GitAbortMergeHelper {
+public nonisolated enum GitAbortMergeHelper {
 	/// Aborts an ongoing merge operation
 	/// - Parameter path: The path to the Git repository
 	/// - Throws: GitError if the abort fails
-	static func abortMerge(at path: String) async throws {
+	public static func abortMerge(at path: String) async throws {
 		let result = await ProcessRunner.runGit(
 			arguments: ["merge", "--abort"],
 			at: path

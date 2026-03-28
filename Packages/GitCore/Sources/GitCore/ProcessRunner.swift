@@ -1,26 +1,26 @@
 import Foundation
 
 /// Result of a process execution with captured output and error streams
-nonisolated struct ProcessResult {
-	let exitCode: Int32
-	let output: Data
-	let error: Data
+public nonisolated struct ProcessResult {
+	public let exitCode: Int32
+	public let output: Data
+	public let error: Data
 
-	var outputString: String {
+	public var outputString: String {
 		String(data: output, encoding: .utf8) ?? ""
 	}
 
-	var errorString: String {
+	public var errorString: String {
 		String(data: error, encoding: .utf8) ?? ""
 	}
 
-	var success: Bool {
+	public var success: Bool {
 		exitCode == 0
 	}
 }
 
 /// Helper for running shell processes with proper pipe handling to prevent buffer overflow
-nonisolated enum ProcessRunner {
+public nonisolated enum ProcessRunner {
 
 	/// Runs a process and captures its output and error streams
 	/// - Parameters:
@@ -29,7 +29,7 @@ nonisolated enum ProcessRunner {
 	///   - currentDirectory: Working directory (optional)
 	///   - environment: Environment variables (optional)
 	/// - Returns: ProcessResult containing exit code and captured streams
-	static func run(
+	public static func run(
 		executableURL: URL,
 		arguments: [String],
 		currentDirectory: URL? = nil,
@@ -110,7 +110,7 @@ nonisolated enum ProcessRunner {
 	///   - arguments: Git command arguments (e.g., ["status", "--short"])
 	///   - repositoryPath: Path to the repository
 	/// - Returns: ProcessResult containing exit code and captured streams
-	static func runGit(
+	public static func runGit(
 		arguments: [String],
 		at repositoryPath: String
 	) async -> ProcessResult {

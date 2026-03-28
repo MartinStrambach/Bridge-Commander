@@ -3,12 +3,12 @@ import Foundation
 
 // MARK: - YouTrack Service Protocol
 
-nonisolated enum CodeReviewState: String, Equatable {
+public nonisolated enum CodeReviewState: String, Equatable {
 	case passed = "Passed"
 	case waiting = "Waiting"
 	case notApplicable = "N/A"
 
-	init?(rawValue: String) {
+	public init?(rawValue: String) {
 		switch rawValue.lowercased() {
 		case "passed":
 			self = .passed
@@ -22,7 +22,7 @@ nonisolated enum CodeReviewState: String, Equatable {
 	}
 }
 
-nonisolated enum TicketState: String, Equatable {
+public nonisolated enum TicketState: String, Equatable {
 	case open = "Open"
 	case inProgress = "In Progress"
 	case waitingToCodeReview = "Waiting to code review"
@@ -31,7 +31,7 @@ nonisolated enum TicketState: String, Equatable {
 	case accepted = "Accepted"
 	case done = "Done"
 
-	init?(rawValue: String) {
+	public init?(rawValue: String) {
 		switch rawValue.lowercased() {
 		case "open":
 			self = .open
@@ -53,29 +53,38 @@ nonisolated enum TicketState: String, Equatable {
 	}
 }
 
-protocol YouTrackServiceType: Sendable {
+public protocol YouTrackServiceType: Sendable {
 	func fetchIssueDetails(for ticketId: String) async throws -> IssueDetails
 }
 
-struct IssueDetails {
-	let prUrl: String?
-	let androidCR: CodeReviewState?
-	let iosCR: CodeReviewState?
-	let androidReviewerName: String?
-	let iosReviewerName: String?
-	let ticketState: TicketState?
+public struct IssueDetails {
+	public let prUrl: String?
+	public let androidCR: CodeReviewState?
+	public let iosCR: CodeReviewState?
+	public let androidReviewerName: String?
+	public let iosReviewerName: String?
+	public let ticketState: TicketState?
+
+	public init(prUrl: String?, androidCR: CodeReviewState?, iosCR: CodeReviewState?, androidReviewerName: String?, iosReviewerName: String?, ticketState: TicketState?) {
+		self.prUrl = prUrl
+		self.androidCR = androidCR
+		self.iosCR = iosCR
+		self.androidReviewerName = androidReviewerName
+		self.iosReviewerName = iosReviewerName
+		self.ticketState = ticketState
+	}
 }
 
 // MARK: - Xcode Service Protocol
 
-nonisolated protocol XcodeServiceType: Sendable {
+public nonisolated protocol XcodeServiceType: Sendable {
 	func hasXcodeProject(in path: String, iosSubfolderPath: String) -> Bool
 	func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String?
 }
 
 // MARK: - Last Opened Directory Service Protocol
 
-protocol LastOpenedDirectoryServiceType: Sendable {
+public protocol LastOpenedDirectoryServiceType: Sendable {
 	func load() -> String?
 	func save(_ directory: String)
 	func clear()

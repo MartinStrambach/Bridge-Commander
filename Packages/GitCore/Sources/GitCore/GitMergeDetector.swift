@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum GitMergeDetector {
+public nonisolated enum GitMergeDetector {
 
 	/// Checks if a repository has any ongoing git operation (merge, rebase, etc.)
 	/// - Parameter path: The path to the Git repository
 	/// - Returns: true if any git operation is in progress, false otherwise
-	static func isGitOperationInProgress(at path: String) -> Bool {
+	public static func isGitOperationInProgress(at path: String) -> Bool {
 		guard let actualGitPath = GitDirectoryResolver.resolveGitDirectory(at: path) else {
 			return false
 		}

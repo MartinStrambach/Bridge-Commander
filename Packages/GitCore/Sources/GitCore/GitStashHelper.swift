@@ -1,10 +1,10 @@
 import Foundation
 
-nonisolated enum GitStashHelper {
+public nonisolated enum GitStashHelper {
 	/// Stashes changes including untracked files
 	/// - Parameter path: The path to the Git repository
 	/// - Throws: GitError if the operation fails
-	static func stash(at path: String) async throws {
+	public static func stash(at path: String) async throws {
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "-u"], // Include untracked files
 			at: path
@@ -19,7 +19,7 @@ nonisolated enum GitStashHelper {
 	/// Pops the most recent stash
 	/// - Parameter path: The path to the Git repository
 	/// - Throws: GitError if the operation fails
-	static func stashPop(at path: String) async throws {
+	public static func stashPop(at path: String) async throws {
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "pop"],
 			at: path
@@ -36,7 +36,7 @@ nonisolated enum GitStashHelper {
 	///   - path: The path to the Git repository
 	///   - branch: The branch name to check for stashes
 	/// - Returns: true if a stash exists on the branch, false otherwise
-	static func checkHasStashOnBranch(at path: String, branch: String) async -> Bool {
+	public static func checkHasStashOnBranch(at path: String, branch: String) async -> Bool {
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "list"],
 			at: path

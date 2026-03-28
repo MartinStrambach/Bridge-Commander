@@ -1,11 +1,15 @@
 import Foundation
 
-nonisolated enum GitMergeHelper {
-	struct MergeResult: Equatable {
-		let commitsMerged: Bool
+public nonisolated enum GitMergeHelper {
+	public struct MergeResult: Equatable {
+		public let commitsMerged: Bool
+
+		public init(commitsMerged: Bool) {
+			self.commitsMerged = commitsMerged
+		}
 	}
 
-	static func mergeMaster(at path: String) async throws -> MergeResult {
+	public static func mergeMaster(at path: String) async throws -> MergeResult {
 		// First, fetch origin/master
 		try await fetchOriginMaster(at: path)
 
@@ -13,7 +17,7 @@ nonisolated enum GitMergeHelper {
 		return try await mergeOriginMaster(at: path)
 	}
 
-	static func finishMerge(at path: String) async throws {
+	public static func finishMerge(at path: String) async throws {
 		let result = await ProcessRunner.runGit(
 			arguments: ["commit", "--no-edit"],
 			at: path

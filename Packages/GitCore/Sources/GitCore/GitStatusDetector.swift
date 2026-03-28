@@ -1,31 +1,31 @@
 import Foundation
 
 /// Parsed result of `git status --porcelain=v2 [--branch]`.
-nonisolated struct GitPorcelainStatus {
+public nonisolated struct GitPorcelainStatus {
 
 	// MARK: - Branch (populated only when run with --branch)
 
-	let branch: String?
-	let hasRemoteBranch: Bool
-	let unpushedCount: Int
-	let behindCount: Int
+	public let branch: String?
+	public let hasRemoteBranch: Bool
+	public let unpushedCount: Int
+	public let behindCount: Int
 
 	// MARK: - File changes
 
-	let staged: [FileChange]
-	let unstaged: [FileChange]
+	public let staged: [FileChange]
+	public let unstaged: [FileChange]
 
-	var stagedCount: Int {
+	public var stagedCount: Int {
 		staged.count
 	}
 
-	var unstagedCount: Int {
+	public var unstagedCount: Int {
 		unstaged.count
 	}
 
 	// MARK: - Init
 
-	init(parsing output: String) {
+	public init(parsing output: String) {
 		var branch: String?
 		var hasRemoteBranch = false
 		var unpushedCount = 0
@@ -138,9 +138,9 @@ nonisolated struct GitPorcelainStatus {
 
 // MARK: -
 
-nonisolated enum GitStatusDetector {
+public nonisolated enum GitStatusDetector {
 	/// Runs `git status --porcelain=v2 --branch` and returns the parsed result.
-	static func getStatus(at path: String) async -> GitPorcelainStatus {
+	public static func getStatus(at path: String) async -> GitPorcelainStatus {
 		let result = await ProcessRunner.runGit(
 			arguments: ["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
 			at: path

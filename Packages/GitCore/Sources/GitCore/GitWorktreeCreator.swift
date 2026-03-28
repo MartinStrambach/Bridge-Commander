@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum GitWorktreeCreator {
+public nonisolated enum GitWorktreeCreator {
 
 	/// Creates a new Git worktree with the specified branch name
 	/// - Parameters:
@@ -9,7 +9,7 @@ nonisolated enum GitWorktreeCreator {
 	///   - repositoryPath: The path to the Git repository
 	///   - createNewBranch: When true, creates a new branch; when false, checks out the base branch directly
 	/// - Throws: An error if the creation fails
-	static func createWorktree(
+	public static func createWorktree(
 		branchName: String,
 		baseBranch: String,
 		repositoryPath: String,

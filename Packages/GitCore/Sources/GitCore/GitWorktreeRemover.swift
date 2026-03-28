@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum GitWorktreeRemover {
+public nonisolated enum GitWorktreeRemover {
 
 	/// Removes a Git worktree at the specified path
 	/// - Parameters:
@@ -8,7 +8,7 @@ nonisolated enum GitWorktreeRemover {
 	///   - path: The path to the Git worktree
 	///   - force: Whether to force removal even if there are uncommitted changes
 	/// - Throws: An error if the removal fails
-	static func removeWorktree(name: String, path: String, force: Bool = false) async throws {
+	public static func removeWorktree(name: String, path: String, force: Bool = false) async throws {
 		let forceFlag = force ? "--force" : ""
 		let script = """
 		folder="\(path)"

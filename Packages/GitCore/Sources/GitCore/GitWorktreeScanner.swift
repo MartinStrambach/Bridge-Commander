@@ -1,11 +1,11 @@
 import Foundation
 
-nonisolated enum GitWorktreeScanner {
+public nonisolated enum GitWorktreeScanner {
 
 	/// Lists all worktrees for a given repository using `git worktree list --porcelain`
 	/// - Parameter repositoryPath: The path to the main Git repository
 	/// - Returns: An array of ScannedRepository entries (main repo first, then worktrees)
-	static func listWorktrees(forRepo repositoryPath: String) async -> [ScannedRepository] {
+	public static func listWorktrees(forRepo repositoryPath: String) async -> [ScannedRepository] {
 		let result = await ProcessRunner.runGit(
 			arguments: ["worktree", "list", "--porcelain"],
 			at: repositoryPath

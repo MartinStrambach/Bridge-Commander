@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated enum GitStagingHelper {
+public nonisolated enum GitStagingHelper {
 
 	private static let hunkHeaderRegex = try? NSRegularExpression(
 		pattern: #"@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@"#
@@ -8,7 +8,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Fetch File Changes
 
-	static func fetchFileChanges(at path: String) async -> GitFileChanges {
+	public static func fetchFileChanges(at path: String) async -> GitFileChanges {
 		let status = await GitStatusDetector.getStatus(at: path)
 		return GitFileChanges(
 			staged: status.staged.sorted { $0.path < $1.path },
@@ -18,7 +18,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Fetch Diff
 
-	static func fetchFileDiff(
+	public static func fetchFileDiff(
 		at repositoryPath: String,
 		file: FileChange,
 		isStaged: Bool
@@ -65,7 +65,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Stage Files
 
-	static func stageFiles(at repositoryPath: String, filePaths: [String]) async throws {
+	public static func stageFiles(at repositoryPath: String, filePaths: [String]) async throws {
 		guard !filePaths.isEmpty else {
 			return
 		}
@@ -80,7 +80,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Unstage Files
 
-	static func unstageFiles(at repositoryPath: String, filePaths: [String]) async throws {
+	public static func unstageFiles(at repositoryPath: String, filePaths: [String]) async throws {
 		guard !filePaths.isEmpty else {
 			return
 		}
@@ -95,7 +95,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Stage Hunk
 
-	static func stageHunk(
+	public static func stageHunk(
 		at repositoryPath: String,
 		file: FileChange,
 		hunk: DiffHunk
@@ -111,7 +111,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Unstage Hunk
 
-	static func unstageHunk(
+	public static func unstageHunk(
 		at repositoryPath: String,
 		file: FileChange,
 		hunk: DiffHunk
@@ -127,7 +127,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Discard Hunk
 
-	static func discardHunk(
+	public static func discardHunk(
 		at repositoryPath: String,
 		file: FileChange,
 		hunk: DiffHunk
@@ -143,7 +143,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Discard File Changes
 
-	static func discardFileChanges(at repositoryPath: String, filePaths: [String]) async throws {
+	public static func discardFileChanges(at repositoryPath: String, filePaths: [String]) async throws {
 		guard !filePaths.isEmpty else {
 			return
 		}
@@ -158,7 +158,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Delete Conflicted Files
 
-	static func deleteConflictedFiles(at repositoryPath: String, filePaths: [String]) async throws {
+	public static func deleteConflictedFiles(at repositoryPath: String, filePaths: [String]) async throws {
 		guard !filePaths.isEmpty else {
 			return
 		}
@@ -172,7 +172,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Commit
 
-	static func commit(at path: String, message: String) async throws {
+	public static func commit(at path: String, message: String) async throws {
 		let result = await ProcessRunner.runGit(arguments: ["commit", "-m", message], at: path)
 		guard result.success else {
 			let errMsg = result.errorString.isEmpty ? result.outputString : result.errorString
@@ -182,7 +182,7 @@ nonisolated enum GitStagingHelper {
 
 	// MARK: - Delete Untracked Files
 
-	static func deleteUntrackedFiles(at repositoryPath: String, filePaths: [String]) async throws {
+	public static func deleteUntrackedFiles(at repositoryPath: String, filePaths: [String]) async throws {
 		guard !filePaths.isEmpty else {
 			return
 		}

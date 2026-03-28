@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - File Change Status
 
-enum FileChangeStatus: String, Equatable {
+public enum FileChangeStatus: String, Equatable {
 	case added = "A"
 	case modified = "M"
 	case deleted = "D"
@@ -12,7 +12,7 @@ enum FileChangeStatus: String, Equatable {
 	case typeChanged = "T"
 	case conflicted = "U"
 
-	var displayName: String {
+	public var displayName: String {
 		switch self {
 		case .added: "Added"
 		case .modified: "Modified"
@@ -25,7 +25,7 @@ enum FileChangeStatus: String, Equatable {
 		}
 	}
 
-	var iconName: String {
+	public var iconName: String {
 		switch self {
 		case .added: "plus.circle.fill"
 		case .modified: "pencil.circle.fill"
@@ -41,21 +41,21 @@ enum FileChangeStatus: String, Equatable {
 
 // MARK: - File Change
 
-nonisolated struct FileChange: Identifiable, Equatable {
-	let id: String
-	let path: String
-	let status: FileChangeStatus
-	let oldPath: String? // For renames
+public nonisolated struct FileChange: Identifiable, Equatable {
+	public let id: String
+	public let path: String
+	public let status: FileChangeStatus
+	public let oldPath: String? // For renames
 
-	var fileName: String {
+	public var fileName: String {
 		(path as NSString).lastPathComponent
 	}
 
-	var directoryPath: String {
+	public var directoryPath: String {
 		(path as NSString).deletingLastPathComponent
 	}
 
-	init(path: String, status: FileChangeStatus, oldPath: String? = nil) {
+	public init(path: String, status: FileChangeStatus, oldPath: String? = nil) {
 		self.id = path
 		self.path = path
 		self.status = status
@@ -65,20 +65,20 @@ nonisolated struct FileChange: Identifiable, Equatable {
 
 // MARK: - Diff Hunk
 
-nonisolated struct DiffHunk: Identifiable, Equatable {
-	let id: String
-	let header: String // e.g., "@@ -1,5 +1,6 @@"
-	let oldStart: Int
-	let oldCount: Int
-	let newStart: Int
-	let newCount: Int
-	let lines: [DiffLine]
+public nonisolated struct DiffHunk: Identifiable, Equatable {
+	public let id: String
+	public let header: String // e.g., "@@ -1,5 +1,6 @@"
+	public let oldStart: Int
+	public let oldCount: Int
+	public let newStart: Int
+	public let newCount: Int
+	public let lines: [DiffLine]
 
-	var patch: String {
+	public var patch: String {
 		([header] + lines.map(\.rawLine)).joined(separator: "\n")
 	}
 
-	init(header: String, oldStart: Int, oldCount: Int, newStart: Int, newCount: Int, lines: [DiffLine]) {
+	public init(header: String, oldStart: Int, oldCount: Int, newStart: Int, newCount: Int, lines: [DiffLine]) {
 		self.id = header
 		self.header = header
 		self.oldStart = oldStart
@@ -91,21 +91,21 @@ nonisolated struct DiffHunk: Identifiable, Equatable {
 
 // MARK: - Diff Line
 
-nonisolated struct DiffLine: Identifiable, Equatable {
-	enum LineType: Equatable {
+public nonisolated struct DiffLine: Identifiable, Equatable {
+	public enum LineType: Equatable {
 		case context
 		case addition
 		case deletion
 	}
 
-	let id: String
-	let rawLine: String
-	let type: LineType
-	let content: String
-	let oldLineNumber: Int?
-	let newLineNumber: Int?
+	public let id: String
+	public let rawLine: String
+	public let type: LineType
+	public let content: String
+	public let oldLineNumber: Int?
+	public let newLineNumber: Int?
 
-	init(rawLine: String, id: String, oldLineNumber: Int?, newLineNumber: Int?) {
+	public init(rawLine: String, id: String, oldLineNumber: Int?, newLineNumber: Int?) {
 		self.id = id
 		self.rawLine = rawLine
 		self.oldLineNumber = oldLineNumber
@@ -128,16 +128,16 @@ nonisolated struct DiffLine: Identifiable, Equatable {
 
 // MARK: - File Diff
 
-nonisolated struct FileDiff: Equatable {
-	let fileChange: FileChange
-	let hunks: [DiffHunk]
-	let isBinary: Bool
+public nonisolated struct FileDiff: Equatable {
+	public let fileChange: FileChange
+	public let hunks: [DiffHunk]
+	public let isBinary: Bool
 
-	var hasChanges: Bool {
+	public var hasChanges: Bool {
 		!hunks.isEmpty
 	}
 
-	init(fileChange: FileChange, hunks: [DiffHunk], isBinary: Bool = false) {
+	public init(fileChange: FileChange, hunks: [DiffHunk], isBinary: Bool = false) {
 		self.fileChange = fileChange
 		self.hunks = hunks
 		self.isBinary = isBinary

@@ -1,21 +1,27 @@
 import Foundation
 
-struct BranchInfo: Equatable, Hashable {
-	let name: String
-	let existsLocally: Bool
-	let existsRemotely: Bool
+public struct BranchInfo: Equatable, Hashable {
+	public let name: String
+	public let existsLocally: Bool
+	public let existsRemotely: Bool
 
-	var isRemoteOnly: Bool {
+	public var isRemoteOnly: Bool {
 		existsRemotely && !existsLocally
+	}
+
+	public init(name: String, existsLocally: Bool, existsRemotely: Bool) {
+		self.name = name
+		self.existsLocally = existsLocally
+		self.existsRemotely = existsRemotely
 	}
 }
 
-nonisolated enum GitBranchListHelper {
+public nonisolated enum GitBranchListHelper {
 
 	/// Lists all local and remote branches in the repository with their location info
 	/// - Parameter repositoryPath: The path to the Git repository
 	/// - Returns: Array of BranchInfo objects
-	static func listBranchesWithInfo(at repositoryPath: String) async -> [BranchInfo] {
+	public static func listBranchesWithInfo(at repositoryPath: String) async -> [BranchInfo] {
 		let result = await ProcessRunner.runGit(
 			arguments: [
 				"for-each-ref",

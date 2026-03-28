@@ -1,7 +1,7 @@
 import Foundation
 
 /// Unified error type for all Git operations
-enum GitError: LocalizedError, Equatable {
+public enum GitError: LocalizedError, Equatable {
 	case pullFailed(String)
 	case pushFailed(String)
 	case fetchFailed(String)
@@ -16,7 +16,7 @@ enum GitError: LocalizedError, Equatable {
 	case commitFailed(String)
 	case fileOperationFailed(String)
 
-	var errorDescription: String? {
+	public var errorDescription: String? {
 		switch self {
 		case let .pullFailed(message):
 			"Failed to pull: \(message)"

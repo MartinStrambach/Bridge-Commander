@@ -1,12 +1,17 @@
 import Foundation
 
-nonisolated enum GitPullHelper {
-	struct PullResult: Equatable {
-		let commitCount: Int
-		let isAlreadyUpToDate: Bool
+public nonisolated enum GitPullHelper {
+	public struct PullResult: Equatable {
+		public let commitCount: Int
+		public let isAlreadyUpToDate: Bool
+
+		public init(commitCount: Int, isAlreadyUpToDate: Bool) {
+			self.commitCount = commitCount
+			self.isAlreadyUpToDate = isAlreadyUpToDate
+		}
 	}
 
-	static func pull(at path: String) async throws -> PullResult {
+	public static func pull(at path: String) async throws -> PullResult {
 		let result = await ProcessRunner.runGit(
 			arguments: ["pull", "--prune"],
 			at: path
