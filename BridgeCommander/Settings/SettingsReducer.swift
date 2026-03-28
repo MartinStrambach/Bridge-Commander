@@ -58,6 +58,7 @@ struct SettingsReducer {
 		case setGroupSupportsAndroid(groupId: String, value: Bool)
 		case setGroupMobileSubfolderPath(groupId: String, path: String)
 		case setGroupIOSSubfolderPath(groupId: String, path: String)
+		case setGroupSupportsTuist(groupId: String, value: Bool)
 		case setTicketIdRegex(String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
@@ -102,6 +103,10 @@ struct SettingsReducer {
 
 			case let .setGroupIOSSubfolderPath(groupId, path):
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].iosSubfolderPath = path }
+				return .none
+
+			case let .setGroupSupportsTuist(groupId, value):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsTuist = value }
 				return .none
 
 			case let .setTicketIdRegex(regex):
