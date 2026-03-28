@@ -1,7 +1,7 @@
 // BridgeCommander/Models/RepoGroupSettings.swift
 import Foundation
 
-struct RepoGroupSettings: Codable, Equatable {
+nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
     var supportsIOS: Bool = false
     var supportsAndroid: Bool = false
     /// Configurable only when both supportsIOS && supportsAndroid.
