@@ -8,14 +8,6 @@ nonisolated extension SharedReaderKey where Self == AppStorageKey<String> {
 		appStorage("youtrackAuthToken")
 	}
 
-	static var iosSubfolderPath: Self {
-		appStorage("iosSubfolderPath")
-	}
-
-	static var mobileSubfolderPath: Self {
-		appStorage("mobileSubfolderPath")
-	}
-
 	static var ticketIdRegex: Self {
 		appStorage("ticketIdRegex")
 	}
@@ -78,6 +70,12 @@ nonisolated extension SharedReaderKey where Self == FileStorageKey<[String]> {
 
 	static var collapsedRepoPaths: Self {
 		.fileStorage(applicationSupportURL(name: "collapsedRepoPaths.json"))
+	}
+}
+
+nonisolated extension SharedReaderKey where Self == FileStorageKey<[String: RepoGroupSettings]> {
+	static var groupSettings: Self {
+		.fileStorage(applicationSupportURL(name: "groupSettings.json"))
 	}
 }
 
