@@ -43,6 +43,7 @@ struct RepositoryRowReducer {
 
 		var supportsIOS: Bool
 		var supportsAndroid: Bool
+		var supportsTuist: Bool
 		/// Empty when not (supportsIOS && supportsAndroid). Passed to Terminal, Claude Code, Android Studio.
 		var mobileSubfolderPath: String
 		/// Passed to Tuist and Xcode. Empty unless supportsIOS.
@@ -66,7 +67,8 @@ struct RepositoryRowReducer {
 			supportsIOS: Bool = false,
 			supportsAndroid: Bool = false,
 			mobileSubfolderPath: String = "",
-			iosSubfolderPath: String = ""
+			iosSubfolderPath: String = "",
+			supportsTuist: Bool = true
 		) {
 			self.id = path
 			self.path = path
@@ -90,6 +92,7 @@ struct RepositoryRowReducer {
 
 			self.supportsIOS = supportsIOS
 			self.supportsAndroid = supportsAndroid
+			self.supportsTuist = supportsTuist
 			self.mobileSubfolderPath = mobileSubfolderPath
 			self.iosSubfolderPath = iosSubfolderPath
 
