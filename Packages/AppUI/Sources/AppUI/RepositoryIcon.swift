@@ -1,10 +1,15 @@
 import SwiftUI
 
-struct RepositoryIcon: View {
-	let isWorktree: Bool
-	let isMergeInProgress: Bool
+public struct RepositoryIcon: View {
+	public let isWorktree: Bool
+	public let isMergeInProgress: Bool
 
-	var body: some View {
+	public init(isWorktree: Bool, isMergeInProgress: Bool) {
+		self.isWorktree = isWorktree
+		self.isMergeInProgress = isMergeInProgress
+	}
+
+	public var body: some View {
 		ZStack(alignment: .topTrailing) {
 			Image(systemName: isWorktree ? "tree.fill" : "folder.badge.gearshape")
 				.font(.title2)

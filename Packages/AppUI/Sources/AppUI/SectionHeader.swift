@@ -1,12 +1,19 @@
 import SwiftUI
 
-struct SectionHeader: View {
-	let title: String
-	let count: Int
-	var actionTitle: String?
-	var action: (() -> Void)?
+public struct SectionHeader: View {
+	public let title: String
+	public let count: Int
+	public var actionTitle: String?
+	public var action: (() -> Void)?
 
-	var body: some View {
+	public init(title: String, count: Int, actionTitle: String? = nil, action: (() -> Void)? = nil) {
+		self.title = title
+		self.count = count
+		self.actionTitle = actionTitle
+		self.action = action
+	}
+
+	public var body: some View {
 		HStack {
 			Text(title)
 				.font(.headline)

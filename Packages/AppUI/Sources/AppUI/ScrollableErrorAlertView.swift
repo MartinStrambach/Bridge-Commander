@@ -4,21 +4,29 @@ import SwiftUI
 // MARK: - GitAlertReducer
 
 @Reducer
-struct GitAlertReducer {
+public struct GitAlertReducer: Sendable {
 	@ObservableState
-	struct State: Equatable {
-		let title: String
-		let message: String
-		let isError: Bool
+	public struct State: Equatable {
+		public let title: String
+		public let message: String
+		public let isError: Bool
+
+		public init(title: String, message: String, isError: Bool) {
+			self.title = title
+			self.message = message
+			self.isError = isError
+		}
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case dismissTapped
 	}
 
 	@Dependency(\.dismiss) var dismiss
 
-	var body: some Reducer<State, Action> {
+	public init() {}
+
+	public var body: some Reducer<State, Action> {
 		Reduce { _, action in
 			switch action {
 			case .dismissTapped:
@@ -30,10 +38,14 @@ struct GitAlertReducer {
 
 // MARK: - ScrollableAlertView
 
-struct ScrollableAlertView: View {
-	let store: StoreOf<GitAlertReducer>
+public struct ScrollableAlertView: View {
+	public let store: StoreOf<GitAlertReducer>
 
-	var body: some View {
+	public init(store: StoreOf<GitAlertReducer>) {
+		self.store = store
+	}
+
+	public var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			HStack(alignment: .center, spacing: 12) {
 				Image(systemName: store.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")

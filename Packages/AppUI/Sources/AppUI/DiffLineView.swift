@@ -1,11 +1,12 @@
+import GitCore
 import SwiftUI
 
-struct DiffLineView: View {
-	let line: DiffLine
-	let oldLineNumber: Int?
-	let newLineNumber: Int?
-	let isSelected: Bool
-	let onTap: (EventModifiers) -> Void
+public struct DiffLineView: View {
+	public let line: DiffLine
+	public let oldLineNumber: Int?
+	public let newLineNumber: Int?
+	public let isSelected: Bool
+	public let onTap: (EventModifiers) -> Void
 
 	private var linePrefix: String {
 		switch line.type {
@@ -34,7 +35,15 @@ struct DiffLineView: View {
 		}
 	}
 
-	var body: some View {
+	public init(line: DiffLine, oldLineNumber: Int?, newLineNumber: Int?, isSelected: Bool, onTap: @escaping (EventModifiers) -> Void) {
+		self.line = line
+		self.oldLineNumber = oldLineNumber
+		self.newLineNumber = newLineNumber
+		self.isSelected = isSelected
+		self.onTap = onTap
+	}
+
+	public var body: some View {
 		HStack(spacing: 0) {
 			// Old line number
 			Text(oldLineNumber.map { String($0) } ?? "")

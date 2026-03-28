@@ -1,9 +1,8 @@
-import ComposableArchitecture
 import SwiftUI
 
 /// Reusable tool button component for repository row tool actions
-struct ToolButton: View {
-	enum ButtonIcon {
+public struct ToolButton: View {
+	public enum ButtonIcon {
 		case systemImage(String)
 		case customImage(String)
 	}
@@ -18,7 +17,7 @@ struct ToolButton: View {
 	private let buttonSize: CGFloat = 65
 	private let iconSize: CGFloat = 25
 
-	var body: some View {
+	public var body: some View {
 		Button(action: action) {
 			VStack(spacing: 4) {
 				if isProcessing {
@@ -63,7 +62,7 @@ struct ToolButton: View {
 		.help(tooltip)
 	}
 
-	init(
+	public init(
 		label: String,
 		icon: ButtonIcon,
 		tooltip: String,

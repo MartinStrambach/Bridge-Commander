@@ -1,11 +1,12 @@
+import GitCore
 import SwiftUI
 
-struct FileChangeRow: View {
-	let file: FileChange
-	let isStaged: Bool
-	let selectedFileIds: Set<String>
-	let onToggle: () -> Void
-	let onToggleSelected: () -> Void
+public struct FileChangeRow: View {
+	public let file: FileChange
+	public let isStaged: Bool
+	public let selectedFileIds: Set<String>
+	public let onToggle: () -> Void
+	public let onToggleSelected: () -> Void
 
 	private var statusColor: Color {
 		switch file.status {
@@ -26,7 +27,15 @@ struct FileChangeRow: View {
 		}
 	}
 
-	var body: some View {
+	public init(file: FileChange, isStaged: Bool, selectedFileIds: Set<String>, onToggle: @escaping () -> Void, onToggleSelected: @escaping () -> Void) {
+		self.file = file
+		self.isStaged = isStaged
+		self.selectedFileIds = selectedFileIds
+		self.onToggle = onToggle
+		self.onToggleSelected = onToggleSelected
+	}
+
+	public var body: some View {
 		HStack(spacing: 8) {
 			// Checkbox
 			Button(action: handleToggle) {

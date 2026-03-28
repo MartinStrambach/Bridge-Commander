@@ -3,7 +3,7 @@ import Foundation
 
 extension AlertState {
 	/// Creates a simple alert with a title, message, and OK button
-	static func okAlert(title: String, message: String) -> Self {
+	public static func okAlert(title: String, message: String) -> Self {
 		AlertState {
 			TextState(title)
 		} actions: {

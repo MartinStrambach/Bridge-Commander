@@ -2,19 +2,43 @@ import SwiftUI
 
 /// A reusable colored banner with an icon, title, optional subtitle, an optional action button, and an optional dismiss
 /// button.
-struct BannerView: View {
-	let icon: String
-	let title: String
-	var subtitle: String?
-	var color: Color = .orange
-	var actionLabel: String?
-	var actionSystemImage: String?
-	var actionHelp: String?
-	var isLoading = false
-	var onAction: (() -> Void)?
-	var onDismiss: (() -> Void)?
+public struct BannerView: View {
+	public let icon: String
+	public let title: String
+	public var subtitle: String?
+	public var color: Color = .orange
+	public var actionLabel: String?
+	public var actionSystemImage: String?
+	public var actionHelp: String?
+	public var isLoading = false
+	public var onAction: (() -> Void)?
+	public var onDismiss: (() -> Void)?
 
-	var body: some View {
+	public init(
+		icon: String,
+		title: String,
+		subtitle: String? = nil,
+		color: Color = .orange,
+		actionLabel: String? = nil,
+		actionSystemImage: String? = nil,
+		actionHelp: String? = nil,
+		isLoading: Bool = false,
+		onAction: (() -> Void)? = nil,
+		onDismiss: (() -> Void)? = nil
+	) {
+		self.icon = icon
+		self.title = title
+		self.subtitle = subtitle
+		self.color = color
+		self.actionLabel = actionLabel
+		self.actionSystemImage = actionSystemImage
+		self.actionHelp = actionHelp
+		self.isLoading = isLoading
+		self.onAction = onAction
+		self.onDismiss = onDismiss
+	}
+
+	public var body: some View {
 		HStack(spacing: 8) {
 			Image(systemName: icon)
 				.foregroundStyle(color)

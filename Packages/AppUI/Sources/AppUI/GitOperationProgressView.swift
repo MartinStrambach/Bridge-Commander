@@ -1,12 +1,18 @@
 import SwiftUI
 
 /// Reusable progress indicator view for git operations
-struct GitOperationProgressView: View {
-	let text: String
-	let color: Color
-	let helpText: String
+public struct GitOperationProgressView: View {
+	public let text: String
+	public let color: Color
+	public let helpText: String
 
-	var body: some View {
+	public init(text: String, color: Color, helpText: String) {
+		self.text = text
+		self.color = color
+		self.helpText = helpText
+	}
+
+	public var body: some View {
 		HStack(spacing: 6) {
 			ProgressView()
 				.controlSize(.small)

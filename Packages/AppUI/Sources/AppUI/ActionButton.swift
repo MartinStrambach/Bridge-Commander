@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Reusable action button component for repository row actions
-struct ActionButton: View {
-	enum ButtonIcon {
+public struct ActionButton: View {
+	public enum ButtonIcon {
 		case systemImage(String)
 		case customImage(String)
 	}
@@ -12,7 +12,7 @@ struct ActionButton: View {
 	private let color: Color?
 	private let action: () -> Void
 
-	var body: some View {
+	public var body: some View {
 		Button(action: action) {
 			Group {
 				switch icon {
@@ -35,7 +35,7 @@ struct ActionButton: View {
 		.help(tooltip)
 	}
 
-	init(
+	public init(
 		icon: ButtonIcon,
 		tooltip: String,
 		color: Color? = nil,

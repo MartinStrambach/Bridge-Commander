@@ -1,13 +1,13 @@
 import SwiftUI
 
 /// Reusable button component for header actions
-struct HeaderButton: View {
+public struct HeaderButton: View {
 	private let icon: String
 	private let tooltip: String
 	private let color: Color
 	private let action: () -> Void
 
-	var body: some View {
+	public var body: some View {
 		Button(action: action) {
 			Image(systemName: icon)
 				.font(.system(size: 16))
@@ -18,7 +18,7 @@ struct HeaderButton: View {
 		.help(tooltip)
 	}
 
-	init(
+	public init(
 		icon: String,
 		tooltip: String,
 		color: Color = .gray,

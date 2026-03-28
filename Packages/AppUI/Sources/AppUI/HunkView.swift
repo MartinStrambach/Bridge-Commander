@@ -1,15 +1,26 @@
+import GitCore
 import SwiftUI
 
-struct HunkView: View {
-	let hunk: DiffHunk
-	let isStaged: Bool
-	let selectedLineIDs: Set<DiffLine.ID>
-	let onStage: () -> Void
-	let onUnstage: () -> Void
-	let onDiscard: () -> Void
-	let onLineTap: (DiffLine, EventModifiers) -> Void
+public struct HunkView: View {
+	public let hunk: DiffHunk
+	public let isStaged: Bool
+	public let selectedLineIDs: Set<DiffLine.ID>
+	public let onStage: () -> Void
+	public let onUnstage: () -> Void
+	public let onDiscard: () -> Void
+	public let onLineTap: (DiffLine, EventModifiers) -> Void
 
-	var body: some View {
+	public init(hunk: DiffHunk, isStaged: Bool, selectedLineIDs: Set<DiffLine.ID>, onStage: @escaping () -> Void, onUnstage: @escaping () -> Void, onDiscard: @escaping () -> Void, onLineTap: @escaping (DiffLine, EventModifiers) -> Void) {
+		self.hunk = hunk
+		self.isStaged = isStaged
+		self.selectedLineIDs = selectedLineIDs
+		self.onStage = onStage
+		self.onUnstage = onUnstage
+		self.onDiscard = onDiscard
+		self.onLineTap = onLineTap
+	}
+
+	public var body: some View {
 		VStack(alignment: .leading, spacing: 0) {
 			// Hunk Header with Actions
 			HStack {

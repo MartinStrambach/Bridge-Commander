@@ -2,11 +2,16 @@
 import AppKit
 import SwiftUI
 
-struct WindowMinSizeModifier: ViewModifier {
-	let minWidth: CGFloat
-	let minHeight: CGFloat
+public struct WindowMinSizeModifier: ViewModifier {
+	public let minWidth: CGFloat
+	public let minHeight: CGFloat
 
-	func body(content: Content) -> some View {
+	public init(minWidth: CGFloat, minHeight: CGFloat) {
+		self.minWidth = minWidth
+		self.minHeight = minHeight
+	}
+
+	public func body(content: Content) -> some View {
 		content.background(
 			WindowMinSizeHelper(minWidth: minWidth, minHeight: minHeight)
 		)
@@ -14,7 +19,7 @@ struct WindowMinSizeModifier: ViewModifier {
 }
 
 extension View {
-	func windowMinSize(width: CGFloat, height: CGFloat) -> some View {
+	public func windowMinSize(width: CGFloat, height: CGFloat) -> some View {
 		modifier(WindowMinSizeModifier(minWidth: width, minHeight: height))
 	}
 }

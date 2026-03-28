@@ -1,10 +1,15 @@
 import SwiftUI
 
-struct HunkActionButton: View {
-	let title: String
-	let action: () -> Void
+public struct HunkActionButton: View {
+	public let title: String
+	public let action: () -> Void
 
-	var body: some View {
+	public init(title: String, action: @escaping () -> Void) {
+		self.title = title
+		self.action = action
+	}
+
+	public var body: some View {
 		Button(action: action) {
 			Text(title)
 				.font(.caption)

@@ -1,22 +1,31 @@
 import AppKit
+import GitCore
 import SwiftUI
 
-struct DiffViewer: View {
+public struct DiffViewer: View {
 	@State private var selectedLineIDs: Set<DiffLine.ID> = []
 	@State private var anchorLineID: DiffLine.ID? = nil
 	@FocusState private var isFocused: Bool
 
-	let diff: FileDiff
-	let isStaged: Bool
-	let onStageHunk: (DiffHunk) -> Void
-	let onUnstageHunk: (DiffHunk) -> Void
-	let onDiscardHunk: (DiffHunk) -> Void
+	public let diff: FileDiff
+	public let isStaged: Bool
+	public let onStageHunk: (DiffHunk) -> Void
+	public let onUnstageHunk: (DiffHunk) -> Void
+	public let onDiscardHunk: (DiffHunk) -> Void
 
 	private var allLines: [DiffLine] {
 		diff.hunks.flatMap(\.lines)
 	}
 
-	var body: some View {
+	public init(diff: FileDiff, isStaged: Bool, onStageHunk: @escaping (DiffHunk) -> Void, onUnstageHunk: @escaping (DiffHunk) -> Void, onDiscardHunk: @escaping (DiffHunk) -> Void) {
+		self.diff = diff
+		self.isStaged = isStaged
+		self.onStageHunk = onStageHunk
+		self.onUnstageHunk = onUnstageHunk
+		self.onDiscardHunk = onDiscardHunk
+	}
+
+	public var body: some View {
 		ScrollView {
 			LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
 				// Header
