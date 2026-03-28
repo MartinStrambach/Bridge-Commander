@@ -12,6 +12,7 @@ struct RepoGroupReducer {
 		var header: RepositoryRowReducer.State
 		/// Worktree rows, sorted by the active sortMode.
 		var worktrees: IdentifiedArrayOf<RepositoryRowReducer.State>
+		var settings: RepoGroupSettings
 	}
 
 	enum Action {
