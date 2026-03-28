@@ -16,8 +16,6 @@ struct SettingsView: View {
 
 				youtrackAuthenticationSection
 				repositoryRefreshSection
-				iosSubfolderSection
-				mobileSubfolderSection
 				ticketIdRegexSection
 				branchNameRegexSection
 				HStack(alignment: .top) {
@@ -31,6 +29,7 @@ struct SettingsView: View {
 				terminalColorThemeSection
 				androidStudioPathSection
 				worktreeOptionsSection
+				repositoryGroupsSection
 			}
 			.padding()
 		}
@@ -160,26 +159,6 @@ struct SettingsView: View {
 		.cornerRadius(8)
 	}
 
-	private var iosSubfolderSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("iOS Project Subfolder")
-				.font(.headline)
-
-			Text(
-				"Specify the subfolder path within repositories where Tuist and Xcode actions should be executed (e.g., 'ios/FlashScore')."
-			)
-			.font(.caption)
-			.foregroundColor(.secondary)
-
-			TextField("iOS Subfolder Path", text: $store.iosSubfolderPath.sending(\.setIosSubfolderPath))
-				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
 	private var ticketIdRegexSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Ticket ID Regex Pattern")
@@ -302,26 +281,6 @@ struct SettingsView: View {
 		.cornerRadius(8)
 	}
 
-	private var mobileSubfolderSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Mobile Project Subfolder")
-				.font(.headline)
-
-			Text(
-				"Specify the subfolder path within repositories where Android Studio should be opened (e.g., 'android/App')."
-			)
-			.font(.caption)
-			.foregroundColor(.secondary)
-
-			TextField("Mobile Subfolder Path", text: $store.mobileSubfolderPath.sending(\.setMobileSubfolderPath))
-				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
 	private var androidStudioPathSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Android Studio Path")
@@ -340,6 +299,86 @@ struct SettingsView: View {
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
 		.cornerRadius(8)
+	}
+
+	private var repositoryGroupsSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Repository Groups")
+				.font(.headline)
+
+			Text("Configure which platforms each repository group supports.")
+				.font(.caption)
+				.foregroundColor(.secondary)
+
+			if store.trackedRepoPaths.isEmpty {
+				Text("No repositories tracked yet.")
+					.font(.caption)
+					.foregroundColor(.secondary)
+			} else {
+				ForEach(store.trackedRepoPaths, id: \.self) { groupId in
+					repoGroupRow(groupId: groupId)
+				}
+			}
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private func repoGroupRow(groupId: String) -> some View {
+		let settings = store.groupSettings[groupId] ?? RepoGroupSettings()
+		let groupName = URL(fileURLWithPath: groupId).lastPathComponent
+
+		return VStack(alignment: .leading, spacing: 8) {
+			Text(groupName)
+				.font(.subheadline)
+				.fontWeight(.semibold)
+
+			HStack(spacing: 20) {
+				Toggle("iOS", isOn: Binding(
+					get: { settings.supportsIOS },
+					set: { store.send(.setGroupSupportsIOS(groupId: groupId, value: $0)) }
+				))
+
+				Toggle("Android", isOn: Binding(
+					get: { settings.supportsAndroid },
+					set: { store.send(.setGroupSupportsAndroid(groupId: groupId, value: $0)) }
+				))
+			}
+
+			if settings.supportsIOS {
+				HStack {
+					Text("iOS Subfolder Path")
+						.font(.caption)
+						.foregroundColor(.secondary)
+						.frame(width: 140, alignment: .leading)
+					TextField("e.g. ios/MyApp", text: Binding(
+						get: { settings.iosSubfolderPath },
+						set: { store.send(.setGroupIOSSubfolderPath(groupId: groupId, path: $0)) }
+					))
+					.textFieldStyle(.roundedBorder)
+					.font(.system(.body, design: .monospaced))
+				}
+			}
+
+			if settings.supportsIOS && settings.supportsAndroid {
+				HStack {
+					Text("Mobile Subfolder Path")
+						.font(.caption)
+						.foregroundColor(.secondary)
+						.frame(width: 140, alignment: .leading)
+					TextField("e.g. mobile/App", text: Binding(
+						get: { settings.mobileSubfolderPath },
+						set: { store.send(.setGroupMobileSubfolderPath(groupId: groupId, path: $0)) }
+					))
+					.textFieldStyle(.roundedBorder)
+					.font(.system(.body, design: .monospaced))
+				}
+			}
+		}
+		.padding(10)
+		.background(Color(NSColor.windowBackgroundColor))
+		.cornerRadius(6)
 	}
 }
 
