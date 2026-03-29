@@ -8,8 +8,7 @@ struct TerminalButtonView: View {
 	let store: StoreOf<TerminalButtonReducer>
 
 	var body: some View {
-		ToolButton(
-			label: "Terminal",
+		ActionButton(
 			icon: .systemImage("terminal"),
 			tooltip: "Open terminal at repository location",
 			action: { store.send(.openTerminalButtonTapped) }
