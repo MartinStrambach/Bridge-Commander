@@ -39,7 +39,7 @@ struct FileChangeListView: View {
 				) {
 					ForEach(store.files) { file in
 						FileChangeRow(
-							file: file,
+							file: file.toAppUI(),
 							isStaged: store.listType == .staged,
 							selectedFileIds: store.selectedFileIds,
 							onToggle: { store.send(.delegate(.toggleAll([file]))) },

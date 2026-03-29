@@ -7,15 +7,27 @@ struct FileDiffViewerView: View {
 	let store: StoreOf<FileDiffViewer>
 
 	var body: some View {
-		if let diff = store.fileDiff {
+		if let gitDiff = store.fileDiff {
 			DiffViewer(
-				diff: diff,
+				diff: gitDiff.toAppUI(),
 				isStaged: store.fileIsStaged ?? false,
-				onStageHunk: { store.send(.stageHunk($0)) },
-				onUnstageHunk: { store.send(.unstageHunk($0)) },
-				onDiscardHunk: { store.send(.discardHunk($0)) }
+				onStageHunk: { appUIHunk in
+					if let hunk = gitDiff.hunks.first(where: { $0.id == appUIHunk.id }) {
+						store.send(.stageHunk(hunk))
+					}
+				},
+				onUnstageHunk: { appUIHunk in
+					if let hunk = gitDiff.hunks.first(where: { $0.id == appUIHunk.id }) {
+						store.send(.unstageHunk(hunk))
+					}
+				},
+				onDiscardHunk: { appUIHunk in
+					if let hunk = gitDiff.hunks.first(where: { $0.id == appUIHunk.id }) {
+						store.send(.discardHunk(hunk))
+					}
+				}
 			)
-			.id(diff.fileChange.id)
+			.id(gitDiff.fileChange.id)
 		}
 		else {
 			EmptyStateView(

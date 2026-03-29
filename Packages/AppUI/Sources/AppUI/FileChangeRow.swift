@@ -1,4 +1,3 @@
-import GitCore
 import SwiftUI
 
 public struct FileChangeRow: View {

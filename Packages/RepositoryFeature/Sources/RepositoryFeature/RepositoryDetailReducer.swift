@@ -1,9 +1,12 @@
+import AppUI
 import ComposableArchitecture
 import Foundation
-import AppUI
 import GitCore
 import Settings
 import ToolsIntegration
+
+typealias FileChange = GitCore.FileChange
+typealias FileChangeStatus = GitCore.FileChangeStatus
 
 @Reducer
 struct RepositoryDetail: Sendable {

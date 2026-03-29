@@ -1,5 +1,4 @@
 import AppKit
-import GitCore
 import SwiftUI
 
 public struct DiffViewer: View {
