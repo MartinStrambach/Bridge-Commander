@@ -6,7 +6,7 @@ import Settings
 import ToolsIntegration
 
 @Reducer
-struct RepositoryDetail: @unchecked Sendable {
+struct RepositoryDetail: Sendable {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String

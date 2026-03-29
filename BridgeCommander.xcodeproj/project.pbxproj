@@ -3,12 +3,18 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 100;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 93351C4A2ECF9BAE006D4609 /* ComposableArchitecture */; };
 		933DE50A2F6AB3920045D622 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 933DE5092F6AB3920045D622 /* SwiftTerm */; };
+		93B04CFC2F793324008328A2 /* GitCore in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04CFB2F793324008328A2 /* GitCore */; };
+		93B04CFF2F793341008328A2 /* AppUI in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04CFE2F793341008328A2 /* AppUI */; };
+		93B04D022F7933BD008328A2 /* Settings in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04D012F7933BD008328A2 /* Settings */; };
+		93B04D052F7933CA008328A2 /* ToolsIntegration in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04D042F7933CA008328A2 /* ToolsIntegration */; };
+		93B04D082F7933D7008328A2 /* TerminalFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04D072F7933D7008328A2 /* TerminalFeature */; };
+		93B04D0B2F7933E3008328A2 /* RepositoryFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04D0A2F7933E3008328A2 /* RepositoryFeature */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,10 +32,18 @@
 /* Begin PBXFrameworksBuildPhase section */
 		93351BB12ECD3F1A006D4609 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
+				93B04CFF2F793341008328A2 /* AppUI in Frameworks */,
+				93B04D022F7933BD008328A2 /* Settings in Frameworks */,
+				93B04CFC2F793324008328A2 /* GitCore in Frameworks */,
+				93B04D082F7933D7008328A2 /* TerminalFeature in Frameworks */,
 				933DE50A2F6AB3920045D622 /* SwiftTerm in Frameworks */,
+				93B04D0B2F7933E3008328A2 /* RepositoryFeature in Frameworks */,
 				93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */,
+				93B04D052F7933CA008328A2 /* ToolsIntegration in Frameworks */,
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -63,6 +77,8 @@
 			);
 			buildRules = (
 			);
+			dependencies = (
+			);
 			fileSystemSynchronizedGroups = (
 				93351BB62ECD3F1A006D4609 /* BridgeCommander */,
 			);
@@ -70,6 +86,12 @@
 			packageProductDependencies = (
 				93351C4A2ECF9BAE006D4609 /* ComposableArchitecture */,
 				933DE5092F6AB3920045D622 /* SwiftTerm */,
+				93B04CFB2F793324008328A2 /* GitCore */,
+				93B04CFE2F793341008328A2 /* AppUI */,
+				93B04D012F7933BD008328A2 /* Settings */,
+				93B04D042F7933CA008328A2 /* ToolsIntegration */,
+				93B04D072F7933D7008328A2 /* TerminalFeature */,
+				93B04D0A2F7933E3008328A2 /* RepositoryFeature */,
 			);
 			productName = BridgeCommander;
 			productReference = 93351BB42ECD3F1A006D4609 /* BridgeCommander.app */;
@@ -102,6 +124,12 @@
 			packageReferences = (
 				93351C492ECF9BAD006D4609 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
 				933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				93B04CFA2F793324008328A2 /* XCLocalSwiftPackageReference "Packages/GitCore" */,
+				93B04CFD2F793341008328A2 /* XCLocalSwiftPackageReference "Packages/AppUI" */,
+				93B04D002F7933BD008328A2 /* XCLocalSwiftPackageReference "Packages/Settings" */,
+				93B04D032F7933CA008328A2 /* XCLocalSwiftPackageReference "Packages/ToolsIntegration" */,
+				93B04D062F7933D7008328A2 /* XCLocalSwiftPackageReference "Packages/TerminalFeature" */,
+				93B04D092F7933E3008328A2 /* XCLocalSwiftPackageReference "Packages/RepositoryFeature" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 93351BB52ECD3F1A006D4609 /* Products */;
@@ -116,21 +144,25 @@
 /* Begin PBXResourcesBuildPhase section */
 		93351BB22ECD3F1A006D4609 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		93351BB02ECD3F1A006D4609 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		93351BBD2ECD3F1B006D4609 /* Debug configuration for PBXProject "BridgeCommander" */ = {
+		93351BBD2ECD3F1B006D4609 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -195,7 +227,7 @@
 			};
 			name = Debug;
 		};
-		93351BBE2ECD3F1B006D4609 /* Release configuration for PBXProject "BridgeCommander" */ = {
+		93351BBE2ECD3F1B006D4609 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -253,7 +285,7 @@
 			};
 			name = Release;
 		};
-		93351BC02ECD3F1B006D4609 /* Debug configuration for PBXNativeTarget "BridgeCommander" */ = {
+		93351BC02ECD3F1B006D4609 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -288,7 +320,7 @@
 			};
 			name = Debug;
 		};
-		93351BC12ECD3F1B006D4609 /* Release configuration for PBXNativeTarget "BridgeCommander" */ = {
+		93351BC12ECD3F1B006D4609 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -330,20 +362,49 @@
 		93351BAF2ECD3F1A006D4609 /* Build configuration list for PBXProject "BridgeCommander" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				93351BBD2ECD3F1B006D4609 /* Debug configuration for PBXProject "BridgeCommander" */,
-				93351BBE2ECD3F1B006D4609 /* Release configuration for PBXProject "BridgeCommander" */,
+				93351BBD2ECD3F1B006D4609 /* Debug */,
+				93351BBE2ECD3F1B006D4609 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		93351BBF2ECD3F1B006D4609 /* Build configuration list for PBXNativeTarget "BridgeCommander" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				93351BC02ECD3F1B006D4609 /* Debug configuration for PBXNativeTarget "BridgeCommander" */,
-				93351BC12ECD3F1B006D4609 /* Release configuration for PBXNativeTarget "BridgeCommander" */,
+				93351BC02ECD3F1B006D4609 /* Debug */,
+				93351BC12ECD3F1B006D4609 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		93B04CFA2F793324008328A2 /* XCLocalSwiftPackageReference "Packages/GitCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/GitCore;
+		};
+		93B04CFD2F793341008328A2 /* XCLocalSwiftPackageReference "Packages/AppUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/AppUI;
+		};
+		93B04D002F7933BD008328A2 /* XCLocalSwiftPackageReference "Packages/Settings" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/Settings;
+		};
+		93B04D032F7933CA008328A2 /* XCLocalSwiftPackageReference "Packages/ToolsIntegration" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ToolsIntegration;
+		};
+		93B04D062F7933D7008328A2 /* XCLocalSwiftPackageReference "Packages/TerminalFeature" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/TerminalFeature;
+		};
+		93B04D092F7933E3008328A2 /* XCLocalSwiftPackageReference "Packages/RepositoryFeature" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RepositoryFeature;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		93351C492ECF9BAD006D4609 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
@@ -354,8 +415,6 @@
 				version = 1.25.3;
 			};
 			traits = (
-				ComposableArchitecture2DeprecationOverloads,
-				ComposableArchitecture2Deprecations,
 			);
 		};
 		933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
@@ -378,6 +437,30 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
 			productName = SwiftTerm;
+		};
+		93B04CFB2F793324008328A2 /* GitCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = GitCore;
+		};
+		93B04CFE2F793341008328A2 /* AppUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AppUI;
+		};
+		93B04D012F7933BD008328A2 /* Settings */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Settings;
+		};
+		93B04D042F7933CA008328A2 /* ToolsIntegration */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ToolsIntegration;
+		};
+		93B04D072F7933D7008328A2 /* TerminalFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TerminalFeature;
+		};
+		93B04D0A2F7933E3008328A2 /* RepositoryFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RepositoryFeature;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
