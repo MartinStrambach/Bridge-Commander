@@ -635,7 +635,8 @@ private func buildGroup(
 			mobileSubfolderPath: effectiveMobileSubfolder,
 			iosSubfolderPath: settings.iosSubfolderPath,
 			supportsTuist: settings.supportsTuist,
-			ticketIdRegex: settings.ticketIdRegex
+			ticketIdRegex: settings.ticketIdRegex,
+			xcodeFilePreference: settings.xcodeFilePreference
 		)
 	}
 	guard let header = allRows.first(where: { !$0.isWorktree }) else {
@@ -691,7 +692,8 @@ private func mergeGroupRows(
 				mobileSubfolderPath: effectiveMobileSubfolder,
 				iosSubfolderPath: rowSettings.iosSubfolderPath,
 				supportsTuist: rowSettings.supportsTuist,
-				ticketIdRegex: rowSettings.ticketIdRegex
+				ticketIdRegex: rowSettings.ticketIdRegex,
+				xcodeFilePreference: rowSettings.xcodeFilePreference
 			))
 		}
 	}
@@ -776,6 +778,7 @@ private func applySettings(
 	row.shareButton.updateTicketURL(newTicketURL)
 	row.tuistButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.xcodeButton.iosSubfolderPath = settings.iosSubfolderPath
+	row.xcodeButton.xcodeFilePreference = settings.xcodeFilePreference
 	row.androidStudioButton.mobileSubfolderPath = effectiveMobileSubfolder
 	row.terminalButton.mobileSubfolderPath = effectiveMobileSubfolder
 	row.claudeCodeButton.mobileSubfolderPath = effectiveMobileSubfolder

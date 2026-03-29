@@ -1,4 +1,5 @@
 import Foundation
+import ToolsIntegration
 
 public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	public var supportsIOS: Bool = false
@@ -15,6 +16,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	/// When empty, ticket parsing is disabled — ticket button, YouTrack fetch, and branch formatting are all
 	/// suppressed.
 	public var ticketIdRegex: String = ""
+	/// Controls whether the Xcode button prefers .xcworkspace, .xcodeproj, or auto-detects.
+	public var xcodeFilePreference: XcodeFilePreference = .auto
 
 	/// Memberwise initializer with default values
 	public init(
@@ -23,7 +26,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		mobileSubfolderPath: String = "",
 		iosSubfolderPath: String = "",
 		supportsTuist: Bool = false,
-		ticketIdRegex: String = ""
+		ticketIdRegex: String = "",
+		xcodeFilePreference: XcodeFilePreference = .auto
 	) {
 		self.supportsIOS = supportsIOS
 		self.supportsAndroid = supportsAndroid
@@ -31,6 +35,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.iosSubfolderPath = iosSubfolderPath
 		self.supportsTuist = supportsTuist
 		self.ticketIdRegex = ticketIdRegex
+		self.xcodeFilePreference = xcodeFilePreference
 	}
 
 	// Custom decoder: uses decodeIfPresent so keys missing from older JSON
@@ -49,5 +54,6 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.iosSubfolderPath = try c.decodeIfPresent(String.self, forKey: .iosSubfolderPath) ?? ""
 		self.supportsTuist = try c.decodeIfPresent(Bool.self, forKey: .supportsTuist) ?? false
 		self.ticketIdRegex = try c.decodeIfPresent(String.self, forKey: .ticketIdRegex) ?? ""
+		self.xcodeFilePreference = try c.decodeIfPresent(XcodeFilePreference.self, forKey: .xcodeFilePreference) ?? .auto
 	}
 }

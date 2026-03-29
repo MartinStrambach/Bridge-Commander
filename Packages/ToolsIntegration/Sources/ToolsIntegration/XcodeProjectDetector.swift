@@ -1,5 +1,19 @@
 import Foundation
 
+public enum XcodeFilePreference: String, Codable, Equatable, Sendable, CaseIterable {
+	case auto
+	case workspace
+	case project
+
+	public var displayName: String {
+		switch self {
+		case .auto: "Auto"
+		case .workspace: "Workspace"
+		case .project: "Project"
+		}
+	}
+}
+
 public nonisolated enum XcodeProjectDetector {
 
 	/// Finds an Xcode workspace or project in the configured iOS subfolder
@@ -8,7 +22,11 @@ public nonisolated enum XcodeProjectDetector {
 	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	/// - Returns: Path to .xcworkspace or .xcodeproj, or nil if not found
 	/// - Note: Prioritizes .xcworkspace over .xcodeproj
-	public static func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String? {
+	public static func findXcodeProject(
+		in repositoryPath: String,
+		iosSubfolderPath: String,
+		preference: XcodeFilePreference = .auto
+	) -> String? {
 		let fileManager = FileManager.default
 
 		// Build path to iOS subfolder
@@ -28,14 +46,22 @@ public nonisolated enum XcodeProjectDetector {
 			return nil
 		}
 
-		// Priority 1: Look for .xcworkspace
-		if let workspace = contents.first(where: { $0.hasSuffix(".xcworkspace") }) {
-			return (iosFlashscorePath as NSString).appendingPathComponent(workspace)
-		}
-
-		// Priority 2: Look for .xcodeproj
-		if let project = contents.first(where: { $0.hasSuffix(".xcodeproj") }) {
-			return (iosFlashscorePath as NSString).appendingPathComponent(project)
+		switch preference {
+		case .auto:
+			if let workspace = contents.first(where: { $0.hasSuffix(".xcworkspace") }) {
+				return (iosFlashscorePath as NSString).appendingPathComponent(workspace)
+			}
+			if let project = contents.first(where: { $0.hasSuffix(".xcodeproj") }) {
+				return (iosFlashscorePath as NSString).appendingPathComponent(project)
+			}
+		case .workspace:
+			if let workspace = contents.first(where: { $0.hasSuffix(".xcworkspace") }) {
+				return (iosFlashscorePath as NSString).appendingPathComponent(workspace)
+			}
+		case .project:
+			if let project = contents.first(where: { $0.hasSuffix(".xcodeproj") }) {
+				return (iosFlashscorePath as NSString).appendingPathComponent(project)
+			}
 		}
 
 		return nil

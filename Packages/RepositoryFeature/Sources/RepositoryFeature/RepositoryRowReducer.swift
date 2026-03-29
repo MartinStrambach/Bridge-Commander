@@ -74,7 +74,8 @@ struct RepositoryRowReducer {
 			mobileSubfolderPath: String = "",
 			iosSubfolderPath: String = "",
 			supportsTuist: Bool = false,
-			ticketIdRegex: String = ""
+			ticketIdRegex: String = "",
+			xcodeFilePreference: XcodeFilePreference = .auto
 		) {
 			self.id = path
 			self.path = path
@@ -105,7 +106,7 @@ struct RepositoryRowReducer {
 			self.mobileSubfolderPath = mobileSubfolderPath
 			self.iosSubfolderPath = iosSubfolderPath
 
-			self.xcodeButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath)
+			self.xcodeButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath, xcodeFilePreference: xcodeFilePreference)
 			self.tuistButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath)
 			self.terminalButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
 			self.claudeCodeButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)

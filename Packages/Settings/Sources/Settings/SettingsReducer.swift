@@ -60,6 +60,7 @@ public struct SettingsReducer {
 		case setGroupIOSSubfolderPath(groupId: String, path: String)
 		case setGroupSupportsTuist(groupId: String, value: Bool)
 		case setGroupTicketIdRegex(groupId: String, regex: String)
+		case setGroupXcodeFilePreference(groupId: String, preference: XcodeFilePreference)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
@@ -113,6 +114,10 @@ public struct SettingsReducer {
 
 			case let .setGroupTicketIdRegex(groupId, regex):
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].ticketIdRegex = regex }
+				return .none
+
+			case let .setGroupXcodeFilePreference(groupId, preference):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].xcodeFilePreference = preference }
 				return .none
 
 			case let .setBranchNameRegex(regex):

@@ -353,6 +353,23 @@ public struct SettingsView: View {
 					.textFieldStyle(.roundedBorder)
 					.font(.system(.body, design: .monospaced))
 				}
+
+				HStack {
+					Text("Xcode File Type")
+						.font(.caption)
+						.foregroundColor(.secondary)
+						.frame(width: 140, alignment: .leading)
+					Picker("Xcode File Type", selection: Binding(
+						get: { settings.xcodeFilePreference },
+						set: { store.send(.setGroupXcodeFilePreference(groupId: groupId, preference: $0)) }
+					)) {
+						ForEach(XcodeFilePreference.allCases, id: \.self) { pref in
+							Text(pref.displayName).tag(pref)
+						}
+					}
+					.pickerStyle(.segmented)
+					.labelsHidden()
+				}
 			}
 
 			if settings.supportsIOS, settings.supportsAndroid {

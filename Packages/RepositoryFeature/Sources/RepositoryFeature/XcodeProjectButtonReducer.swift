@@ -14,6 +14,7 @@ struct XcodeProjectButtonReducer {
 		var projectState: XcodeProjectState = .idle
 		var projectPath: String?
 		var iosSubfolderPath: String
+		var xcodeFilePreference: XcodeFilePreference
 		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
 		@Presents
@@ -21,9 +22,10 @@ struct XcodeProjectButtonReducer {
 
 		fileprivate var isLoaded = false
 
-		init(repositoryPath: String, iosSubfolderPath: String = "") {
+		init(repositoryPath: String, iosSubfolderPath: String = "", xcodeFilePreference: XcodeFilePreference = .auto) {
 			self.repositoryPath = repositoryPath
 			self.iosSubfolderPath = iosSubfolderPath
+			self.xcodeFilePreference = xcodeFilePreference
 		}
 	}
 
@@ -163,8 +165,8 @@ struct XcodeProjectButtonReducer {
 			return .none
 		}
 
-		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
-			let projectPath = xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
+		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, preference = state.xcodeFilePreference] send in
+			let projectPath = xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath, preference: preference)
 			await send(.foundProjectPath(projectPath))
 		}
 	}
