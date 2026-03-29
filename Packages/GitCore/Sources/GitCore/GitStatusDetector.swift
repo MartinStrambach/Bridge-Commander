@@ -98,9 +98,10 @@ public nonisolated struct GitPorcelainStatus {
 				}
 			}
 			else if line.hasPrefix("2 ") {
-				// Renamed/copied — "2 XY sub mH mI mW mR hH hI score newPath\torigPath"
-				let parts = line.split(separator: " ", maxSplits: 10)
-				guard parts.count == 11 else {
+				// Renamed/copied — "2 XY sub mH mI mW hH hI score newPath\torigPath"
+				// Split by space gives 10 parts (index 0–9); the tab-separated paths are the last part.
+				let parts = line.split(separator: " ", maxSplits: 9)
+				guard parts.count == 10 else {
 					continue
 				}
 
@@ -111,7 +112,7 @@ public nonisolated struct GitPorcelainStatus {
 
 				let x = xy[xy.startIndex]
 				let y = xy[xy.index(after: xy.startIndex)]
-				let pathField = parts[10]
+				let pathField = parts[9]
 				let paths = pathField.split(separator: "\t", maxSplits: 1)
 				guard let newPath = paths.first.map(String.init), !newPath.isEmpty else {
 					continue
