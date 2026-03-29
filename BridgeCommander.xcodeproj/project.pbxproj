@@ -18,6 +18,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		932CED7A2F793C71004ED67F /* AppUI */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = AppUI; path = Packages/AppUI; sourceTree = "<group>"; };
+		932CED7B2F793C71004ED67F /* GitCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = GitCore; path = Packages/GitCore; sourceTree = "<group>"; };
+		932CED7C2F793C71004ED67F /* RepositoryFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = RepositoryFeature; path = Packages/RepositoryFeature; sourceTree = "<group>"; };
+		932CED7D2F793C71004ED67F /* Settings */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = Settings; path = Packages/Settings; sourceTree = "<group>"; };
+		932CED7E2F793C71004ED67F /* TerminalFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = TerminalFeature; path = Packages/TerminalFeature; sourceTree = "<group>"; };
+		932CED7F2F793C71004ED67F /* ToolsIntegration */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ToolsIntegration; path = Packages/ToolsIntegration; sourceTree = "<group>"; };
 		93351BB42ECD3F1A006D4609 /* BridgeCommander.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BridgeCommander.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -51,6 +57,12 @@
 		93351BAB2ECD3F1A006D4609 = {
 			isa = PBXGroup;
 			children = (
+				932CED7A2F793C71004ED67F /* AppUI */,
+				932CED7B2F793C71004ED67F /* GitCore */,
+				932CED7C2F793C71004ED67F /* RepositoryFeature */,
+				932CED7D2F793C71004ED67F /* Settings */,
+				932CED7E2F793C71004ED67F /* TerminalFeature */,
+				932CED7F2F793C71004ED67F /* ToolsIntegration */,
 				93351BB62ECD3F1A006D4609 /* BridgeCommander */,
 				93351BB52ECD3F1A006D4609 /* Products */,
 			);
@@ -124,12 +136,6 @@
 			packageReferences = (
 				93351C492ECF9BAD006D4609 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
 				933DE5082F6AB3920045D622 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
-				93B04CFA2F793324008328A2 /* XCLocalSwiftPackageReference "Packages/GitCore" */,
-				93B04CFD2F793341008328A2 /* XCLocalSwiftPackageReference "Packages/AppUI" */,
-				93B04D002F7933BD008328A2 /* XCLocalSwiftPackageReference "Packages/Settings" */,
-				93B04D032F7933CA008328A2 /* XCLocalSwiftPackageReference "Packages/ToolsIntegration" */,
-				93B04D062F7933D7008328A2 /* XCLocalSwiftPackageReference "Packages/TerminalFeature" */,
-				93B04D092F7933E3008328A2 /* XCLocalSwiftPackageReference "Packages/RepositoryFeature" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 93351BB52ECD3F1A006D4609 /* Products */;
@@ -378,33 +384,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCLocalSwiftPackageReference section */
-		93B04CFA2F793324008328A2 /* XCLocalSwiftPackageReference "Packages/GitCore" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/GitCore;
-		};
-		93B04CFD2F793341008328A2 /* XCLocalSwiftPackageReference "Packages/AppUI" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/AppUI;
-		};
-		93B04D002F7933BD008328A2 /* XCLocalSwiftPackageReference "Packages/Settings" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/Settings;
-		};
-		93B04D032F7933CA008328A2 /* XCLocalSwiftPackageReference "Packages/ToolsIntegration" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/ToolsIntegration;
-		};
-		93B04D062F7933D7008328A2 /* XCLocalSwiftPackageReference "Packages/TerminalFeature" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/TerminalFeature;
-		};
-		93B04D092F7933E3008328A2 /* XCLocalSwiftPackageReference "Packages/RepositoryFeature" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/RepositoryFeature;
-		};
-/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		93351C492ECF9BAD006D4609 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
