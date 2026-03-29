@@ -1,24 +1,19 @@
 import Dependencies
 import DependenciesMacros
 import Foundation
-import Settings
-import Sharing
 
 // MARK: - YouTrack Service
 
 @DependencyClient
 public struct YouTrackClient: Sendable {
-	public var fetchIssueDetails: @Sendable (_ for: String) async throws -> IssueDetails
+	public var fetchIssueDetails: @Sendable (_ for: String, _ authToken: String) async throws -> IssueDetails
 }
 
 extension YouTrackClient: DependencyKey {
 	public static let liveValue = YouTrackClient(
-		fetchIssueDetails: { ticketId in
-			@Shared(.youtrackAuthToken)
-			var token = ""
-
+		fetchIssueDetails: { ticketId, authToken in
 			let (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState) = await YouTrackService
-				.fetchIssueDetails(for: ticketId, authToken: token)
+				.fetchIssueDetails(for: ticketId, authToken: authToken)
 
 			return IssueDetails(
 				prUrl: prUrl,

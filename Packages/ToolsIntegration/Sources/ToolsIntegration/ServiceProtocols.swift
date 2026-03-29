@@ -54,7 +54,7 @@ public nonisolated enum TicketState: String, Equatable {
 }
 
 public protocol YouTrackServiceType: Sendable {
-	func fetchIssueDetails(for ticketId: String) async throws -> IssueDetails
+	func fetchIssueDetails(for ticketId: String, authToken: String) async throws -> IssueDetails
 }
 
 public struct IssueDetails {

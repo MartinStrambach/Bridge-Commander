@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import ToolsIntegration
 
 @Reducer
 public struct SettingsReducer {

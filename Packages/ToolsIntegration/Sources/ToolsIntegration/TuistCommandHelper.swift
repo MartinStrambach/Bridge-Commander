@@ -1,6 +1,5 @@
 import Foundation
 import ProcessExecution
-import Settings
 
 // MARK: - Tuist Action
 

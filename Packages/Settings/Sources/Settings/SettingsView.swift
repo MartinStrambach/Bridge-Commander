@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import SwiftUI
+import ToolsIntegration
 
 public struct SettingsView: View {
 	@Bindable

@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import ProcessExecution
-import Settings
 
 public nonisolated enum ClaudeCodeLauncher {
 

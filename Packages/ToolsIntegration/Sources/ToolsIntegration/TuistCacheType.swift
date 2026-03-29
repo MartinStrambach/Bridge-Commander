@@ -14,7 +14,7 @@ public nonisolated enum TuistCacheType: String, Equatable, CaseIterable, Sendabl
 		}
 	}
 
-	public var commandFlag: String {
+	internal var commandFlag: String {
 		switch self {
 		case .externalOnly:
 			"--external-only"

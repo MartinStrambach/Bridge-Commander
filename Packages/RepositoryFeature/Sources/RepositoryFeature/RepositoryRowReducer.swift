@@ -311,9 +311,12 @@ struct RepositoryRowReducer {
 			return .none
 		}
 
-		return .run { send in
+		@Shared(.youtrackAuthToken)
+		var authToken = ""
+
+		return .run { [authToken] send in
 			do {
-				let details = try await youTrackClient.fetchIssueDetails(for: ticketId)
+				let details = try await youTrackClient.fetchIssueDetails(for: ticketId, authToken: authToken)
 				await send(.didFetchYouTrack(details))
 			}
 			catch {
