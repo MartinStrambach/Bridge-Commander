@@ -326,17 +326,17 @@ struct RepositoryRowView: View {
 				TicketButtonView(store: ticketButtonStore)
 			}
 
+			TerminalButtonView(store: store.scope(
+				state: \.terminalButton,
+				action: \.terminalButton
+			))
+
 			if store.supportsAndroid {
 				AndroidStudioButtonView(store: store.scope(
 					state: \.androidStudioButton,
 					action: \.androidStudioButton
 				))
 			}
-
-			TerminalButtonView(store: store.scope(
-				state: \.terminalButton,
-				action: \.terminalButton
-			))
 
 			if store.supportsIOS {
 				XcodeProjectButtonView(store: store.scope(
