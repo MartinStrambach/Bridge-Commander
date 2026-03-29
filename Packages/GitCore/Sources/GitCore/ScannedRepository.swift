@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Scanned Repository
 
-public struct ScannedRepository: Equatable {
+public struct ScannedRepository: Equatable, Sendable {
 	public var path: String
 	public var name: String
 	public var directory: String

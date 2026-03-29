@@ -1,6 +1,6 @@
 import Foundation
 
-public enum XcodeProjectState: Equatable {
+public enum XcodeProjectState: Equatable, Sendable {
 	case idle
 	case checking
 	case runningTi

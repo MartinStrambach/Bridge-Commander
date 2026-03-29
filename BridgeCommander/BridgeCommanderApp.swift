@@ -1,13 +1,10 @@
 import ComposableArchitecture
+import RepositoryFeature
+import Settings
 import SwiftUI
 
 @main
 struct BridgeCommanderApp: App {
-	private let repositoryListStore: StoreOf<RepositoryListReducer> = .init(
-		initialState: .init(),
-		reducer: { RepositoryListReducer() }
-	)
-
 	private let settingsStore: StoreOf<SettingsReducer> = .init(
 		initialState: .init(),
 		reducer: { SettingsReducer() }
@@ -15,7 +12,7 @@ struct BridgeCommanderApp: App {
 
 	var body: some Scene {
 		WindowGroup {
-			RepositoryListView(store: repositoryListStore)
+			RootRepositoryView()
 		}
 		.windowStyle(.hiddenTitleBar)
 		.windowResizability(.contentSize)
