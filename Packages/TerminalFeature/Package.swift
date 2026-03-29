@@ -11,7 +11,6 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.25.3"),
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.12.0"),
         .package(path: "../AppUI"),
-        .package(path: "../Settings"),
     ],
     targets: [
         .target(
@@ -20,7 +19,6 @@ let package = Package(
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "AppUI", package: "AppUI"),
-                .product(name: "Settings", package: "Settings"),
             ]
         ),
     ]

@@ -1,8 +1,6 @@
-// BridgeCommander/TerminalMode/TerminalViewStore.swift
 import AppKit
 import Foundation
 import Observation
-import Settings
 import SwiftTerm
 
 @MainActor
@@ -17,6 +15,8 @@ public final class TerminalViewStore {
 	/// to it (e.g. in an NSViewRepresentable Coordinator).
 	public func view(
 		for session: TerminalSession,
+		foregroundColor: NSColor,
+		backgroundColor: NSColor,
 		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) -> ClaudeAwareTerminalView {
@@ -32,10 +32,8 @@ public final class TerminalViewStore {
 		// Users can toggle back to Meta mode with Option+Command+O if needed.
 		terminalView.optionAsMetaKey = false
 
-		let rawTheme = UserDefaults.standard.string(forKey: "terminalColorTheme") ?? ""
-		let theme = TerminalColorTheme(rawValue: rawTheme) ?? .basicDark
-		terminalView.nativeForegroundColor = theme.foregroundColor
-		terminalView.nativeBackgroundColor = theme.backgroundColor
+		terminalView.nativeForegroundColor = foregroundColor
+		terminalView.nativeBackgroundColor = backgroundColor
 
 		terminalView.processDelegate = processDelegate
 

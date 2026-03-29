@@ -1,4 +1,3 @@
-// BridgeCommander/TerminalMode/TerminalLayoutView.swift
 import ComposableArchitecture
 import SwiftUI
 import Settings

@@ -1,5 +1,5 @@
-import ComposableArchitecture
 import Foundation
+import Sharing
 
 // MARK: - App Storage Shared Keys
 
@@ -32,7 +32,6 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("deleteDerivedDataOnWorktreeDelete")
 	}
 }
-
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalColorTheme> {
 	static var terminalColorTheme: Self {

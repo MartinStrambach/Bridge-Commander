@@ -1,4 +1,3 @@
-// BridgeCommander/TerminalMode/SidebarRepositoryRowView.swift
 import ComposableArchitecture
 import SwiftUI
 import AppUI

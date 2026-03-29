@@ -1,4 +1,3 @@
-// BridgeCommander/TerminalMode/TerminalViewRepresentable.swift
 import AppKit
 import ComposableArchitecture
 import SwiftTerm
@@ -28,17 +27,23 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let terminalViewStore: TerminalViewStore
 	public let sessions: IdentifiedArrayOf<TerminalSession>
 	public let activeSessionId: UUID?
+	public let foregroundColor: NSColor
+	public let backgroundColor: NSColor
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
 	public init(
 		terminalViewStore: TerminalViewStore,
 		sessions: IdentifiedArrayOf<TerminalSession>,
 		activeSessionId: UUID?,
+		foregroundColor: NSColor,
+		backgroundColor: NSColor,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
 		self.sessions = sessions
 		self.activeSessionId = activeSessionId
+		self.foregroundColor = foregroundColor
+		self.backgroundColor = backgroundColor
 		self.onStatusChange = onStatusChange
 	}
 
@@ -75,6 +80,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 
 				let termView = terminalViewStore.view(
 					for: session,
+					foregroundColor: foregroundColor,
+					backgroundColor: backgroundColor,
 					processDelegate: delegate,
 					onStatusChange: onStatusChange
 				)

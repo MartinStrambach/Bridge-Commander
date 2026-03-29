@@ -1,4 +1,3 @@
-// BridgeCommander/TerminalMode/TerminalPanelView.swift
 import ComposableArchitecture
 import SwiftTerm
 import SwiftUI
@@ -9,6 +8,9 @@ import ToolsIntegration
 struct TerminalPanelView: View {
 	@Bindable
 	var store: StoreOf<TerminalLayoutReducer>
+
+	@Shared(.terminalColorTheme)
+	private var terminalColorTheme = TerminalColorTheme.basicDark
 
 	let activeRowState: RepositoryRowReducer.State?
 	let terminalViewStore: TerminalViewStore
@@ -180,6 +182,8 @@ struct TerminalPanelView: View {
 				terminalViewStore: terminalViewStore,
 				sessions: sessions,
 				activeSessionId: activeSessionId,
+				foregroundColor: terminalColorTheme.foregroundColor,
+				backgroundColor: terminalColorTheme.backgroundColor,
 				onStatusChange: onStatusChange
 			)
 

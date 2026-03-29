@@ -1,4 +1,3 @@
-// BridgeCommander/Components/TerminalStatusDotView.swift
 import SwiftUI
 
 /// A 6pt indicator dot showing terminal session state.

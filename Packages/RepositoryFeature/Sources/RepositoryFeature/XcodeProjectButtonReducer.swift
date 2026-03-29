@@ -1,6 +1,6 @@
+import AppUI
 import ComposableArchitecture
 import Foundation
-import AppUI
 import Settings
 import ToolsIntegration
 
@@ -164,7 +164,7 @@ struct XcodeProjectButtonReducer {
 		}
 
 		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
-			let projectPath = await xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
+			let projectPath = xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath)
 			await send(.foundProjectPath(projectPath))
 		}
 	}

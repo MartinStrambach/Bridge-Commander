@@ -1,4 +1,3 @@
-// BridgeCommander/Models/TerminalSession.swift
 import Foundation
 
 public enum TerminalSessionStatus: Equatable, Sendable {

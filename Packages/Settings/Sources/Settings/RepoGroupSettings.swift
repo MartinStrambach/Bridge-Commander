@@ -1,4 +1,3 @@
-// BridgeCommander/Models/RepoGroupSettings.swift
 import Foundation
 
 public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {

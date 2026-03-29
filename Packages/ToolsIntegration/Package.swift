@@ -11,7 +11,6 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-dependencies", exact: "1.12.0"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", exact: "2.8.0"),
         .package(path: "../ProcessExecution"),
-        .package(path: "../Settings"),
     ],
     targets: [
         .target(
@@ -21,7 +20,6 @@ let package = Package(
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "Sharing", package: "swift-sharing"),
                 .product(name: "ProcessExecution", package: "ProcessExecution"),
-                .product(name: "Settings", package: "Settings"),
             ]
         ),
     ]
