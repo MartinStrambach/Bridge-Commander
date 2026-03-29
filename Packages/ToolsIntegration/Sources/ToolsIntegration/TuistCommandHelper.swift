@@ -1,5 +1,5 @@
 import Foundation
-import GitCore
+import ProcessExecution
 import Settings
 
 // MARK: - Tuist Action
@@ -58,7 +58,7 @@ public nonisolated enum TuistCommandHelper {
 			executableURL: URL(fileURLWithPath: "/bin/zsh"),
 			arguments: ["-c", fullCommand],
 			currentDirectory: URL(fileURLWithPath: path),
-			environment: GitEnvironmentHelper.setupEnvironment()
+			environment: EnvironmentHelper.setupEnvironment()
 		)
 
 		if result.success {

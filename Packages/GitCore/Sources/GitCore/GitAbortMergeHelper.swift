@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 public nonisolated enum GitAbortMergeHelper {
 	/// Aborts an ongoing merge operation

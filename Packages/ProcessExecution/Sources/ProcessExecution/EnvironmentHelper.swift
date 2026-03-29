@@ -1,9 +1,9 @@
 import Foundation
 
-public nonisolated enum GitEnvironmentHelper {
+public nonisolated enum EnvironmentHelper {
 
-	/// Sets up the environment for Git processes with enhanced PATH
-	/// - Returns: Environment dictionary with common Git tool paths included
+	/// Sets up the environment for processes with enhanced PATH
+	/// - Returns: Environment dictionary with common tool paths included
 	public static func setupEnvironment() -> [String: String] {
 		var environment = ProcessInfo.processInfo.environment
 		if let path = environment["PATH"] {

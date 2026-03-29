@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 public nonisolated enum GitMergeHelper {
 	public struct MergeResult: Equatable {

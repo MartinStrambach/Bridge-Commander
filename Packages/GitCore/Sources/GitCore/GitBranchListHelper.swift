@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 public struct BranchInfo: Equatable, Hashable {
 	public let name: String

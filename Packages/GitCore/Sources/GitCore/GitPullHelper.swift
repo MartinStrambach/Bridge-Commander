@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 public nonisolated enum GitPullHelper {
 	public struct PullResult: Equatable {

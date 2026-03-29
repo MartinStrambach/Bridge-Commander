@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 public nonisolated enum GitStashHelper {
 	/// Stashes changes including untracked files

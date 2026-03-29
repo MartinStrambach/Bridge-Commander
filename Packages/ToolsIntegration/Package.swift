@@ -11,7 +11,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.25.3"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", exact: "1.12.0"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", exact: "2.8.0"),
-        .package(path: "../GitCore"),
+        .package(path: "../ProcessExecution"),
         .package(path: "../Settings"),
     ],
     targets: [
@@ -22,7 +22,7 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "Sharing", package: "swift-sharing"),
-                .product(name: "GitCore", package: "GitCore"),
+                .product(name: "ProcessExecution", package: "ProcessExecution"),
                 .product(name: "Settings", package: "Settings"),
             ]
         ),

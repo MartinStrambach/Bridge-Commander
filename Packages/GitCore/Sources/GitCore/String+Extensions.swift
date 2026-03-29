@@ -6,15 +6,3 @@ public nonisolated extension String {
 		contains("Already up to date") || contains("Already up-to-date")
 	}
 }
-
-public nonisolated extension ProcessResult {
-	/// Returns the output string trimmed of whitespace and newlines
-	var trimmedOutput: String {
-		outputString.trimmingCharacters(in: .whitespacesAndNewlines)
-	}
-
-	/// Returns the error string trimmed of whitespace and newlines
-	var trimmedError: String {
-		errorString.trimmingCharacters(in: .whitespacesAndNewlines)
-	}
-}

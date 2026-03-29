@@ -1,6 +1,6 @@
 import AppKit
 import Foundation
-import GitCore
+import ProcessExecution
 
 public nonisolated enum AndroidStudioLauncher {
 

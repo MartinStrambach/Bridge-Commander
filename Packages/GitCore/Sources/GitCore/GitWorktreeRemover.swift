@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 public nonisolated enum GitWorktreeRemover {
 
@@ -26,7 +27,7 @@ public nonisolated enum GitWorktreeRemover {
 			executableURL: URL(filePath: "/bin/sh"),
 			arguments: ["-c", script],
 			currentDirectory: URL(filePath: path),
-			environment: GitEnvironmentHelper.setupEnvironment()
+			environment: EnvironmentHelper.setupEnvironment()
 		)
 
 		guard result.success else {

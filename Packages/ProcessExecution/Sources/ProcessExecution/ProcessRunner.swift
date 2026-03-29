@@ -19,6 +19,18 @@ public nonisolated struct ProcessResult {
 	}
 }
 
+public nonisolated extension ProcessResult {
+	/// Returns the output string trimmed of whitespace and newlines
+	var trimmedOutput: String {
+		outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
+
+	/// Returns the error string trimmed of whitespace and newlines
+	var trimmedError: String {
+		errorString.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
+}
+
 /// Helper for running shell processes with proper pipe handling to prevent buffer overflow
 public nonisolated enum ProcessRunner {
 
@@ -118,7 +130,7 @@ public nonisolated enum ProcessRunner {
 			executableURL: URL(filePath: "/usr/bin/git"),
 			arguments: arguments,
 			currentDirectory: URL(filePath: repositoryPath),
-			environment: GitEnvironmentHelper.setupEnvironment()
+			environment: EnvironmentHelper.setupEnvironment()
 		)
 	}
 }

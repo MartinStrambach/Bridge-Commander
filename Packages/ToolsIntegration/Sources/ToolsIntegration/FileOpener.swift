@@ -1,5 +1,5 @@
 import Foundation
-import GitCore
+import ProcessExecution
 
 public nonisolated enum FileOpener {
 

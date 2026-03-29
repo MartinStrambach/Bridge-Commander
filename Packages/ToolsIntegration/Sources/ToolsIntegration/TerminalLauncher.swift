@@ -1,6 +1,6 @@
 import AppKit
 import Foundation
-import GitCore
+import ProcessExecution
 import Settings
 
 public nonisolated enum TerminalLauncher {

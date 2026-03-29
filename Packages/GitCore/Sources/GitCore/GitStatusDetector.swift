@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 /// Parsed result of `git status --porcelain=v2 [--branch]`.
 public nonisolated struct GitPorcelainStatus {

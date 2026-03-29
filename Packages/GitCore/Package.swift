@@ -10,6 +10,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.25.3"),
         .package(url: "https://github.com/pointfreeco/swift-dependencies", exact: "1.12.0"),
+        .package(path: "../ProcessExecution"),
     ],
     targets: [
         .target(
@@ -18,6 +19,7 @@ let package = Package(
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
+                .product(name: "ProcessExecution", package: "ProcessExecution"),
             ]
         ),
     ]

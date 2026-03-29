@@ -24,6 +24,7 @@
 		932CED7D2F793C71004ED67F /* Settings */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = Settings; path = Packages/Settings; sourceTree = "<group>"; };
 		932CED7E2F793C71004ED67F /* TerminalFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = TerminalFeature; path = Packages/TerminalFeature; sourceTree = "<group>"; };
 		932CED7F2F793C71004ED67F /* ToolsIntegration */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ToolsIntegration; path = Packages/ToolsIntegration; sourceTree = "<group>"; };
+		932CED802F79404F004ED67F /* ProcessExecution */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ProcessExecution; path = Packages/ProcessExecution; sourceTree = "<group>"; };
 		93351BB42ECD3F1A006D4609 /* BridgeCommander.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BridgeCommander.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -57,6 +58,7 @@
 		93351BAB2ECD3F1A006D4609 = {
 			isa = PBXGroup;
 			children = (
+				932CED802F79404F004ED67F /* ProcessExecution */,
 				932CED7A2F793C71004ED67F /* AppUI */,
 				932CED7B2F793C71004ED67F /* GitCore */,
 				932CED7C2F793C71004ED67F /* RepositoryFeature */,

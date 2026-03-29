@@ -1,4 +1,5 @@
 import Foundation
+import ProcessExecution
 
 public nonisolated enum GitWorktreeCreator {
 
@@ -97,7 +98,7 @@ public nonisolated enum GitWorktreeCreator {
 				worktreeBasePath
 			],
 			currentDirectory: URL(fileURLWithPath: repositoryPath),
-			environment: GitEnvironmentHelper.setupEnvironment()
+			environment: EnvironmentHelper.setupEnvironment()
 		)
 
 		guard result.success else {

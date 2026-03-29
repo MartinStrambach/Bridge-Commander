@@ -1,5 +1,5 @@
 import Foundation
-import GitCore
+import ProcessExecution
 
 public nonisolated enum PermissionChecker {
 	/// Checks whether Automation permission for System Events is granted by running
