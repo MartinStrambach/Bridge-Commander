@@ -9,7 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.25.3"),
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.12.0"),
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm", exact: "1.13.0"),
         .package(path: "../AppUI"),
     ],
     targets: [
