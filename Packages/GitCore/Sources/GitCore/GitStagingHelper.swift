@@ -37,7 +37,11 @@ public nonisolated enum GitStagingHelper {
 		// For tracked files, use git diff
 		let arguments: [String] =
 			if isStaged {
-				["diff", "--cached", "--", file.path]
+				if file.status == .renamed, let oldPath = file.oldPath {
+					["diff", "--cached", "--", oldPath, file.path]
+				} else {
+					["diff", "--cached", "--", file.path]
+				}
 			}
 			else {
 				["diff", "--", file.path]
