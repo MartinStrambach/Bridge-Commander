@@ -98,6 +98,10 @@ struct FileChangeListView: View {
 		else {
 			Button("Open in IDE") { store.send(.openInIDE(file)) }
 			Button("Reveal in Finder") { openInFinder([file]) }
+			Button("Copy File Name") {
+				NSPasteboard.general.clearContents()
+				NSPasteboard.general.setString(file.fileName, forType: .string)
+			}
 
 			if store.listType == .staged {
 				Button("Unstage") { store.send(.delegate(.toggleAll([file]))) }
