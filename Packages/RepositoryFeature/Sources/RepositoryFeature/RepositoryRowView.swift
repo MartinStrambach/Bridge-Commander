@@ -1,8 +1,8 @@
-import ComposableArchitecture
-import SwiftUI
 import AppUI
+import ComposableArchitecture
 import GitActionsMenu
 import Settings
+import SwiftUI
 import TerminalFeature
 import ToolsIntegration
 
@@ -83,12 +83,12 @@ struct RepositoryRowView: View {
 		.padding(.vertical, 12)
 		.background(backgroundColorForState)
 		.contentShape(Rectangle())
-		.simultaneousGesture(
-			TapGesture(count: 2)
-				.onEnded {
-					store.send(.openTerminalForRepo)
-				}
-		)
+		.onTapGesture(count: 2) {
+			store.send(.openTerminalForRepo)
+		}
+		.onTapGesture(count: 1) {
+			store.send(.openRepositoryDetail)
+		}
 		.task {
 			store.send(.onAppear)
 		}
