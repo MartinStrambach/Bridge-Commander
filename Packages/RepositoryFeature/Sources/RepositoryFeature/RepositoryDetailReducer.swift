@@ -300,8 +300,16 @@ struct RepositoryDetail {
 				return .send(.operationCompleted(result))
 
 			case let .operationCompleted(.failure(error)):
+				let title: String
+				if let gitError = error as? GitError, case .mergeFailed = gitError {
+					title = "Finish Merge Failed"
+				} else if let gitError = error as? GitError, case .abortMergeFailed = gitError {
+					title = "Finish Merge Failed"
+				} else {
+					title = "Operation Failed"
+				}
 				state.alert = GitAlertReducer.State(
-					title: "Finish Merge Failed",
+					title: title,
 					message: error.localizedDescription,
 					isError: true
 				)

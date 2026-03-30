@@ -76,7 +76,9 @@ public nonisolated enum GitStagingHelper {
 		}
 
 		// Build arguments with all file paths
-		let arguments = ["add", "--"] + filePaths
+		// Use -f to handle tracked files that match .gitignore patterns (git add exits 1 with a
+		// warning for these even though it stages them successfully).
+		let arguments = ["add", "-f", "--"] + filePaths
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
 		guard result.success else {
 			throw GitError.stagingFailed("Failed to stage files")
