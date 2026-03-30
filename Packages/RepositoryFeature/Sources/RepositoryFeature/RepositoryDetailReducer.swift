@@ -8,8 +8,13 @@ import ToolsIntegration
 typealias FileChange = GitCore.FileChange
 typealias FileChangeStatus = GitCore.FileChangeStatus
 
+struct PendingSelection: Equatable {
+	let sourceIndex: Int
+	let sourceWasUnstaged: Bool
+}
+
 @Reducer
-struct RepositoryDetail: Sendable {
+struct RepositoryDetail {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
@@ -24,10 +29,7 @@ struct RepositoryDetail: Sendable {
 		var unpushedCommitsCount: Int = 0
 		var isPushing: Bool = false
 		var isLoadingChanges: Bool = false
-
-		var lastActionedFileId: String?
-		var lastActionedFileIndex: Int?
-		var wasStaging = false
+		var pendingSelection: PendingSelection?
 
 		var hasChanges: Bool {
 			!staged.files.isEmpty || !unstaged.files.isEmpty
@@ -59,9 +61,9 @@ struct RepositoryDetail: Sendable {
 		case openTerminalButtonTapped
 		case selectFile(FileChange, isStaged: Bool)
 		case staged(FileChangeList.Action)
-		case stageFilesCompleted([FileChange])
+		case stageFilesCompleted
 		case unstaged(FileChangeList.Action)
-		case unstageFilesCompleted([FileChange])
+		case unstageFilesCompleted
 		case operationCompleted(Result<Void, Error>)
 	}
 
@@ -123,7 +125,14 @@ struct RepositoryDetail: Sendable {
 				state.staged.files = changes.staged
 				state.unstaged.isLoading = false
 				state.unstaged.files = changes.unstaged
-				return handleAutoSelection(state: &state, staged: changes.staged, unstaged: changes.unstaged)
+				let pendingSelection = state.pendingSelection
+				state.pendingSelection = nil
+				return handleAutoSelection(
+					state: &state,
+					staged: changes.staged,
+					unstaged: changes.unstaged,
+					pendingSelection: pendingSelection
+				)
 
 			case let .selectFile(file, isStaged):
 				if isStaged {
@@ -141,55 +150,50 @@ struct RepositoryDetail: Sendable {
 					return .none
 				}
 
-				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
+				let stagedFileIds = Set(files.map(\.id))
+				let lastIndex = state.unstaged.files.lastIndex(where: { stagedFileIds.contains($0.id) }) ?? 0
+				state.pendingSelection = PendingSelection(sourceIndex: lastIndex, sourceWasUnstaged: true)
 				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
 					do {
 						try await gitStagingClient.stageFiles(path, paths)
-						await send(.stageFilesCompleted(files))
+						await send(.stageFilesCompleted)
 					}
 					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case let .stageFilesCompleted(files):
-				moveFiles(
-					files,
-					from: \.unstaged.files,
-					to: \.staged.files,
-					statusTransform: { $0 == .untracked ? .added : $0 },
-					state: &state
-				)
-				return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
+			case .stageFilesCompleted:
+				return .run { [path = state.repositoryPath] send in
+					let changes = await gitStagingClient.fetchFileChanges(path)
+					await send(.loadChangesResponse(changes))
+				}
 
 			case let .staged(.delegate(.toggleAll(files))):
 				guard !files.isEmpty else {
 					return .none
 				}
 
-				trackLastActioned(files, wasStaging: false, sourceList: state.staged.files, state: &state)
+				let unstagingFileIds = Set(files.map(\.id))
+				let lastIndex = state.staged.files.lastIndex(where: { unstagingFileIds.contains($0.id) }) ?? 0
+				state.pendingSelection = PendingSelection(sourceIndex: lastIndex, sourceWasUnstaged: false)
 				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
 					do {
 						try await gitStagingClient.unstageFiles(path, paths)
-						await send(.unstageFilesCompleted(files))
+						await send(.unstageFilesCompleted)
 					}
 					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case let .unstageFilesCompleted(files):
-				moveFiles(
-					files,
-					from: \.staged.files,
-					to: \.unstaged.files,
-					statusTransform: { $0 == .added ? .untracked : $0 },
-					state: &state
-				)
-				return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
+			case .unstageFilesCompleted:
+				return .run { [path = state.repositoryPath] send in
+					let changes = await gitStagingClient.fetchFileChanges(path)
+					await send(.loadChangesResponse(changes))
+				}
 
 			case let .unstaged(.delegate(.discardChanges(files))):
 				guard !files.isEmpty else {
 					return .none
 				}
 
-				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
 				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
 					do {
 						try await gitStagingClient.discardFileChanges(path, paths)
@@ -207,7 +211,6 @@ struct RepositoryDetail: Sendable {
 					return .none
 				}
 
-				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
 				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
 					do {
 						try await gitStagingClient.deleteUntrackedFiles(path, paths)
@@ -221,7 +224,6 @@ struct RepositoryDetail: Sendable {
 					return .none
 				}
 
-				trackLastActioned(files, wasStaging: true, sourceList: state.unstaged.files, state: &state)
 				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
 					do {
 						try await gitStagingClient.deleteConflictedFiles(path, paths)
@@ -234,16 +236,20 @@ struct RepositoryDetail: Sendable {
 
 			case let .diffViewer(.delegate(.fileHasNoChanges(fileId, isStaged))):
 				let list = isStaged ? state.staged.files : state.unstaged.files
-				state.lastActionedFileId = fileId
-				state.lastActionedFileIndex = list.firstIndex { $0.id == fileId }
-				state.wasStaging = !isStaged
+				let index = list.firstIndex(where: { $0.id == fileId }) ?? 0
 				if isStaged {
 					state.staged.files.removeAll { $0.id == fileId }
 				}
 				else {
 					state.unstaged.files.removeAll { $0.id == fileId }
 				}
-				return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
+				let pending = PendingSelection(sourceIndex: index, sourceWasUnstaged: !isStaged)
+				return handleAutoSelection(
+					state: &state,
+					staged: state.staged.files,
+					unstaged: state.unstaged.files,
+					pendingSelection: pending
+				)
 
 			case let .diffViewer(.delegate(.stageHunk(file, hunk))):
 				return .run { [path = state.repositoryPath] send in
@@ -361,95 +367,61 @@ struct RepositoryDetail: Sendable {
 
 	// MARK: - Helpers
 
-	private func trackLastActioned(
-		_ files: [FileChange],
-		wasStaging: Bool,
-		sourceList: [FileChange],
-		state: inout State
-	) {
-		state.wasStaging = wasStaging
-		if let lastId = files.last?.id {
-			state.lastActionedFileId = lastId
-			state.lastActionedFileIndex = sourceList.firstIndex { $0.id == lastId }
-		}
-	}
-
-	private func moveFiles(
-		_ files: [FileChange],
-		from source: WritableKeyPath<State, [FileChange]>,
-		to target: WritableKeyPath<State, [FileChange]>,
-		statusTransform: (FileChangeStatus) -> FileChangeStatus,
-		state: inout State
-	) {
-		let fileIds = Set(files.map(\.id))
-		state[keyPath: source].removeAll { fileIds.contains($0.id) }
-		let existingIds = Set(state[keyPath: target].map(\.id))
-		let newFiles = files
-			.filter { !existingIds.contains($0.id) }
-			.map { FileChange(path: $0.path, status: statusTransform($0.status), oldPath: $0.oldPath) }
-		state[keyPath: target].append(contentsOf: newFiles)
-		state[keyPath: target].sort { $0.path < $1.path }
-	}
-
 	private func removeFromUnstaged(_ files: [FileChange], state: inout State) -> EffectOf<RepositoryDetail> {
 		let fileIds = Set(files.map(\.id))
+		let lastIndex = state.unstaged.files.lastIndex(where: { fileIds.contains($0.id) }) ?? 0
 		state.unstaged.files.removeAll { fileIds.contains($0.id) }
-		return handleAutoSelection(state: &state, staged: state.staged.files, unstaged: state.unstaged.files)
+		let pending = PendingSelection(sourceIndex: lastIndex, sourceWasUnstaged: true)
+		return handleAutoSelection(
+			state: &state,
+			staged: state.staged.files,
+			unstaged: state.unstaged.files,
+			pendingSelection: pending
+		)
 	}
 
 	private func handleAutoSelection(
 		state: inout State,
 		staged: [FileChange],
-		unstaged: [FileChange]
+		unstaged: [FileChange],
+		pendingSelection: PendingSelection? = nil
 	) -> EffectOf<RepositoryDetail> {
-		guard state.lastActionedFileId != nil else {
-			if let selectedFileId = state.diffViewer.fileId, let wasStaged = state.diffViewer.fileIsStaged {
-				if wasStaged, let file = staged.first(where: { $0.id == selectedFileId }) {
-					return .send(.selectFile(file, isStaged: true))
-				}
-				else if !wasStaged, let file = unstaged.first(where: { $0.id == selectedFileId }) {
-					return .send(.selectFile(file, isStaged: false))
-				}
-				else {
-					state.diffViewer.fileId = nil
-					state.diffViewer.fileIsStaged = nil
-					state.diffViewer.fileDiff = nil
-				}
+		if let pending = pendingSelection {
+			let sourceList = pending.sourceWasUnstaged ? unstaged : staged
+			let targetList = pending.sourceWasUnstaged ? staged : unstaged
+			let sourceIsStaged = !pending.sourceWasUnstaged
+			if pending.sourceIndex < sourceList.count {
+				return .send(.selectFile(sourceList[pending.sourceIndex], isStaged: sourceIsStaged))
 			}
-			else {
-				if let firstUnstaged = unstaged.first {
-					return .send(.selectFile(firstUnstaged, isStaged: false))
-				}
-				else if let firstStaged = staged.first {
-					return .send(.selectFile(firstStaged, isStaged: true))
-				}
+			else if let last = sourceList.last {
+				return .send(.selectFile(last, isStaged: sourceIsStaged))
 			}
-			return .none
-		}
-
-		state.lastActionedFileId = nil
-		let actionedIndex = state.lastActionedFileIndex
-		state.lastActionedFileIndex = nil
-		state.unstaged.selectedFileIds.removeAll()
-		state.staged.selectedFileIds.removeAll()
-
-		let (sourceList, targetList, isStaged) = state.wasStaging
-			? (unstaged, staged, false)
-			: (staged, unstaged, true)
-
-		if let index = actionedIndex {
-			if index < sourceList.count {
-				return .send(.selectFile(sourceList[index], isStaged: isStaged))
-			}
-			else if index > 0, !sourceList.isEmpty {
-				return .send(.selectFile(sourceList[sourceList.count - 1], isStaged: isStaged))
+			else if let first = targetList.first {
+				return .send(.selectFile(first, isStaged: !sourceIsStaged))
 			}
 		}
-
-		if let firstTarget = targetList.first {
-			return .send(.selectFile(firstTarget, isStaged: !isStaged))
+		else if let selectedFileId = state.diffViewer.fileId, let wasStaged = state.diffViewer.fileIsStaged {
+			if wasStaged, let file = staged.first(where: { $0.id == selectedFileId }) {
+				return .send(.selectFile(file, isStaged: true))
+			}
+			else if !wasStaged, let file = unstaged.first(where: { $0.id == selectedFileId }) {
+				return .send(.selectFile(file, isStaged: false))
+			}
+			else if let firstUnstaged = unstaged.first {
+				return .send(.selectFile(firstUnstaged, isStaged: false))
+			}
+			else if let firstStaged = staged.first {
+				return .send(.selectFile(firstStaged, isStaged: true))
+			}
 		}
-
+		else {
+			if let firstUnstaged = unstaged.first {
+				return .send(.selectFile(firstUnstaged, isStaged: false))
+			}
+			else if let firstStaged = staged.first {
+				return .send(.selectFile(firstStaged, isStaged: true))
+			}
+		}
 		state.diffViewer.fileId = nil
 		state.diffViewer.fileIsStaged = nil
 		state.diffViewer.fileDiff = nil
