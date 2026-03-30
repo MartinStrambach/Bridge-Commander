@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import SwiftUI
 import AppUI
+import GitActionsMenu
 import Settings
 import TerminalFeature
 import ToolsIntegration

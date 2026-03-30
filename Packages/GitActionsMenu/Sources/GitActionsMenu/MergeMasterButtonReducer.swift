@@ -5,9 +5,9 @@ import GitCore
 // MARK: - Merge Master Button Reducer
 
 @Reducer
-struct MergeMasterButtonReducer {
+public struct MergeMasterButtonReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		var isMergingMaster = false
 
 		fileprivate let repositoryPath: String
@@ -17,7 +17,7 @@ struct MergeMasterButtonReducer {
 		}
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case mergeMasterTapped
 		case mergeMasterCompleted(result: Result<GitMergeHelper.MergeResult, GitError>)
 	}
@@ -25,12 +25,12 @@ struct MergeMasterButtonReducer {
 	@Dependency(GitClient.self)
 	private var gitClient
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .mergeMasterTapped:
 				state.isMergingMaster = true
-				return .run { [path = state.repositoryPath] send in
+				return .run { [path = state.repositoryPath, gitClient] send in
 					do {
 						let mergeResult = try await gitClient.mergeMaster(at: path)
 						await send(.mergeMasterCompleted(result: .success(mergeResult)))

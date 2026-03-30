@@ -5,19 +5,19 @@ import GitCore
 // MARK: - Abort Merge Button Reducer
 
 @Reducer
-struct AbortMergeButtonReducer {
+public struct AbortMergeButtonReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		var isAbortingMerge = false
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case abortMergeTapped
 		case abortMergeCompleted(success: Bool, error: String?)
 	}
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .abortMergeTapped:

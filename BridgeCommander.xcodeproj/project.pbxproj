@@ -17,14 +17,15 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9303DBEA2F7A967A00AE9EB8 /* GitActionsMenu */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = GitActionsMenu; path = Packages/GitActionsMenu; sourceTree = "<group>"; };
 		932CED7A2F793C71004ED67F /* AppUI */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = AppUI; path = Packages/AppUI; sourceTree = "<group>"; };
 		932CED7B2F793C71004ED67F /* GitCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = GitCore; path = Packages/GitCore; sourceTree = "<group>"; };
 		932CED7C2F793C71004ED67F /* RepositoryFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = RepositoryFeature; path = Packages/RepositoryFeature; sourceTree = "<group>"; };
 		932CED7D2F793C71004ED67F /* Settings */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = Settings; path = Packages/Settings; sourceTree = "<group>"; };
 		932CED7E2F793C71004ED67F /* TerminalFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = TerminalFeature; path = Packages/TerminalFeature; sourceTree = "<group>"; };
 		932CED7F2F793C71004ED67F /* ToolsIntegration */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ToolsIntegration; path = Packages/ToolsIntegration; sourceTree = "<group>"; };
-		932CED802F79404F004ED67F /* ProcessExecution */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ProcessExecution; path = Packages/ProcessExecution; sourceTree = "<group>"; };
 		93351BB42ECD3F1A006D4609 /* BridgeCommander.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BridgeCommander.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		93761C4E2F7A6D5D0049F6F0 /* ProcessExecution */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ProcessExecution; path = Packages/ProcessExecution; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -56,7 +57,8 @@
 		93351BAB2ECD3F1A006D4609 = {
 			isa = PBXGroup;
 			children = (
-				932CED802F79404F004ED67F /* ProcessExecution */,
+				9303DBEA2F7A967A00AE9EB8 /* GitActionsMenu */,
+				93761C4E2F7A6D5D0049F6F0 /* ProcessExecution */,
 				932CED7A2F793C71004ED67F /* AppUI */,
 				932CED7B2F793C71004ED67F /* GitCore */,
 				932CED7C2F793C71004ED67F /* RepositoryFeature */,

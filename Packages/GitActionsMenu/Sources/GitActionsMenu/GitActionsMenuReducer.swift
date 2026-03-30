@@ -1,31 +1,32 @@
+import AppUI
 import ComposableArchitecture
 import Foundation
 import GitCore
-import AppUI
 
 // MARK: - Git Actions Menu Reducer
 
 @Reducer
-struct GitActionsMenuReducer {
+public struct GitActionsMenuReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
+		public var isMergeInProgress = false
+		public var currentBranch: String
+		public var hasRemoteBranch = false
+		public var unpushedCommitsCount = 0
+		public var stashButton: StashButtonReducer.State
+
 		let repositoryPath: String
-		var currentBranch: String
-		var hasRemoteBranch = false
-		var isMergeInProgress = false
-		var unpushedCommitsCount = 0
 		var fetchButton: FetchButtonReducer.State
 		var pullButton: PullButtonReducer.State
 		var pushButton: PushButtonReducer.State
 		var mergeMasterButton: MergeMasterButtonReducer.State
 		var abortMergeButton: AbortMergeButtonReducer.State
-		var stashButton: StashButtonReducer.State
 		@Presents
 		var alert: GitAlertReducer.State?
 
 		fileprivate var isLoaded = false
 
-		init(repositoryPath: String, currentBranch: String) {
+		public init(repositoryPath: String, currentBranch: String) {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch
 			self.fetchButton = FetchButtonReducer.State(repositoryPath: repositoryPath)
@@ -37,7 +38,7 @@ struct GitActionsMenuReducer {
 		}
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case onAppear
 		case refresh
 		case didCheckGitStatus(isMergeInProgress: Bool)
@@ -50,7 +51,7 @@ struct GitActionsMenuReducer {
 		case alert(PresentationAction<GitAlertReducer.Action>)
 	}
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Scope(state: \.fetchButton, action: \.fetchButton) {
 			FetchButtonReducer()
 		}
@@ -218,6 +219,8 @@ struct GitActionsMenuReducer {
 			GitAlertReducer()
 		}
 	}
+
+	public init() {}
 
 	private func checkStatusEffect(path: String) -> EffectOf<GitActionsMenuReducer> {
 		.merge(

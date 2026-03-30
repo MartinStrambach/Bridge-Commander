@@ -5,14 +5,14 @@ import GitCore
 // MARK: - Fetch Button Reducer
 
 @Reducer
-struct FetchButtonReducer {
+public struct FetchButtonReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		var isFetching = false
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case fetchTapped
 		case fetchCompleted(result: GitFetchHelper.FetchResult?, error: GitError?)
 	}
@@ -20,12 +20,12 @@ struct FetchButtonReducer {
 	@Dependency(GitClient.self)
 	private var gitClient
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .fetchTapped:
 				state.isFetching = true
-				return .run { [path = state.repositoryPath] send in
+				return .run { [path = state.repositoryPath, gitClient] send in
 					do {
 						let result = try await gitClient.fetch(at: path)
 						await send(.fetchCompleted(result: result, error: nil))

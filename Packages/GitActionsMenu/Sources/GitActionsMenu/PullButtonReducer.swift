@@ -5,14 +5,14 @@ import GitCore
 // MARK: - Pull Button Reducer
 
 @Reducer
-struct PullButtonReducer {
+public struct PullButtonReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		var isPulling = false
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case pullTapped
 		case pullCompleted(result: GitPullHelper.PullResult?, error: GitError?)
 	}
@@ -20,12 +20,12 @@ struct PullButtonReducer {
 	@Dependency(GitClient.self)
 	private var gitClient
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .pullTapped:
 				state.isPulling = true
-				return .run { [path = state.repositoryPath] send in
+				return .run { [path = state.repositoryPath, gitClient] send in
 					do {
 						let result = try await gitClient.pull(at: path)
 						await send(.pullCompleted(result: result, error: nil))

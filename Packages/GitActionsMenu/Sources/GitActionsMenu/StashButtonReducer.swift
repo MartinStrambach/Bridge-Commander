@@ -5,17 +5,18 @@ import GitCore
 // MARK: - Stash Button Reducer
 
 @Reducer
-struct StashButtonReducer {
+public struct StashButtonReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		let currentBranch: String
 		var hasStash = false
-		var hasChanges = false
 		var isProcessing = false
+
+		public var hasChanges = false
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case stashTapped
 		case stashPopTapped
 		case stashCompleted(success: Bool, error: String?)
@@ -24,7 +25,7 @@ struct StashButtonReducer {
 		case didCheckStashStatus(hasStash: Bool)
 	}
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .stashTapped:

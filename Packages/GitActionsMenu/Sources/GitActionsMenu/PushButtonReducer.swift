@@ -5,19 +5,19 @@ import GitCore
 // MARK: - Push Button Reducer
 
 @Reducer
-struct PushButtonReducer {
+public struct PushButtonReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		var isPushing = false
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case pushTapped
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
 	}
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .pushTapped:

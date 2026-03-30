@@ -2,31 +2,23 @@
 import PackageDescription
 
 let package = Package(
-    name: "RepositoryFeature",
+    name: "GitActionsMenu",
     platforms: [.macOS(.v26)],
     products: [
-        .library(name: "RepositoryFeature", targets: ["RepositoryFeature"]),
+        .library(name: "GitActionsMenu", targets: ["GitActionsMenu"]),
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.25.3"),
         .package(path: "../GitCore"),
         .package(path: "../AppUI"),
-        .package(path: "../Settings"),
-        .package(path: "../ToolsIntegration"),
-        .package(path: "../TerminalFeature"),
-        .package(path: "../GitActionsMenu"),
     ],
     targets: [
         .target(
-            name: "RepositoryFeature",
+            name: "GitActionsMenu",
             dependencies: [
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "GitCore", package: "GitCore"),
                 .product(name: "AppUI", package: "AppUI"),
-                .product(name: "Settings", package: "Settings"),
-                .product(name: "ToolsIntegration", package: "ToolsIntegration"),
-                .product(name: "TerminalFeature", package: "TerminalFeature"),
-                .product(name: "GitActionsMenu", package: "GitActionsMenu"),
             ]
         ),
     ]

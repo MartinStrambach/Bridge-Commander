@@ -1,14 +1,14 @@
+import AppUI
 import ComposableArchitecture
 import SwiftUI
-import AppUI
 
 // MARK: - Git Actions Menu View
 
-struct GitActionsMenuView: View {
+public struct GitActionsMenuView: View {
 	@Bindable
 	var store: StoreOf<GitActionsMenuReducer>
 
-	var body: some View {
+	public var body: some View {
 		Group {
 			if store.fetchButton.isFetching {
 				GitOperationProgressView(
@@ -89,6 +89,10 @@ struct GitActionsMenuView: View {
 		.sheet(item: $store.scope(state: \.$alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
+	}
+
+	public init(store: StoreOf<GitActionsMenuReducer>) {
+		self.store = store
 	}
 }
 
