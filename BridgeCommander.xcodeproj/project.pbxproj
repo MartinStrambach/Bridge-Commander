@@ -118,7 +118,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2610;
-				LastUpgradeCheck = 2610;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					93351BB32ECD3F1A006D4609 = {
 						CreatedOnToolsVersion = 26.1.1;
@@ -202,6 +202,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = R9AYPG35ES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -300,6 +301,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = R9AYPG35ES;
 				EAGER_LINKING = YES;
 				ENABLE_APP_SANDBOX = NO;
