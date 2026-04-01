@@ -81,6 +81,9 @@ struct RepositoryDetail {
 	@Dependency(\.dismiss)
 	private var dismiss
 
+	@Shared(.terminalApp)
+	private var terminalApp = TerminalApp.systemTerminal
+
 	@Shared(.terminalOpeningBehavior)
 	private var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
@@ -357,8 +360,8 @@ struct RepositoryDetail {
 				return .run { _ in await dismiss() }
 
 			case .openTerminalButtonTapped:
-				return .run { [path = state.repositoryPath, behavior = terminalOpeningBehavior] _ in
-					await TerminalLauncher.openTerminal(at: path, behavior: behavior)
+				return .run { [path = state.repositoryPath, app = terminalApp, behavior = terminalOpeningBehavior] _ in
+					await TerminalLauncher.openTerminal(at: path, app: app, behavior: behavior)
 				}
 
 			default:

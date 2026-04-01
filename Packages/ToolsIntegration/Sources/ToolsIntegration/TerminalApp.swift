@@ -1,0 +1,28 @@
+public nonisolated enum TerminalApp: String, CaseIterable, Equatable, Sendable {
+	case systemTerminal
+	case iTerm2
+	case ghostty
+
+	public var displayName: String {
+		switch self {
+		case .systemTerminal: "Terminal"
+		case .iTerm2: "iTerm2"
+		case .ghostty: "Ghostty"
+		}
+	}
+
+	var appName: String {
+		switch self {
+		case .systemTerminal: "Terminal"
+		case .iTerm2: "iTerm"
+		case .ghostty: "Ghostty"
+		}
+	}
+
+	public var supportsBehaviorSelection: Bool {
+		switch self {
+		case .systemTerminal, .iTerm2: true
+		case .ghostty: false
+		}
+	}
+}

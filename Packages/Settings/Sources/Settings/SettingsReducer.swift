@@ -30,6 +30,9 @@ public struct SettingsReducer {
 		@Shared(.tuistCacheType)
 		public var tuistCacheType = TuistCacheType.externalOnly
 
+		@Shared(.terminalApp)
+		public var terminalApp = TerminalApp.systemTerminal
+
 		@Shared(.terminalOpeningBehavior)
 		public var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
@@ -65,6 +68,7 @@ public struct SettingsReducer {
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
 		case setTuistCacheType(TuistCacheType)
+		case setTerminalApp(TerminalApp)
 		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
 		case setAndroidStudioPath(String)
@@ -134,6 +138,10 @@ public struct SettingsReducer {
 
 			case let .setTuistCacheType(cacheType):
 				state.$tuistCacheType.withLock { $0 = cacheType }
+				return .none
+
+			case let .setTerminalApp(app):
+				state.$terminalApp.withLock { $0 = app }
 				return .none
 
 			case let .setTerminalOpeningBehavior(behavior):

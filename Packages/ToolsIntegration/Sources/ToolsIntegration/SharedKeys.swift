@@ -23,3 +23,9 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<Termina
 		appStorage("claudeCodeOpeningBehavior")
 	}
 }
+
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalApp> {
+	static var terminalApp: Self {
+		appStorage("terminalApp")
+	}
+}

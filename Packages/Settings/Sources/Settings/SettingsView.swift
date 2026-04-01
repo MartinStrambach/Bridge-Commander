@@ -43,22 +43,34 @@ public struct SettingsView: View {
 
 	private var terminalBehaviorSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
-			Text("Terminal Opening Behavior")
+			Text("Terminal")
 				.font(.headline)
 
-			Text("Choose how Terminal windows should open when clicking the Terminal button.")
+			Text("Choose which terminal app opens when clicking the Terminal button.")
 				.font(.caption)
 				.foregroundColor(.secondary)
 
 			Picker(
-				"Opening Behavior",
-				selection: $store.terminalOpeningBehavior.sending(\.setTerminalOpeningBehavior)
+				"Terminal App",
+				selection: $store.terminalApp.sending(\.setTerminalApp)
 			) {
-				ForEach(TerminalOpeningBehavior.allCases, id: \.self) { behavior in
-					Text(behavior.displayName).tag(behavior)
+				ForEach(TerminalApp.allCases, id: \.self) { app in
+					Text(app.displayName).tag(app)
 				}
 			}
 			.pickerStyle(.segmented)
+
+			if store.terminalApp.supportsBehaviorSelection {
+				Picker(
+					"Opening Behavior",
+					selection: $store.terminalOpeningBehavior.sending(\.setTerminalOpeningBehavior)
+				) {
+					ForEach(TerminalOpeningBehavior.allCases, id: \.self) { behavior in
+						Text(behavior.displayName).tag(behavior)
+					}
+				}
+				.pickerStyle(.segmented)
+			}
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))

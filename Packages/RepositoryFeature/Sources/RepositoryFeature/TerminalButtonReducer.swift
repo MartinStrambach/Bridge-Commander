@@ -11,6 +11,9 @@ struct TerminalButtonReducer {
 	struct State: Equatable {
 		let repositoryPath: String
 
+		@Shared(.terminalApp)
+		var terminalApp = TerminalApp.systemTerminal
+
 		@Shared(.terminalOpeningBehavior)
 		var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
@@ -33,10 +36,11 @@ struct TerminalButtonReducer {
 				.run { [
 					path = state.repositoryPath,
 					subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+					app = state.terminalApp,
 					behavior = state.terminalOpeningBehavior
 				] _ in
 					let targetPath = (path as NSString).appendingPathComponent(subfolder)
-					await TerminalLauncher.openTerminal(at: targetPath, behavior: behavior)
+					await TerminalLauncher.openTerminal(at: targetPath, app: app, behavior: behavior)
 				}
 			}
 		}
