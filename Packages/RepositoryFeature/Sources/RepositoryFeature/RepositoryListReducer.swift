@@ -1,9 +1,9 @@
-internal import OrderedCollections
 import ComposableArchitecture
 import Foundation
-import SwiftUI
 import GitCore
+internal import OrderedCollections
 import Settings
+import SwiftUI
 import TerminalFeature
 import ToolsIntegration
 
@@ -45,17 +45,19 @@ struct RepositoryListReducer {
 		fileprivate var isPermissionWarningDismissed = false
 
 		var filteredRepositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> {
+			let sorted = repositoryGroups
+				.sorted { $0.header.name.localizedCaseInsensitiveCompare($1.header.name) == .orderedAscending }
 			guard !searchText.isEmpty else {
-				return repositoryGroups
+				return IdentifiedArrayOf(uniqueElements: sorted)
 			}
 
-			return repositoryGroups.filter { group in
+			return IdentifiedArrayOf(uniqueElements: sorted.filter { group in
 				let query = searchText
 				if group.header.branchName?.localizedCaseInsensitiveContains(query) == true {
 					return true
 				}
 				return group.worktrees.contains { $0.branchName?.localizedCaseInsensitiveContains(query) == true }
-			}
+			})
 		}
 
 		var showPermissionDialog: Bool {
