@@ -34,6 +34,7 @@ public final class TerminalViewStore {
 
 		terminalView.nativeForegroundColor = foregroundColor
 		terminalView.nativeBackgroundColor = backgroundColor
+		terminalView.allowMouseReporting = false
 
 		terminalView.processDelegate = processDelegate
 
