@@ -75,7 +75,7 @@ public struct DiffLineView: View {
 			}
 			.padding(.vertical, 1)
 			.padding(.trailing, 8)
-			.background(backgroundColor)
+			.background(isSelected ? Color.clear : backgroundColor)
 		}
 		.background(isSelected ? Color.accentColor.opacity(0.35) : Color.clear)
 		.contentShape(Rectangle())
