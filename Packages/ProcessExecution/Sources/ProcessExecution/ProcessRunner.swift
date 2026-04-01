@@ -47,73 +47,80 @@ public nonisolated enum ProcessRunner {
 		currentDirectory: URL? = nil,
 		environment: [String: String]? = nil
 	) async -> ProcessResult {
-		await withCheckedContinuation { continuation in
-			let process = Process()
-			process.executableURL = executableURL
-			process.arguments = arguments
+		let process = Process()
+		process.executableURL = executableURL
+		process.arguments = arguments
 
-			if let currentDirectory {
-				process.currentDirectoryURL = currentDirectory
+		if let currentDirectory {
+			process.currentDirectoryURL = currentDirectory
+		}
+
+		if let environment {
+			process.environment = environment
+		}
+
+		let outputPipe = Pipe()
+		let errorPipe = Pipe()
+		process.standardOutput = outputPipe
+		process.standardError = errorPipe
+
+		let outputCollector = PipeDataCollector()
+		let errorCollector = PipeDataCollector()
+
+		// Continuously read from output pipe in background to prevent buffer overflow
+		outputPipe.fileHandleForReading.readabilityHandler = { fileHandle in
+			let data = fileHandle.availableData
+			outputCollector.append(data)
+		}
+
+		// Continuously read from error pipe in background to prevent buffer overflow
+		errorPipe.fileHandleForReading.readabilityHandler = { fileHandle in
+			let data = fileHandle.availableData
+			errorCollector.append(data)
+		}
+
+		return await withTaskCancellationHandler {
+			await withCheckedContinuation { continuation in
+				process.terminationHandler = { proc in
+					// Stop reading from pipes
+					outputPipe.fileHandleForReading.readabilityHandler = nil
+					errorPipe.fileHandleForReading.readabilityHandler = nil
+
+					// Read any remaining data
+					let remainingOutput = (try? outputPipe.fileHandleForReading.readToEnd()) ?? Data()
+					let remainingError = (try? errorPipe.fileHandleForReading.readToEnd()) ?? Data()
+
+					// Combine all output
+					outputCollector.append(remainingOutput)
+					errorCollector.append(remainingError)
+
+					let result = ProcessResult(
+						exitCode: proc.terminationStatus,
+						output: outputCollector.getData(),
+						error: errorCollector.getData()
+					)
+
+					continuation.resume(returning: result)
+				}
+
+				do {
+					try process.run()
+				}
+				catch {
+					// If process fails to start, return a failure result
+					let result = ProcessResult(
+						exitCode: -1,
+						output: Data(),
+						error: "Failed to start process: \(error.localizedDescription)".data(using: .utf8) ?? Data()
+					)
+					continuation.resume(returning: result)
+				}
 			}
-
-			if let environment {
-				process.environment = environment
-			}
-
-			let outputPipe = Pipe()
-			let errorPipe = Pipe()
-			process.standardOutput = outputPipe
-			process.standardError = errorPipe
-
-			let outputCollector = PipeDataCollector()
-			let errorCollector = PipeDataCollector()
-
-			// Continuously read from output pipe in background to prevent buffer overflow
-			outputPipe.fileHandleForReading.readabilityHandler = { fileHandle in
-				let data = fileHandle.availableData
-				outputCollector.append(data)
-			}
-
-			// Continuously read from error pipe in background to prevent buffer overflow
-			errorPipe.fileHandleForReading.readabilityHandler = { fileHandle in
-				let data = fileHandle.availableData
-				errorCollector.append(data)
-			}
-
-			process.terminationHandler = { proc in
-				// Stop reading from pipes
-				outputPipe.fileHandleForReading.readabilityHandler = nil
-				errorPipe.fileHandleForReading.readabilityHandler = nil
-
-				// Read any remaining data
-				let remainingOutput = (try? outputPipe.fileHandleForReading.readToEnd()) ?? Data()
-				let remainingError = (try? errorPipe.fileHandleForReading.readToEnd()) ?? Data()
-
-				// Combine all output
-				outputCollector.append(remainingOutput)
-				errorCollector.append(remainingError)
-
-				let result = ProcessResult(
-					exitCode: proc.terminationStatus,
-					output: outputCollector.getData(),
-					error: errorCollector.getData()
-				)
-
-				continuation.resume(returning: result)
-			}
-
-			do {
-				try process.run()
-			}
-			catch {
-				// If process fails to start, return a failure result
-				let result = ProcessResult(
-					exitCode: -1,
-					output: Data(),
-					error: "Failed to start process: \(error.localizedDescription)".data(using: .utf8) ?? Data()
-				)
-				continuation.resume(returning: result)
-			}
+		} onCancel: {
+			// When the Swift task is cancelled, terminate the process immediately.
+			// Without this, the process runs to completion as an orphan, competing
+			// with subsequent scans for system resources and causing git failures.
+			process.terminate()
 		}
 	}
 

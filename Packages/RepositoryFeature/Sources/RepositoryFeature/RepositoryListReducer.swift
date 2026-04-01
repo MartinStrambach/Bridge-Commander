@@ -242,6 +242,14 @@ struct RepositoryListReducer {
 			// MARK: - Full Scan (all tracked repos)
 
 			case .startScan:
+				// Don't interrupt an in-flight scan — let it complete.
+				// A concurrent second scan would cancel the first mid-flight via cancelInFlight:true,
+				// leaving some repos' groups never added. The cancelled scan also orphans git processes
+				// (withCheckedContinuation can't be cancelled), which compete with the new scan.
+				guard !state.isScanning else {
+					return .none
+				}
+
 				// Migration: on first launch, import the legacy single-repo path.
 				if state.trackedRepoPaths.isEmpty {
 					let legacy = lastOpenedDirectoryClient.load() ?? ""
