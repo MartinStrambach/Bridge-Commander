@@ -66,6 +66,7 @@ public struct DiffViewer: View {
 			}
 		}
 		.focusable()
+		.focusEffectDisabled()
 		.focused($isFocused)
 		.onTapGesture { isFocused = true }
 		.onKeyPress(.init("c"), phases: .down) { press in
