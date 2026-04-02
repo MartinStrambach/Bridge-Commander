@@ -5,8 +5,15 @@ import AppUI
 // MARK: - Android Studio Button View
 
 struct AndroidStudioButtonView: View {
+	enum Style {
+		case tool
+		case compact
+	}
+
 	@Bindable
 	var store: StoreOf<AndroidStudioButtonReducer>
+
+	var style: Style = .tool
 
 	private var buttonTooltip: String {
 		if store.isOpening {
@@ -18,15 +25,26 @@ struct AndroidStudioButtonView: View {
 	}
 
 	var body: some View {
-		ToolButton(
-			label: store.isOpening ? "Opening" : "Android Studio",
-			icon: .customImage("android"),
-			tooltip: buttonTooltip,
-			isProcessing: store.isOpening,
-			tint: store.isOpening ? .green : nil,
-			action: { store.send(.openAndroidStudioButtonTapped) }
-		)
-		.alert($store.scope(state: \.$alert, action: \.alert))
+		switch style {
+		case .tool:
+			ToolButton(
+				label: store.isOpening ? "Opening" : "Android Studio",
+				icon: .customImage("android"),
+				tooltip: buttonTooltip,
+				isProcessing: store.isOpening,
+				tint: store.isOpening ? .green : nil,
+				action: { store.send(.openAndroidStudioButtonTapped) }
+			)
+			.alert($store.scope(state: \.$alert, action: \.alert))
+
+		case .compact:
+			ActionButton(
+				icon: .customImage("android"),
+				tooltip: buttonTooltip,
+				action: { store.send(.openAndroidStudioButtonTapped) }
+			)
+			.alert($store.scope(state: \.$alert, action: \.alert))
+		}
 	}
 
 }

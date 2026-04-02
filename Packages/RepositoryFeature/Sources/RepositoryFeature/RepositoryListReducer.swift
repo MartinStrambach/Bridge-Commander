@@ -446,6 +446,7 @@ struct RepositoryListReducer {
 					state.terminalSessions.append(session)
 					state.terminalLayout?.activeSessionId = session.id
 				}
+				syncTerminalButtons(for: repositoryPath, in: &state)
 				return .none
 
 			case .terminalLayout(.hideTerminalMode):
@@ -619,6 +620,7 @@ private func openTerminal(
 		state.terminalLayout?.activeRepositoryPath = repositoryPath
 		state.terminalLayout?.activeSessionId = session.id
 	}
+	syncTerminalButtons(for: repositoryPath, in: &state)
 	return .none
 }
 
@@ -792,6 +794,23 @@ private func applySettings(
 	row.androidStudioButton.mobileSubfolderPath = effectiveMobileSubfolder
 	row.terminalButton.mobileSubfolderPath = effectiveMobileSubfolder
 	row.claudeCodeButton.mobileSubfolderPath = effectiveMobileSubfolder
+}
+
+private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {
+	guard let rowState = findRowState(for: path, in: state) else { return }
+	state.terminalLayout?.xcodeButton = rowState.supportsIOS ? rowState.xcodeButton : nil
+	state.terminalLayout?.androidStudioButton = rowState.supportsAndroid ? rowState.androidStudioButton : nil
+}
+
+private func findRowState(
+	for path: String,
+	in state: RepositoryListReducer.State
+) -> RepositoryRowReducer.State? {
+	for group in state.repositoryGroups {
+		if group.header.path == path { return group.header }
+		if let wt = group.worktrees[id: path] { return wt }
+	}
+	return nil
 }
 
 private func groupSettings(

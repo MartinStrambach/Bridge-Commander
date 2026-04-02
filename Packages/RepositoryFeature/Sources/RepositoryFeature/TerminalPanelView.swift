@@ -1,3 +1,4 @@
+import AppUI
 import ComposableArchitecture
 import SwiftTerm
 import SwiftUI
@@ -79,16 +80,6 @@ struct TerminalPanelView: View {
 
 			Spacer()
 
-			if let rowState = activeRowState, rowState.stagedChangesCount > 0 {
-				Button("Commit") {
-					if let path = store.activeRepositoryPath {
-						store.send(.stagingButtonTapped(repositoryPath: path))
-					}
-				}
-				.buttonStyle(.bordered)
-				.controlSize(.small)
-			}
-
 			if let rowState = activeRowState, rowState.unpushedCommitCount > 0 || store.isPushing {
 				Button {
 					if let path = store.activeRepositoryPath {
@@ -112,6 +103,33 @@ struct TerminalPanelView: View {
 				.disabled(store.isPushing)
 			}
 
+			if let prUrl = activeRowState?.prUrl, let url = URL(string: prUrl) {
+				ActionButton(
+					icon: .customImage("gitlab"),
+					tooltip: "Open pull request in GitLab"
+				) {
+					NSWorkspace.shared.open(url)
+				}
+			}
+
+			if let xcodeStore = store.scope(state: \.xcodeButton, action: \.xcodeButton) {
+				XcodeProjectButtonView(store: xcodeStore, style: .compact)
+			}
+
+			if let androidStore = store.scope(state: \.androidStudioButton, action: \.androidStudioButton) {
+				AndroidStudioButtonView(store: androidStore, style: .compact)
+			}
+
+//			if let rowState = activeRowState, rowState.stagedChangesCount > 0 {
+//				Button("Commit") {
+//					if let path = store.activeRepositoryPath {
+//						store.send(.stagingButtonTapped(repositoryPath: path))
+//					}
+//				}
+//				.buttonStyle(.bordered)
+//				.controlSize(.small)
+//			}
+			
 			Button("Staging") {
 				if let path = store.activeRepositoryPath {
 					store.send(.stagingButtonTapped(repositoryPath: path))

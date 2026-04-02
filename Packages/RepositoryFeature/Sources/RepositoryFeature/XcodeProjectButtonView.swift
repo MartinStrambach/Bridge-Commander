@@ -6,8 +6,15 @@ import ToolsIntegration
 // MARK: - Xcode Project Button View
 
 struct XcodeProjectButtonView: View {
+	enum Style {
+		case tool
+		case compact
+	}
+
 	@Bindable
 	var store: StoreOf<XcodeProjectButtonReducer>
+
+	var style: Style = .tool
 
 	private var buttonLabel: String {
 		switch store.projectState {
@@ -61,15 +68,27 @@ struct XcodeProjectButtonView: View {
 	}
 
 	var body: some View {
-		ToolButton(
-			label: buttonLabel,
-			icon: .systemImage(buttonIcon),
-			tooltip: buttonTooltip,
-			isProcessing: store.projectState.isProcessing,
-			tint: store.projectPath == nil ? .orange : nil,
-			action: { store.send(.openProject) }
-		)
-		.alert($store.scope(state: \.$alert, action: \.alert))
+		switch style {
+		case .tool:
+			ToolButton(
+				label: buttonLabel,
+				icon: .systemImage(buttonIcon),
+				tooltip: buttonTooltip,
+				isProcessing: store.projectState.isProcessing,
+				tint: store.projectPath == nil ? .orange : nil,
+				action: { store.send(.openProject) }
+			)
+			.alert($store.scope(state: \.$alert, action: \.alert))
+
+		case .compact:
+			ActionButton(
+				icon: .systemImage(buttonIcon),
+				tooltip: buttonTooltip,
+				color: store.projectPath == nil ? .orange : nil,
+				action: { store.send(.openProject) }
+			)
+			.alert($store.scope(state: \.$alert, action: \.alert))
+		}
 	}
 
 }

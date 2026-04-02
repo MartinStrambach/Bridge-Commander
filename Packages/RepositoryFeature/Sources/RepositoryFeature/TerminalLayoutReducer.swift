@@ -11,6 +11,9 @@ struct TerminalLayoutReducer {
 		var activeSessionId: UUID?
 		var isPushing = false
 
+		var xcodeButton: XcodeProjectButtonReducer.State?
+		var androidStudioButton: AndroidStudioButtonReducer.State?
+
 		@Presents
 		var stagingDetail: RepositoryDetail.State?
 	}
@@ -28,6 +31,8 @@ struct TerminalLayoutReducer {
 		case newTabRequested
 		case selectTab(sessionId: UUID)
 		case retryTab(sessionId: UUID)
+		case xcodeButton(XcodeProjectButtonReducer.Action)
+		case androidStudioButton(AndroidStudioButtonReducer.Action)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -93,10 +98,22 @@ struct TerminalLayoutReducer {
 			case .retryTab:
 				// Forwarded up to RepositoryListReducer
 				return .none
+
+			case .xcodeButton:
+				return .none
+
+			case .androidStudioButton:
+				return .none
 			}
 		}
 		.ifLet(\.$stagingDetail, action: \.stagingDetail) {
 			RepositoryDetail()
+		}
+		.ifLet(\.xcodeButton, action: \.xcodeButton) {
+			XcodeProjectButtonReducer()
+		}
+		.ifLet(\.androidStudioButton, action: \.androidStudioButton) {
+			AndroidStudioButtonReducer()
 		}
 	}
 }
