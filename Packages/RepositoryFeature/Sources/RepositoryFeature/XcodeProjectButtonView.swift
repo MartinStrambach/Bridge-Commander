@@ -30,10 +30,10 @@ struct XcodeProjectButtonView: View {
 			"Checking"
 
 		case .runningTi:
-			"Running ti"
+			"Installing"
 
 		case .runningTg:
-			"Running tg"
+			"Generating"
 
 		case .opening:
 			"Opening"

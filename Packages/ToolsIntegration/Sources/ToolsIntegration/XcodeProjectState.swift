@@ -17,10 +17,10 @@ public enum XcodeProjectState: Equatable, Sendable {
 			"Checking"
 
 		case .runningTi:
-			"Running ti"
+			"Installing"
 
 		case .runningTg:
-			"Running tg"
+			"Generating"
 
 		case .opening:
 			"Opening"
