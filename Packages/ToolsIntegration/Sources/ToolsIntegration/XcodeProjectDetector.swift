@@ -84,4 +84,18 @@ public nonisolated enum XcodeProjectDetector {
 	public static func getIosFlashscorePath(in repositoryPath: String, iosSubfolderPath: String) -> String {
 		(repositoryPath as NSString).appendingPathComponent(iosSubfolderPath)
 	}
+
+	/// Checks whether the iOS subfolder contains Tuist manifest files
+	/// - Parameters:
+	///   - repositoryPath: The repository root path
+	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
+	/// - Returns: True if Tuist manifests are detected
+	public static func hasTuistManifest(in repositoryPath: String, iosSubfolderPath: String) -> Bool {
+		let folderPath = getIosFlashscorePath(in: repositoryPath, iosSubfolderPath: iosSubfolderPath)
+		let fileManager = FileManager.default
+		let tuistIndicators = ["Project.swift", "Workspace.swift", "Tuist"]
+		return tuistIndicators.contains { indicator in
+			fileManager.fileExists(atPath: (folderPath as NSString).appendingPathComponent(indicator))
+		}
+	}
 }

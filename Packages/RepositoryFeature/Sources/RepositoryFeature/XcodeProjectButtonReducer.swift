@@ -13,6 +13,7 @@ struct XcodeProjectButtonReducer {
 		let repositoryPath: String
 		var projectState: XcodeProjectState = .idle
 		var projectPath: String?
+		var usesTuist: Bool = false
 		var iosSubfolderPath: String
 		var xcodeFilePreference: XcodeFilePreference
 		@Shared(.openXcodeAfterGenerate)
@@ -32,7 +33,7 @@ struct XcodeProjectButtonReducer {
 	enum Action {
 		case onAppear
 		case refresh
-		case foundProjectPath(String?)
+		case foundProjectPath(String?, usesTuist: Bool)
 		case openProject
 		case didOpenProject
 		case openFailed(String)
@@ -62,9 +63,10 @@ struct XcodeProjectButtonReducer {
 			case .refresh:
 				return findProjectEffect(state: &state)
 
-			case let .foundProjectPath(path):
+			case let .foundProjectPath(path, usesTuist: usesTuist):
 				state.projectState = .idle
 				state.projectPath = path
+				state.usesTuist = usesTuist
 				state.isLoaded = true
 				return .none
 
@@ -167,7 +169,8 @@ struct XcodeProjectButtonReducer {
 
 		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, preference = state.xcodeFilePreference] send in
 			let projectPath = xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath, preference: preference)
-			await send(.foundProjectPath(projectPath))
+			let usesTuist = XcodeProjectDetector.hasTuistManifest(in: path, iosSubfolderPath: iosSubfolderPath)
+			await send(.foundProjectPath(projectPath, usesTuist: usesTuist))
 		}
 	}
 }

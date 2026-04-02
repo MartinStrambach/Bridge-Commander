@@ -20,7 +20,7 @@ struct XcodeProjectButtonView: View {
 		switch store.projectState {
 		case .idle:
 			if store.projectPath == nil {
-				"Generate"
+				store.usesTuist ? "Install & Generate" : "Generate"
 			}
 			else {
 				"Xcode"
@@ -56,7 +56,9 @@ struct XcodeProjectButtonView: View {
 		switch store.projectState {
 		case .idle:
 			if store.projectPath == nil {
-				"Xcode project not found - click to generate"
+				store.usesTuist
+					? "Xcode project not found - click to run tuist install & generate"
+					: "Xcode project not found - click to generate"
 			}
 			else {
 				"Open Xcode project or workspace"
