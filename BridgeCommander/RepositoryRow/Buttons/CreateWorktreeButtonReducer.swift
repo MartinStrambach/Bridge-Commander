@@ -13,7 +13,16 @@ struct CreateWorktreeButtonReducer {
 		var branchName: String = ""
 		var availableBranches: [BranchInfo] = []
 		var selectedBaseBranch: String = "master"
+		var branchSearchText: String = ""
 		var isLoadingBranches: Bool = false
+
+		var filteredBranches: [BranchInfo] {
+			guard !branchSearchText.isEmpty else { return availableBranches }
+			return availableBranches.filter {
+				$0.name == selectedBaseBranch ||
+				$0.name.localizedCaseInsensitiveContains(branchSearchText)
+			}
+		}
 		var createNewBranch: Bool = true
 		@Presents
 		var errorAlert: AlertState<Action.ErrorAlert>?
@@ -68,6 +77,7 @@ struct CreateWorktreeButtonReducer {
 			case .cancelCreation:
 				state.showCreateDialog = false
 				state.branchName = ""
+				state.branchSearchText = ""
 				state.availableBranches = []
 				return .none
 
@@ -103,6 +113,7 @@ struct CreateWorktreeButtonReducer {
 			case .didCreateSuccessfully:
 				state.isCreating = false
 				state.branchName = ""
+				state.branchSearchText = ""
 				state.availableBranches = []
 				return .none
 
