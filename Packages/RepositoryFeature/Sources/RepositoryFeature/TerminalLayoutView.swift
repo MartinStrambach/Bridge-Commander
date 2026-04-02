@@ -11,7 +11,19 @@ struct TerminalLayoutView: View {
 	let terminalViewStore: TerminalViewStore
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
+	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
+
 	// MARK: - Helpers
+
+	private var filteredSidebarGroups: [(group: RepoGroupReducer.State, showHeader: Bool, worktrees: [RepositoryRowReducer.State])] {
+		let sessionPaths = Set(sessions.map(\.repositoryPath))
+		return repositoryGroups.compactMap { group in
+			let showHeader = sessionPaths.contains(group.header.path)
+			let filteredWorktrees = group.worktrees.filter { sessionPaths.contains($0.path) }
+			guard showHeader || !filteredWorktrees.isEmpty else { return nil }
+			return (group, showHeader, Array(filteredWorktrees))
+		}
+	}
 
 	private var activeRowState: RepositoryRowReducer.State? {
 		guard let path = store.activeRepositoryPath else {
@@ -65,55 +77,48 @@ struct TerminalLayoutView: View {
 
 	private var sidebar: some View {
 		VStack(spacing: 0) {
-			Text("REPOSITORIES")
-				.font(.caption2)
-				.fontWeight(.semibold)
-				.foregroundColor(.secondary)
-				.frame(maxWidth: .infinity, alignment: .leading)
-				.padding(.horizontal, 8)
-				.padding(.top, 12)
-				.padding(.bottom, 4)
+			HStack {
+				Text("REPOSITORIES")
+					.font(.caption2)
+					.fontWeight(.semibold)
+					.foregroundColor(.secondary)
+				Spacer()
+				Button {
+					showOnlyWithTerminals.toggle()
+				} label: {
+					Image(systemName: showOnlyWithTerminals ? "terminal.fill" : "terminal")
+						.font(.caption)
+						.foregroundColor(showOnlyWithTerminals ? .green : .secondary)
+						.padding(8)
+						.background(Color.secondary.opacity(showOnlyWithTerminals ? 0.2 : 0.1), in: RoundedRectangle(cornerRadius: 6))
+						.contentShape(Rectangle())
+				}
+				.buttonStyle(.plain)
+				.help(showOnlyWithTerminals ? "Showing only repos with active terminals" : "Show only repos with active terminals")
+			}
+			.padding(.horizontal, 8)
+			.padding(.top, 12)
+			.padding(.bottom, 4)
 
 			ScrollView {
 				LazyVStack(alignment: .leading, spacing: 2) {
-					ForEach(repositoryGroups) { group in
-						Text(URL(fileURLWithPath: group.id).lastPathComponent.uppercased())
-							.font(.caption2)
-							.fontWeight(.semibold)
-							.foregroundColor(.secondary)
-							.frame(maxWidth: .infinity, alignment: .leading)
-							.padding(.horizontal, 8)
-							.padding(.top, 8)
-							.padding(.bottom, 2)
-
-						SidebarRepositoryRowView(
-							rowState: group.header,
-							isActive: store.activeRepositoryPath == group.header.path,
-							sessionStatus: sessions.first(where: { $0.repositoryPath == group.header.path })?.status,
-							onTap: {
-								store.send(.selectRepo(repositoryPath: group.header.path))
-							},
-							onKill: {
-								terminalViewStore.killAllSessions(for: group.header.path)
-								store.send(.killRepo(repositoryPath: group.header.path))
+					if showOnlyWithTerminals {
+						ForEach(filteredSidebarGroups, id: \.group.id) { item in
+							sidebarGroupLabel(for: item.group)
+							if item.showHeader {
+								sidebarRow(for: item.group.header)
 							}
-						)
-						.padding(.horizontal, 4)
-
-						ForEach(group.worktrees) { rowState in
-							SidebarRepositoryRowView(
-								rowState: rowState,
-								isActive: store.activeRepositoryPath == rowState.path,
-								sessionStatus: sessions.first(where: { $0.repositoryPath == rowState.path })?.status,
-								onTap: {
-									store.send(.selectRepo(repositoryPath: rowState.path))
-								},
-								onKill: {
-									terminalViewStore.killAllSessions(for: rowState.path)
-									store.send(.killRepo(repositoryPath: rowState.path))
-								}
-							)
-							.padding(.horizontal, 4)
+							ForEach(item.worktrees, id: \.id) { rowState in
+								sidebarRow(for: rowState)
+							}
+						}
+					} else {
+						ForEach(repositoryGroups) { group in
+							sidebarGroupLabel(for: group)
+							sidebarRow(for: group.header)
+							ForEach(group.worktrees) { rowState in
+								sidebarRow(for: rowState)
+							}
 						}
 					}
 				}
@@ -139,6 +144,33 @@ struct TerminalLayoutView: View {
 				.keyboardShortcut("§", modifiers: .command)
 				.hidden()
 		}
+	}
+
+	private func sidebarGroupLabel(for group: RepoGroupReducer.State) -> some View {
+		Text(URL(fileURLWithPath: group.id).lastPathComponent.uppercased())
+			.font(.caption2)
+			.fontWeight(.semibold)
+			.foregroundColor(.secondary)
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.padding(.horizontal, 8)
+			.padding(.top, 8)
+			.padding(.bottom, 2)
+	}
+
+	private func sidebarRow(for rowState: RepositoryRowReducer.State) -> some View {
+		SidebarRepositoryRowView(
+			rowState: rowState,
+			isActive: store.activeRepositoryPath == rowState.path,
+			sessionStatus: sessions.first(where: { $0.repositoryPath == rowState.path })?.status,
+			onTap: {
+				store.send(.selectRepo(repositoryPath: rowState.path))
+			},
+			onKill: {
+				terminalViewStore.killAllSessions(for: rowState.path)
+				store.send(.killRepo(repositoryPath: rowState.path))
+			}
+		)
+		.padding(.horizontal, 4)
 	}
 
 }
