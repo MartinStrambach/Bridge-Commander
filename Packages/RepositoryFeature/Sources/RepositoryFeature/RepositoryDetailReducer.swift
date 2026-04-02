@@ -51,7 +51,6 @@ struct RepositoryDetail {
 		case commitSheet(PresentationAction<CommitReducer.Action>)
 		case pushButtonTapped
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
-		case loadUnpushedCountResponse(Int)
 		case deleteFilesCompleted([FileChange])
 		case discardFilesCompleted([FileChange])
 		case diffViewer(FileDiffViewer.Action)
@@ -69,7 +68,6 @@ struct RepositoryDetail {
 
 	private nonisolated enum CancellableId: Hashable {
 		case loadChanges
-		case loadUnpushedCount
 	}
 
 	@Dependency(GitStagingClient.self)
@@ -99,28 +97,21 @@ struct RepositoryDetail {
 			     .operationCompleted(.success):
 				state.isLoadingChanges = true
 				return .merge(
-					.merge(
-						.run { [path = state.repositoryPath] send in
-							// Retry logic to handle git index race conditions
-							var changes = await gitStagingClient.fetchFileChanges(path)
-							if changes.staged.isEmpty, changes.unstaged.isEmpty {
-								try await Task.sleep(nanoseconds: 200_000_000) // 200ms
-								changes = await gitStagingClient.fetchFileChanges(path)
-							}
-							await send(.loadChangesResponse(changes))
-						},
-						.run { [path = state.repositoryPath] send in
-							let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-							await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
-						}
-					)
-					.cancellable(id: CancellableId.loadChanges, cancelInFlight: true),
 					.run { [path = state.repositoryPath] send in
-						let info = await GitStatusDetector.getStatus(at: path)
-						await send(.loadUnpushedCountResponse(info.unpushedCount))
+						// Retry logic to handle git index race conditions
+						var changes = await gitStagingClient.fetchFileChanges(path)
+						if changes.staged.isEmpty, changes.unstaged.isEmpty {
+							try await Task.sleep(nanoseconds: 200_000_000) // 200ms
+							changes = await gitStagingClient.fetchFileChanges(path)
+						}
+						await send(.loadChangesResponse(changes))
+					},
+					.run { [path = state.repositoryPath] send in
+						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
+						await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
 					}
-					.cancellable(id: CancellableId.loadUnpushedCount, cancelInFlight: true)
 				)
+				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
 
 			case let .loadChangesResponse(changes):
 				state.isLoadingChanges = false
@@ -128,6 +119,7 @@ struct RepositoryDetail {
 				state.staged.files = changes.staged
 				state.unstaged.isLoading = false
 				state.unstaged.files = changes.unstaged
+				state.unpushedCommitsCount = changes.unpushedCount
 				let pendingSelection = state.pendingSelection
 				state.pendingSelection = nil
 				return handleAutoSelection(
@@ -316,10 +308,6 @@ struct RepositoryDetail {
 					message: error.localizedDescription,
 					isError: true
 				)
-				return .none
-
-			case let .loadUnpushedCountResponse(count):
-				state.unpushedCommitsCount = count
 				return .none
 
 			case .pushButtonTapped:

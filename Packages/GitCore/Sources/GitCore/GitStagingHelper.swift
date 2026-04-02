@@ -13,7 +13,8 @@ public nonisolated enum GitStagingHelper {
 		let status = await GitStatusDetector.getStatus(at: path)
 		return GitFileChanges(
 			staged: status.staged.sorted { $0.path < $1.path },
-			unstaged: status.unstaged.sorted { $0.path < $1.path }
+			unstaged: status.unstaged.sorted { $0.path < $1.path },
+			unpushedCount: status.unpushedCount
 		)
 	}
 

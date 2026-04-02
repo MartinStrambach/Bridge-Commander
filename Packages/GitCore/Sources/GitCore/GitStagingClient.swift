@@ -27,10 +27,12 @@ public struct GitStagingClient: Sendable {
 public struct GitFileChanges: Equatable {
 	public let staged: [FileChange]
 	public let unstaged: [FileChange]
+	public let unpushedCount: Int
 
-	public init(staged: [FileChange], unstaged: [FileChange]) {
+	public init(staged: [FileChange], unstaged: [FileChange], unpushedCount: Int = 0) {
 		self.staged = staged
 		self.unstaged = unstaged
+		self.unpushedCount = unpushedCount
 	}
 }
 
