@@ -57,7 +57,7 @@ struct RepositoryRowView: View {
 							.rotationEffect(.degrees(collapsed ? 0 : 90))
 							.animation(.easeInOut(duration: 0.2), value: collapsed)
 							.frame(maxHeight: .infinity)
-							.padding(.horizontal, 4)
+							.padding(.horizontal, 8)
 							.background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
 							.contentShape(Rectangle())
 					}
@@ -66,7 +66,7 @@ struct RepositoryRowView: View {
 				else {
 					Image(systemName: "chevron.right")
 						.font(.caption)
-						.padding(.horizontal, 4)
+						.padding(.horizontal, 8)
 						.hidden()
 				}
 			}
