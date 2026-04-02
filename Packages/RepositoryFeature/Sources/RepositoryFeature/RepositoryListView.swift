@@ -58,47 +58,18 @@ struct RepositoryListView: View {
 	}
 
 	var body: some View {
-		Group {
-			if
-				let terminalLayoutStore = store.scope(
-					state: \.terminalLayout,
-					action: \.terminalLayout
-				)
-			{
-				TerminalLayoutView(
-					store: terminalLayoutStore,
-					repositoryGroups: store.repositoryGroups,
-					sessions: store.terminalSessions,
-					terminalViewStore: terminalViewStore,
-					onStatusChange: { sessionId, status in
-						MainActor.assumeIsolated {
-							_ = store.send(.terminalLayout(.sessionStatusChanged(sessionId: sessionId, status: status)))
-						}
-					}
-				)
-				.windowMinSize(width: 800, height: 400)
-				.transition(.opacity.combined(with: .move(edge: .trailing)))
-			}
-			else {
-				VStack(spacing: 0) {
-					headerView
-					Divider()
-					if store.showPermissionDialog {
-						permissionWarningBanner
-					}
-					if store.repositoryGroups.isEmpty {
-						emptyStateView
-					}
-					else {
-						searchBarView
-						Divider()
-						repositoryListView
-					}
-				}
-				.windowMinSize(width: 600, height: 400)
-				.transition(.opacity.combined(with: .move(edge: .leading)))
-			}
+		ZStack {
+			// Repository list — always in hierarchy so there's no cold-start layout cost
+			// when the terminal panel is hidden. Fades out while the terminal is visible.
+			repositoryContentView
+				.opacity(store.terminalLayout != nil ? 0 : 1)
+
+			// Terminal overlay — fades in/out on top with opacity only.
+			// Avoids per-frame NSView frame repositioning that .move would cause on
+			// the Metal-backed SwiftTerm views inside TerminalContainerRepresentable.
+			terminalOverlayView
 		}
+		.windowMinSize(width: store.terminalLayout != nil ? 800 : 600, height: 400)
 		.animation(.spring(duration: 0.3), value: store.terminalLayout != nil)
 		.background { focusSearchShortcut }
 		.onAppear { send(.onAppear) }
@@ -110,6 +81,43 @@ struct RepositoryListView: View {
 			send(.groupSettingsChanged)
 		}
 		.alert($store.scope(state: \.$alert, action: \.alert))
+	}
+
+	@ViewBuilder
+	private var repositoryContentView: some View {
+		VStack(spacing: 0) {
+			headerView
+			Divider()
+			if store.showPermissionDialog {
+				permissionWarningBanner
+			}
+			if store.repositoryGroups.isEmpty {
+				emptyStateView
+			}
+			else {
+				searchBarView
+				Divider()
+				repositoryListView
+			}
+		}
+	}
+
+	@ViewBuilder
+	private var terminalOverlayView: some View {
+		if let terminalLayoutStore = store.scope(state: \.terminalLayout, action: \.terminalLayout) {
+			TerminalLayoutView(
+				store: terminalLayoutStore,
+				repositoryGroups: store.repositoryGroups,
+				sessions: store.terminalSessions,
+				terminalViewStore: terminalViewStore,
+				onStatusChange: { sessionId, status in
+					MainActor.assumeIsolated {
+						send(.terminalLayout(.sessionStatusChanged(sessionId: sessionId, status: status)))
+					}
+				}
+			)
+			.transition(.opacity)
+		}
 	}
 
 	// MARK: - Header View
