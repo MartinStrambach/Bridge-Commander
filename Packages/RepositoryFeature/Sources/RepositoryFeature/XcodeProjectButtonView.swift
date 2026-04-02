@@ -16,11 +16,15 @@ struct XcodeProjectButtonView: View {
 
 	var style: Style = .tool
 
+	private var isNotFound: Bool {
+		store.projectState == .idle && store.projectPath == nil && !store.usesTuist
+	}
+
 	private var buttonLabel: String {
 		switch store.projectState {
 		case .idle:
 			if store.projectPath == nil {
-				store.usesTuist ? "Install & Generate" : "Generate"
+				store.usesTuist ? "Install & Generate" : "Not Found"
 			}
 			else {
 				"Xcode"
@@ -58,7 +62,7 @@ struct XcodeProjectButtonView: View {
 			if store.projectPath == nil {
 				store.usesTuist
 					? "Xcode project not found - click to run tuist install & generate"
-					: "Xcode project not found - click to generate"
+					: "Project not found - check iOS project path or if project exists on disk"
 			}
 			else {
 				"Open Xcode project or workspace"
@@ -80,6 +84,7 @@ struct XcodeProjectButtonView: View {
 				tint: store.projectPath == nil ? .orange : nil,
 				action: { store.send(.openProject) }
 			)
+			.disabled(isNotFound)
 			.alert($store.scope(state: \.$alert, action: \.alert))
 
 		case .compact:
@@ -89,6 +94,7 @@ struct XcodeProjectButtonView: View {
 				color: store.projectPath == nil ? .orange : nil,
 				action: { store.send(.openProject) }
 			)
+			.disabled(isNotFound)
 			.alert($store.scope(state: \.$alert, action: \.alert))
 		}
 	}
