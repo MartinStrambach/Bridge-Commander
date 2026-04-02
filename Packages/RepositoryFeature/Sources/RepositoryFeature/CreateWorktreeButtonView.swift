@@ -25,15 +25,18 @@ struct CreateWorktreeDialogView: View {
 						.frame(maxWidth: .infinity)
 				}
 				else {
+					TextField("Filter branches...", text: $store.branchSearchText)
+						.textFieldStyle(.roundedBorder)
+
 					Picker("Branch name", selection: $store.selectedBaseBranch) {
-						ForEach(store.availableBranches, id: \.self) { branchInfo in
+						ForEach(store.filteredBranches, id: \.self) { branchInfo in
 							Text(branchInfo.name + (branchInfo.isRemoteOnly ? " (remote)" : ""))
 								.foregroundColor(branchInfo.isRemoteOnly ? .orange.opacity(0.5) : .green.opacity(0.8))
 								.tag(branchInfo.name)
 						}
 					}
 					.pickerStyle(.menu)
-					.disabled(store.availableBranches.isEmpty)
+					.disabled(store.filteredBranches.isEmpty)
 				}
 
 				Toggle("Create new branch", isOn: $store.createNewBranch)
