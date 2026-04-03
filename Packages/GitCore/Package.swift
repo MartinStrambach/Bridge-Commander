@@ -8,8 +8,8 @@ let package = Package(
         .library(name: "GitCore", targets: ["GitCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.25.3"),
-        .package(url: "https://github.com/pointfreeco/swift-dependencies", exact: "1.12.0"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.25.3"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.12.0"),
         .package(path: "../ProcessExecution"),
     ],
     targets: [

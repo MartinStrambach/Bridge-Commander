@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "AppUI", targets: ["AppUI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", exact: "1.25.3"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.25.3"),
     ],
     targets: [
         .target(

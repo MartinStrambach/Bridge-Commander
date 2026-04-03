@@ -8,8 +8,8 @@ let package = Package(
         .library(name: "ToolsIntegration", targets: ["ToolsIntegration"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-dependencies", exact: "1.12.0"),
-        .package(url: "https://github.com/pointfreeco/swift-sharing", exact: "2.8.0"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.12.0"),
+        .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.8.0"),
         .package(path: "../ProcessExecution"),
     ],
     targets: [
