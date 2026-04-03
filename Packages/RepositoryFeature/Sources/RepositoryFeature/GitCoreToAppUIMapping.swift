@@ -35,7 +35,8 @@ extension GitCore.DiffLine {
 			type: lineType,
 			content: content,
 			oldLineNumber: oldLineNumber,
-			newLineNumber: newLineNumber
+			newLineNumber: newLineNumber,
+			inlineChanges: inlineChanges
 		)
 	}
 }

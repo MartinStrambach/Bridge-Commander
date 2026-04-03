@@ -104,12 +104,14 @@ public nonisolated struct DiffLine: Identifiable, Equatable, Sendable {
 	public let content: String
 	public let oldLineNumber: Int?
 	public let newLineNumber: Int?
+	public let inlineChanges: [Range<String.Index>]
 
-	public init(rawLine: String, id: String, oldLineNumber: Int?, newLineNumber: Int?) {
+	public init(rawLine: String, id: String, oldLineNumber: Int?, newLineNumber: Int?, inlineChanges: [Range<String.Index>] = []) {
 		self.id = id
 		self.rawLine = rawLine
 		self.oldLineNumber = oldLineNumber
 		self.newLineNumber = newLineNumber
+		self.inlineChanges = inlineChanges
 
 		if rawLine.hasPrefix("+") {
 			self.type = .addition
@@ -123,6 +125,10 @@ public nonisolated struct DiffLine: Identifiable, Equatable, Sendable {
 			self.type = .context
 			self.content = rawLine.hasPrefix(" ") ? String(rawLine.dropFirst()) : rawLine
 		}
+	}
+
+	public func withInlineChanges(_ changes: [Range<String.Index>]) -> DiffLine {
+		DiffLine(rawLine: rawLine, id: id, oldLineNumber: oldLineNumber, newLineNumber: newLineNumber, inlineChanges: changes)
 	}
 }
 

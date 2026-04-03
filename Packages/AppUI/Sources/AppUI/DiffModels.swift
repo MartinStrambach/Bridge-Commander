@@ -76,14 +76,16 @@ public struct DiffLine: Identifiable, Equatable, Sendable {
 	public let content: String
 	public let oldLineNumber: Int?
 	public let newLineNumber: Int?
+	public let inlineChanges: [Range<String.Index>]
 
-	public init(id: String, rawLine: String, type: LineType, content: String, oldLineNumber: Int?, newLineNumber: Int?) {
+	public init(id: String, rawLine: String, type: LineType, content: String, oldLineNumber: Int?, newLineNumber: Int?, inlineChanges: [Range<String.Index>] = []) {
 		self.id = id
 		self.rawLine = rawLine
 		self.type = type
 		self.content = content
 		self.oldLineNumber = oldLineNumber
 		self.newLineNumber = newLineNumber
+		self.inlineChanges = inlineChanges
 	}
 }
 

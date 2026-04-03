@@ -308,7 +308,7 @@ public nonisolated enum GitStagingHelper {
 				oldCount: isAdded ? 0 : lineCount,
 				newStart: newStart,
 				newCount: isAdded ? lineCount : 0,
-				lines: makeNumberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: oldStart, newStart: newStart)
+				lines: applyInlineChanges(to: makeNumberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: oldStart, newStart: newStart))
 			)
 
 			return [hunk]
@@ -337,7 +337,7 @@ public nonisolated enum GitStagingHelper {
 					oldCount: parts.oldCount,
 					newStart: parts.newStart,
 					newCount: parts.newCount,
-					lines: diffLines
+					lines: applyInlineChanges(to: diffLines)
 				)
 			)
 		}
@@ -436,6 +436,213 @@ public nonisolated enum GitStagingHelper {
 		}
 
 		return Int(string[range]) ?? 0
+	}
+
+	// MARK: - Inline Change Highlighting
+
+	private static func applyInlineChanges(to lines: [DiffLine]) -> [DiffLine] {
+		var result = lines
+		var i = 0
+		let threshold = 0.40
+
+		while i < lines.count {
+			let delStart = i
+			while i < lines.count, lines[i].type == .deletion { i += 1 }
+			let delEnd = i
+
+			let addStart = i
+			while i < lines.count, lines[i].type == .addition { i += 1 }
+			let addEnd = i
+
+			let deletions = Array(lines[delStart..<delEnd])
+			let additions = Array(lines[addStart..<addEnd])
+
+			if !deletions.isEmpty, !additions.isEmpty {
+				// Build similarity matrix and collect pairs above threshold
+				var pairs: [(sim: Double, di: Int, ai: Int)] = []
+				for (di, del) in deletions.enumerated() {
+					for (ai, add) in additions.enumerated() {
+						let sim = computeSimilarity(old: del.content, new: add.content)
+						if sim >= threshold { pairs.append((sim, di, ai)) }
+					}
+				}
+				// Greedy match: highest similarity first
+				pairs.sort { $0.sim > $1.sim }
+				var usedDel = Set<Int>(), usedAdd = Set<Int>()
+				for pair in pairs {
+					guard !usedDel.contains(pair.di), !usedAdd.contains(pair.ai) else { continue }
+					let del = deletions[pair.di], add = additions[pair.ai]
+					let (oldRanges, newRanges) = computeInlineChanges(old: del.content, new: add.content)
+					if !oldRanges.isEmpty || !newRanges.isEmpty {
+						result[delStart + pair.di] = del.withInlineChanges(oldRanges)
+						result[addStart + pair.ai] = add.withInlineChanges(newRanges)
+					}
+					usedDel.insert(pair.di)
+					usedAdd.insert(pair.ai)
+				}
+			}
+
+			if i == delStart { i += 1 }
+		}
+
+		return result
+	}
+
+	private static func computeSimilarity(old: String, new: String) -> Double {
+		let a = tokenize(old)
+		let b = tokenize(new)
+		guard !a.isEmpty, !b.isEmpty else { return 0.0 }
+		let m = a.count, n = b.count
+		var prev = Array(repeating: 0, count: n + 1)
+		for i in 1...m {
+			var cur = Array(repeating: 0, count: n + 1)
+			for j in 1...n {
+				cur[j] = a[i - 1].text == b[j - 1].text
+					? prev[j - 1] + 1
+					: max(prev[j], cur[j - 1])
+			}
+			prev = cur
+		}
+		return 2.0 * Double(prev[n]) / Double(m + n)
+	}
+
+	private static func computeInlineChanges(
+		old: String,
+		new: String
+	) -> (oldRanges: [Range<String.Index>], newRanges: [Range<String.Index>]) {
+		let oldTokens = tokenize(old)
+		let newTokens = tokenize(new)
+		let m = oldTokens.count
+		let n = newTokens.count
+
+		guard m > 0, n > 0 else { return ([], []) }
+
+		// Wagner-Fischer LCS on token sequences
+		var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+		for i in 1...m {
+			for j in 1...n {
+				if oldTokens[i - 1].text == newTokens[j - 1].text {
+					dp[i][j] = dp[i - 1][j - 1] + 1
+				} else {
+					dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+				}
+			}
+		}
+
+		// Backtrack to mark matched tokens
+		var oldMatched = Array(repeating: false, count: m)
+		var newMatched = Array(repeating: false, count: n)
+		var i = m, j = n
+		while i > 0, j > 0 {
+			if oldTokens[i - 1].text == newTokens[j - 1].text {
+				oldMatched[i - 1] = true
+				newMatched[j - 1] = true
+				i -= 1
+				j -= 1
+			} else if dp[i - 1][j] >= dp[i][j - 1] {
+				i -= 1
+			} else {
+				j -= 1
+			}
+		}
+
+		// Raw unmatched ranges
+		var oldRanges = unmatchedTokenRanges(oldTokens, matched: oldMatched)
+		var newRanges = unmatchedTokenRanges(newTokens, matched: newMatched)
+
+		// Step 4A: equality smasher — merge ranges with tiny keeps between them
+		oldRanges = applyEqualitySmasher(oldRanges, in: old, tokens: oldTokens)
+		newRanges = applyEqualitySmasher(newRanges, in: new, tokens: newTokens)
+
+		// Step 4B: boundary alignment — trim leading/trailing whitespace from highlights
+		oldRanges = applyBoundaryAlignment(oldRanges, in: old)
+		newRanges = applyBoundaryAlignment(newRanges, in: new)
+
+		return (oldRanges, newRanges)
+	}
+
+	private static func applyEqualitySmasher(
+		_ ranges: [Range<String.Index>],
+		in string: String,
+		tokens: [(text: Substring, range: Range<String.Index>)]
+	) -> [Range<String.Index>] {
+		guard ranges.count >= 2 else { return ranges }
+		var result = [ranges[0]]
+		for current in ranges.dropFirst() {
+			let prev = result[result.count - 1]
+			let gapLen = string[prev.upperBound..<current.lowerBound].count
+			let gapTokens = tokens.filter {
+				$0.range.lowerBound >= prev.upperBound &&
+				$0.range.upperBound <= current.lowerBound
+			}
+			let singleNonAlnum = gapTokens.count == 1 &&
+				gapTokens[0].text.allSatisfy { !$0.isLetter && !$0.isNumber && $0 != "_" }
+			if gapLen <= 2 || singleNonAlnum {
+				result[result.count - 1] = prev.lowerBound..<current.upperBound
+			} else {
+				result.append(current)
+			}
+		}
+		return result
+	}
+
+	private static func applyBoundaryAlignment(
+		_ ranges: [Range<String.Index>],
+		in string: String
+	) -> [Range<String.Index>] {
+		var result: [Range<String.Index>] = []
+		for range in ranges {
+			var lo = range.lowerBound
+			var hi = range.upperBound
+			while lo < hi, string[lo].isWhitespace { lo = string.index(after: lo) }
+			while hi > lo, string[string.index(before: hi)].isWhitespace { hi = string.index(before: hi) }
+			if lo < hi { result.append(lo..<hi) }
+		}
+		return result
+	}
+
+	private static func tokenize(_ string: String) -> [(text: Substring, range: Range<String.Index>)] {
+		var tokens: [(text: Substring, range: Range<String.Index>)] = []
+		var i = string.startIndex
+		while i < string.endIndex {
+			let c = string[i]
+			if c.isLetter || c.isNumber || c == "_" {
+				var j = string.index(after: i)
+				while j < string.endIndex, string[j].isLetter || string[j].isNumber || string[j] == "_" {
+					string.formIndex(after: &j)
+				}
+				tokens.append((string[i..<j], i..<j))
+				i = j
+			} else if c.isWhitespace {
+				var j = string.index(after: i)
+				while j < string.endIndex, string[j].isWhitespace {
+					string.formIndex(after: &j)
+				}
+				tokens.append((string[i..<j], i..<j))
+				i = j
+			} else {
+				let j = string.index(after: i)
+				tokens.append((string[i..<j], i..<j))
+				i = j
+			}
+		}
+		return tokens
+	}
+
+	private static func unmatchedTokenRanges(
+		_ tokens: [(text: Substring, range: Range<String.Index>)],
+		matched: [Bool]
+	) -> [Range<String.Index>] {
+		var ranges: [Range<String.Index>] = []
+		for (token, isMatched) in zip(tokens, matched) {
+			guard !isMatched else { continue }
+			if let last = ranges.last, last.upperBound == token.range.lowerBound {
+				ranges[ranges.count - 1] = last.lowerBound..<token.range.upperBound
+			} else {
+				ranges.append(token.range)
+			}
+		}
+		return ranges
 	}
 
 	private static func createPatchForHunk(file: FileChange, hunk: DiffHunk) -> String {
