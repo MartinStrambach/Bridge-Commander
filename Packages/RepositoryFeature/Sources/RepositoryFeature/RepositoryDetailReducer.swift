@@ -35,12 +35,12 @@ struct RepositoryDetail {
 			!staged.files.isEmpty || !unstaged.files.isEmpty
 		}
 
-		init(repositoryPath: String) {
+		init(repositoryPath: String, iosSubfolderPath: String) {
 			self.repositoryPath = repositoryPath
 			self.diffViewer = FileDiffViewer.State(repositoryPath: repositoryPath)
 			self.mergeStatus = MergeStatus.State(repositoryPath: repositoryPath)
-			self.staged = FileChangeList.State(repositoryPath: repositoryPath, listType: .staged)
-			self.unstaged = FileChangeList.State(repositoryPath: repositoryPath, listType: .unstaged)
+			self.staged = FileChangeList.State(repositoryPath: repositoryPath, iosSubfolderPath: iosSubfolderPath, listType: .staged)
+			self.unstaged = FileChangeList.State(repositoryPath: repositoryPath, iosSubfolderPath: iosSubfolderPath, listType: .unstaged)
 		}
 	}
 

@@ -23,7 +23,7 @@ struct XcodeProjectButtonReducer {
 
 		fileprivate var isLoaded = false
 
-		init(repositoryPath: String, iosSubfolderPath: String = "", xcodeFilePreference: XcodeFilePreference = .auto) {
+		init(repositoryPath: String, iosSubfolderPath: String, xcodeFilePreference: XcodeFilePreference = .auto) {
 			self.repositoryPath = repositoryPath
 			self.iosSubfolderPath = iosSubfolderPath
 			self.xcodeFilePreference = xcodeFilePreference

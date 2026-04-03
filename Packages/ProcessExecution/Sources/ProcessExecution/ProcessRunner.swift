@@ -120,6 +120,10 @@ public nonisolated enum ProcessRunner {
 			// When the Swift task is cancelled, terminate the process immediately.
 			// Without this, the process runs to completion as an orphan, competing
 			// with subsequent scans for system resources and causing git failures.
+			guard process.isRunning else {
+				return
+			}
+
 			process.terminate()
 		}
 	}

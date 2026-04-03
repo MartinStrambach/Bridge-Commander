@@ -1,7 +1,8 @@
-import ComposableArchitecture
-import SwiftUI
+import AppKit
 import AppUI
+import ComposableArchitecture
 import GitCore
+import SwiftUI
 
 struct FileChangeListView: View {
 	@Bindable
@@ -47,6 +48,12 @@ struct FileChangeListView: View {
 						)
 						.tag(file.id)
 						.contextMenu { contextMenu(for: file) }
+						.background(
+							DoubleClickCatcher {
+								store.send(.updateSelection([file.id]))
+								store.send(.openInIDE(file))
+							}
+						)
 					}
 				}
 				.listStyle(.plain)
@@ -134,4 +141,60 @@ struct FileChangeListView: View {
 		}
 		NSWorkspace.shared.activateFileViewerSelecting(urls)
 	}
+}
+
+private struct DoubleClickCatcher: NSViewRepresentable {
+	let action: () -> Void
+
+	func makeNSView(context: Context) -> DoubleClickCatcherView {
+		DoubleClickCatcherView(action: action)
+	}
+
+	func updateNSView(_ nsView: DoubleClickCatcherView, context: Context) {
+		nsView.action = action
+	}
+}
+
+private final class DoubleClickCatcherView: NSView {
+	var action: (() -> Void)?
+
+	private var monitor: Any?
+
+	init(action: @escaping () -> Void) {
+		self.action = action
+		super.init(frame: .zero)
+	}
+
+	@available(*, unavailable)
+	required init?(coder: NSCoder) {
+		fatalError()
+	}
+
+	override func viewDidMoveToWindow() {
+		super.viewDidMoveToWindow()
+		if let monitor {
+			NSEvent.removeMonitor(monitor)
+			self.monitor = nil
+		}
+		guard window != nil else {
+			return
+		}
+
+		monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+			guard
+				let self,
+				event.clickCount == 2,
+				event.window === self.window
+			else {
+				return event
+			}
+
+			let point = convert(event.locationInWindow, from: nil)
+			if bounds.contains(point) {
+				action?()
+			}
+			return event
+		}
+	}
+
 }

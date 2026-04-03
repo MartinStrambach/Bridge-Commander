@@ -21,7 +21,7 @@ struct TerminalLayoutReducer {
 	enum Action {
 		case selectRepo(repositoryPath: String)
 		case hideTerminalMode
-		case stagingButtonTapped(repositoryPath: String)
+		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case pushButtonTapped(repositoryPath: String)
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
@@ -46,8 +46,8 @@ struct TerminalLayoutReducer {
 				// Parent RepositoryListReducer handles this by setting terminalLayout = nil
 				return .none
 
-			case let .stagingButtonTapped(repositoryPath):
-				state.stagingDetail = RepositoryDetail.State(repositoryPath: repositoryPath)
+			case let .stagingButtonTapped(repositoryPath, iosSubfolderPath):
+				state.stagingDetail = RepositoryDetail.State(repositoryPath: repositoryPath, iosSubfolderPath: iosSubfolderPath)
 				return .none
 
 			case let .pushButtonTapped(repositoryPath):

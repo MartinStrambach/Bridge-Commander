@@ -26,14 +26,6 @@ public struct FileChangeRow: View {
 		}
 	}
 
-	public init(file: FileChange, isStaged: Bool, selectedFileIds: Set<String>, onToggle: @escaping () -> Void, onToggleSelected: @escaping () -> Void) {
-		self.file = file
-		self.isStaged = isStaged
-		self.selectedFileIds = selectedFileIds
-		self.onToggle = onToggle
-		self.onToggleSelected = onToggleSelected
-	}
-
 	public var body: some View {
 		HStack(spacing: 8) {
 			// Checkbox
@@ -41,6 +33,7 @@ public struct FileChangeRow: View {
 				Image(systemName: isStaged ? "checkmark.square.fill" : "square")
 					.foregroundStyle(isStaged ? .blue : .secondary)
 			}
+			.contentShape(Rectangle())
 			.buttonStyle(.plain)
 
 			// Status Icon
@@ -65,6 +58,20 @@ public struct FileChangeRow: View {
 			Spacer()
 		}
 		.padding(.vertical, 4)
+	}
+
+	public init(
+		file: FileChange,
+		isStaged: Bool,
+		selectedFileIds: Set<String>,
+		onToggle: @escaping () -> Void,
+		onToggleSelected: @escaping () -> Void
+	) {
+		self.file = file
+		self.isStaged = isStaged
+		self.selectedFileIds = selectedFileIds
+		self.onToggle = onToggle
+		self.onToggleSelected = onToggleSelected
 	}
 
 	private func handleToggle() {

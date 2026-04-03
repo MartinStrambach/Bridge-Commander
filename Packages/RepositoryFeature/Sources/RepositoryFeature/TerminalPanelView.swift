@@ -132,7 +132,10 @@ struct TerminalPanelView: View {
 			
 			Button("Staging") {
 				if let path = store.activeRepositoryPath {
-					store.send(.stagingButtonTapped(repositoryPath: path))
+					store.send(.stagingButtonTapped(
+						repositoryPath: path,
+						iosSubfolderPath: activeRowState?.iosSubfolderPath ?? ""
+					))
 				}
 			}
 			.buttonStyle(.bordered)

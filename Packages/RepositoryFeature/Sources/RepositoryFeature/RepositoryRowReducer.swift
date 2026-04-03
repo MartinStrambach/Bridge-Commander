@@ -198,7 +198,7 @@ struct RepositoryRowReducer {
 		Reduce { state, action in
 			switch action {
 			case .openRepositoryDetail:
-				state.repositoryDetail = RepositoryDetail.State(repositoryPath: state.path)
+				state.repositoryDetail = RepositoryDetail.State(repositoryPath: state.path, iosSubfolderPath: state.iosSubfolderPath)
 				return .none
 
 			case .onAppear:

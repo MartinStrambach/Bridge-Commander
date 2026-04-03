@@ -7,50 +7,57 @@ public nonisolated enum FileOpener {
 	/// - Parameters:
 	///   - filePath: Relative path to the file
 	///   - repositoryPath: Absolute path to the repository
-	///   - androidStudioPath: Path to Android Studio executable
+	///   - xcodeProjectPath: Path to .xcworkspace or .xcodeproj, if available
 	public static func openFileInIDE(
 		filePath: String,
 		repositoryPath: String,
-		androidStudioPath: String
+		xcodeProjectPath: String? = nil
 	) async throws {
 		let fullPath = (repositoryPath as NSString).appendingPathComponent(filePath)
 		let fileExtension = (filePath as NSString).pathExtension.lowercased()
 
-		// Check if file exists
 		guard FileManager.default.fileExists(atPath: fullPath) else {
 			throw FileOpenerError.failedToOpen("File does not exist")
 		}
 
-		let result: ProcessResult =
-			switch fileExtension {
-			case "swift":
-				// For Swift files, use xed command which is specifically for opening in Xcode
-				await ProcessRunner.run(
-					executableURL: URL(filePath: "/usr/bin/xed"),
-					arguments: [fullPath]
-				)
-
-			case "kt",
-			     "kts":
-				// For Kotlin files, open in Android Studio within the project context
-				// Use Android Studio's command-line launcher to open both project and file
-				await ProcessRunner.run(
-					executableURL: URL(filePath: androidStudioPath),
-					arguments: [repositoryPath, fullPath]
-				)
-
-			default:
-				// For other files, use default application
-				await ProcessRunner.run(
-					executableURL: URL(filePath: "/usr/bin/open"),
-					arguments: [fullPath]
-				)
+		switch fileExtension {
+		case "swift":
+			if let xcodeProjectPath {
+				try await XcodeProjectGenerator.openProject(at: xcodeProjectPath)
+			}
+			let result = await ProcessRunner.run(
+				executableURL: URL(filePath: "/usr/bin/xed"),
+				arguments: [fullPath]
+			)
+			guard result.success else {
+				let errorMsg = result.trimmedError
+				throw FileOpenerError
+					.failedToOpen(errorMsg.isEmpty ? "Unknown error (exit code \(result.exitCode))" : errorMsg)
 			}
 
-		guard result.success else {
-			let errorMsg = result.trimmedError
-			throw FileOpenerError
-				.failedToOpen(errorMsg.isEmpty ? "Unknown error (exit code \(result.exitCode))" : errorMsg)
+		case "kt",
+		     "kts":
+			try await AndroidStudioLauncher.openInAndroidStudio(at: repositoryPath)
+			let result = await ProcessRunner.run(
+				executableURL: URL(filePath: "/usr/bin/open"),
+				arguments: [fullPath]
+			)
+			guard result.success else {
+				let errorMsg = result.trimmedError
+				throw FileOpenerError
+					.failedToOpen(errorMsg.isEmpty ? "Unknown error (exit code \(result.exitCode))" : errorMsg)
+			}
+
+		default:
+			let result = await ProcessRunner.run(
+				executableURL: URL(filePath: "/usr/bin/open"),
+				arguments: [fullPath]
+			)
+			guard result.success else {
+				let errorMsg = result.trimmedError
+				throw FileOpenerError
+					.failedToOpen(errorMsg.isEmpty ? "Unknown error (exit code \(result.exitCode))" : errorMsg)
+			}
 		}
 	}
 }

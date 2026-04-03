@@ -13,13 +13,15 @@ struct FileChangeList {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
+		let iosSubfolderPath: String
 		let listType: ListType
 		var files: [FileChange] = []
 		var selectedFileIds: Set<String> = []
 		var isLoading = true
 
-		init(repositoryPath: String, listType: ListType) {
+		init(repositoryPath: String, iosSubfolderPath: String, listType: ListType) {
 			self.repositoryPath = repositoryPath
+			self.iosSubfolderPath = iosSubfolderPath
 			self.listType = listType
 		}
 	}
@@ -39,9 +41,6 @@ struct FileChangeList {
 			case deleteConflicted([FileChange])
 		}
 	}
-
-	@Shared(.androidStudioPath)
-	private var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -67,12 +66,16 @@ struct FileChangeList {
 				return .send(.delegate(.toggleAll(files)))
 
 			case let .openInIDE(file):
-				return .run { [path = state.repositoryPath, studioPath = androidStudioPath] _ in
+				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] _ in
 					do {
+						let xcodeProjectPath = XcodeProjectDetector.findXcodeProject(
+							in: path,
+							iosSubfolderPath: iosSubfolderPath
+						)
 						try await FileOpener.openFileInIDE(
 							filePath: file.path,
 							repositoryPath: path,
-							androidStudioPath: studioPath
+							xcodeProjectPath: xcodeProjectPath
 						)
 					}
 					catch {

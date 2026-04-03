@@ -1,8 +1,8 @@
 import AppKit
-import ComposableArchitecture
-import SwiftUI
 import AppUI
+import ComposableArchitecture
 import GitCore
+import SwiftUI
 
 struct RepositoryDetailView: View {
 	@Bindable
@@ -120,7 +120,8 @@ struct RepositoryDetailView: View {
 	RepositoryDetailView(
 		store: Store(
 			initialState: RepositoryDetail.State(
-				repositoryPath: "/Users/test/repo"
+				repositoryPath: "/Users/test/repo",
+				iosSubfolderPath: "",
 			)
 		) {
 			RepositoryDetail()

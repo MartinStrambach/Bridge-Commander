@@ -105,7 +105,8 @@ struct XcodeProjectButtonView: View {
 	XcodeProjectButtonView(
 		store: Store(
 			initialState: XcodeProjectButtonReducer.State(
-				repositoryPath: "/Users/test/projects/my-project"
+				repositoryPath: "/Users/test/projects/my-project",
+				iosSubfolderPath: ""
 			),
 			reducer: {
 				XcodeProjectButtonReducer()

@@ -99,7 +99,8 @@ struct TuistButtonView: View {
 	TuistButtonView(
 		store: Store(
 			initialState: TuistButtonReducer.State(
-				repositoryPath: "/Users/test/projects/my-project"
+				repositoryPath: "/Users/test/projects/my-project",
+				iosSubfolderPath: ""
 			),
 			reducer: {
 				TuistButtonReducer()

@@ -24,7 +24,7 @@ struct TuistButtonReducer {
 			runningAction != nil
 		}
 
-		init(repositoryPath: String, iosSubfolderPath: String = "") {
+		init(repositoryPath: String, iosSubfolderPath: String) {
 			self.repositoryPath = repositoryPath
 			self.iosSubfolderPath = iosSubfolderPath
 			self.runningAction = nil
