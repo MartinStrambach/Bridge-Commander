@@ -1,19 +1,19 @@
+import AppUI
 import ComposableArchitecture
 import SwiftUI
-import AppUI
 
 // MARK: - Android Studio Button View
 
-struct AndroidStudioButtonView: View {
-	enum Style {
+public struct AndroidStudioButtonView: View {
+	public enum Style {
 		case tool
 		case compact
 	}
 
 	@Bindable
-	var store: StoreOf<AndroidStudioButtonReducer>
+	public var store: StoreOf<AndroidStudioButtonReducer>
 
-	var style: Style = .tool
+	public var style: Style = .tool
 
 	private var buttonTooltip: String {
 		if store.isOpening {
@@ -24,7 +24,7 @@ struct AndroidStudioButtonView: View {
 		}
 	}
 
-	var body: some View {
+	public var body: some View {
 		switch style {
 		case .tool:
 			ToolButton(
@@ -45,6 +45,11 @@ struct AndroidStudioButtonView: View {
 			)
 			.alert($store.scope(state: \.$alert, action: \.alert))
 		}
+	}
+
+	public init(store: StoreOf<AndroidStudioButtonReducer>, style: Style = .tool) {
+		self.store = store
+		self.style = style
 	}
 
 }

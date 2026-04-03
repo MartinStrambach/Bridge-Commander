@@ -26,6 +26,7 @@
 		932CED7F2F793C71004ED67F /* ToolsIntegration */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ToolsIntegration; path = Packages/ToolsIntegration; sourceTree = "<group>"; };
 		93351BB42ECD3F1A006D4609 /* BridgeCommander.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BridgeCommander.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		93761C4E2F7A6D5D0049F6F0 /* ProcessExecution */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ProcessExecution; path = Packages/ProcessExecution; sourceTree = "<group>"; };
+		93C9515E2F807809002EB9A8 /* ActionButtons */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ActionButtons; path = Packages/ActionButtons; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -55,6 +56,7 @@
 		93351BAB2ECD3F1A006D4609 = {
 			isa = PBXGroup;
 			children = (
+				93C9515E2F807809002EB9A8 /* ActionButtons */,
 				9303DBEA2F7A967A00AE9EB8 /* GitActionsMenu */,
 				93761C4E2F7A6D5D0049F6F0 /* ProcessExecution */,
 				932CED7A2F793C71004ED67F /* AppUI */,

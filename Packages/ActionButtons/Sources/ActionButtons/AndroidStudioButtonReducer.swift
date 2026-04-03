@@ -3,31 +3,31 @@ import Foundation
 import ToolsIntegration
 
 @Reducer
-struct AndroidStudioButtonReducer {
+public struct AndroidStudioButtonReducer {
 	@ObservableState
-	struct State: Equatable {
-		let repositoryPath: String
-		var isOpening: Bool = false
-		var mobileSubfolderPath: String
+	public struct State: Equatable {
+		public let repositoryPath: String
+		public var isOpening: Bool = false
+		public var mobileSubfolderPath: String
 		@Presents
-		var alert: AlertState<Action.Alert>?
+		public var alert: AlertState<Action.Alert>?
 
-		init(repositoryPath: String, mobileSubfolderPath: String = "") {
+		public init(repositoryPath: String, mobileSubfolderPath: String = "") {
 			self.repositoryPath = repositoryPath
 			self.mobileSubfolderPath = mobileSubfolderPath
 		}
 	}
 
-	enum Action: Equatable {
+	public enum Action: Equatable {
 		case openAndroidStudioButtonTapped
 		case didOpenAndroidStudio
 		case openFailed(String)
 		case alert(PresentationAction<Alert>)
 
-		enum Alert: Equatable {}
+		public enum Alert: Equatable {}
 	}
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .openAndroidStudioButtonTapped:
@@ -64,4 +64,7 @@ struct AndroidStudioButtonReducer {
 		}
 		.ifLet(\.$alert, action: \.alert)
 	}
+
+	public init() {}
+
 }

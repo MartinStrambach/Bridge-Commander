@@ -2,23 +2,23 @@
 import PackageDescription
 
 let package = Package(
-	name: "TerminalFeature",
+	name: "ActionButtons",
 	platforms: [.macOS(.v26)],
 	products: [
-		.library(name: "TerminalFeature", targets: ["TerminalFeature"]),
+		.library(name: "ActionButtons", targets: ["ActionButtons"]),
 	],
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.25.3"),
-		.package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.13.0"),
 		.package(path: "../AppUI"),
+		.package(path: "../ToolsIntegration"),
 	],
 	targets: [
 		.target(
-			name: "TerminalFeature",
+			name: "ActionButtons",
 			dependencies: [
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-				.product(name: "SwiftTerm", package: "SwiftTerm"),
 				.product(name: "AppUI", package: "AppUI"),
+				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
 			]
 		),
 	]
