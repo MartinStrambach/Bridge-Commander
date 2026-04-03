@@ -23,6 +23,38 @@ public struct DiffLineView: View {
 		}
 	}
 
+	private var inlineHighlightColor: Color {
+		switch line.type {
+		case .addition: Color(red: 0.4, green: 0.8, blue: 0.4)
+		case .deletion: Color(red: 0.9, green: 0.4, blue: 0.4)
+		case .context: Color.clear
+		}
+	}
+
+	private var attributedContent: AttributedString {
+		var result = AttributedString()
+		var idx = line.content.startIndex
+		let sorted = line.inlineChanges.sorted { $0.lowerBound < $1.lowerBound }
+		for range in sorted {
+			if idx < range.lowerBound {
+				var part = AttributedString(line.content[idx ..< range.lowerBound])
+				part.foregroundColor = lineColor
+				result.append(part)
+			}
+			var highlighted = AttributedString(line.content[range])
+			highlighted.foregroundColor = lineColor
+			highlighted.backgroundColor = inlineHighlightColor
+			result.append(highlighted)
+			idx = range.upperBound
+		}
+		if idx < line.content.endIndex {
+			var part = AttributedString(line.content[idx...])
+			part.foregroundColor = lineColor
+			result.append(part)
+		}
+		return result
+	}
+
 	private var backgroundColor: Color {
 		switch line.type {
 		case .addition:
@@ -32,14 +64,6 @@ public struct DiffLineView: View {
 		case .context:
 			Color.clear
 		}
-	}
-
-	public init(line: DiffLine, oldLineNumber: Int?, newLineNumber: Int?, isSelected: Bool, onTap: @escaping (EventModifiers) -> Void) {
-		self.line = line
-		self.oldLineNumber = oldLineNumber
-		self.newLineNumber = newLineNumber
-		self.isSelected = isSelected
-		self.onTap = onTap
 	}
 
 	public var body: some View {
@@ -68,10 +92,17 @@ public struct DiffLineView: View {
 					.foregroundStyle(lineColor)
 
 				// Line content
-				Text(line.content)
-					.font(.system(.body, design: .monospaced))
-					.foregroundStyle(lineColor)
-					.frame(maxWidth: .infinity, alignment: .leading)
+				if line.inlineChanges.isEmpty {
+					Text(line.content)
+						.font(.system(.body, design: .monospaced))
+						.foregroundStyle(lineColor)
+						.frame(maxWidth: .infinity, alignment: .leading)
+				}
+				else {
+					Text(attributedContent)
+						.font(.system(.body, design: .monospaced))
+						.frame(maxWidth: .infinity, alignment: .leading)
+				}
 			}
 			.padding(.vertical, 1)
 			.padding(.trailing, 8)
@@ -91,4 +122,19 @@ public struct DiffLineView: View {
 			onTap(swiftModifiers)
 		}
 	}
+
+	public init(
+		line: DiffLine,
+		oldLineNumber: Int?,
+		newLineNumber: Int?,
+		isSelected: Bool,
+		onTap: @escaping (EventModifiers) -> Void
+	) {
+		self.line = line
+		self.oldLineNumber = oldLineNumber
+		self.newLineNumber = newLineNumber
+		self.isSelected = isSelected
+		self.onTap = onTap
+	}
+
 }
