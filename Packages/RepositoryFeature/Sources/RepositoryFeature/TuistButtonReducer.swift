@@ -22,7 +22,7 @@ struct TuistButtonReducer {
 		@Shared(.tuistRunMode)
 		var tuistRunMode = TuistRunMode.mise
 		@Presents
-		var alert: GitAlertReducer.State?
+		var alert: ScrollableAlertReducer.State?
 
 		var isProcessing: Bool {
 			runningAction != nil
@@ -42,7 +42,7 @@ struct TuistButtonReducer {
 		case editTapped
 		case inspectDependenciesTapped
 		case actionCompleted(TuistAction, Result<String, Error>)
-		case alert(PresentationAction<GitAlertReducer.Action>)
+		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -218,7 +218,7 @@ struct TuistButtonReducer {
 			}
 		}
 		.ifLet(\.$alert, action: \.alert) {
-			GitAlertReducer()
+			ScrollableAlertReducer()
 		}
 	}
 }

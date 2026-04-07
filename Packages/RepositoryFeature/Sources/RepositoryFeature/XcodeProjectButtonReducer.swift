@@ -24,6 +24,8 @@ struct XcodeProjectButtonReducer {
 		var tuistRunMode = TuistRunMode.mise
 		@Presents
 		var alert: AlertState<Action.Alert>?
+		@Presents
+		var errorAlert: ScrollableAlertReducer.State?
 
 		fileprivate var isLoaded = false
 
@@ -45,6 +47,7 @@ struct XcodeProjectButtonReducer {
 		case didGenerateProject(String)
 		case generationFailed(String)
 		case alert(PresentationAction<Alert>)
+		case errorAlert(PresentationAction<ScrollableAlertReducer.Action>)
 
 		enum Alert: Equatable {
 			case confirmGenerate
@@ -110,9 +113,10 @@ struct XcodeProjectButtonReducer {
 
 			case let .openFailed(error):
 				state.projectState = .error(error)
-				state.alert = .okAlert(
+				state.errorAlert = .init(
 					title: "Failed to Open Xcode Project",
-					message: error
+					message: error,
+					isError: true
 				)
 				return .none
 
@@ -155,9 +159,10 @@ struct XcodeProjectButtonReducer {
 
 			case let .generationFailed(error):
 				state.projectState = .error(error)
-				state.alert = .okAlert(
+				state.errorAlert = .init(
 					title: "Project Generation Failed",
-					message: error
+					message: error,
+					isError: true
 				)
 				return .none
 
@@ -165,9 +170,16 @@ struct XcodeProjectButtonReducer {
 				// When alert is dismissed, reset state
 				state.projectState = .idle
 				return .none
+
+			case .errorAlert:
+				state.projectState = .idle
+				return .none
 			}
 		}
 		.ifLet(\.$alert, action: \.alert)
+		.ifLet(\.$errorAlert, action: \.errorAlert) {
+			ScrollableAlertReducer()
+		}
 	}
 
 	private func findProjectEffect(state: inout State) -> EffectOf<XcodeProjectButtonReducer> {

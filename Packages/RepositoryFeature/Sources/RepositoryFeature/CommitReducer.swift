@@ -12,7 +12,7 @@ struct CommitReducer {
 		var isCommitting: Bool = false
 		var shouldPushAfterCommit: Bool = false
 		@Presents
-		var alert: GitAlertReducer.State?
+		var alert: ScrollableAlertReducer.State?
 	}
 
 	enum Action: BindableAction {
@@ -22,7 +22,7 @@ struct CommitReducer {
 		case cancelTapped
 		case commitCompleted(Result<Void, Error>)
 		case pushCompleted(Result<Void, Error>)
-		case alert(PresentationAction<GitAlertReducer.Action>)
+		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 		case delegate(Delegate)
 
 		enum Delegate {
@@ -85,7 +85,7 @@ struct CommitReducer {
 
 			case let .pushCompleted(.failure(error)):
 				state.isCommitting = false
-				state.alert = GitAlertReducer.State(
+				state.alert = ScrollableAlertReducer.State(
 					title: "Push Failed",
 					message: error.localizedDescription,
 					isError: true
@@ -95,7 +95,7 @@ struct CommitReducer {
 			case let .commitCompleted(.failure(error)):
 				state.isCommitting = false
 				state.shouldPushAfterCommit = false
-				state.alert = GitAlertReducer.State(
+				state.alert = ScrollableAlertReducer.State(
 					title: "Commit Failed",
 					message: error.localizedDescription,
 					isError: true
@@ -112,7 +112,7 @@ struct CommitReducer {
 			}
 		}
 		.ifLet(\.$alert, action: \.alert) {
-			GitAlertReducer()
+			ScrollableAlertReducer()
 		}
 	}
 }

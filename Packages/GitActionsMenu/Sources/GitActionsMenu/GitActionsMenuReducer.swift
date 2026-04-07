@@ -22,7 +22,7 @@ public struct GitActionsMenuReducer {
 		var mergeMasterButton: MergeMasterButtonReducer.State
 		var abortMergeButton: AbortMergeButtonReducer.State
 		@Presents
-		var alert: GitAlertReducer.State?
+		var alert: ScrollableAlertReducer.State?
 
 		fileprivate var isLoaded = false
 
@@ -48,7 +48,7 @@ public struct GitActionsMenuReducer {
 		case mergeMasterButton(MergeMasterButtonReducer.Action)
 		case abortMergeButton(AbortMergeButtonReducer.Action)
 		case stashButton(StashButtonReducer.Action)
-		case alert(PresentationAction<GitAlertReducer.Action>)
+		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 	}
 
 	public var body: some Reducer<State, Action> {
@@ -80,7 +80,7 @@ public struct GitActionsMenuReducer {
 			switch action {
 			case let .fetchButton(.fetchCompleted(result, error)):
 				if let error {
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Fetch Failed",
 						message: error.localizedDescription,
 						isError: true
@@ -97,13 +97,13 @@ public struct GitActionsMenuReducer {
 						else {
 							"Fetch completed successfully."
 						}
-					state.alert = GitAlertReducer.State(title: "Fetch Successful", message: message, isError: false)
+					state.alert = ScrollableAlertReducer.State(title: "Fetch Successful", message: message, isError: false)
 				}
 				return checkStatusEffect(path: state.repositoryPath)
 
 			case let .pullButton(.pullCompleted(result, error)):
 				if let error {
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Pull Failed",
 						message: error.localizedDescription,
 						isError: true
@@ -120,13 +120,13 @@ public struct GitActionsMenuReducer {
 						else {
 							"Pull completed successfully."
 						}
-					state.alert = GitAlertReducer.State(title: "Pull Successful", message: message, isError: false)
+					state.alert = ScrollableAlertReducer.State(title: "Pull Successful", message: message, isError: false)
 				}
 				return checkStatusEffect(path: state.repositoryPath)
 
 			case let .pushButton(.pushCompleted(result, error)):
 				if let error {
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Push Failed",
 						message: error.localizedDescription,
 						isError: true
@@ -136,7 +136,7 @@ public struct GitActionsMenuReducer {
 					let message = result.isUpToDate
 						? "Everything is already up to date with the remote branch."
 						: "Successfully pushed commits to remote branch."
-					state.alert = GitAlertReducer.State(title: "Push Successful", message: message, isError: false)
+					state.alert = ScrollableAlertReducer.State(title: "Push Successful", message: message, isError: false)
 				}
 				return checkStatusEffect(path: state.repositoryPath)
 
@@ -146,10 +146,10 @@ public struct GitActionsMenuReducer {
 					let (title, message) = mergeResult.commitsMerged
 						? ("Merge Successful", "Successfully merged commits from master.")
 						: ("Already Up to Date", "Branch is already up to date with master. No commits were merged.")
-					state.alert = GitAlertReducer.State(title: title, message: message, isError: false)
+					state.alert = ScrollableAlertReducer.State(title: title, message: message, isError: false)
 
 				case let .failure(error):
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Merge Failed",
 						message: error.localizedDescription,
 						isError: true
@@ -159,10 +159,10 @@ public struct GitActionsMenuReducer {
 
 			case let .abortMergeButton(.abortMergeCompleted(success, error)):
 				if let error {
-					state.alert = GitAlertReducer.State(title: "Abort Merge Failed", message: error, isError: true)
+					state.alert = ScrollableAlertReducer.State(title: "Abort Merge Failed", message: error, isError: true)
 				}
 				else if success {
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Merge Aborted",
 						message: "The merge has been successfully aborted.",
 						isError: false
@@ -172,10 +172,10 @@ public struct GitActionsMenuReducer {
 
 			case let .stashButton(.stashCompleted(success, error)):
 				if let error {
-					state.alert = GitAlertReducer.State(title: "Stash Failed", message: error, isError: true)
+					state.alert = ScrollableAlertReducer.State(title: "Stash Failed", message: error, isError: true)
 				}
 				else if success {
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Stash Successful",
 						message: "Changes have been stashed successfully.",
 						isError: false
@@ -185,10 +185,10 @@ public struct GitActionsMenuReducer {
 
 			case let .stashButton(.stashPopCompleted(success, error)):
 				if let error {
-					state.alert = GitAlertReducer.State(title: "Stash Pop Failed", message: error, isError: true)
+					state.alert = ScrollableAlertReducer.State(title: "Stash Pop Failed", message: error, isError: true)
 				}
 				else if success {
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Stash Pop Successful",
 						message: "Stashed changes have been restored successfully.",
 						isError: false
@@ -216,7 +216,7 @@ public struct GitActionsMenuReducer {
 			}
 		}
 		.ifLet(\.$alert, action: \.alert) {
-			GitAlertReducer()
+			ScrollableAlertReducer()
 		}
 	}
 

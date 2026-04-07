@@ -23,7 +23,7 @@ struct RepositoryDetail {
 		var staged: FileChangeList.State
 		var unstaged: FileChangeList.State
 		@Presents
-		var alert: GitAlertReducer.State?
+		var alert: ScrollableAlertReducer.State?
 		@Presents
 		var commitSheet: CommitReducer.State?
 		var unpushedCommitsCount: Int = 0
@@ -45,7 +45,7 @@ struct RepositoryDetail {
 	}
 
 	enum Action {
-		case alert(PresentationAction<GitAlertReducer.Action>)
+		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 		case cancelButtonTapped
 		case commitButtonTapped
 		case commitSheet(PresentationAction<CommitReducer.Action>)
@@ -303,7 +303,7 @@ struct RepositoryDetail {
 				} else {
 					title = "Operation Failed"
 				}
-				state.alert = GitAlertReducer.State(
+				state.alert = ScrollableAlertReducer.State(
 					title: title,
 					message: error.localizedDescription,
 					isError: true
@@ -328,7 +328,7 @@ struct RepositoryDetail {
 			case let .pushCompleted(result: _, error: error):
 				state.isPushing = false
 				if let error {
-					state.alert = GitAlertReducer.State(
+					state.alert = ScrollableAlertReducer.State(
 						title: "Push Failed",
 						message: error.localizedDescription,
 						isError: true
@@ -357,7 +357,7 @@ struct RepositoryDetail {
 			}
 		}
 		.ifLet(\.$alert, action: \.alert) {
-			GitAlertReducer()
+			ScrollableAlertReducer()
 		}
 		.ifLet(\.$commitSheet, action: \.commitSheet) {
 			CommitReducer()

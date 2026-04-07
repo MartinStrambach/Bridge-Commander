@@ -74,31 +74,33 @@ struct XcodeProjectButtonView: View {
 	}
 
 	var body: some View {
-		switch style {
-		case .tool:
-			ToolButton(
-				label: buttonLabel,
-				icon: .systemImage(buttonIcon),
-				tooltip: buttonTooltip,
-				isProcessing: store.projectState.isProcessing,
-				tint: store.projectPath == nil ? .orange : nil,
-				action: { store.send(.openProject) }
-			)
-			.disabled(isNotFound)
-			.alert($store.scope(state: \.$alert, action: \.alert))
-
-		case .compact:
-			ActionButton(
-				icon: .systemImage(buttonIcon),
-				tooltip: buttonTooltip,
-				color: store.projectPath == nil ? .orange : nil,
-				action: { store.send(.openProject) }
-			)
-			.disabled(isNotFound)
-			.alert($store.scope(state: \.$alert, action: \.alert))
+		Group {
+			switch style {
+			case .tool:
+				ToolButton(
+					label: buttonLabel,
+					icon: .systemImage(buttonIcon),
+					tooltip: buttonTooltip,
+					isProcessing: store.projectState.isProcessing,
+					tint: store.projectPath == nil ? .orange : nil,
+					action: { store.send(.openProject) }
+				)
+				
+			case .compact:
+				ActionButton(
+					icon: .systemImage(buttonIcon),
+					tooltip: buttonTooltip,
+					color: store.projectPath == nil ? .orange : nil,
+					action: { store.send(.openProject) }
+				)
+			}
+		}
+		.disabled(isNotFound)
+		.alert($store.scope(state: \.$alert, action: \.alert))
+		.sheet(item: $store.scope(state: \.$errorAlert, action: \.errorAlert)) { alertStore in
+			ScrollableAlertView(store: alertStore)
 		}
 	}
-
 }
 
 #Preview {

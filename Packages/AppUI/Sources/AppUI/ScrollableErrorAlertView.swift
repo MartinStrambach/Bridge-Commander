@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - GitAlertReducer
 
 @Reducer
-public struct GitAlertReducer: Sendable {
+public struct ScrollableAlertReducer: Sendable {
 	@ObservableState
 	public struct State: Equatable {
 		public let title: String
@@ -39,9 +39,9 @@ public struct GitAlertReducer: Sendable {
 // MARK: - ScrollableAlertView
 
 public struct ScrollableAlertView: View {
-	public let store: StoreOf<GitAlertReducer>
+	public let store: StoreOf<ScrollableAlertReducer>
 
-	public init(store: StoreOf<GitAlertReducer>) {
+	public init(store: StoreOf<ScrollableAlertReducer>) {
 		self.store = store
 	}
 
@@ -61,6 +61,7 @@ public struct ScrollableAlertView: View {
 					.textSelection(.enabled)
 					.frame(maxWidth: .infinity, alignment: .leading)
 					.padding(8)
+					.lineLimit(nil)
 			}
 			.frame(height: 200)
 			.background(Color(NSColor.textBackgroundColor))
@@ -86,7 +87,7 @@ public struct ScrollableAlertView: View {
 #Preview("Error") {
 	ScrollableAlertView(
 		store: Store(
-			initialState: GitAlertReducer.State(
+			initialState: ScrollableAlertReducer.State(
 				title: "Pull Failed",
 				message: """
 				error: Your local changes to the following files would be overwritten by merge:
@@ -98,7 +99,7 @@ public struct ScrollableAlertView: View {
 				isError: true
 			)
 		) {
-			GitAlertReducer()
+			ScrollableAlertReducer()
 		}
 	)
 }
@@ -106,13 +107,13 @@ public struct ScrollableAlertView: View {
 #Preview("Success") {
 	ScrollableAlertView(
 		store: Store(
-			initialState: GitAlertReducer.State(
+			initialState: ScrollableAlertReducer.State(
 				title: "Pull Successful",
 				message: "Successfully pulled 3 commits from remote branch.",
 				isError: false
 			)
 		) {
-			GitAlertReducer()
+			ScrollableAlertReducer()
 		}
 	)
 }
