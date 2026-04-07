@@ -15,6 +15,8 @@ public nonisolated enum XcodeProjectGenerator {
 		at repositoryPath: String,
 		iosSubfolderPath: String,
 		shouldOpenXcode: Bool,
+		misePath: String,
+		runMode: TuistRunMode,
 		onStateChange: @escaping (XcodeProjectState) -> Void
 	) async throws -> String {
 		// Get iOS subfolder path
@@ -38,7 +40,9 @@ public nonisolated enum XcodeProjectGenerator {
 		let installResult = await TuistCommandHelper.runCommand(
 			.install,
 			at: iosFlashscorePath,
-			shouldOpenXcode: shouldOpenXcode
+			shouldOpenXcode: shouldOpenXcode,
+			misePath: misePath,
+			runMode: runMode
 		)
 		if case let .failure(error) = installResult {
 			throw ProjectGenerationError.commandFailed(command: "tuist install", message: error.localizedDescription)
@@ -49,7 +53,9 @@ public nonisolated enum XcodeProjectGenerator {
 		let generateResult = await TuistCommandHelper.runCommand(
 			.generate,
 			at: iosFlashscorePath,
-			shouldOpenXcode: shouldOpenXcode
+			shouldOpenXcode: shouldOpenXcode,
+			misePath: misePath,
+			runMode: runMode
 		)
 		if case let .failure(error) = generateResult {
 			throw ProjectGenerationError.commandFailed(command: "tuist generate", message: error.localizedDescription)

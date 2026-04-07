@@ -43,15 +43,21 @@ public nonisolated enum TuistCommandHelper {
 	public static func runCommand(
 		_ action: TuistAction,
 		at path: String,
-		shouldOpenXcode: Bool
+		shouldOpenXcode: Bool,
+		misePath: String,
+		runMode: TuistRunMode
 	) async -> Result<String, Error> {
-		// Replace 'mise exec' with full path to mise for compatibility in sandbox
-		let misePath = NSHomeDirectory() + "/.local/bin/mise"
 		let commandString = action.commandString
 
 		// Add --no-open flag for generate action when Xcode should not open
 		let flags = (action == .generate && !shouldOpenXcode) ? " --no-open" : ""
-		let fullCommand = "\(misePath) exec -- tuist \(commandString)\(flags)"
+		let fullCommand: String
+		switch runMode {
+		case .mise:
+			fullCommand = "\(misePath) exec -- tuist \(commandString)\(flags)"
+		case .native:
+			fullCommand = "tuist \(commandString)\(flags)"
+		}
 
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/bin/zsh"),

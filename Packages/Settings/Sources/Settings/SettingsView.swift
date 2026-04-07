@@ -26,6 +26,7 @@ public struct SettingsView: View {
 					tuistCacheOptionsSection
 					tuistGenerateOptionsSection
 				}
+				tuistExecutionSection
 				HStack(alignment: .top) {
 					terminalBehaviorSection
 					claudeCodeBehaviorSection
@@ -236,6 +237,43 @@ public struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var tuistExecutionSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Tuist Execution")
+				.font(.headline)
+
+			Picker(
+				"Run via",
+				selection: $store.tuistRunMode.sending(\.setTuistRunMode)
+			) {
+				ForEach(TuistRunMode.allCases, id: \.self) { mode in
+					Text(mode.displayName).tag(mode)
+				}
+			}
+			.pickerStyle(.segmented)
+
+			if store.tuistRunMode == .mise {
+				TextField(
+					"mise Path",
+					text: $store.misePath.sending(\.setMisePath)
+				)
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
+
+				Text("Full path to the mise binary. Native install: ~/.local/bin/mise. Homebrew (Apple Silicon): /opt/homebrew/bin/mise.")
+					.font(.caption)
+					.foregroundColor(.secondary)
+			} else {
+				Text("Tuist will be invoked directly from PATH without mise.")
+					.font(.caption)
+					.foregroundColor(.secondary)
+			}
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))

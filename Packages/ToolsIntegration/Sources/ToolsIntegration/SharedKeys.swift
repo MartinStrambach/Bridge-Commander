@@ -6,6 +6,16 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 	static var youtrackAuthToken: Self {
 		appStorage("youtrackAuthToken")
 	}
+
+	static var misePath: Self {
+		appStorage("misePath")
+	}
+}
+
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<TuistRunMode> {
+	static var tuistRunMode: Self {
+		appStorage("tuistRunMode")
+	}
 }
 
 public extension SharedReaderKey where Self == AppStorageKey<TuistCacheType> {

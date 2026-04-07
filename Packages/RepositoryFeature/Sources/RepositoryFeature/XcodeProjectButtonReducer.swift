@@ -18,6 +18,10 @@ struct XcodeProjectButtonReducer {
 		var xcodeFilePreference: XcodeFilePreference
 		@Shared(.openXcodeAfterGenerate)
 		var openXcodeAfterGenerate = true
+		@Shared(.misePath)
+		var misePath = NSHomeDirectory() + "/.local/bin/mise"
+		@Shared(.tuistRunMode)
+		var tuistRunMode = TuistRunMode.mise
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -116,13 +120,17 @@ struct XcodeProjectButtonReducer {
 				return .run { [
 					path = state.repositoryPath,
 					iosSubfolderPath = state.iosSubfolderPath,
-					shouldOpen = state.openXcodeAfterGenerate
+					shouldOpen = state.openXcodeAfterGenerate,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
 				] send in
 					do {
 						let projectPath = try await XcodeProjectGenerator.generateProject(
 							at: path,
 							iosSubfolderPath: iosSubfolderPath,
-							shouldOpenXcode: shouldOpen
+							shouldOpenXcode: shouldOpen,
+							misePath: misePath,
+							runMode: runMode
 						) { newState in
 							Task {
 								await send(.projectGenerationProgress(newState))

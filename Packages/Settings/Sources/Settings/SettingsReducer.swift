@@ -42,6 +42,12 @@ public struct SettingsReducer {
 		@Shared(.androidStudioPath)
 		public var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
 
+		@Shared(.misePath)
+		public var misePath = NSHomeDirectory() + "/.local/bin/mise"
+
+		@Shared(.tuistRunMode)
+		public var tuistRunMode = TuistRunMode.mise
+
 		@Shared(.worktreeBasePath)
 		public var worktreeBasePath = "../worktrees"
 
@@ -73,6 +79,8 @@ public struct SettingsReducer {
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
 		case setAndroidStudioPath(String)
 		case setWorktreeBasePath(String)
+		case setMisePath(String)
+		case setTuistRunMode(TuistRunMode)
 		case setTerminalColorTheme(TerminalColorTheme)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
@@ -158,6 +166,14 @@ public struct SettingsReducer {
 
 			case let .setWorktreeBasePath(path):
 				state.$worktreeBasePath.withLock { $0 = path }
+				return .none
+
+			case let .setMisePath(path):
+				state.$misePath.withLock { $0 = path }
+				return .none
+
+			case let .setTuistRunMode(mode):
+				state.$tuistRunMode.withLock { $0 = mode }
 				return .none
 
 			case let .setTerminalColorTheme(theme):

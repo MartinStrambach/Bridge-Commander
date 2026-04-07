@@ -17,6 +17,10 @@ struct TuistButtonReducer {
 		var openXcodeAfterGenerate = true
 		@Shared(.tuistCacheType)
 		var tuistCacheType = TuistCacheType.externalOnly
+		@Shared(.misePath)
+		var misePath = NSHomeDirectory() + "/.local/bin/mise"
+		@Shared(.tuistRunMode)
+		var tuistRunMode = TuistRunMode.mise
 		@Presents
 		var alert: GitAlertReducer.State?
 
@@ -53,7 +57,9 @@ struct TuistButtonReducer {
 				return .run { [
 					repositoryPath = state.repositoryPath,
 					iosSubfolderPath = state.iosSubfolderPath,
-					shouldOpen = state.openXcodeAfterGenerate
+					shouldOpen = state.openXcodeAfterGenerate,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
 				] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
@@ -62,7 +68,9 @@ struct TuistButtonReducer {
 					let result = await TuistCommandHelper.runCommand(
 						.generate,
 						at: iosFlashscorePath,
-						shouldOpenXcode: shouldOpen
+						shouldOpenXcode: shouldOpen,
+						misePath: misePath,
+						runMode: runMode
 					)
 					await send(.actionCompleted(.generate, result))
 				}
@@ -76,7 +84,9 @@ struct TuistButtonReducer {
 				return .run { [
 					repositoryPath = state.repositoryPath,
 					iosSubfolderPath = state.iosSubfolderPath,
-					shouldOpen = state.openXcodeAfterGenerate
+					shouldOpen = state.openXcodeAfterGenerate,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
 				] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
@@ -85,7 +95,9 @@ struct TuistButtonReducer {
 					let result = await TuistCommandHelper.runCommand(
 						.install,
 						at: iosFlashscorePath,
-						shouldOpenXcode: shouldOpen
+						shouldOpenXcode: shouldOpen,
+						misePath: misePath,
+						runMode: runMode
 					)
 					await send(.actionCompleted(.install, result))
 				}
@@ -101,7 +113,9 @@ struct TuistButtonReducer {
 					repositoryPath = state.repositoryPath,
 					iosSubfolderPath = state.iosSubfolderPath,
 					shouldOpen = state.openXcodeAfterGenerate,
-					cacheType
+					cacheType,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
 				] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
@@ -110,7 +124,9 @@ struct TuistButtonReducer {
 					let result = await TuistCommandHelper.runCommand(
 						.cache(cacheType),
 						at: iosFlashscorePath,
-						shouldOpenXcode: shouldOpen
+						shouldOpenXcode: shouldOpen,
+						misePath: misePath,
+						runMode: runMode
 					)
 					await send(.actionCompleted(.cache(cacheType), result))
 				}
@@ -121,7 +137,12 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .edit
-				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+				return .run { [
+					repositoryPath = state.repositoryPath,
+					iosSubfolderPath = state.iosSubfolderPath,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
+				] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
 						iosSubfolderPath: iosSubfolderPath
@@ -129,7 +150,9 @@ struct TuistButtonReducer {
 					let result = await TuistCommandHelper.runCommand(
 						.edit,
 						at: iosFlashscorePath,
-						shouldOpenXcode: false
+						shouldOpenXcode: false,
+						misePath: misePath,
+						runMode: runMode
 					)
 					await send(.actionCompleted(.edit, result))
 				}
@@ -140,7 +163,12 @@ struct TuistButtonReducer {
 				}
 
 				state.runningAction = .inspectDependencies
-				return .run { [repositoryPath = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
+				return .run { [
+					repositoryPath = state.repositoryPath,
+					iosSubfolderPath = state.iosSubfolderPath,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
+				] send in
 					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
 						in: repositoryPath,
 						iosSubfolderPath: iosSubfolderPath
@@ -148,7 +176,9 @@ struct TuistButtonReducer {
 					let result = await TuistCommandHelper.runCommand(
 						.inspectDependencies,
 						at: iosFlashscorePath,
-						shouldOpenXcode: false
+						shouldOpenXcode: false,
+						misePath: misePath,
+						runMode: runMode
 					)
 					await send(.actionCompleted(.inspectDependencies, result))
 				}
