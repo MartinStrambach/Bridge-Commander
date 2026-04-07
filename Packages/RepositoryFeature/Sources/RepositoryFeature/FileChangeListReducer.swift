@@ -19,6 +19,9 @@ struct FileChangeList {
 		var selectedFileIds: Set<String> = []
 		var isLoading = true
 
+		@Presents
+		var alert: AlertState<Action.Alert>?
+
 		init(repositoryPath: String, iosSubfolderPath: String, listType: ListType) {
 			self.repositoryPath = repositoryPath
 			self.iosSubfolderPath = iosSubfolderPath
@@ -32,7 +35,11 @@ struct FileChangeList {
 		case toggleAllTapped
 		case spaceKeyPressed
 		case openInIDE(FileChange)
+		case openInIDEFailed(String)
+		case alert(PresentationAction<Alert>)
 		case delegate(Delegate)
+
+		enum Alert: Equatable {}
 
 		enum Delegate {
 			case toggleAll([FileChange])
@@ -66,7 +73,7 @@ struct FileChangeList {
 				return .send(.delegate(.toggleAll(files)))
 
 			case let .openInIDE(file):
-				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] _ in
+				return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath] send in
 					do {
 						let xcodeProjectPath = XcodeProjectDetector.findXcodeProject(
 							in: path,
@@ -79,13 +86,21 @@ struct FileChangeList {
 						)
 					}
 					catch {
-						print("Failed to open file in IDE: \(error)")
+						await send(.openInIDEFailed(error.localizedDescription))
 					}
 				}
+
+			case let .openInIDEFailed(message):
+				state.alert = .okAlert(title: "Failed to Open File", message: message)
+				return .none
+
+			case .alert:
+				return .none
 
 			case .delegate:
 				return .none
 			}
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 }
