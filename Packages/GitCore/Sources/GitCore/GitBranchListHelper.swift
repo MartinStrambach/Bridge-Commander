@@ -40,7 +40,7 @@ public nonisolated enum GitBranchListHelper {
 		let allBranches = result.outputString
 			.split(separator: "\n")
 			.map { String($0) }
-			.filter { $0 != "origin/HEAD" }
+			.filter { $0 != "origin/HEAD" && $0 != "origin" }
 
 		// Separate local and remote branches
 		var localBranches = Set<String>()
