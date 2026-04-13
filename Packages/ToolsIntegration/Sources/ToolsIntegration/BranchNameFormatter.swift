@@ -10,9 +10,12 @@ public nonisolated enum BranchNameFormatter {
 
 		var formatted = branchName
 
-		// 1. Remove part before first slash (feature, fix, bugfix, etc.)
-		if let firstSlashIndex = formatted.firstIndex(of: "/") {
-			formatted = String(formatted[formatted.index(after: firstSlashIndex)...])
+		// 1. Remove prefix segments (feature/, fix/, ios/, android/, etc.)
+		// A segment without underscores is treated as a type/platform prefix; stop when content begins.
+		while let slashIndex = formatted.firstIndex(of: "/") {
+			let segment = String(formatted[..<slashIndex])
+			if segment.contains("_") { break }
+			formatted = String(formatted[formatted.index(after: slashIndex)...])
 		}
 
 		// 2. Remove project type patterns like "tech-60", "mob-45" (case insensitive)
