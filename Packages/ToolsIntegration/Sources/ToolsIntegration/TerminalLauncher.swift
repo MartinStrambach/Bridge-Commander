@@ -20,6 +20,12 @@ public nonisolated enum TerminalLauncher {
 			}
 		case .ghostty:
 			await openAppInNewWindow(appName: app.appName, at: path)
+		case .warp:
+			if behavior == .newTab {
+				await openWarp(at: path, action: "new_tab")
+			} else {
+				await openWarp(at: path, action: "new_window")
+			}
 		}
 	}
 
@@ -133,6 +139,21 @@ public nonisolated enum TerminalLauncher {
 
 		if !result.success {
 			print("Failed to open iTerm2: \(result.errorString)")
+		}
+	}
+
+	private static func openWarp(at path: String, action: String) async {
+		guard let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+			  let url = URL(string: "warp://action/\(action)?path=\(encodedPath)")
+		else { return }
+
+		let result = await ProcessRunner.run(
+			executableURL: URL(filePath: "/usr/bin/open"),
+			arguments: [url.absoluteString]
+		)
+
+		if !result.success {
+			print("Failed to open Warp: \(result.errorString)")
 		}
 	}
 
