@@ -16,6 +16,9 @@ public nonisolated struct GitPorcelainStatus {
 	public let staged: [FileChange]
 	public let unstaged: [FileChange]
 
+	/// False when the underlying git process failed — callers should ignore all fields.
+	public let didSucceed: Bool
+
 	public var stagedCount: Int {
 		staged.count
 	}
@@ -26,7 +29,7 @@ public nonisolated struct GitPorcelainStatus {
 
 	// MARK: - Init
 
-	public init(parsing output: String) {
+	public init(parsing output: String, didSucceed: Bool = true) {
 		var branch: String?
 		var hasRemoteBranch = false
 		var unpushedCount = 0
@@ -135,6 +138,7 @@ public nonisolated struct GitPorcelainStatus {
 		self.behindCount = behindCount
 		self.staged = staged
 		self.unstaged = unstaged
+		self.didSucceed = didSucceed
 	}
 }
 
@@ -147,6 +151,6 @@ public nonisolated enum GitStatusDetector {
 			arguments: ["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
 			at: path
 		)
-		return GitPorcelainStatus(parsing: result.success ? result.outputString : "")
+		return GitPorcelainStatus(parsing: result.outputString, didSucceed: result.success)
 	}
 }

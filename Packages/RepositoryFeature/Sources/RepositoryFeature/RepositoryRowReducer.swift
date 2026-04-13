@@ -224,7 +224,10 @@ struct RepositoryRowReducer {
 				)
 
 			case let .didFetchStatus(status, isMerge):
-				let branch = status.branch ?? "unknown"
+				guard status.didSucceed else {
+					return .none
+				}
+				let branch = status.branch ?? state.branchName ?? state.name
 				let unstaged = isMerge ? 0 : status.unstagedCount
 				let staged = isMerge ? 0 : status.stagedCount
 				state.branchName = branch
