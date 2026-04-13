@@ -5,6 +5,7 @@ import ProcessExecution
 
 public nonisolated enum TuistAction: Equatable {
 	case generate
+	case generateWithoutCache
 	case install
 	case installUpdate
 	case cache(TuistCacheType)
@@ -15,6 +16,9 @@ public nonisolated enum TuistAction: Equatable {
 		switch self {
 		case .generate:
 			"generate"
+
+		case .generateWithoutCache:
+			"generate --no-binary-cache"
 
 		case .install:
 			"install"
@@ -54,7 +58,7 @@ public nonisolated enum TuistCommandHelper {
 		let commandString = action.commandString
 
 		// Add --no-open flag for generate action when Xcode should not open
-		let flags = (action == .generate && !shouldOpenXcode) ? " --no-open" : ""
+		let flags = ((action == .generate || action == .generateWithoutCache) && !shouldOpenXcode) ? " --no-open" : ""
 		let fullCommand: String
 		switch runMode {
 		case .mise:

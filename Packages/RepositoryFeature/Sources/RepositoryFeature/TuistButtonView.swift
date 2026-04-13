@@ -27,6 +27,12 @@ struct TuistButtonView: View {
 					}
 
 					Button {
+						store.send(.generateWithoutCacheTapped)
+					} label: {
+						Label("Generate (No Cache)", systemImage: "hammer.circle")
+					}
+
+					Button {
 						store.send(.installTapped)
 					} label: {
 						Label("Install", systemImage: "arrow.down.circle")
@@ -72,7 +78,7 @@ struct TuistButtonView: View {
 
 	private func progressText(for action: TuistAction) -> String {
 		switch action {
-		case .generate:
+		case .generate, .generateWithoutCache:
 			"Generating..."
 		case .install, .installUpdate:
 			"Installing..."
@@ -89,6 +95,8 @@ struct TuistButtonView: View {
 		switch action {
 		case .generate:
 			"Generating Xcode project with Tuist..."
+		case .generateWithoutCache:
+			"Generating Xcode project without binary cache..."
 		case .install:
 			"Installing Tuist dependencies..."
 		case .installUpdate:
