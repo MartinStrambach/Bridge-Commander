@@ -33,6 +33,12 @@ struct TuistButtonView: View {
 					}
 
 					Button {
+						store.send(.installUpdateTapped)
+					} label: {
+						Label("Install (Update)", systemImage: "arrow.down.circle.dotted")
+					}
+
+					Button {
 						store.send(.cacheTapped)
 					} label: {
 						Label("Cache", systemImage: "tray")
@@ -68,7 +74,7 @@ struct TuistButtonView: View {
 		switch action {
 		case .generate:
 			"Generating..."
-		case .install:
+		case .install, .installUpdate:
 			"Installing..."
 		case .cache:
 			"Caching..."
@@ -85,6 +91,8 @@ struct TuistButtonView: View {
 			"Generating Xcode project with Tuist..."
 		case .install:
 			"Installing Tuist dependencies..."
+		case .installUpdate:
+			"Installing and updating Tuist dependencies..."
 		case .cache:
 			"Caching Tuist targets..."
 		case .edit:

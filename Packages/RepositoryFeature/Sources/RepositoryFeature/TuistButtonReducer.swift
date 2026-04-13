@@ -38,6 +38,7 @@ struct TuistButtonReducer {
 	enum Action {
 		case generateTapped
 		case installTapped
+		case installUpdateTapped
 		case cacheTapped
 		case editTapped
 		case inspectDependenciesTapped
@@ -100,6 +101,33 @@ struct TuistButtonReducer {
 						runMode: runMode
 					)
 					await send(.actionCompleted(.install, result))
+				}
+
+			case .installUpdateTapped:
+				guard state.runningAction == nil else {
+					return .none
+				}
+
+				state.runningAction = .installUpdate
+				return .run { [
+					repositoryPath = state.repositoryPath,
+					iosSubfolderPath = state.iosSubfolderPath,
+					shouldOpen = state.openXcodeAfterGenerate,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
+				] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+						in: repositoryPath,
+						iosSubfolderPath: iosSubfolderPath
+					)
+					let result = await TuistCommandHelper.runCommand(
+						.installUpdate,
+						at: iosFlashscorePath,
+						shouldOpenXcode: shouldOpen,
+						misePath: misePath,
+						runMode: runMode
+					)
+					await send(.actionCompleted(.installUpdate, result))
 				}
 
 			case .cacheTapped:
@@ -201,6 +229,7 @@ struct TuistButtonReducer {
 						switch tuistAction {
 						case .generate: "Tuist Generate Failed"
 						case .install: "Tuist Install Failed"
+						case .installUpdate: "Tuist Install Failed"
 						case .cache: "Tuist Cache Failed"
 						case .edit: "Tuist Edit Failed"
 						case .inspectDependencies: "Tuist Inspect Failed"

@@ -6,6 +6,7 @@ import ProcessExecution
 public nonisolated enum TuistAction: Equatable {
 	case generate
 	case install
+	case installUpdate
 	case cache(TuistCacheType)
 	case edit
 	case inspectDependencies
@@ -17,6 +18,9 @@ public nonisolated enum TuistAction: Equatable {
 
 		case .install:
 			"install"
+
+		case .installUpdate:
+			"install -u"
 
 		case let .cache(type):
 			"cache \(type.commandFlag)".trimmingCharacters(in: .whitespaces)
