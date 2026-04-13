@@ -61,7 +61,7 @@ public nonisolated enum TuistCommandHelper {
 
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/bin/zsh"),
-			arguments: ["-c", fullCommand],
+			arguments: ["-i", "-c", fullCommand],
 			currentDirectory: URL(fileURLWithPath: path),
 			environment: EnvironmentHelper.setupEnvironment()
 		)
