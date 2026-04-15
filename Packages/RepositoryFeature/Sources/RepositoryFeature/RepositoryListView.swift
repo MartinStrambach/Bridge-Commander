@@ -91,6 +91,9 @@ struct RepositoryListView: View {
 			if store.showPermissionDialog {
 				permissionWarningBanner
 			}
+			if store.showAccessibilityPermissionDialog {
+				accessibilityPermissionWarningBanner
+			}
 			if store.repositoryGroups.isEmpty {
 				emptyStateView
 			}
@@ -192,6 +195,17 @@ struct RepositoryListView: View {
 			actionLabel: "Open System Settings",
 			onAction: { send(.openAutomationSettingsButtonTapped) },
 			onDismiss: { send(.dismissPermissionWarningButtonTapped) }
+		)
+	}
+
+	private var accessibilityPermissionWarningBanner: some View {
+		BannerView(
+			icon: "exclamationmark.triangle.fill",
+			title: "Accessibility permission required",
+			subtitle: "Opening terminal tabs requires accessibility access.",
+			actionLabel: "Open System Settings",
+			onAction: { send(.openAccessibilitySettingsButtonTapped) },
+			onDismiss: { send(.dismissAccessibilityPermissionWarningButtonTapped) }
 		)
 	}
 

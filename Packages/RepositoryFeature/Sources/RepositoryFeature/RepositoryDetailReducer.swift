@@ -349,7 +349,7 @@ struct RepositoryDetail {
 
 			case .openTerminalButtonTapped:
 				return .run { [path = state.repositoryPath, app = terminalApp, behavior = terminalOpeningBehavior] _ in
-					await TerminalLauncher.openTerminal(at: path, app: app, behavior: behavior)
+					try? await TerminalLauncher.openTerminal(at: path, app: app, behavior: behavior)
 				}
 
 			default:

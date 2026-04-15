@@ -44,6 +44,9 @@ struct RepositoryListReducer {
 		fileprivate var isSystemEventsPermissionGranted: Bool?
 		fileprivate var isPermissionWarningDismissed = false
 
+		fileprivate var isAccessibilityPermissionGranted: Bool?
+		fileprivate var isAccessibilityPermissionWarningDismissed = false
+
 		var filteredRepositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> {
 			let sorted = repositoryGroups
 				.sorted { $0.header.name.localizedCaseInsensitiveCompare($1.header.name) == .orderedAscending }
@@ -63,6 +66,10 @@ struct RepositoryListReducer {
 		var showPermissionDialog: Bool {
 			isSystemEventsPermissionGranted == false && !isPermissionWarningDismissed
 		}
+
+		var showAccessibilityPermissionDialog: Bool {
+			isAccessibilityPermissionGranted == false && !isAccessibilityPermissionWarningDismissed
+		}
 	}
 
 	enum Action: ViewAction {
@@ -71,6 +78,7 @@ struct RepositoryListReducer {
 		case addRepositoryFailed(String)
 		case addRepositorySucceeded(rootPath: String, scanned: [ScannedRepository])
 		case alert(PresentationAction<Alert>)
+		case checkAccessibilityPermission
 		case checkSystemEventsPermission
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
@@ -87,10 +95,12 @@ struct RepositoryListReducer {
 		enum ViewAction {
 			case clearButtonTapped
 			case addRepository(String)
+			case dismissAccessibilityPermissionWarningButtonTapped
 			case dismissPermissionWarningButtonTapped
 			case groupSettingsChanged
 			case onAppear
 			case onDisappear
+			case openAccessibilitySettingsButtonTapped
 			case openAutomationSettingsButtonTapped
 			case periodicRefreshIntervalChanged
 			case refreshButtonTapped
@@ -187,12 +197,28 @@ struct RepositoryListReducer {
 					}
 				}
 
+			case .view(.openAccessibilitySettingsButtonTapped):
+				return .run { _ in
+					if
+						let url = URL(
+							string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+						)
+					{
+						NSWorkspace.shared.open(url)
+					}
+				}
+
 			case .view(.dismissPermissionWarningButtonTapped):
 				state.isPermissionWarningDismissed = true
 				return .none
 
+			case .view(.dismissAccessibilityPermissionWarningButtonTapped):
+				state.isAccessibilityPermissionWarningDismissed = true
+				return .none
+
 			case .view(.refreshButtonTapped):
 				state.isSystemEventsPermissionGranted = nil
+				state.isAccessibilityPermissionGranted = nil
 				return .send(.refreshRepositories)
 
 			// MARK: - Add Repository
@@ -266,6 +292,7 @@ struct RepositoryListReducer {
 				state.isScanning = true
 				let paths = Array(state.trackedRepoPaths)
 				return .merge(
+					.send(.checkAccessibilityPermission),
 					.send(.checkSystemEventsPermission),
 					.run { send in
 						await withTaskGroup(of: (String, [ScannedRepository]).self) { group in
@@ -534,6 +561,13 @@ struct RepositoryListReducer {
 				return .none
 
 			// MARK: - Permissions
+
+			case .checkAccessibilityPermission:
+				guard state.isAccessibilityPermissionGranted == nil else {
+					return .none
+				}
+				state.isAccessibilityPermissionGranted = PermissionChecker.isAccessibilityPermitted()
+				return .none
 
 			case .checkSystemEventsPermission:
 				guard state.isSystemEventsPermissionGranted == nil else {

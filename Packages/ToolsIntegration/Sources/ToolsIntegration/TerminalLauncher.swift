@@ -2,34 +2,55 @@ import AppKit
 import Foundation
 import ProcessExecution
 
+public enum TerminalLauncherError: LocalizedError {
+	case failed(String)
+
+	public var errorDescription: String? {
+		switch self {
+		case let .failed(message): message
+		}
+	}
+}
+
 public nonisolated enum TerminalLauncher {
 
-	public static func openTerminal(at path: String, app: TerminalApp, behavior: TerminalOpeningBehavior) async {
+	public static func openTerminal(
+		at path: String,
+		app: TerminalApp,
+		behavior: TerminalOpeningBehavior,
+		command: String? = nil
+	) async throws {
 		switch app {
 		case .systemTerminal:
 			if behavior == .newTab {
-				await openSystemTerminalInNewTab(at: path)
-			} else {
-				await openAppInNewWindow(appName: app.appName, at: path)
+				try await openSystemTerminalInNewTab(at: path, command: command)
 			}
+			else {
+				try await openSystemTerminalInNewWindow(at: path, command: command)
+			}
+
 		case .iTerm2:
 			if behavior == .newTab {
-				await openITerm2InNewTab(at: path)
-			} else {
-				await openITerm2InNewWindow(at: path)
+				try await openITerm2InNewTab(at: path, command: command)
 			}
+			else {
+				try await openITerm2InNewWindow(at: path, command: command)
+			}
+
 		case .ghostty:
-			await openAppInNewWindow(appName: app.appName, at: path)
+			try await openAppInNewWindow(appName: app.appName, at: path)
+
 		case .warp:
 			if behavior == .newTab {
-				await openWarp(at: path, action: "new_tab")
-			} else {
-				await openWarp(at: path, action: "new_window")
+				try await openWarp(at: path, action: "new_tab")
+			}
+			else {
+				try await openWarp(at: path, action: "new_window")
 			}
 		}
 	}
 
-	private static func openSystemTerminalInNewTab(at path: String) async {
+	private static func openSystemTerminalInNewTab(at path: String, command: String?) async throws {
 		let escapedPath = path
 			.replacingOccurrences(of: "\\", with: "\\\\")
 			.replacingOccurrences(of: "\"", with: "\\\"")
@@ -37,7 +58,7 @@ public nonisolated enum TerminalLauncher {
 		let script = """
 		if application "Terminal" is not running then
 			tell application "Terminal"
-				do script "cd \\"\(escapedPath)\\""
+				do script "cd \\"\(escapedPath)\\" && '\(command ?? ":")'"
 				activate
 			end tell
 		else
@@ -49,7 +70,7 @@ public nonisolated enum TerminalLauncher {
 					end tell
 				end tell
 				delay 0.2
-				do script "cd \\"\(escapedPath)\\"" in front window
+				do script "cd \\"\(escapedPath)\\" && '\(command ?? ":")'" in front window
 			end tell
 		end if
 		"""
@@ -60,11 +81,11 @@ public nonisolated enum TerminalLauncher {
 		)
 
 		if !result.success {
-			print("Failed to open Terminal: \(result.errorString)")
+			throw TerminalLauncherError.failed(result.errorString)
 		}
 	}
 
-	private static func openITerm2InNewTab(at path: String) async {
+	private static func openITerm2InNewTab(at path: String, command: String?) async throws {
 		let escapedPath = path
 			.replacingOccurrences(of: "\\", with: "\\\\")
 			.replacingOccurrences(of: "\"", with: "\\\"")
@@ -77,7 +98,7 @@ public nonisolated enum TerminalLauncher {
 			delay 0.3
 			tell application "iTerm"
 				tell current session of current window
-					write text "cd \\"\(escapedPath)\\""
+					write text "cd \\"\(escapedPath)\\" && '\(command ?? ":")'"
 				end tell
 			end tell
 		else
@@ -88,7 +109,7 @@ public nonisolated enum TerminalLauncher {
 					set newSession to current session of (create tab with default profile of current window)
 				end if
 				tell newSession
-					write text "cd \\"\(escapedPath)\\""
+					write text "cd \\"\(escapedPath)\\" && '\(command ?? ":")'"
 				end tell
 				activate
 			end tell
@@ -101,11 +122,11 @@ public nonisolated enum TerminalLauncher {
 		)
 
 		if !result.success {
-			print("Failed to open iTerm2: \(result.errorString)")
+			throw TerminalLauncherError.failed(result.errorString)
 		}
 	}
 
-	private static func openITerm2InNewWindow(at path: String) async {
+	private static func openITerm2InNewWindow(at path: String, command: String?) async throws {
 		let escapedPath = path
 			.replacingOccurrences(of: "\\", with: "\\\\")
 			.replacingOccurrences(of: "\"", with: "\\\"")
@@ -118,14 +139,14 @@ public nonisolated enum TerminalLauncher {
 			delay 0.3
 			tell application "iTerm"
 				tell current session of current window
-					write text "cd \\"\(escapedPath)\\""
+					write text "cd \\"\(escapedPath)\\" && '\(command ?? ":")'"
 				end tell
 			end tell
 		else
 			tell application "iTerm"
 				set newWindow to (create window with default profile)
 				tell current session of newWindow
-					write text "cd \\"\(escapedPath)\\""
+					write text "cd \\"\(escapedPath)\\" && '\(command ?? ":")'"
 				end tell
 				activate
 			end tell
@@ -138,14 +159,17 @@ public nonisolated enum TerminalLauncher {
 		)
 
 		if !result.success {
-			print("Failed to open iTerm2: \(result.errorString)")
+			throw TerminalLauncherError.failed(result.errorString)
 		}
 	}
 
-	private static func openWarp(at path: String, action: String) async {
-		guard let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-			  let url = URL(string: "warp://action/\(action)?path=\(encodedPath)")
-		else { return }
+	private static func openWarp(at path: String, action: String) async throws {
+		guard
+			let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+			let url = URL(string: "warp://action/\(action)?path=\(encodedPath)")
+		else {
+			return
+		}
 
 		let result = await ProcessRunner.run(
 			executableURL: URL(filePath: "/usr/bin/open"),
@@ -153,18 +177,45 @@ public nonisolated enum TerminalLauncher {
 		)
 
 		if !result.success {
-			print("Failed to open Warp: \(result.errorString)")
+			throw TerminalLauncherError.failed(result.errorString)
 		}
 	}
 
-	private static func openAppInNewWindow(appName: String, at path: String) async {
+	private static func openSystemTerminalInNewWindow(at path: String, command: String?) async throws {
+		guard let command else {
+			try await openAppInNewWindow(appName: "Terminal", at: path)
+			return
+		}
+
+		let escapedPath = path
+			.replacingOccurrences(of: "\\", with: "\\\\")
+			.replacingOccurrences(of: "'", with: "\\'")
+
+		let script = """
+		tell application "Terminal"
+			activate
+			do script "cd '\(escapedPath)' && \(command)"
+		end tell
+		"""
+
+		let result = await ProcessRunner.run(
+			executableURL: URL(filePath: "/usr/bin/osascript"),
+			arguments: ["-e", script]
+		)
+
+		if !result.success {
+			throw TerminalLauncherError.failed(result.errorString)
+		}
+	}
+
+	private static func openAppInNewWindow(appName: String, at path: String) async throws {
 		let result = await ProcessRunner.run(
 			executableURL: URL(filePath: "/usr/bin/open"),
 			arguments: ["-a", appName, path]
 		)
 
 		if !result.success {
-			print("Failed to open \(appName): \(result.errorString)")
+			throw TerminalLauncherError.failed(result.errorString)
 		}
 	}
 
