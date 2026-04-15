@@ -35,6 +35,7 @@ public final class TerminalViewStore {
 		terminalView.nativeForegroundColor = foregroundColor
 		terminalView.nativeBackgroundColor = backgroundColor
 		terminalView.allowMouseReporting = false
+		terminalView.terminal.changeHistorySize(3000)
 
 		terminalView.processDelegate = processDelegate
 
