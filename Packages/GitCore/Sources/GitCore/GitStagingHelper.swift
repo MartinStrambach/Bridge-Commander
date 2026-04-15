@@ -156,8 +156,8 @@ public nonisolated enum GitStagingHelper {
 			return
 		}
 
-		// Use git checkout with multiple files in a single command
-		let arguments = ["checkout", "HEAD", "--"] + filePaths
+		// Restore from index (not HEAD) so staged changes are preserved
+		let arguments = ["checkout", "--"] + filePaths
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
 		guard result.success else {
 			throw GitError.stagingFailed("Failed to discard changes")
