@@ -40,7 +40,7 @@ struct TerminalButtonReducer {
 					behavior = state.terminalOpeningBehavior
 				] _ in
 					let targetPath = (path as NSString).appendingPathComponent(subfolder)
-					await TerminalLauncher.openTerminal(at: targetPath, app: app, behavior: behavior)
+					try? await TerminalLauncher.openTerminal(at: targetPath, app: app, behavior: behavior)
 				}
 			}
 		}

@@ -8,7 +8,10 @@ struct ClaudeCodeButtonReducer {
 	@ObservableState
 	struct State: Equatable {
 		let repositoryPath: String
-		var isLaunching: Bool = false
+		var isLaunching = false
+
+		@Shared(.terminalApp)
+		var terminalApp = TerminalApp.systemTerminal
 
 		@Shared(.claudeCodeOpeningBehavior)
 		var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
@@ -21,9 +24,7 @@ struct ClaudeCodeButtonReducer {
 		init(repositoryPath: String, mobileSubfolderPath: String = "") {
 			self.repositoryPath = repositoryPath
 			self.mobileSubfolderPath = mobileSubfolderPath
-			self.isLaunching = false
 		}
-
 	}
 
 	enum Action: Equatable {
@@ -43,11 +44,17 @@ struct ClaudeCodeButtonReducer {
 				return .run { [
 					path = state.repositoryPath,
 					subfolder = state.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+					app = state.terminalApp,
 					behavior = state.claudeCodeOpeningBehavior
 				] send in
 					let targetPath = (path as NSString).appendingPathComponent(subfolder)
 					do {
-						try await ClaudeCodeLauncher.runClaudeCode(at: targetPath, behavior: behavior)
+						try await TerminalLauncher.openTerminal(
+							at: targetPath,
+							app: app,
+							behavior: behavior,
+							command: "claude"
+						)
 						await send(.didLaunchClaudeCode)
 					}
 					catch {
