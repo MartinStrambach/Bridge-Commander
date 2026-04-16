@@ -4,6 +4,7 @@ xcuserdata/
 
 ### Claude code files
 .claude/settings.local.json
+docs/superpowers/
 
 # SPM package state
 .swiftpm/

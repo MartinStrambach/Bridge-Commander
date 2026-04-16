@@ -314,8 +314,31 @@ struct RepositoryListReducer {
 			// MARK: - Per-group scan (worktree added/removed)
 
 			case let .repositoryGroups(.element(id: groupId, action: .header(.worktreeCreated))),
-			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated)))),
-			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeDeleted)))):
+			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated)))):
+				state.isScanning = true
+				return .run { [groupId] send in
+					let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
+					await send(.didScanGroup(rootPath: groupId, rows: rows))
+					await send(.scanCompleted)
+				}
+				.cancellable(id: CancellableId.scan)
+
+			case let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(id: worktreePath, .worktreeDeleted)))):
+				let toRemove = state.terminalSessions
+					.filter { $0.repositoryPath == worktreePath }
+					.map(\.id)
+				for sessionId in toRemove {
+					state.terminalSessions.remove(id: sessionId)
+				}
+				if state.terminalLayout?.activeRepositoryPath == worktreePath {
+					if let next = state.terminalSessions.first {
+						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
+						state.terminalLayout?.activeSessionId = next.id
+					}
+					else {
+						state.terminalLayout = nil
+					}
+				}
 				state.isScanning = true
 				return .run { [groupId] send in
 					let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
