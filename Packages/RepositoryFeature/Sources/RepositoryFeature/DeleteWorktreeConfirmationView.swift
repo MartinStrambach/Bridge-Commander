@@ -20,12 +20,11 @@ struct DeleteWorktreeConfirmationView: View {
 
 			Text(store.name)
 				.font(.system(.body, design: .monospaced))
-				.lineLimit(1)
+				.multilineTextAlignment(.center)
 				.padding(.horizontal)
 				.padding(.vertical, 8)
 				.background(Color.secondary.opacity(0.1))
 				.cornerRadius(6)
-				.fixedSize(horizontal: true, vertical: false)
 				.frame(maxWidth: .infinity)
 
 			Toggle(isOn: $store.forceRemoval) {
