@@ -54,8 +54,9 @@ struct RepositoryRowView: View {
 		switch store.prProvider {
 		case .gitlab:
 			.customImage("gitlab")
-		case .github,
-		     .none:
+		case .github:
+			.customImage("github")
+		case .none:
 			.systemImage(prButtonSystemImageName)
 		}
 	}
