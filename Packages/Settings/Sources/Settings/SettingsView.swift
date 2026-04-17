@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import GitHosting
 import SwiftUI
 import ToolsIntegration
 
@@ -20,6 +21,8 @@ public struct SettingsView: View {
 				Divider()
 
 				youtrackAuthenticationSection
+				gitHubAuthenticationSection
+				gitLabAuthenticationSection
 				repositoryRefreshSection
 				branchNameRegexSection
 				HStack(alignment: .top) {
@@ -142,6 +145,58 @@ public struct SettingsView: View {
 				.font(.system(.body, design: .monospaced))
 
 			Button(action: { store.send(.clearTokenButtonTapped) }) {
+				Label("Clear Token", systemImage: "xmark.circle")
+			}
+			.buttonStyle(.bordered)
+			.foregroundColor(.red)
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var gitHubAuthenticationSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("GitHub Authentication")
+				.font(.headline)
+
+			Text(
+				"Enter a GitHub personal access token (classic or fine-grained) with `pull_requests: read` scope. Used to detect open PRs for the current branch."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
+			SecureField("GitHub Token", text: $store.githubToken.sending(\.setGitHubToken))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
+
+			Button(action: { store.send(.clearGitHubToken) }) {
+				Label("Clear Token", systemImage: "xmark.circle")
+			}
+			.buttonStyle(.bordered)
+			.foregroundColor(.red)
+		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var gitLabAuthenticationSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("GitLab Authentication")
+				.font(.headline)
+
+			Text(
+				"Enter a GitLab personal access token with `read_api` scope. Used to detect open merge requests for the current branch."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
+			SecureField("GitLab Token", text: $store.gitlabToken.sending(\.setGitLabToken))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
+
+			Button(action: { store.send(.clearGitLabToken) }) {
 				Label("Clear Token", systemImage: "xmark.circle")
 			}
 			.buttonStyle(.bordered)

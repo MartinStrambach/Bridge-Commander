@@ -3,6 +3,7 @@ import ComposableArchitecture
 import Foundation
 import GitActionsMenu
 import GitCore
+import GitHosting
 import Settings
 import ToolsIntegration
 
@@ -27,6 +28,8 @@ struct RepositoryRowReducer {
 		var commitsBehindCount: Int
 		var hasRemoteBranch: Bool
 		var prUrl: String?
+		var prState: PullRequestState?
+		var prProvider: PullRequestProvider?
 		var androidCR: CodeReviewState?
 		var iosCR: CodeReviewState?
 		var androidReviewerName: String?
@@ -108,7 +111,11 @@ struct RepositoryRowReducer {
 			self.mobileSubfolderPath = mobileSubfolderPath
 			self.iosSubfolderPath = iosSubfolderPath
 
-			self.xcodeButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath, xcodeFilePreference: xcodeFilePreference)
+			self.xcodeButton = .init(
+				repositoryPath: path,
+				iosSubfolderPath: iosSubfolderPath,
+				xcodeFilePreference: xcodeFilePreference
+			)
 			self.tuistButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath)
 			self.terminalButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
 			self.claudeCodeButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
@@ -133,6 +140,7 @@ struct RepositoryRowReducer {
 		case refresh
 		case didFetchStatus(GitPorcelainStatus, Bool)
 		case didFetchYouTrack(IssueDetails)
+		case didFetchPullRequest(PullRequestDetails?)
 		case openRepositoryDetail
 		case openTerminalForRepo
 		case repositoryDetail(PresentationAction<RepositoryDetail.Action>)
@@ -155,6 +163,9 @@ struct RepositoryRowReducer {
 
 	@Dependency(YouTrackClient.self)
 	private var youTrackClient
+
+	@Dependency(PullRequestClient.self)
+	private var pullRequestClient
 
 	@Dependency(XcodeClient.self)
 	private var xcodeClient
@@ -199,7 +210,10 @@ struct RepositoryRowReducer {
 		Reduce { state, action in
 			switch action {
 			case .openRepositoryDetail:
-				state.repositoryDetail = RepositoryDetail.State(repositoryPath: state.path, iosSubfolderPath: state.iosSubfolderPath)
+				state.repositoryDetail = RepositoryDetail.State(
+					repositoryPath: state.path,
+					iosSubfolderPath: state.iosSubfolderPath
+				)
 				return .none
 
 			case .onAppear:
@@ -211,6 +225,7 @@ struct RepositoryRowReducer {
 				return .merge(
 					fetchBranchInfo(for: state),
 					fetchYouTrack(for: state),
+					fetchPullRequest(for: state),
 					.send(.gitActionsMenu(.onAppear)),
 					.send(.xcodeButton(.onAppear))
 				)
@@ -219,6 +234,7 @@ struct RepositoryRowReducer {
 				return .merge(
 					fetchBranchInfo(for: state),
 					fetchYouTrack(for: state),
+					fetchPullRequest(for: state),
 					.send(.gitActionsMenu(.refresh)),
 					.send(.xcodeButton(.refresh))
 				)
@@ -227,6 +243,7 @@ struct RepositoryRowReducer {
 				guard status.didSucceed else {
 					return .none
 				}
+
 				let branch = status.branch ?? state.branchName ?? state.name
 				let unstaged = isMerge ? 0 : status.unstagedCount
 				let staged = isMerge ? 0 : status.stagedCount
@@ -250,13 +267,18 @@ struct RepositoryRowReducer {
 				return .none
 
 			case let .didFetchYouTrack(details):
-				state.prUrl = details.prUrl
 				state.androidCR = details.androidCR
 				state.iosCR = details.iosCR
 				state.androidReviewerName = details.androidReviewerName
 				state.iosReviewerName = details.iosReviewerName
 				state.ticketState = details.ticketState
-				state.shareButton.updatePRURL(details.prUrl)
+				return .none
+
+			case let .didFetchPullRequest(details):
+				state.prUrl = details?.url
+				state.prState = details?.state
+				state.prProvider = details?.provider
+				state.shareButton.updatePRURL(details?.url)
 				return .none
 
 			case let .deleteWorktreeButton(action):
@@ -329,6 +351,18 @@ struct RepositoryRowReducer {
 				// Silently fail - YouTrack might be unavailable
 				print("Failed to fetch YouTrack details for \(ticketId): \(error.localizedDescription)")
 			}
+		}
+	}
+
+	private func fetchPullRequest(for state: State) -> EffectOf<RepositoryRowReducer> {
+		.run { [path = state.path, branchName = state.branchName ?? state.name] send in
+			guard let remote = await gitClient.getOriginRemote(at: path) else {
+				await send(.didFetchPullRequest(nil))
+				return
+			}
+
+			let details = await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
+			await send(.didFetchPullRequest(details))
 		}
 	}
 }

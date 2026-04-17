@@ -2,6 +2,7 @@ import ActionButtons
 import AppUI
 import ComposableArchitecture
 import GitActionsMenu
+import GitHosting
 import Settings
 import SwiftUI
 import TerminalFeature
@@ -45,6 +46,63 @@ struct RepositoryRowView: View {
 			}
 		}
 		return Color(NSColor.controlBackgroundColor).opacity(0.5)
+	}
+
+	// MARK: - PR Button Presentation
+
+	private var prButtonIcon: ActionButton.ButtonIcon {
+		switch store.prProvider {
+		case .gitlab:
+			.customImage("gitlab")
+		case .github,
+		     .none:
+			.systemImage(prButtonSystemImageName)
+		}
+	}
+
+	private var prButtonSystemImageName: String {
+		switch store.prState {
+		case .draft:
+			"arrow.triangle.pull"
+		case .merged:
+			"arrow.triangle.merge"
+		case .closed:
+			"xmark.circle"
+		case .none,
+		     .ready:
+			"arrow.triangle.pull"
+		}
+	}
+
+	private var prButtonTooltip: String {
+		let providerName = store.prProvider == .gitlab ? "GitLab" : "GitHub"
+		let noun = store.prProvider == .gitlab ? "merge request" : "pull request"
+		switch store.prState {
+		case .draft:
+			return "Open draft \(noun) in \(providerName)"
+		case .merged:
+			return "Open merged \(noun) in \(providerName)"
+		case .closed:
+			return "Open closed \(noun) in \(providerName)"
+		case .none,
+		     .ready:
+			return "Open \(noun) in \(providerName)"
+		}
+	}
+
+	private var prButtonColor: Color? {
+		switch store.prState {
+		case .draft:
+			.orange
+		case .merged:
+			.purple
+		case .closed:
+			.gray
+		case .ready:
+			.green
+		case .none:
+			nil
+		}
 	}
 
 	var body: some View {
@@ -314,8 +372,9 @@ struct RepositoryRowView: View {
 			// Open PR button (conditional)
 			if let prUrl = store.prUrl {
 				ActionButton(
-					icon: .customImage("gitlab"),
-					tooltip: "Open pull request in Gitlab"
+					icon: prButtonIcon,
+					tooltip: prButtonTooltip,
+					color: prButtonColor
 				) {
 					if let url = URL(string: prUrl) {
 						NSWorkspace.shared.open(url)

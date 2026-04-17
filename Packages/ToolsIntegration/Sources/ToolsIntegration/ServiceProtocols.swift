@@ -58,15 +58,13 @@ public protocol YouTrackServiceType: Sendable {
 }
 
 public struct IssueDetails {
-	public let prUrl: String?
 	public let androidCR: CodeReviewState?
 	public let iosCR: CodeReviewState?
 	public let androidReviewerName: String?
 	public let iosReviewerName: String?
 	public let ticketState: TicketState?
 
-	public init(prUrl: String?, androidCR: CodeReviewState?, iosCR: CodeReviewState?, androidReviewerName: String?, iosReviewerName: String?, ticketState: TicketState?) {
-		self.prUrl = prUrl
+	public init(androidCR: CodeReviewState?, iosCR: CodeReviewState?, androidReviewerName: String?, iosReviewerName: String?, ticketState: TicketState?) {
 		self.androidCR = androidCR
 		self.iosCR = iosCR
 		self.androidReviewerName = androidReviewerName

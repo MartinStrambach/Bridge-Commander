@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import GitHosting
 import ToolsIntegration
 
 @Reducer
@@ -8,6 +9,12 @@ public struct SettingsReducer {
 	public struct State: Equatable {
 		@Shared(.youtrackAuthToken)
 		public var youtrackAuthToken = ""
+
+		@Shared(.githubToken)
+		public var githubToken = ""
+
+		@Shared(.gitlabToken)
+		public var gitlabToken = ""
 
 		@Shared(.periodicRefreshInterval)
 		public var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
@@ -62,6 +69,10 @@ public struct SettingsReducer {
 
 	public enum Action {
 		case setYouTrackToken(String)
+		case setGitHubToken(String)
+		case setGitLabToken(String)
+		case clearGitHubToken
+		case clearGitLabToken
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setGroupSupportsIOS(groupId: String, value: Bool)
 		case setGroupSupportsAndroid(groupId: String, value: Bool)
@@ -98,6 +109,22 @@ public struct SettingsReducer {
 			switch action {
 			case let .setYouTrackToken(token):
 				state.$youtrackAuthToken.withLock { $0 = token }
+				return .none
+
+			case let .setGitHubToken(token):
+				state.$githubToken.withLock { $0 = token }
+				return .none
+
+			case let .setGitLabToken(token):
+				state.$gitlabToken.withLock { $0 = token }
+				return .none
+
+			case .clearGitHubToken:
+				state.$githubToken.withLock { $0 = "" }
+				return .none
+
+			case .clearGitLabToken:
+				state.$gitlabToken.withLock { $0 = "" }
 				return .none
 
 			case let .setPeriodicRefreshInterval(interval):

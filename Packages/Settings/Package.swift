@@ -11,6 +11,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.25.3"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.8.0"),
         .package(path: "../ToolsIntegration"),
+        .package(path: "../GitHosting"),
     ],
     targets: [
         .target(
@@ -19,6 +20,7 @@ let package = Package(
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "Sharing", package: "swift-sharing"),
                 .product(name: "ToolsIntegration", package: "ToolsIntegration"),
+                .product(name: "GitHosting", package: "GitHosting"),
             ]
         ),
     ]

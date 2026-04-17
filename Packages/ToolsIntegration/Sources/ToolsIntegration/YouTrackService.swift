@@ -3,16 +3,14 @@ import Foundation
 public nonisolated enum YouTrackService {
 	private static let baseURL = "https://youtrack.livesport.eu/api"
 
-	/// Fetches PR URL and code review fields from a YouTrack issue
+	/// Fetches code review fields from a YouTrack issue
 	/// - Parameters:
 	///   - ticketId: The YouTrack ticket ID (e.g., "MOB-1963")
 	///   - authToken: The YouTrack authentication token
-	/// - Returns: A tuple containing (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState), any
-	/// of which may
-	/// be nil if not found
+	/// - Returns: A tuple containing (androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState), any
+	/// of which may be nil if not found
 	public static func fetchIssueDetails(for ticketId: String, authToken: String) async
 		-> (
-			prUrl: String?,
 			androidCR: CodeReviewState?,
 			iosCR: CodeReviewState?,
 			androidReviewerName: String?,
@@ -23,13 +21,13 @@ public nonisolated enum YouTrackService {
 		// Validate that a token is configured
 		guard !authToken.isEmpty else {
 			print("YouTrackService: Cannot fetch issue details without a valid auth token")
-			return (nil, nil, nil, nil, nil, nil)
+			return (nil, nil, nil, nil, nil)
 		}
 
 		let issueURL = "\(baseURL)/issues/\(ticketId)?fields=customFields(name,value(text,name))"
 
 		guard let url = URL(string: issueURL) else {
-			return (nil, nil, nil, nil, nil, nil)
+			return (nil, nil, nil, nil, nil)
 		}
 
 		var request = URLRequest(url: url)
@@ -44,14 +42,13 @@ public nonisolated enum YouTrackService {
 			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
 				print("YouTrackService: Failed with status code \(statusCode)")
-				return (nil, nil, nil, nil, nil, nil)
+				return (nil, nil, nil, nil, nil)
 			}
 
 			let decoder = JSONDecoder()
 			let issue = try decoder.decode(YouTrackIssue.self, from: data)
 			print("YouTrackService: Successfully fetched issue \(issue.key ?? "unknown")")
 
-			let prUrl = extractMonorepoPRUrl(from: issue)
 			let androidCRString = extractCustomFieldValue(from: issue, fieldName: "Android CR")
 			let androidCR = androidCRString.flatMap { CodeReviewState(rawValue: $0) }
 			let iosCRString = extractCustomFieldValue(from: issue, fieldName: "iOS CR")
@@ -61,12 +58,6 @@ public nonisolated enum YouTrackService {
 			let ticketStateString = extractCustomFieldValue(from: issue, fieldName: "State")
 			let ticketState = ticketStateString.flatMap { TicketState(rawValue: $0) }
 
-			if let prUrl {
-				print("YouTrackService: Found Monorepo PR: \(prUrl)")
-			}
-			else {
-				print("YouTrackService: No Monorepo PR found")
-			}
 			if let androidCRString {
 				print("YouTrackService: Found Android CR: \(androidCRString) -> \(androidCR?.rawValue ?? "unknown")")
 			}
@@ -83,36 +74,12 @@ public nonisolated enum YouTrackService {
 				print("YouTrackService: Found State: \(ticketStateString) -> \(ticketState?.rawValue ?? "unknown")")
 			}
 
-			return (prUrl, androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState)
+			return (androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState)
 		}
 		catch {
 			print("YouTrackService: Error decoding response: \(error)")
-			return (nil, nil, nil, nil, nil, nil)
+			return (nil, nil, nil, nil, nil)
 		}
-	}
-
-	/// Extracts the Monorepo PR URL from the YouTrack issue's custom fields
-	/// - Parameter issue: The decoded YouTrack issue
-	/// - Returns: The PR URL, or nil if not found
-	private static func extractMonorepoPRUrl(from issue: YouTrackIssue) -> String? {
-		guard let customFields = issue.customFields else {
-			return nil
-		}
-
-		for field in customFields {
-			// Look for field named "Code review urls"
-			if
-				field.name?.lowercased() == "code review urls",
-				let fieldText = field.value?.text
-			{
-				// Extract the Monorepo PR URL from the field text
-				if let prUrl = extractMonorepoPRFromText(fieldText) {
-					return prUrl
-				}
-			}
-		}
-
-		return nil
 	}
 
 	/// Extracts a custom field value by field name
@@ -134,51 +101,6 @@ public nonisolated enum YouTrackService {
 			}
 		}
 
-		return nil
-	}
-
-	/// Extracts the Monorepo PR URL from Code review urls field text
-	/// - Parameter fieldText: The text content of the Code review urls field
-	/// - Returns: The Monorepo PR URL, or nil if not found
-	private static func extractMonorepoPRFromText(_ fieldText: String) -> String? {
-		// The field may contain multiple lines like:
-		// Monorepo: https://github.com/...
-		// Android: https://github.com/...
-		// iOS: https://github.com/...
-
-		let lines = fieldText.split(separator: "\n", omittingEmptySubsequences: true)
-
-		for line in lines {
-			let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-
-			// Look for lines starting with "Monorepo:"
-			if trimmedLine.lowercased().hasPrefix("monorepo:") {
-				// Extract URL from this line
-				if let url = extractUrlFromText(String(trimmedLine)) {
-					return url
-				}
-			}
-		}
-
-		return nil
-	}
-
-	/// Extracts the actual URL from a text that may contain prefix like "Monorepo: <url>"
-	/// - Parameter text: The text that may contain a URL
-	/// - Returns: The extracted URL, or nil if not found
-	private static func extractUrlFromText(_ text: String) -> String? {
-		// Try to extract URL pattern: http(s)://...
-		// Match http(s) followed by any non-whitespace characters (greedy)
-		let pattern = "https?://\\S+"
-		if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-			let range = NSRange(text.startIndex..., in: text)
-			if
-				let match = regex.firstMatch(in: text, options: [], range: range),
-				let urlRange = Range(match.range, in: text)
-			{
-				return String(text[urlRange])
-			}
-		}
 		return nil
 	}
 }
