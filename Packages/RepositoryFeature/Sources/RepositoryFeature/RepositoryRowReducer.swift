@@ -356,6 +356,11 @@ struct RepositoryRowReducer {
 
 	private func fetchPullRequest(for state: State) -> EffectOf<RepositoryRowReducer> {
 		.run { [path = state.path, branchName = state.branchName ?? state.name] send in
+			guard !["master", "main"].contains(branchName.lowercased()) else {
+				await send(.didFetchPullRequest(nil))
+				return
+			}
+
 			guard let remote = await gitClient.getOriginRemote(at: path) else {
 				await send(.didFetchPullRequest(nil))
 				return
