@@ -41,6 +41,10 @@ struct TerminalLayoutView: View {
 		return nil
 	}
 
+	private var homeSessionStatus: TerminalSessionStatus? {
+		sessions.first(where: { $0.repositoryPath == NSHomeDirectory() })?.status
+	}
+
 	var body: some View {
 		HStack(spacing: 0) {
 			sidebar
@@ -102,6 +106,9 @@ struct TerminalLayoutView: View {
 
 			ScrollView {
 				LazyVStack(alignment: .leading, spacing: 2) {
+					if let status = homeSessionStatus {
+						homeSessionRow(status: status)
+					}
 					if showOnlyWithTerminals {
 						ForEach(filteredSidebarGroups, id: \.group.id) { item in
 							sidebarGroupLabel(for: item.group)
@@ -155,6 +162,42 @@ struct TerminalLayoutView: View {
 			.padding(.horizontal, 8)
 			.padding(.top, 8)
 			.padding(.bottom, 2)
+	}
+
+	private func homeSessionRow(status: TerminalSessionStatus) -> some View {
+		let isActive = store.activeRepositoryPath == NSHomeDirectory()
+		return Button {
+			store.send(.selectRepo(repositoryPath: NSHomeDirectory()))
+		} label: {
+			HStack(spacing: 8) {
+				TerminalStatusDotView(status: status)
+				VStack(alignment: .leading, spacing: 2) {
+					Text("Home Directory")
+						.font(.caption)
+						.fontWeight(isActive ? .semibold : .regular)
+						.foregroundColor(isActive ? .primary : .secondary)
+						.lineLimit(1)
+					Text("~")
+						.font(.caption2)
+						.foregroundColor(.secondary)
+						.lineLimit(1)
+				}
+				Spacer()
+			}
+			.padding(.horizontal, 8)
+			.padding(.vertical, 6)
+			.background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
+			.cornerRadius(6)
+			.contentShape(Rectangle())
+		}
+		.buttonStyle(.plain)
+		.padding(.horizontal, 4)
+		.contextMenu {
+			Button("Kill Terminal", role: .destructive) {
+				terminalViewStore.killAllSessions(for: NSHomeDirectory())
+				store.send(.killRepo(repositoryPath: NSHomeDirectory()))
+			}
+		}
 	}
 
 	private func sidebarRow(for rowState: RepositoryRowReducer.State) -> some View {

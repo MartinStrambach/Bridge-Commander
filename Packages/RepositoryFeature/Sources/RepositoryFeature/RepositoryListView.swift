@@ -132,6 +132,14 @@ struct RepositoryListView: View {
 					.font(.title2)
 					.fontWeight(.bold)
 			}
+
+			HeaderButton(
+				icon: "terminal",
+				tooltip: "Open terminal in home directory (⌘T)",
+				action: { send(.openHomeTerminalButtonTapped) }
+			)
+			.keyboardShortcut("t", modifiers: .command)
+
 			if !store.repositoryGroups.isEmpty {
 				HStack(spacing: 8) {
 					HeaderButton(

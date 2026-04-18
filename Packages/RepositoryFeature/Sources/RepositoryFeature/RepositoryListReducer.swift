@@ -102,6 +102,7 @@ struct RepositoryListReducer {
 			case onDisappear
 			case openAccessibilitySettingsButtonTapped
 			case openAutomationSettingsButtonTapped
+			case openHomeTerminalButtonTapped
 			case periodicRefreshIntervalChanged
 			case refreshButtonTapped
 			case searchTextChanged(String)
@@ -220,6 +221,9 @@ struct RepositoryListReducer {
 				state.isSystemEventsPermissionGranted = nil
 				state.isAccessibilityPermissionGranted = nil
 				return .send(.refreshRepositories)
+
+			case .view(.openHomeTerminalButtonTapped):
+				return openTerminal(for: NSHomeDirectory(), in: &state)
 
 			// MARK: - Add Repository
 
@@ -854,7 +858,11 @@ private func applySettings(
 }
 
 private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {
-	guard let rowState = findRowState(for: path, in: state) else { return }
+	guard let rowState = findRowState(for: path, in: state) else {
+		state.terminalLayout?.xcodeButton = nil
+		state.terminalLayout?.androidStudioButton = nil
+		return
+	}
 	state.terminalLayout?.xcodeButton = rowState.supportsIOS ? rowState.xcodeButton : nil
 	state.terminalLayout?.androidStudioButton = rowState.supportsAndroid ? rowState.androidStudioButton : nil
 }
