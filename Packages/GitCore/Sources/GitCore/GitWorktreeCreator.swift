@@ -3,20 +3,52 @@ import ProcessExecution
 
 public nonisolated enum GitWorktreeCreator {
 
-	/// Creates a new Git worktree with the specified branch name
-	/// - Parameters:
-	///   - branchName: The name of the new branch to create
-	///   - baseBranch: The base branch to create the worktree from (defaults to current branch)
-	///   - repositoryPath: The path to the Git repository
-	///   - createNewBranch: When true, creates a new branch; when false, checks out the base branch directly
-	/// - Throws: An error if the creation fails
+	/// Computes the destination folder for a new worktree, mirroring the
+	/// sanitization done by the shell script below.
+	public static func worktreeFolder(
+		repositoryPath: String,
+		branchName: String,
+		baseBranch: String,
+		createNewBranch: Bool,
+		worktreeBasePath: String
+	) -> URL {
+		let repoURL = URL(fileURLWithPath: repositoryPath)
+		let repoName = repoURL.lastPathComponent
+
+		let baseURL: URL = {
+			if worktreeBasePath.hasPrefix("/") {
+				return URL(fileURLWithPath: worktreeBasePath)
+			}
+			return URL(fileURLWithPath: worktreeBasePath, relativeTo: repoURL).standardizedFileURL
+		}()
+
+		let source = createNewBranch ? branchName : baseBranch
+		let sanitized = source
+			.replacingOccurrences(of: "/", with: "_")
+			.replacingOccurrences(of: ".", with: "_")
+
+		return baseURL
+			.appendingPathComponent(repoName)
+			.appendingPathComponent(sanitized)
+	}
+
+	/// Creates a new Git worktree with the specified branch name.
+	/// Returns the absolute URL of the created worktree.
 	public static func createWorktree(
 		branchName: String,
 		baseBranch: String,
 		repositoryPath: String,
 		createNewBranch: Bool = true,
 		worktreeBasePath: String = "../worktrees"
-	) async throws {
+	) async throws -> URL {
+		let folder = worktreeFolder(
+			repositoryPath: repositoryPath,
+			branchName: branchName,
+			baseBranch: baseBranch,
+			createNewBranch: createNewBranch,
+			worktreeBasePath: worktreeBasePath
+		)
+
 		let script = """
 		set -e
 
@@ -27,18 +59,9 @@ public nonisolated enum GitWorktreeCreator {
 		branch="$1";
 		base_branch="$2";
 		create_new_branch="$3";
-		worktree_base="$4";
+		folder="$4";
 
-		# Sanitize name for folder (replace / and . with _)
-		if [ "$create_new_branch" = "true" ]; then
-		  temp="${branch//\\//_}"
-		else
-		  temp="${base_branch//\\//_}"
-		fi
-		reponame=$(basename "$PWD")
-		worktrees_dir="$worktree_base/$reponame"
-		mkdir -p "$worktrees_dir"
-		folder="$worktrees_dir/${temp//./_}"
+		mkdir -p "$(dirname "$folder")"
 
 		# Check if worktree already exists (exact match)
 		if git worktree list | grep -qw "$folder"; then
@@ -95,7 +118,7 @@ public nonisolated enum GitWorktreeCreator {
 				branchName,
 				baseBranch,
 				createNewBranch ? "true" : "false",
-				worktreeBasePath
+				folder.path
 			],
 			currentDirectory: URL(fileURLWithPath: repositoryPath),
 			environment: EnvironmentHelper.setupEnvironment()
@@ -105,5 +128,7 @@ public nonisolated enum GitWorktreeCreator {
 			let msg = result.trimmedError
 			throw GitError.worktreeCreationFailed(msg.isEmpty ? "Unknown error" : msg)
 		}
+
+		return folder
 	}
 }

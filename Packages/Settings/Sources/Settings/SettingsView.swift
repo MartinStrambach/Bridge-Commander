@@ -407,7 +407,13 @@ public struct SettingsView: View {
 					.foregroundColor(.secondary)
 			}
 			else {
-				ForEach(store.trackedRepoPaths, id: \.self) { groupId in
+				ForEach(Array(store.trackedRepoPaths.enumerated()), id: \.element) { index, groupId in
+					if index > 0 {
+						Rectangle()
+							.fill(Color.white)
+							.frame(height: 1)
+							.padding(.vertical, 6)
+					}
 					repoGroupRow(groupId: groupId)
 				}
 			}
@@ -503,6 +509,56 @@ public struct SettingsView: View {
 				))
 				.textFieldStyle(.roundedBorder)
 				.font(.system(.body, design: .monospaced))
+			}
+
+			Divider()
+				.padding(.vertical, 4)
+
+			VStack(alignment: .leading, spacing: 6) {
+				Text("Files to copy into new worktrees")
+					.font(.subheadline)
+					.fontWeight(.semibold)
+				Text("Relative paths to files or directories copied from this repository into each new worktree.")
+					.font(.caption)
+					.foregroundColor(.secondary)
+
+				ForEach(Array(settings.worktreeCopyPaths.enumerated()), id: \.offset) { index, path in
+					HStack {
+						TextField("e.g. .env or config/local/", text: Binding(
+							get: { path },
+							set: { newValue in
+								var updated = settings.worktreeCopyPaths
+								guard index < updated.count else { return }
+								updated[index] = newValue
+								store.send(.setGroupWorktreeCopyPaths(groupId: groupId, value: updated))
+							}
+						))
+						.textFieldStyle(.roundedBorder)
+						.font(.system(.body, design: .monospaced))
+
+						Button {
+							var updated = settings.worktreeCopyPaths
+							guard index < updated.count else { return }
+							updated.remove(at: index)
+							store.send(.setGroupWorktreeCopyPaths(groupId: groupId, value: updated))
+						} label: {
+							Image(systemName: "minus.circle")
+						}
+						.buttonStyle(.borderless)
+						.help("Remove path")
+					}
+				}
+
+				Button {
+					var updated = settings.worktreeCopyPaths
+					updated.append("")
+					store.send(.setGroupWorktreeCopyPaths(groupId: groupId, value: updated))
+				} label: {
+					Label("Add path", systemImage: "plus.circle")
+						.font(.caption)
+				}
+				.buttonStyle(.borderless)
+				.padding(.top, 2)
 			}
 		}
 		.padding(10)

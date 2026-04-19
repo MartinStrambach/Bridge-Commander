@@ -10,6 +10,8 @@ struct CreateWorktreeButtonReducer {
 		let repositoryPath: String
 		@Shared(.worktreeBasePath)
 		var worktreeBasePath = "../worktrees"
+		@Shared(.groupSettings)
+		var groupSettings: [String: RepoGroupSettings] = [:]
 		var isCreating: Bool = false
 		var showCreateDialog: Bool = false
 		var branchName: String = ""
@@ -36,7 +38,7 @@ struct CreateWorktreeButtonReducer {
 		case cancelCreation
 		case confirmCreation
 		case errorAlert(PresentationAction<ErrorAlert>)
-		case didCreateSuccessfully
+		case didCreateSuccessfully(copyResult: WorktreeFileCopier.Result?)
 		case didFailWithError(String)
 		case loadBranches
 		case branchesLoaded([BranchInfo])
@@ -90,33 +92,63 @@ struct CreateWorktreeButtonReducer {
 
 				state.showCreateDialog = false
 				state.isCreating = true
+				let copyPaths = state.groupSettings[state.repositoryPath]?.worktreeCopyPaths ?? []
 				return .run { [
 					branchName = state.branchName,
 					baseBranch = state.selectedBaseBranch,
 					path = state.repositoryPath,
 					createNewBranch = state.createNewBranch,
-					worktreeBasePath = state.worktreeBasePath
+					worktreeBasePath = state.worktreeBasePath,
+					copyPaths
 				] send in
 					do {
-						try await GitWorktreeCreator.createWorktree(
+						let worktreeURL = try await GitWorktreeCreator.createWorktree(
 							branchName: branchName,
 							baseBranch: baseBranch,
 							repositoryPath: path,
 							createNewBranch: createNewBranch,
 							worktreeBasePath: worktreeBasePath
 						)
-						await send(.didCreateSuccessfully)
+						let copyResult: WorktreeFileCopier.Result? = copyPaths.isEmpty
+							? nil
+							: WorktreeFileCopier.copy(
+								paths: copyPaths,
+								from: URL(fileURLWithPath: path),
+								to: worktreeURL
+							)
+						await send(.didCreateSuccessfully(copyResult: copyResult))
 					}
 					catch {
 						await send(.didFailWithError(error.localizedDescription))
 					}
 				}
 
-			case .didCreateSuccessfully:
+			case let .didCreateSuccessfully(copyResult):
 				state.isCreating = false
 				state.branchName = ""
 				state.branchSearchText = ""
 				state.availableBranches = []
+				if let result = copyResult, result.hasWarnings {
+					var lines: [String] = []
+					if !result.missing.isEmpty {
+						lines.append("Missing in source repository:")
+						lines.append(contentsOf: result.missing.map { "  • \($0)" })
+					}
+					if !result.failed.isEmpty {
+						if !lines.isEmpty { lines.append("") }
+						lines.append("Failed to copy:")
+						lines.append(contentsOf: result.failed.map { "  • \($0.path) — \($0.reason)" })
+					}
+					state.errorAlert = AlertState {
+						TextState("Worktree created with warnings")
+					} actions: {
+						ButtonState(role: .cancel) {
+							TextState("OK")
+						}
+					} message: {
+						TextState(lines.joined(separator: "\n"))
+					}
+				}
 				return .none
 
 			case let .didFailWithError(error):

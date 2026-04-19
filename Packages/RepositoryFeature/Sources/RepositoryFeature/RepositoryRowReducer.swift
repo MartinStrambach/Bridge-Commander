@@ -360,7 +360,6 @@ struct RepositoryRowReducer {
 				await send(.didFetchPullRequest(nil))
 				return
 			}
-
 			guard let remote = await gitClient.getOriginRemote(at: path) else {
 				await send(.didFetchPullRequest(nil))
 				return

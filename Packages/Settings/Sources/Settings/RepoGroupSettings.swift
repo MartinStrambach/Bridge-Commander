@@ -18,6 +18,9 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	public var ticketIdRegex: String = ""
 	/// Controls whether the Xcode button prefers .xcworkspace, .xcodeproj, or auto-detects.
 	public var xcodeFilePreference: XcodeFilePreference = .auto
+	/// Relative paths (files or directories) to copy from the source repository
+	/// into a newly created worktree. Empty = feature disabled for this repo.
+	public var worktreeCopyPaths: [String] = []
 
 	/// Memberwise initializer with default values
 	public init(
@@ -27,7 +30,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		iosSubfolderPath: String = "",
 		supportsTuist: Bool = false,
 		ticketIdRegex: String = "",
-		xcodeFilePreference: XcodeFilePreference = .auto
+		xcodeFilePreference: XcodeFilePreference = .auto,
+		worktreeCopyPaths: [String] = []
 	) {
 		self.supportsIOS = supportsIOS
 		self.supportsAndroid = supportsAndroid
@@ -36,6 +40,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.supportsTuist = supportsTuist
 		self.ticketIdRegex = ticketIdRegex
 		self.xcodeFilePreference = xcodeFilePreference
+		self.worktreeCopyPaths = worktreeCopyPaths
 	}
 
 	// Custom decoder: uses decodeIfPresent so keys missing from older JSON
@@ -55,5 +60,6 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.supportsTuist = try c.decodeIfPresent(Bool.self, forKey: .supportsTuist) ?? false
 		self.ticketIdRegex = try c.decodeIfPresent(String.self, forKey: .ticketIdRegex) ?? ""
 		self.xcodeFilePreference = try c.decodeIfPresent(XcodeFilePreference.self, forKey: .xcodeFilePreference) ?? .auto
+		self.worktreeCopyPaths = try c.decodeIfPresent([String].self, forKey: .worktreeCopyPaths) ?? []
 	}
 }
