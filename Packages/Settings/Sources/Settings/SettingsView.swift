@@ -449,6 +449,11 @@ public struct SettingsView: View {
 						set: { store.send(.setGroupSupportsTuist(groupId: groupId, value: $0)) }
 					))
 				}
+
+				Toggle("Web", isOn: Binding(
+					get: { settings.supportsWeb },
+					set: { store.send(.setGroupSupportsWeb(groupId: groupId, value: $0)) }
+				))
 			}
 
 			if settings.supportsIOS {
@@ -492,6 +497,21 @@ public struct SettingsView: View {
 					TextField("e.g. mobile/App", text: Binding(
 						get: { settings.mobileSubfolderPath },
 						set: { store.send(.setGroupMobileSubfolderPath(groupId: groupId, path: $0)) }
+					))
+					.textFieldStyle(.roundedBorder)
+					.font(.system(.body, design: .monospaced))
+				}
+			}
+
+			if settings.supportsWeb {
+				HStack {
+					Text("Web Index Path")
+						.font(.caption)
+						.foregroundColor(.secondary)
+						.frame(width: 140, alignment: .leading)
+					TextField("e.g. dist/index.html", text: Binding(
+						get: { settings.webIndexPath },
+						set: { store.send(.setGroupWebIndexPath(groupId: groupId, path: $0)) }
 					))
 					.textFieldStyle(.roundedBorder)
 					.font(.system(.body, design: .monospaced))

@@ -392,6 +392,10 @@ struct RepositoryRowView: View {
 				TicketButtonView(store: ticketButtonStore)
 			}
 
+			if let webButtonStore = store.scope(state: \.webButton, action: \.webButton) {
+				WebButtonView(store: webButtonStore)
+			}
+
 			TerminalButtonView(store: store.scope(
 				state: \.terminalButton,
 				action: \.terminalButton

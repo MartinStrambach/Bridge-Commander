@@ -709,7 +709,9 @@ private func buildGroup(
 			iosSubfolderPath: settings.iosSubfolderPath,
 			supportsTuist: settings.supportsTuist,
 			ticketIdRegex: settings.ticketIdRegex,
-			xcodeFilePreference: settings.xcodeFilePreference
+			xcodeFilePreference: settings.xcodeFilePreference,
+			supportsWeb: settings.supportsWeb,
+			webIndexPath: settings.webIndexPath
 		)
 	}
 	guard let header = allRows.first(where: { !$0.isWorktree }) else {
@@ -766,7 +768,9 @@ private func mergeGroupRows(
 				iosSubfolderPath: rowSettings.iosSubfolderPath,
 				supportsTuist: rowSettings.supportsTuist,
 				ticketIdRegex: rowSettings.ticketIdRegex,
-				xcodeFilePreference: rowSettings.xcodeFilePreference
+				xcodeFilePreference: rowSettings.xcodeFilePreference,
+				supportsWeb: rowSettings.supportsWeb,
+				webIndexPath: rowSettings.webIndexPath
 			))
 		}
 	}
@@ -855,16 +859,27 @@ private func applySettings(
 	row.androidStudioButton.mobileSubfolderPath = effectiveMobileSubfolder
 	row.terminalButton.mobileSubfolderPath = effectiveMobileSubfolder
 	row.claudeCodeButton.mobileSubfolderPath = effectiveMobileSubfolder
+	if settings.supportsWeb, !settings.webIndexPath.isEmpty {
+		row.webButton = .init(
+			repositoryPath: row.path,
+			webIndexPath: settings.webIndexPath
+		)
+	}
+	else {
+		row.webButton = nil
+	}
 }
 
 private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {
 	guard let rowState = findRowState(for: path, in: state) else {
 		state.terminalLayout?.xcodeButton = nil
 		state.terminalLayout?.androidStudioButton = nil
+		state.terminalLayout?.webButton = nil
 		return
 	}
 	state.terminalLayout?.xcodeButton = rowState.supportsIOS ? rowState.xcodeButton : nil
 	state.terminalLayout?.androidStudioButton = rowState.supportsAndroid ? rowState.androidStudioButton : nil
+	state.terminalLayout?.webButton = rowState.webButton
 }
 
 private func findRowState(

@@ -14,6 +14,7 @@ struct TerminalLayoutReducer {
 
 		var xcodeButton: XcodeProjectButtonReducer.State?
 		var androidStudioButton: AndroidStudioButtonReducer.State?
+		var webButton: WebButtonReducer.State?
 
 		@Presents
 		var stagingDetail: RepositoryDetail.State?
@@ -34,6 +35,7 @@ struct TerminalLayoutReducer {
 		case retryTab(sessionId: UUID)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
+		case webButton(WebButtonReducer.Action)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -105,6 +107,9 @@ struct TerminalLayoutReducer {
 
 			case .androidStudioButton:
 				return .none
+
+			case .webButton:
+				return .none
 			}
 		}
 		.ifLet(\.$stagingDetail, action: \.stagingDetail) {
@@ -115,6 +120,9 @@ struct TerminalLayoutReducer {
 		}
 		.ifLet(\.androidStudioButton, action: \.androidStudioButton) {
 			AndroidStudioButtonReducer()
+		}
+		.ifLet(\.webButton, action: \.webButton) {
+			WebButtonReducer()
 		}
 	}
 }

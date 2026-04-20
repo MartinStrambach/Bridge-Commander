@@ -121,6 +121,10 @@ struct TerminalPanelView: View {
 				AndroidStudioButtonView(store: androidStore, style: .compact)
 			}
 
+			if let webStore = store.scope(state: \.webButton, action: \.webButton) {
+				WebButtonView(store: webStore, style: .compact)
+			}
+
 //			if let rowState = activeRowState, rowState.stagedChangesCount > 0 {
 //				Button("Commit") {
 //					if let path = store.activeRepositoryPath {

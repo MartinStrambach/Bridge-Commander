@@ -82,6 +82,8 @@ public struct SettingsReducer {
 		case setGroupTicketIdRegex(groupId: String, regex: String)
 		case setGroupXcodeFilePreference(groupId: String, preference: XcodeFilePreference)
 		case setGroupWorktreeCopyPaths(groupId: String, value: [String])
+		case setGroupSupportsWeb(groupId: String, value: Bool)
+		case setGroupWebIndexPath(groupId: String, path: String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
@@ -162,6 +164,14 @@ public struct SettingsReducer {
 
 			case let .setGroupWorktreeCopyPaths(groupId, value):
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].worktreeCopyPaths = value }
+				return .none
+
+			case let .setGroupSupportsWeb(groupId, value):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsWeb = value }
+				return .none
+
+			case let .setGroupWebIndexPath(groupId, path):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].webIndexPath = path }
 				return .none
 
 			case let .setBranchNameRegex(regex):

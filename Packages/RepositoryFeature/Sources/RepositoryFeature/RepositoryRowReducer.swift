@@ -42,6 +42,7 @@ struct RepositoryRowReducer {
 		var claudeCodeButton: ClaudeCodeButtonReducer.State
 		var androidStudioButton: AndroidStudioButtonReducer.State
 		var ticketButton: TicketButtonReducer.State?
+		var webButton: WebButtonReducer.State?
 		var shareButton: ShareButtonReducer.State
 		var deleteWorktreeButton: DeleteWorktreeButtonReducer.State
 		var createWorktreeButton: CreateWorktreeButtonReducer.State
@@ -80,7 +81,9 @@ struct RepositoryRowReducer {
 			iosSubfolderPath: String = "",
 			supportsTuist: Bool = false,
 			ticketIdRegex: String = "",
-			xcodeFilePreference: XcodeFilePreference = .auto
+			xcodeFilePreference: XcodeFilePreference = .auto,
+			supportsWeb: Bool = false,
+			webIndexPath: String = ""
 		) {
 			self.id = path
 			self.path = path
@@ -123,6 +126,9 @@ struct RepositoryRowReducer {
 			if let ticketId {
 				self.ticketButton = .init(ticketId: ticketId)
 			}
+			if supportsWeb, !webIndexPath.isEmpty {
+				self.webButton = .init(repositoryPath: path, webIndexPath: webIndexPath)
+			}
 
 			let ticketURL = ticketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? ""
 			self.shareButton = .init(
@@ -150,6 +156,7 @@ struct RepositoryRowReducer {
 		case claudeCodeButton(ClaudeCodeButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
+		case webButton(WebButtonReducer.Action)
 		case shareButton(ShareButtonReducer.Action)
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
 		case createWorktreeButton(CreateWorktreeButtonReducer.Action)
@@ -318,6 +325,9 @@ struct RepositoryRowReducer {
 		}
 		.ifLet(\.ticketButton, action: \.ticketButton) {
 			TicketButtonReducer()
+		}
+		.ifLet(\.webButton, action: \.webButton) {
+			WebButtonReducer()
 		}
 		.ifLet(\.$repositoryDetail, action: \.repositoryDetail) {
 			RepositoryDetail()

@@ -21,6 +21,10 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	/// Relative paths (files or directories) to copy from the source repository
 	/// into a newly created worktree. Empty = feature disabled for this repo.
 	public var worktreeCopyPaths: [String] = []
+	/// When true and `webIndexPath` is non-empty, shows the Web globe button.
+	public var supportsWeb: Bool = false
+	/// Repo-relative (or absolute) path to an HTML file opened in the default browser.
+	public var webIndexPath: String = ""
 
 	/// Memberwise initializer with default values
 	public init(
@@ -31,7 +35,9 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		supportsTuist: Bool = false,
 		ticketIdRegex: String = "",
 		xcodeFilePreference: XcodeFilePreference = .auto,
-		worktreeCopyPaths: [String] = []
+		worktreeCopyPaths: [String] = [],
+		supportsWeb: Bool = false,
+		webIndexPath: String = ""
 	) {
 		self.supportsIOS = supportsIOS
 		self.supportsAndroid = supportsAndroid
@@ -41,6 +47,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.ticketIdRegex = ticketIdRegex
 		self.xcodeFilePreference = xcodeFilePreference
 		self.worktreeCopyPaths = worktreeCopyPaths
+		self.supportsWeb = supportsWeb
+		self.webIndexPath = webIndexPath
 	}
 
 	// Custom decoder: uses decodeIfPresent so keys missing from older JSON
@@ -61,5 +69,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.ticketIdRegex = try c.decodeIfPresent(String.self, forKey: .ticketIdRegex) ?? ""
 		self.xcodeFilePreference = try c.decodeIfPresent(XcodeFilePreference.self, forKey: .xcodeFilePreference) ?? .auto
 		self.worktreeCopyPaths = try c.decodeIfPresent([String].self, forKey: .worktreeCopyPaths) ?? []
+		self.supportsWeb = try c.decodeIfPresent(Bool.self, forKey: .supportsWeb) ?? false
+		self.webIndexPath = try c.decodeIfPresent(String.self, forKey: .webIndexPath) ?? ""
 	}
 }
