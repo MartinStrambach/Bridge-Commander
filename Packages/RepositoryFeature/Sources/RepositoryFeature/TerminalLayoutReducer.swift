@@ -4,6 +4,25 @@ import Foundation
 import TerminalFeature
 import GitCore
 
+enum TerminalChangesSplitOrientation: Equatable {
+	case vertical
+	case horizontal
+
+	var systemImage: String {
+		switch self {
+		case .vertical: "rectangle.split.1x2"
+		case .horizontal: "rectangle.split.2x1"
+		}
+	}
+
+	var displayName: String {
+		switch self {
+		case .vertical: "Vertical Split"
+		case .horizontal: "Horizontal Split"
+		}
+	}
+}
+
 @Reducer
 struct TerminalLayoutReducer {
 	@ObservableState
@@ -15,6 +34,8 @@ struct TerminalLayoutReducer {
 		var xcodeButton: XcodeProjectButtonReducer.State?
 		var androidStudioButton: AndroidStudioButtonReducer.State?
 		var webButton: WebButtonReducer.State?
+		var changesDetail: RepositoryDetail.State?
+		var changesSplitOrientation = TerminalChangesSplitOrientation.vertical
 
 		@Presents
 		var stagingDetail: RepositoryDetail.State?
@@ -24,6 +45,10 @@ struct TerminalLayoutReducer {
 		case selectRepo(repositoryPath: String)
 		case hideTerminalMode
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
+		case openChangesSplit(repositoryPath: String, iosSubfolderPath: String, orientation: TerminalChangesSplitOrientation)
+		case closeChangesSplit
+		case setChangesSplitOrientation(TerminalChangesSplitOrientation)
+		case changesDetail(RepositoryDetail.Action)
 		case pushButtonTapped(repositoryPath: String)
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
@@ -51,6 +76,22 @@ struct TerminalLayoutReducer {
 
 			case let .stagingButtonTapped(repositoryPath, iosSubfolderPath):
 				state.stagingDetail = RepositoryDetail.State(repositoryPath: repositoryPath, iosSubfolderPath: iosSubfolderPath)
+				return .none
+
+			case let .openChangesSplit(repositoryPath, iosSubfolderPath, orientation):
+				state.changesSplitOrientation = orientation
+				state.changesDetail = RepositoryDetail.State(repositoryPath: repositoryPath, iosSubfolderPath: iosSubfolderPath)
+				return .none
+
+			case .closeChangesSplit:
+				state.changesDetail = nil
+				return .none
+
+			case let .setChangesSplitOrientation(orientation):
+				state.changesSplitOrientation = orientation
+				return .none
+
+			case .changesDetail:
 				return .none
 
 			case let .pushButtonTapped(repositoryPath):
@@ -113,6 +154,9 @@ struct TerminalLayoutReducer {
 			}
 		}
 		.ifLet(\.$stagingDetail, action: \.stagingDetail) {
+			RepositoryDetail()
+		}
+		.ifLet(\.changesDetail, action: \.changesDetail) {
 			RepositoryDetail()
 		}
 		.ifLet(\.xcodeButton, action: \.xcodeButton) {
