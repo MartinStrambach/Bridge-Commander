@@ -104,6 +104,27 @@ struct TerminalPanelView: View {
 				.disabled(store.isPushing)
 			}
 
+			if store.activeRepositoryPath != nil {
+				Menu {
+					Button("Vertical Split") {
+						openChangesSplit(orientation: .vertical)
+					}
+					Button("Horizontal Split") {
+						openChangesSplit(orientation: .horizontal)
+					}
+				} label: {
+					Image(systemName: store.changesSplitOrientation.systemImage)
+						.resizable()
+						.scaledToFit()
+						.padding(4)
+						.frame(width: 25, height: 25)
+						.foregroundColor(store.changesDetail == nil ? .secondary : .accentColor)
+				}
+				.menuStyle(.borderlessButton)
+				.menuIndicator(.hidden)
+				.help("Open changes in split view")
+			}
+
 			if let prUrl = activeRowState?.prUrl, let url = URL(string: prUrl) {
 				ActionButton(
 					icon: .customImage("gitlab"),
@@ -157,6 +178,16 @@ struct TerminalPanelView: View {
 		.background(Color(NSColor.windowBackgroundColor))
 	}
 
+	private func openChangesSplit(orientation: TerminalChangesSplitOrientation) {
+		if let path = store.activeRepositoryPath {
+			store.send(.openChangesSplit(
+				repositoryPath: path,
+				iosSubfolderPath: activeRowState?.iosSubfolderPath ?? "",
+				orientation: orientation
+			))
+		}
+	}
+
 	// MARK: - Tab Bar
 
 	private var tabBar: some View {
@@ -202,7 +233,44 @@ struct TerminalPanelView: View {
 	/// in a stable position in the view hierarchy across repo switches and
 	/// hide/show cycles, preventing the zero-frame setFrameSize that would
 	/// send a spurious SIGWINCH and cause zsh to clear visible terminal output.
+	@ViewBuilder
 	private var terminalContent: some View {
+		if let changesStore = store.scope(state: \.changesDetail, action: \.changesDetail) {
+			switch store.changesSplitOrientation {
+			case .vertical:
+				VSplitView {
+					terminalSessionContent
+						.frame(minHeight: 240)
+
+					changesSplitContent(changesStore)
+						.frame(minHeight: 260, idealHeight: 420)
+				}
+
+			case .horizontal:
+				HSplitView {
+					terminalSessionContent
+						.frame(minWidth: 360)
+
+					changesSplitContent(changesStore)
+						.frame(minWidth: 520, idealWidth: 700)
+				}
+			}
+		}
+		else {
+			terminalSessionContent
+		}
+	}
+
+	private func changesSplitContent(_ changesStore: StoreOf<RepositoryDetail>) -> some View {
+		RepositoryChangesSplitView(
+			store: changesStore,
+			orientation: store.changesSplitOrientation,
+			onOrientationChange: { store.send(.setChangesSplitOrientation($0)) },
+			onClose: { store.send(.closeChangesSplit) }
+		)
+	}
+
+	private var terminalSessionContent: some View {
 		ZStack {
 			TerminalContainerRepresentable(
 				terminalViewStore: terminalViewStore,
