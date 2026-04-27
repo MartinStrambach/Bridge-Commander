@@ -112,6 +112,7 @@ struct RepositoryListView: View {
 				store: terminalLayoutStore,
 				repositoryGroups: store.repositoryGroups,
 				sessions: store.terminalSessions,
+				isRefreshing: store.isScanning,
 				terminalViewStore: terminalViewStore,
 				onStatusChange: { sessionId, status in
 					MainActor.assumeIsolated {

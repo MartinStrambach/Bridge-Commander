@@ -26,6 +26,7 @@ struct TerminalLayoutReducer {
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case pushButtonTapped(repositoryPath: String)
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
+		case refreshButtonTapped
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case sessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
 		case killTab(sessionId: UUID)
@@ -70,6 +71,10 @@ struct TerminalLayoutReducer {
 
 			case .pushCompleted:
 				state.isPushing = false
+				return .none
+
+			case .refreshButtonTapped:
+				// Forwarded up to RepositoryListReducer
 				return .none
 
 			case .stagingDetail(.dismiss):
