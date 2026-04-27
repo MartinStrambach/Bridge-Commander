@@ -8,6 +8,7 @@ struct TerminalLayoutView: View {
 
 	let repositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State>
 	let sessions: IdentifiedArrayOf<TerminalSession>
+	let isRefreshing: Bool
 	let terminalViewStore: TerminalViewStore
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
@@ -55,6 +56,7 @@ struct TerminalLayoutView: View {
 			TerminalPanelView(
 				store: store,
 				activeRowState: activeRowState,
+				isRefreshing: isRefreshing,
 				terminalViewStore: terminalViewStore,
 				sessions: sessions,
 				activeSessionId: store.activeSessionId,

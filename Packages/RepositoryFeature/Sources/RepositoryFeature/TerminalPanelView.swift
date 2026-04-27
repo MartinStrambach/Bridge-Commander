@@ -15,6 +15,7 @@ struct TerminalPanelView: View {
 	private var terminalColorTheme = TerminalColorTheme.basicDark
 
 	let activeRowState: RepositoryRowReducer.State?
+	let isRefreshing: Bool
 	let terminalViewStore: TerminalViewStore
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let activeSessionId: UUID?
@@ -124,6 +125,22 @@ struct TerminalPanelView: View {
 			if let webStore = store.scope(state: \.webButton, action: \.webButton) {
 				WebButtonView(store: webStore, style: .compact)
 			}
+
+			HeaderButton(
+				icon: "arrow.clockwise",
+				tooltip: "Refresh repository status (⌘R)",
+				color: .blue,
+				action: { store.send(.refreshButtonTapped) }
+			)
+			.keyboardShortcut("r", modifiers: .command)
+			.opacity(isRefreshing ? 0 : 1)
+			.overlay {
+				if isRefreshing {
+					ProgressView()
+						.scaleEffect(0.55)
+				}
+			}
+			.disabled(isRefreshing)
 
 //			if let rowState = activeRowState, rowState.stagedChangesCount > 0 {
 //				Button("Commit") {

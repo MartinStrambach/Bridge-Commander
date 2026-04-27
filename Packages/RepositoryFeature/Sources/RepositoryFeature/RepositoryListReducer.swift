@@ -507,6 +507,9 @@ struct RepositoryListReducer {
 				state.terminalLayout = nil
 				return .none
 
+			case .terminalLayout(.refreshButtonTapped):
+				return refreshActiveTerminalData(in: state)
+
 			case .terminalLayout(.newTabRequested):
 				guard let path = state.terminalLayout?.activeRepositoryPath else {
 					return .none
@@ -683,6 +686,35 @@ private func openTerminal(
 	}
 	syncTerminalButtons(for: repositoryPath, in: &state)
 	return .none
+}
+
+private func refreshActiveTerminalData(in state: RepositoryListReducer.State) -> EffectOf<RepositoryListReducer> {
+	guard let repositoryPath = state.terminalLayout?.activeRepositoryPath else {
+		return .none
+	}
+
+	var effects: [EffectOf<RepositoryListReducer>] = []
+
+	for group in state.repositoryGroups {
+		if group.header.path == repositoryPath {
+			effects.append(.send(.repositoryGroups(.element(id: group.id, action: .header(.refresh)))))
+			break
+		}
+
+		if group.worktrees[id: repositoryPath] != nil {
+			effects.append(.send(.repositoryGroups(.element(
+				id: group.id,
+				action: .worktrees(.element(id: repositoryPath, action: .refresh))
+			))))
+			break
+		}
+	}
+
+	if state.terminalLayout?.xcodeButton != nil {
+		effects.append(.send(.terminalLayout(.xcodeButton(.refresh))))
+	}
+
+	return .merge(effects)
 }
 
 private func buildGroup(
