@@ -9,7 +9,7 @@ let package = Package(
 	],
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.25.3"),
-		.package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.13.0"),
+		.package(url: "https://github.com/migueldeicaza/SwiftTerm", branch: "prevent-scroll-while-dragging"),
 		.package(path: "../AppUI"),
 	],
 	targets: [
