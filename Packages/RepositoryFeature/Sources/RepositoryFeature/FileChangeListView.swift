@@ -45,7 +45,6 @@ struct FileChangeListView: View {
 							onToggle: { store.send(.toggleTapped(file)) }
 						)
 						.tag(file.id)
-						.contextMenu { contextMenu(for: file) }
 						.background(
 							DoubleClickCatcher {
 								store.send(.updateSelection([file.id]))
@@ -53,6 +52,13 @@ struct FileChangeListView: View {
 							}
 						)
 					}
+				}
+				// A single list-level context menu driven by the current selection.
+				// Per-row `.contextMenu` is intentionally avoided: ⌘A is dispatched through
+				// `NSMenu performKeyEquivalent:`, which forces AppKit to build every row's
+				// menu, turning select-all into O(rows^2) work and freezing the app.
+				.contextMenu(forSelectionType: FileChange.ID.self) { ids in
+					contextMenu(forSelection: ids)
 				}
 				.listStyle(.plain)
 				.onKeyPress(.space) {
@@ -69,20 +75,24 @@ struct FileChangeListView: View {
 		}
 	}
 
+	// Built lazily by AppKit only when a context menu is actually requested
+	// (right-click), so the O(n) filtering here runs once per interaction — never
+	// per row and never during ⌘A select-all.
 	@ViewBuilder
-	private func contextMenu(for file: FileChange) -> some View {
-		if store.selectedFileIds.count > 1, store.selectedFileIds.contains(file.id) {
+	private func contextMenu(forSelection ids: Set<FileChange.ID>) -> some View {
+		if ids.count > 1 {
+			let selectedFiles = store.files.filter { ids.contains($0.id) }
+
 			if store.listType == .staged {
-				Button("Unstage All Selected (\(store.selectedFileIds.count) files)") {
+				Button("Unstage All Selected (\(ids.count) files)") {
 					store.send(.toggleSelectedTapped)
 				}
 			}
 			else {
-				let selectedFiles = store.files.filter { store.selectedFileIds.contains($0.id) }
 				let allTracked = selectedFiles.allSatisfy { $0.status != .untracked }
 				let allUntracked = selectedFiles.allSatisfy { $0.status == .untracked }
 
-				Button("Stage All Selected (\(store.selectedFileIds.count) files)") {
+				Button("Stage All Selected (\(ids.count) files)") {
 					store.send(.toggleSelectedTapped)
 				}
 				if allTracked {
@@ -96,12 +106,13 @@ struct FileChangeListView: View {
 					}
 				}
 			}
-			Button("Reveal in Finder (\(store.selectedFileIds.count) files)") {
-				let selected = store.files.filter { store.selectedFileIds.contains($0.id) }
-				openInFinder(selected)
+			Button("Reveal in Finder (\(ids.count) files)") {
+				openInFinder(selectedFiles)
 			}
 		}
-		else {
+		else if
+			let id = ids.first,
+			let file = store.files.first(where: { $0.id == id }) {
 			Button("Open in IDE") { store.send(.openInIDE(file)) }
 			Button("Reveal in Finder") { openInFinder([file]) }
 			Button("Copy File Name") {
