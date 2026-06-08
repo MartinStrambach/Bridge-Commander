@@ -94,7 +94,11 @@ public nonisolated enum GitWorktreeCreator {
 		# Create worktree
 		if [ "$create_new_branch" = "true" ]; then
 		  echo "→ Creating worktree at: $folder with new branch '$branch' from $base_ref"
-		  git worktree add "$folder" -b "$branch" "$base_ref"
+		  # --no-track: when $base_ref is a remote branch (origin/A), git would otherwise
+		  # auto-configure the new branch to track origin/A. A later `git push` would then
+		  # push commits straight into A instead of creating a new remote branch for the MR.
+		  # Branching off a local base never sets up tracking, so this makes both paths consistent.
+		  git worktree add "$folder" -b "$branch" --no-track "$base_ref"
 		  echo "✅ Worktree created successfully with branch '$branch' from $base_ref"
 		else
 		  # When base branch is remote-only, create a local tracking branch to avoid detached HEAD
