@@ -138,7 +138,12 @@ struct RepositoryListView: View {
 				tooltip: "Open terminal in home directory (⌘T)",
 				action: { send(.openHomeTerminalButtonTapped) }
 			)
-			.keyboardShortcut("t", modifiers: .command)
+			// Only own ⌘T while the terminal panel is closed. When it's open, the
+			// new-tab button in TerminalPanelView claims ⌘T instead. Both views stay
+			// in the hierarchy (this one is just opacity-0), and an invisible view
+			// keeps its keyboard shortcut — so without this gate both would register
+			// ⌘T and SwiftUI would dispatch to either one non-deterministically.
+			.commandTShortcut(enabled: store.terminalLayout == nil)
 
 			if !store.repositoryGroups.isEmpty {
 				HStack(spacing: 8) {
@@ -332,6 +337,21 @@ struct RepositoryListView: View {
 		return true
 	}
 
+}
+
+private extension View {
+	/// Applies the ⌘T keyboard shortcut only when `enabled`. Used to hand ⌘T off to
+	/// the terminal panel's new-tab button while the terminal is open, since an
+	/// opacity-0 view in the hierarchy would otherwise keep claiming the shortcut.
+	@ViewBuilder
+	func commandTShortcut(enabled: Bool) -> some View {
+		if enabled {
+			keyboardShortcut("t", modifiers: .command)
+		}
+		else {
+			self
+		}
+	}
 }
 
 #Preview {
