@@ -1,6 +1,10 @@
 .build/
 build/
+dist/
 xcuserdata/
+
+### Release secrets
+.env.release
 
 ### Claude code files
 .claude/settings.local.json
