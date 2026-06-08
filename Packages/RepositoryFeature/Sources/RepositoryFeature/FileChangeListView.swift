@@ -42,9 +42,7 @@ struct FileChangeListView: View {
 						FileChangeRow(
 							file: file.toAppUI(),
 							isStaged: store.listType == .staged,
-							selectedFileIds: store.selectedFileIds,
-							onToggle: { store.send(.delegate(.toggleAll([file]))) },
-							onToggleSelected: { store.send(.toggleSelectedTapped) }
+							onToggle: { store.send(.toggleTapped(file)) }
 						)
 						.tag(file.id)
 						.contextMenu { contextMenu(for: file) }

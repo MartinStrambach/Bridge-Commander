@@ -31,6 +31,7 @@ struct FileChangeList {
 
 	enum Action {
 		case updateSelection(Set<String>)
+		case toggleTapped(FileChange)
 		case toggleSelectedTapped
 		case toggleAllTapped
 		case spaceKeyPressed
@@ -55,6 +56,15 @@ struct FileChangeList {
 			case let .updateSelection(ids):
 				state.selectedFileIds = ids
 				return .none
+
+			case let .toggleTapped(file):
+				// If multiple files are selected and this file is among them, toggle all selected.
+				// Otherwise toggle just this file.
+				if state.selectedFileIds.count > 1, state.selectedFileIds.contains(file.id) {
+					let files = state.files.filter { state.selectedFileIds.contains($0.id) }
+					return .send(.delegate(.toggleAll(files)))
+				}
+				return .send(.delegate(.toggleAll([file])))
 
 			case .toggleSelectedTapped:
 				let files = state.files.filter { state.selectedFileIds.contains($0.id) }

@@ -131,8 +131,8 @@ Packages/
 ## Build & Run
 
 **Build:**
-- `open BridgeCommander.xcworkspace` (workspace includes all packages)
-- Or: `xcodebuild -workspace BridgeCommander.xcworkspace -scheme BridgeCommander build`
+- `open BridgeCommander.xcodeproj` (the project references all local SPM packages under `Packages/`)
+- Or: `xcodebuild -project BridgeCommander.xcodeproj -scheme BridgeCommander -destination 'platform=macOS' build`
 
 **Run:**
 - ⌘R in Xcode

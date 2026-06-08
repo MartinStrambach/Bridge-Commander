@@ -3,9 +3,7 @@ import SwiftUI
 public struct FileChangeRow: View {
 	public let file: FileChange
 	public let isStaged: Bool
-	public let selectedFileIds: Set<String>
 	public let onToggle: () -> Void
-	public let onToggleSelected: () -> Void
 
 	private var statusColor: Color {
 		switch file.status {
@@ -29,7 +27,7 @@ public struct FileChangeRow: View {
 	public var body: some View {
 		HStack(spacing: 8) {
 			// Checkbox
-			Button(action: handleToggle) {
+			Button(action: onToggle) {
 				Image(systemName: isStaged ? "checkmark.square.fill" : "square")
 					.foregroundStyle(isStaged ? .blue : .secondary)
 			}
@@ -63,25 +61,10 @@ public struct FileChangeRow: View {
 	public init(
 		file: FileChange,
 		isStaged: Bool,
-		selectedFileIds: Set<String>,
-		onToggle: @escaping () -> Void,
-		onToggleSelected: @escaping () -> Void
+		onToggle: @escaping () -> Void
 	) {
 		self.file = file
 		self.isStaged = isStaged
-		self.selectedFileIds = selectedFileIds
 		self.onToggle = onToggle
-		self.onToggleSelected = onToggleSelected
-	}
-
-	private func handleToggle() {
-		// If multiple files are selected and this file is among them, toggle all selected
-		if selectedFileIds.count > 1, selectedFileIds.contains(file.id) {
-			onToggleSelected()
-		}
-		// Otherwise, toggle just this file
-		else {
-			onToggle()
-		}
 	}
 }
