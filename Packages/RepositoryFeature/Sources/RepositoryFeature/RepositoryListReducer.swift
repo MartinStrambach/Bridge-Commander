@@ -48,14 +48,14 @@ struct RepositoryListReducer {
 		fileprivate var isAccessibilityPermissionWarningDismissed = false
 
 		var filteredRepositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> {
-			let sorted = repositoryGroups
-				.sorted { $0.header.name.localizedCaseInsensitiveCompare($1.header.name) == .orderedAscending }
+			// `repositoryGroups` is kept sorted by header name at mutation time (see sortGroupsByName),
+			// so the common no-search path is a cheap passthrough — no per-body re-sort or re-wrap.
 			guard !searchText.isEmpty else {
-				return IdentifiedArrayOf(uniqueElements: sorted)
+				return repositoryGroups
 			}
 
-			return IdentifiedArrayOf(uniqueElements: sorted.filter { group in
-				let query = searchText
+			let query = searchText
+			return IdentifiedArrayOf(uniqueElements: repositoryGroups.filter { group in
 				if group.header.branchName?.localizedCaseInsensitiveContains(query) == true {
 					return true
 				}
@@ -268,6 +268,7 @@ struct RepositoryListReducer {
 					)
 				{
 					state.repositoryGroups.append(group)
+					sortGroupsByName(in: &state)
 				}
 				return .none
 
@@ -370,6 +371,7 @@ struct RepositoryListReducer {
 						)
 					{
 						state.repositoryGroups.append(group)
+						sortGroupsByName(in: &state)
 					}
 				}
 				return .none
@@ -632,6 +634,14 @@ struct RepositoryListReducer {
 }
 
 // MARK: - Private Free Functions
+
+/// Sorts the top-level repository groups alphabetically by header name.
+/// Called once whenever a group is added so `filteredRepositoryGroups` can skip re-sorting on every read.
+private func sortGroupsByName(in state: inout RepositoryListReducer.State) {
+	state.repositoryGroups.sort {
+		$0.header.name.localizedCaseInsensitiveCompare($1.header.name) == .orderedAscending
+	}
+}
 
 private func sortGroupsInState(in state: inout RepositoryListReducer.State) {
 	for groupId in state.repositoryGroups.ids {
