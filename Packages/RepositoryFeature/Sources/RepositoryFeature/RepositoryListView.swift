@@ -284,11 +284,17 @@ struct RepositoryListView: View {
 	// MARK: - Repository List View
 
 	private var repositoryListView: some View {
-		List {
+		// Build a path → status map once so each row does an O(1) lookup instead of
+		// scanning the whole sessions array.
+		let statusByPath = Dictionary(
+			store.terminalSessions.map { ($0.repositoryPath, $0.status) },
+			uniquingKeysWith: { first, _ in first }
+		)
+		return List {
 			ForEach(store.scope(state: \.filteredRepositoryGroups, action: \.repositoryGroups)) { groupStore in
 				RepoGroupView(
 					store: groupStore,
-					sessions: store.terminalSessions
+					statusByPath: statusByPath
 				)
 			}
 		}

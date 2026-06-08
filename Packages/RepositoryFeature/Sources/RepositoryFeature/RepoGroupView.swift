@@ -6,7 +6,8 @@ import TerminalFeature
 struct RepoGroupView: View {
 	@Bindable var store: StoreOf<RepoGroupReducer>
 
-	let sessions: IdentifiedArrayOf<TerminalSession>
+	/// Terminal session status keyed by repository path. O(1) lookup per row, built once by the parent.
+	let statusByPath: [String: TerminalSessionStatus]
 
 	var body: some View {
 		let isExpanded = Binding(
@@ -22,7 +23,7 @@ struct RepoGroupView: View {
 			ForEach(store.scope(state: \.worktrees, action: \.worktrees)) { rowStore in
 				RepositoryRowView(
 					store: rowStore,
-					terminalSessionStatus: sessions.first(where: { $0.repositoryPath == rowStore.path })?.status
+					terminalSessionStatus: statusByPath[rowStore.path]
 				)
 				.padding(.leading, 20)
 				.listRowInsets(EdgeInsets())
@@ -30,7 +31,7 @@ struct RepoGroupView: View {
 		} header: {
 			RepositoryRowView(
 				store: store.scope(state: \.header, action: \.header),
-				terminalSessionStatus: sessions.first(where: { $0.repositoryPath == store.header.path })?.status,
+				terminalSessionStatus: statusByPath[store.header.path],
 				isGroupCollapsed: store.isCollapsed,
 				onToggleCollapse: store.worktrees
 					.isEmpty ? nil : { isExpanded.wrappedValue = !isExpanded.wrappedValue },
@@ -66,7 +67,7 @@ struct RepoGroupView: View {
 				),
 				reducer: { RepoGroupReducer() }
 			),
-			sessions: []
+			statusByPath: [:]
 		)
 	}
 	.listStyle(.plain)
