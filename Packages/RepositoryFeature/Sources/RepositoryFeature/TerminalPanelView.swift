@@ -105,12 +105,11 @@ struct TerminalPanelView: View {
 			}
 
 			if let prUrl = activeRowState?.prUrl, let url = URL(string: prUrl) {
-				ActionButton(
-					icon: .customImage("gitlab"),
-					tooltip: "Open pull request in GitLab"
-				) {
-					NSWorkspace.shared.open(url)
-				}
+				PullRequestButton(
+					url: url,
+					provider: activeRowState?.prProvider,
+					state: activeRowState?.prState
+				)
 			}
 
 			if let xcodeStore = store.scope(state: \.xcodeButton, action: \.xcodeButton) {
