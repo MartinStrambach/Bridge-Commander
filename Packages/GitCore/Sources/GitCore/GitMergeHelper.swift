@@ -10,7 +10,7 @@ public nonisolated enum GitMergeHelper {
 		}
 	}
 
-	public static func mergeMaster(at path: String, baseBranch: String) async throws -> MergeResult {
+	public static func mergeDefaultBranch(at path: String, baseBranch: String) async throws -> MergeResult {
 		// Empty config preserves the historical behavior of merging origin/master.
 		let branch = baseBranch.isEmpty ? "master" : baseBranch
 

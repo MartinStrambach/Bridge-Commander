@@ -35,7 +35,7 @@ public struct MergeMasterButtonReducer {
 				state.isMergingMaster = true
 				return .run { [path = state.repositoryPath, baseBranch = state.defaultBranch, gitClient] send in
 					do {
-						let mergeResult = try await gitClient.mergeMaster(at: path, baseBranch: baseBranch)
+						let mergeResult = try await gitClient.mergeDefaultBranch(at: path, baseBranch: baseBranch)
 						await send(.mergeMasterCompleted(result: .success(mergeResult)))
 					}
 					catch let error as GitError {
