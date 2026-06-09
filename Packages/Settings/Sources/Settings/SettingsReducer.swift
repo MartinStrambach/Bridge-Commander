@@ -178,7 +178,7 @@ public struct SettingsReducer {
 			case let .setGroupDefaultBranch(groupId, value):
 				// Trim so a whitespace-only entry is stored as empty (= master/main fallback),
 				// keeping every downstream consumer (resolver, merge, alerts) consistent.
-				let trimmed = value.trimmingCharacters(in: .whitespaces)
+				let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].defaultBranch = trimmed }
 				return .none
 

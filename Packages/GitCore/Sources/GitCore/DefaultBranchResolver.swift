@@ -12,7 +12,7 @@ public nonisolated enum DefaultBranchResolver {
 	/// configured name exactly. Comparison is case-insensitive.
 	public static func isDefaultBranch(_ branch: String, configured: String) -> Bool {
 		let branch = branch.lowercased()
-		let configured = configured.trimmingCharacters(in: .whitespaces)
+		let configured = configured.trimmingCharacters(in: .whitespacesAndNewlines)
 		if configured.isEmpty {
 			return branch == "master" || branch == "main"
 		}
@@ -23,7 +23,7 @@ public nonisolated enum DefaultBranchResolver {
 	/// when present, then "master", then "main", then the first available
 	/// branch. Returns nil when `available` is empty.
 	public static func resolveBaseBranch(configured: String, available: [String]) -> String? {
-		let configured = configured.trimmingCharacters(in: .whitespaces)
+		let configured = configured.trimmingCharacters(in: .whitespacesAndNewlines)
 		if !configured.isEmpty,
 		   let match = available.first(where: { $0.caseInsensitiveCompare(configured) == .orderedSame }) {
 			return match
