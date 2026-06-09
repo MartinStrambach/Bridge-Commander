@@ -582,6 +582,17 @@ struct RepositoryListReducer {
 				state.terminalLayout?.activeSessionId = newSession.id
 				return .none
 
+			case let .terminalLayout(.finishMergeCompleted(repositoryPath, error)):
+				if let error {
+					state.alert = AlertState {
+						TextState("Finish Merge Failed")
+					} message: {
+						TextState(error.localizedDescription)
+					}
+					return .none
+				}
+				return refreshRow(for: repositoryPath, in: state)
+
 			case let .terminalLayout(.sessionStatusChanged(sessionId, status)):
 				state.terminalSessions[id: sessionId]?.status = status
 				return .none
@@ -905,6 +916,24 @@ private func findRowState(
 		if let wt = group.worktrees[id: path] { return wt }
 	}
 	return nil
+}
+
+private func refreshRow(
+	for path: String,
+	in state: RepositoryListReducer.State
+) -> EffectOf<RepositoryListReducer> {
+	for group in state.repositoryGroups {
+		if group.header.path == path {
+			return .send(.repositoryGroups(.element(id: group.id, action: .header(.refresh))))
+		}
+		if group.worktrees[id: path] != nil {
+			return .send(.repositoryGroups(.element(
+				id: group.id,
+				action: .worktrees(.element(id: path, action: .refresh))
+			)))
+		}
+	}
+	return .none
 }
 
 private func groupSettings(

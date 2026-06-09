@@ -28,6 +28,9 @@ struct TerminalPanelView: View {
 		VStack(spacing: 0) {
 			toolbar
 			Divider()
+			if activeRowState?.gitActionsMenu.isMergeInProgress == true {
+				mergeStatusBanner
+			}
 			if store.activeRepositoryPath != nil {
 				tabBar
 				Divider()
@@ -154,6 +157,24 @@ struct TerminalPanelView: View {
 		.padding(.horizontal, 12)
 		.padding(.vertical, 8)
 		.background(Color(NSColor.windowBackgroundColor))
+	}
+
+	// MARK: - Merge Status Banner
+
+	private var mergeStatusBanner: some View {
+		BannerView(
+			icon: "arrow.triangle.merge",
+			title: "Merge in Progress",
+			actionLabel: "Finish Merge",
+			actionSystemImage: "checkmark.circle",
+			actionHelp: "Complete merge with git commit --no-edit",
+			isLoading: store.isFinishingMerge,
+			onAction: {
+				if let path = store.activeRepositoryPath {
+					store.send(.finishMergeButtonTapped(repositoryPath: path))
+				}
+			}
+		)
 	}
 
 	// MARK: - Tab Bar

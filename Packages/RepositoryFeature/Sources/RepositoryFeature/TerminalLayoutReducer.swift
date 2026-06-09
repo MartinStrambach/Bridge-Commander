@@ -11,6 +11,7 @@ struct TerminalLayoutReducer {
 		var activeRepositoryPath: String?
 		var activeSessionId: UUID?
 		var isPushing = false
+		var isFinishingMerge = false
 
 		var xcodeButton: XcodeProjectButtonReducer.State?
 		var androidStudioButton: AndroidStudioButtonReducer.State?
@@ -26,6 +27,8 @@ struct TerminalLayoutReducer {
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case pushButtonTapped(repositoryPath: String)
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
+		case finishMergeButtonTapped(repositoryPath: String)
+		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case sessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
 		case killTab(sessionId: UUID)
@@ -70,6 +73,24 @@ struct TerminalLayoutReducer {
 
 			case .pushCompleted:
 				state.isPushing = false
+				return .none
+
+			case let .finishMergeButtonTapped(repositoryPath):
+				state.isFinishingMerge = true
+				return .run { send in
+					do {
+						try await GitMergeHelper.finishMerge(at: repositoryPath)
+						await send(.finishMergeCompleted(repositoryPath: repositoryPath, error: nil))
+					}
+					catch {
+						let gitError = error as? GitError ?? .mergeFailed(error.localizedDescription)
+						await send(.finishMergeCompleted(repositoryPath: repositoryPath, error: gitError))
+					}
+				}
+
+			case .finishMergeCompleted:
+				state.isFinishingMerge = false
+				// Alert and row refresh are handled by RepositoryListReducer
 				return .none
 
 			case .stagingDetail(.dismiss):
