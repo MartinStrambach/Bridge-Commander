@@ -10,12 +10,15 @@ public nonisolated enum GitMergeHelper {
 		}
 	}
 
-	public static func mergeMaster(at path: String) async throws -> MergeResult {
-		// First, fetch origin/master
-		try await fetchOriginMaster(at: path)
+	public static func mergeMaster(at path: String, baseBranch: String) async throws -> MergeResult {
+		// Empty config preserves the historical behavior of merging origin/master.
+		let branch = baseBranch.isEmpty ? "master" : baseBranch
 
-		// Then, merge origin/master
-		return try await mergeOriginMaster(at: path)
+		// First, fetch origin/<branch>
+		try await fetchOrigin(branch: branch, at: path)
+
+		// Then, merge origin/<branch>
+		return try await mergeOrigin(branch: branch, at: path)
 	}
 
 	public static func finishMerge(at path: String) async throws {
@@ -32,9 +35,9 @@ public nonisolated enum GitMergeHelper {
 		}
 	}
 
-	private static func fetchOriginMaster(at path: String) async throws {
+	private static func fetchOrigin(branch: String, at path: String) async throws {
 		let result = await ProcessRunner.runGit(
-			arguments: ["fetch", "origin", "master"],
+			arguments: ["fetch", "origin", branch],
 			at: path
 		)
 
@@ -44,9 +47,9 @@ public nonisolated enum GitMergeHelper {
 		}
 	}
 
-	private static func mergeOriginMaster(at path: String) async throws -> MergeResult {
+	private static func mergeOrigin(branch: String, at path: String) async throws -> MergeResult {
 		let result = await ProcessRunner.runGit(
-			arguments: ["merge", "origin/master"],
+			arguments: ["merge", "origin/\(branch)"],
 			at: path
 		)
 
