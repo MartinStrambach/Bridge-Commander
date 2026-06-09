@@ -96,8 +96,8 @@ struct XcodeProjectButtonView: View {
 			}
 		}
 		.disabled(isNotFound)
-		.alert($store.scope(state: \.$alert, action: \.alert))
-		.sheet(item: $store.scope(state: \.$errorAlert, action: \.errorAlert)) { alertStore in
+		.alert($store.scope(\.$alert, action: \.alert))
+		.sheet(item: $store.scope(\.$errorAlert, action: \.errorAlert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
 	}

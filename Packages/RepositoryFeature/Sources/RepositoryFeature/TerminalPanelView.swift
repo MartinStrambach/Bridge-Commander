@@ -38,7 +38,7 @@ struct TerminalPanelView: View {
 			terminalContent
 		}
 		.sheet(
-			item: $store.scope(state: \.$stagingDetail, action: \.stagingDetail)
+			item: $store.scope(\.$stagingDetail, action: \.stagingDetail)
 		) { detailStore in
 			RepositoryDetailView(store: detailStore)
 				.frame(
@@ -115,19 +115,19 @@ struct TerminalPanelView: View {
 				)
 			}
 
-			if let tuistStore = store.scope(state: \.tuistButton, action: \.tuistButton) {
+			if let tuistStore = store.scope(\.tuistButton, action: \.tuistButton) {
 				TuistButtonView(store: tuistStore)
 			}
 
-			if let xcodeStore = store.scope(state: \.xcodeButton, action: \.xcodeButton) {
+			if let xcodeStore = store.scope(\.xcodeButton, action: \.xcodeButton) {
 				XcodeProjectButtonView(store: xcodeStore, style: .compact)
 			}
 
-			if let androidStore = store.scope(state: \.androidStudioButton, action: \.androidStudioButton) {
+			if let androidStore = store.scope(\.androidStudioButton, action: \.androidStudioButton) {
 				AndroidStudioButtonView(store: androidStore, style: .compact)
 			}
 
-			if let webStore = store.scope(state: \.webButton, action: \.webButton) {
+			if let webStore = store.scope(\.webButton, action: \.webButton) {
 				WebButtonView(store: webStore, style: .compact)
 			}
 

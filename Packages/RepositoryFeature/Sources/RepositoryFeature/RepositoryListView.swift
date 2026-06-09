@@ -80,7 +80,7 @@ struct RepositoryListView: View {
 		.onChange(of: store.groupSettings) { _, _ in
 			send(.groupSettingsChanged)
 		}
-		.alert($store.scope(state: \.$alert, action: \.alert))
+		.alert($store.scope(\.$alert, action: \.alert))
 	}
 
 	@ViewBuilder
@@ -107,7 +107,7 @@ struct RepositoryListView: View {
 
 	@ViewBuilder
 	private var terminalOverlayView: some View {
-		if let terminalLayoutStore = store.scope(state: \.terminalLayout, action: \.terminalLayout) {
+		if let terminalLayoutStore = store.scope(\.terminalLayout, action: \.terminalLayout) {
 			TerminalLayoutView(
 				store: terminalLayoutStore,
 				repositoryGroups: store.repositoryGroups,
@@ -296,7 +296,7 @@ struct RepositoryListView: View {
 			uniquingKeysWith: { first, _ in first }
 		)
 		return List {
-			ForEach(store.scope(state: \.filteredRepositoryGroups, action: \.repositoryGroups)) { groupStore in
+			ForEach(store.scope(\.filteredRepositoryGroups, action: \.repositoryGroups)) { groupStore in
 				RepoGroupView(
 					store: groupStore,
 					statusByPath: statusByPath

@@ -98,7 +98,7 @@ struct RepositoryRowView: View {
 		.task {
 			store.send(.onAppear)
 		}
-		.sheet(item: $store.scope(state: \.$repositoryDetail, action: \.repositoryDetail)) { detailStore in
+		.sheet(item: $store.scope(\.$repositoryDetail, action: \.repositoryDetail)) { detailStore in
 			RepositoryDetailView(store: detailStore)
 				.frame(
 					minWidth: 1200,
@@ -287,13 +287,13 @@ struct RepositoryRowView: View {
 		HStack(spacing: 8) {
 			// Git actions dropdown menu
 			GitActionsMenuView(store: store.scope(
-				state: \.gitActionsMenu,
+				\.gitActionsMenu,
 				action: \.gitActionsMenu
 			))
 
 			if store.supportsIOS, store.supportsTuist {
 				TuistButtonView(store: store.scope(
-					state: \.tuistButton,
+					\.tuistButton,
 					action: \.tuistButton
 				))
 			}
@@ -322,52 +322,52 @@ struct RepositoryRowView: View {
 			}
 
 			ShareButtonView(store: store.scope(
-				state: \.shareButton,
+				\.shareButton,
 				action: \.shareButton
 			))
 
-			if let ticketButtonStore = store.scope(state: \.ticketButton, action: \.ticketButton) {
+			if let ticketButtonStore = store.scope(\.ticketButton, action: \.ticketButton) {
 				TicketButtonView(store: ticketButtonStore)
 			}
 
-			if let webButtonStore = store.scope(state: \.webButton, action: \.webButton) {
+			if let webButtonStore = store.scope(\.webButton, action: \.webButton) {
 				WebButtonView(store: webButtonStore)
 			}
 
 			TerminalButtonView(store: store.scope(
-				state: \.terminalButton,
+				\.terminalButton,
 				action: \.terminalButton
 			))
 
 			if store.supportsAndroid {
 				AndroidStudioButtonView(store: store.scope(
-					state: \.androidStudioButton,
+					\.androidStudioButton,
 					action: \.androidStudioButton
 				))
 			}
 
 			if store.supportsIOS {
 				XcodeProjectButtonView(store: store.scope(
-					state: \.xcodeButton,
+					\.xcodeButton,
 					action: \.xcodeButton
 				))
 			}
 
 			ClaudeCodeButtonView(store: store.scope(
-				state: \.claudeCodeButton,
+				\.claudeCodeButton,
 				action: \.claudeCodeButton
 			))
 
 			Group {
 				if store.isWorktree {
 					DeleteWorktreeButtonView(store: store.scope(
-						state: \.deleteWorktreeButton,
+						\.deleteWorktreeButton,
 						action: \.deleteWorktreeButton
 					))
 				}
 				else {
 					CreateWorktreeButtonView(store: store.scope(
-						state: \.createWorktreeButton,
+						\.createWorktreeButton,
 						action: \.createWorktreeButton
 					))
 				}

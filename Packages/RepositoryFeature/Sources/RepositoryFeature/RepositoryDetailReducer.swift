@@ -86,10 +86,10 @@ struct RepositoryDetail {
 	private var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
 	var body: some Reducer<State, Action> {
-		Scope(state: \.staged, action: \.staged) { FileChangeList() }
-		Scope(state: \.unstaged, action: \.unstaged) { FileChangeList() }
-		Scope(state: \.diffViewer, action: \.diffViewer) { FileDiffViewer() }
-		Scope(state: \.mergeStatus, action: \.mergeStatus) { MergeStatus() }
+		Scope(\.staged, action: \.staged) { FileChangeList() }
+		Scope(\.unstaged, action: \.unstaged) { FileChangeList() }
+		Scope(\.diffViewer, action: \.diffViewer) { FileDiffViewer() }
+		Scope(\.mergeStatus, action: \.mergeStatus) { MergeStatus() }
 
 		Reduce { state, action in
 			switch action {

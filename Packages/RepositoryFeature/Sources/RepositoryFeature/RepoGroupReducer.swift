@@ -29,7 +29,7 @@ struct RepoGroupReducer {
 	}
 
 	var body: some Reducer<State, Action> {
-		Scope(state: \.header, action: \.header) {
+		Scope(\.header, action: \.header) {
 			RepositoryRowReducer()
 		}
 		Reduce { state, action in

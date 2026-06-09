@@ -182,39 +182,39 @@ struct RepositoryRowReducer {
 	private var xcodeClient
 
 	var body: some Reducer<State, Action> {
-		Scope(state: \.xcodeButton, action: \.xcodeButton) {
+		Scope(\.xcodeButton, action: \.xcodeButton) {
 			XcodeProjectButtonReducer()
 		}
 
-		Scope(state: \.tuistButton, action: \.tuistButton) {
+		Scope(\.tuistButton, action: \.tuistButton) {
 			TuistButtonReducer()
 		}
 
-		Scope(state: \.terminalButton, action: \.terminalButton) {
+		Scope(\.terminalButton, action: \.terminalButton) {
 			TerminalButtonReducer()
 		}
 
-		Scope(state: \.claudeCodeButton, action: \.claudeCodeButton) {
+		Scope(\.claudeCodeButton, action: \.claudeCodeButton) {
 			ClaudeCodeButtonReducer()
 		}
 
-		Scope(state: \.androidStudioButton, action: \.androidStudioButton) {
+		Scope(\.androidStudioButton, action: \.androidStudioButton) {
 			AndroidStudioButtonReducer()
 		}
 
-		Scope(state: \.shareButton, action: \.shareButton) {
+		Scope(\.shareButton, action: \.shareButton) {
 			ShareButtonReducer()
 		}
 
-		Scope(state: \.deleteWorktreeButton, action: \.deleteWorktreeButton) {
+		Scope(\.deleteWorktreeButton, action: \.deleteWorktreeButton) {
 			DeleteWorktreeButtonReducer()
 		}
 
-		Scope(state: \.createWorktreeButton, action: \.createWorktreeButton) {
+		Scope(\.createWorktreeButton, action: \.createWorktreeButton) {
 			CreateWorktreeButtonReducer()
 		}
 
-		Scope(state: \.gitActionsMenu, action: \.gitActionsMenu) {
+		Scope(\.gitActionsMenu, action: \.gitActionsMenu) {
 			GitActionsMenuReducer()
 		}
 

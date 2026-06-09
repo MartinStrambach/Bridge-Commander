@@ -95,7 +95,7 @@ struct CreateWorktreeButtonView: View {
 		.sheet(isPresented: $store.showCreateDialog) {
 			CreateWorktreeDialogView(store: store)
 		}
-		.alert($store.scope(state: \.$errorAlert, action: \.errorAlert))
+		.alert($store.scope(\.$errorAlert, action: \.errorAlert))
 	}
 }
 

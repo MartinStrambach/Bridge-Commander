@@ -26,7 +26,7 @@ struct ClaudeCodeButtonView: View {
 			tint: store.isLaunching ? .purple : nil,
 			action: { store.send(.launchClaudeCodeButtonTapped) }
 		)
-		.alert($store.scope(state: \.$alert, action: \.alert))
+		.alert($store.scope(\.$alert, action: \.alert))
 	}
 
 }

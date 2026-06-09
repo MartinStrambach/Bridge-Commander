@@ -20,7 +20,7 @@ struct RepoGroupView: View {
 		)
 
 		Section(isExpanded: isExpanded) {
-			ForEach(store.scope(state: \.worktrees, action: \.worktrees)) { rowStore in
+			ForEach(store.scope(\.worktrees, action: \.worktrees)) { rowStore in
 				RepositoryRowView(
 					store: rowStore,
 					terminalSessionStatus: statusByPath[rowStore.path]
@@ -30,7 +30,7 @@ struct RepoGroupView: View {
 			}
 		} header: {
 			RepositoryRowView(
-				store: store.scope(state: \.header, action: \.header),
+				store: store.scope(\.header, action: \.header),
 				terminalSessionStatus: statusByPath[store.header.path],
 				isGroupCollapsed: store.isCollapsed,
 				onToggleCollapse: store.worktrees

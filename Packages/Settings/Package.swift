@@ -8,8 +8,8 @@ let package = Package(
         .library(name: "Settings", targets: ["Settings"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.25.3"),
-        .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.8.0"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.0"),
+        .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.8.1"),
         .package(path: "../ToolsIntegration"),
         .package(path: "../GitHosting"),
     ],

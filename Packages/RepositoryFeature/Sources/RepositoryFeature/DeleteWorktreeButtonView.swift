@@ -21,10 +21,10 @@ struct DeleteWorktreeButtonView: View {
 			}
 		}
 		.disabled(store.isRemoving)
-		.sheet(item: $store.scope(state: \.$confirmationSheet, action: \.confirmationSheet)) { confirmStore in
+		.sheet(item: $store.scope(\.$confirmationSheet, action: \.confirmationSheet)) { confirmStore in
 			DeleteWorktreeConfirmationView(store: confirmStore)
 		}
-		.alert($store.scope(state: \.$errorAlert, action: \.errorAlert))
-		.alert($store.scope(state: \.$derivedDataWarningAlert, action: \.derivedDataWarningAlert))
+		.alert($store.scope(\.$errorAlert, action: \.errorAlert))
+		.alert($store.scope(\.$derivedDataWarningAlert, action: \.derivedDataWarningAlert))
 	}
 }

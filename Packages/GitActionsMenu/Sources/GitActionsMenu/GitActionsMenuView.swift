@@ -56,26 +56,27 @@ public struct GitActionsMenuView: View {
 			else {
 				Menu {
 					if store.isMergeInProgress {
-						AbortMergeButtonView(store: store.scope(state: \.abortMergeButton, action: \.abortMergeButton))
+						AbortMergeButtonView(store: store.scope(\.abortMergeButton, action: \.abortMergeButton))
 					}
 
 					if store.hasRemoteBranch {
-						FetchButtonView(store: store.scope(state: \.fetchButton, action: \.fetchButton))
-						PullButtonView(store: store.scope(state: \.pullButton, action: \.pullButton))
+						FetchButtonView(store: store.scope(\.fetchButton, action: \.fetchButton))
+						PullButtonView(store: store.scope(\.pullButton, action: \.pullButton))
 					}
 
 					if store.unpushedCommitsCount > 0 || !store.hasRemoteBranch {
-						PushButtonView(store: store.scope(state: \.pushButton, action: \.pushButton))
+						PushButtonView(store: store.scope(\.pushButton, action: \.pushButton))
 					}
 
 					if !store.isMergeInProgress {
-						StashButtonView(store: store.scope(state: \.stashButton, action: \.stashButton))
+						StashButtonView(store: store.scope(\.stashButton, action: \.stashButton))
 					}
 
 					if !DefaultBranchResolver.isDefaultBranch(store.currentBranch, configured: store.defaultBranch),
-					   !store.isMergeInProgress {
+					   !store.isMergeInProgress
+					{
 						MergeMasterButtonView(store: store.scope(
-							state: \.mergeMasterButton,
+							\.mergeMasterButton,
 							action: \.mergeMasterButton
 						))
 					}
@@ -88,7 +89,7 @@ public struct GitActionsMenuView: View {
 			}
 		}
 		.fixedSize()
-		.sheet(item: $store.scope(state: \.$alert, action: \.alert)) { alertStore in
+		.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
 	}

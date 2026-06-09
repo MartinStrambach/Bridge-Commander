@@ -70,7 +70,7 @@ struct FileChangeListView: View {
 						store.send(.openInIDE(file))
 					}
 				}
-				.alert($store.scope(state: \.$alert, action: \.alert))
+				.alert($store.scope(\.$alert, action: \.alert))
 			}
 		}
 	}

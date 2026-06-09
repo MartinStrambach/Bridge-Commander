@@ -35,7 +35,7 @@ public struct AndroidStudioButtonView: View {
 				tint: store.isOpening ? .green : nil,
 				action: { store.send(.openAndroidStudioButtonTapped) }
 			)
-			.alert($store.scope(state: \.$alert, action: \.alert))
+			.alert($store.scope(\.$alert, action: \.alert))
 
 		case .compact:
 			ActionButton(
@@ -43,7 +43,7 @@ public struct AndroidStudioButtonView: View {
 				tooltip: buttonTooltip,
 				action: { store.send(.openAndroidStudioButtonTapped) }
 			)
-			.alert($store.scope(state: \.$alert, action: \.alert))
+			.alert($store.scope(\.$alert, action: \.alert))
 		}
 	}
 

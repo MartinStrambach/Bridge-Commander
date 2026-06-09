@@ -82,21 +82,21 @@ struct RepositoryDetailView: View {
 
 			// Merge Status Banner
 			if store.mergeStatus.isMergeInProgress {
-				MergeStatusBannerView(store: store.scope(state: \.mergeStatus, action: \.mergeStatus))
+				MergeStatusBannerView(store: store.scope(\.mergeStatus, action: \.mergeStatus))
 			}
 
 			// Main Content
 			NavigationSplitView(columnVisibility: .constant(.all)) {
 				// Left: File Changes Lists (Staged and Unstaged)
 				VSplitView {
-					FileChangeListView(store: store.scope(state: \.staged, action: \.staged))
+					FileChangeListView(store: store.scope(\.staged, action: \.staged))
 						.frame(minHeight: 100)
-					FileChangeListView(store: store.scope(state: \.unstaged, action: \.unstaged))
+					FileChangeListView(store: store.scope(\.unstaged, action: \.unstaged))
 						.frame(minHeight: 100)
 				}
 				.navigationSplitViewColumnWidth(min: 250, ideal: 350, max: 500)
 			} detail: {
-				FileDiffViewerView(store: store.scope(state: \.diffViewer, action: \.diffViewer))
+				FileDiffViewerView(store: store.scope(\.diffViewer, action: \.diffViewer))
 			}
 		}
 		.task {
@@ -105,10 +105,10 @@ struct RepositoryDetailView: View {
 		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
 			store.send(.loadChanges)
 		}
-		.sheet(item: $store.scope(state: \.$alert, action: \.alert)) { alertStore in
+		.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
-		.sheet(item: $store.scope(state: \.$commitSheet, action: \.commitSheet)) { commitStore in
+		.sheet(item: $store.scope(\.$commitSheet, action: \.commitSheet)) { commitStore in
 			CommitView(store: commitStore)
 		}
 	}

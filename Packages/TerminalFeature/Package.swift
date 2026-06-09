@@ -8,7 +8,7 @@ let package = Package(
 		.library(name: "TerminalFeature", targets: ["TerminalFeature"]),
 	],
 	dependencies: [
-		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.25.3"),
+		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.0"),
 		.package(url: "https://github.com/migueldeicaza/SwiftTerm", branch: "prevent-scroll-while-dragging"),
 		.package(path: "../AppUI"),
 	],

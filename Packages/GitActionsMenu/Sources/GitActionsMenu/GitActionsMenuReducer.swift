@@ -65,27 +65,27 @@ public struct GitActionsMenuReducer {
 	}
 
 	public var body: some Reducer<State, Action> {
-		Scope(state: \.fetchButton, action: \.fetchButton) {
+		Scope(\.fetchButton, action: \.fetchButton) {
 			FetchButtonReducer()
 		}
 
-		Scope(state: \.pullButton, action: \.pullButton) {
+		Scope(\.pullButton, action: \.pullButton) {
 			PullButtonReducer()
 		}
 
-		Scope(state: \.pushButton, action: \.pushButton) {
+		Scope(\.pushButton, action: \.pushButton) {
 			PushButtonReducer()
 		}
 
-		Scope(state: \.mergeMasterButton, action: \.mergeMasterButton) {
+		Scope(\.mergeMasterButton, action: \.mergeMasterButton) {
 			MergeMasterButtonReducer()
 		}
 
-		Scope(state: \.abortMergeButton, action: \.abortMergeButton) {
+		Scope(\.abortMergeButton, action: \.abortMergeButton) {
 			AbortMergeButtonReducer()
 		}
 
-		Scope(state: \.stashButton, action: \.stashButton) {
+		Scope(\.stashButton, action: \.stashButton) {
 			StashButtonReducer()
 		}
 
