@@ -900,11 +900,22 @@ private func syncTerminalButtons(for path: String, in state: inout RepositoryLis
 		state.terminalLayout?.xcodeButton = nil
 		state.terminalLayout?.androidStudioButton = nil
 		state.terminalLayout?.webButton = nil
+		state.terminalLayout?.tuistButton = nil
 		return
 	}
 	state.terminalLayout?.xcodeButton = rowState.supportsIOS ? rowState.xcodeButton : nil
 	state.terminalLayout?.androidStudioButton = rowState.supportsAndroid ? rowState.androidStudioButton : nil
 	state.terminalLayout?.webButton = rowState.webButton
+	state.terminalLayout?.tuistButton = terminalTuistButton(for: rowState)
+}
+
+/// The terminal header shows the Tuist menu under the same gate as the repository row:
+/// the group must support both iOS and Tuist.
+func terminalTuistButton(for rowState: RepositoryRowReducer.State?) -> TuistButtonReducer.State? {
+	guard let rowState, rowState.supportsIOS, rowState.supportsTuist else {
+		return nil
+	}
+	return rowState.tuistButton
 }
 
 private func findRowState(

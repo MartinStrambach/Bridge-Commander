@@ -115,6 +115,10 @@ struct TerminalPanelView: View {
 				)
 			}
 
+			if let tuistStore = store.scope(state: \.tuistButton, action: \.tuistButton) {
+				TuistButtonView(store: tuistStore)
+			}
+
 			if let xcodeStore = store.scope(state: \.xcodeButton, action: \.xcodeButton) {
 				XcodeProjectButtonView(store: xcodeStore, style: .compact)
 			}

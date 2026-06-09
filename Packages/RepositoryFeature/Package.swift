@@ -33,5 +33,9 @@ let package = Package(
 				.product(name: "ActionButtons", package: "ActionButtons"),
 			]
 		),
+		.testTarget(
+			name: "RepositoryFeatureTests",
+			dependencies: ["RepositoryFeature"]
+		),
 	]
 )
