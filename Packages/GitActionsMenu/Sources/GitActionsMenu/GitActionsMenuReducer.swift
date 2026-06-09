@@ -11,6 +11,8 @@ public struct GitActionsMenuReducer {
 	public struct State: Equatable {
 		public var isMergeInProgress = false
 		public var currentBranch: String
+		/// Per-group configured default branch. Empty = historical master/main.
+		public var defaultBranch: String
 		public var hasRemoteBranch = false
 		public var unpushedCommitsCount = 0
 		public var stashButton: StashButtonReducer.State
@@ -26,15 +28,26 @@ public struct GitActionsMenuReducer {
 
 		fileprivate var isLoaded = false
 
-		public init(repositoryPath: String, currentBranch: String) {
+		public init(repositoryPath: String, currentBranch: String, defaultBranch: String = "") {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch
+			self.defaultBranch = defaultBranch
 			self.fetchButton = FetchButtonReducer.State(repositoryPath: repositoryPath)
 			self.pullButton = PullButtonReducer.State(repositoryPath: repositoryPath)
 			self.pushButton = PushButtonReducer.State(repositoryPath: repositoryPath)
-			self.mergeMasterButton = MergeMasterButtonReducer.State(repositoryPath: repositoryPath)
+			self.mergeMasterButton = MergeMasterButtonReducer.State(
+				repositoryPath: repositoryPath,
+				defaultBranch: defaultBranch
+			)
 			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
 			self.stashButton = StashButtonReducer.State(repositoryPath: repositoryPath, currentBranch: currentBranch)
+		}
+
+		/// Updates the configured default branch and keeps the merge button in sync.
+		/// Called when group settings change (see RepositoryListReducer.applySettings).
+		public mutating func setDefaultBranch(_ branch: String) {
+			defaultBranch = branch
+			mergeMasterButton.defaultBranch = branch
 		}
 	}
 
@@ -143,9 +156,10 @@ public struct GitActionsMenuReducer {
 			case let .mergeMasterButton(.mergeMasterCompleted(result)):
 				switch result {
 				case let .success(mergeResult):
+					let branchName = state.defaultBranch.isEmpty ? "master" : state.defaultBranch
 					let (title, message) = mergeResult.commitsMerged
-						? ("Merge Successful", "Successfully merged commits from master.")
-						: ("Already Up to Date", "Branch is already up to date with master. No commits were merged.")
+						? ("Merge Successful", "Successfully merged commits from \(branchName).")
+						: ("Already Up to Date", "Branch is already up to date with \(branchName). No commits were merged.")
 					state.alert = ScrollableAlertReducer.State(title: title, message: message, isError: false)
 
 				case let .failure(error):

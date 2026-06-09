@@ -9,11 +9,14 @@ public struct MergeMasterButtonReducer {
 	@ObservableState
 	public struct State: Equatable {
 		var isMergingMaster = false
+		/// Per-group configured default branch. Empty = historical origin/master.
+		var defaultBranch: String
 
 		fileprivate let repositoryPath: String
 
-		init(repositoryPath: String) {
+		init(repositoryPath: String, defaultBranch: String = "") {
 			self.repositoryPath = repositoryPath
+			self.defaultBranch = defaultBranch
 		}
 	}
 
@@ -30,9 +33,9 @@ public struct MergeMasterButtonReducer {
 			switch action {
 			case .mergeMasterTapped:
 				state.isMergingMaster = true
-				return .run { [path = state.repositoryPath, gitClient] send in
+				return .run { [path = state.repositoryPath, baseBranch = state.defaultBranch, gitClient] send in
 					do {
-						let mergeResult = try await gitClient.mergeMaster(at: path)
+						let mergeResult = try await gitClient.mergeMaster(at: path, baseBranch: baseBranch)
 						await send(.mergeMasterCompleted(result: .success(mergeResult)))
 					}
 					catch let error as GitError {
