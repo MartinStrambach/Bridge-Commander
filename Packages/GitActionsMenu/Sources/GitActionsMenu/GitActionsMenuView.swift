@@ -1,5 +1,6 @@
 import AppUI
 import ComposableArchitecture
+import GitCore
 import SwiftUI
 
 // MARK: - Git Actions Menu View
@@ -35,7 +36,7 @@ public struct GitActionsMenuView: View {
 				GitOperationProgressView(
 					text: "Merging...",
 					color: .orange,
-					helpText: "Merging master branch..."
+					helpText: "Merging \(store.defaultBranch.isEmpty ? "master" : store.defaultBranch) branch..."
 				)
 			}
 			else if store.abortMergeButton.isAbortingMerge {
@@ -71,7 +72,8 @@ public struct GitActionsMenuView: View {
 						StashButtonView(store: store.scope(state: \.stashButton, action: \.stashButton))
 					}
 
-					if store.currentBranch != "master", store.currentBranch != "main", !store.isMergeInProgress {
+					if !DefaultBranchResolver.isDefaultBranch(store.currentBranch, configured: store.defaultBranch),
+					   !store.isMergeInProgress {
 						MergeMasterButtonView(store: store.scope(
 							state: \.mergeMasterButton,
 							action: \.mergeMasterButton

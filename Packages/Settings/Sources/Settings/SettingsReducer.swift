@@ -84,6 +84,7 @@ public struct SettingsReducer {
 		case setGroupWorktreeCopyPaths(groupId: String, value: [String])
 		case setGroupSupportsWeb(groupId: String, value: Bool)
 		case setGroupWebIndexPath(groupId: String, path: String)
+		case setGroupDefaultBranch(groupId: String, value: String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
@@ -172,6 +173,13 @@ public struct SettingsReducer {
 
 			case let .setGroupWebIndexPath(groupId, path):
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].webIndexPath = path }
+				return .none
+
+			case let .setGroupDefaultBranch(groupId, value):
+				// Trim so a whitespace-only entry is stored as empty (= master/main fallback),
+				// keeping every downstream consumer (resolver, merge, alerts) consistent.
+				let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].defaultBranch = trimmed }
 				return .none
 
 			case let .setBranchNameRegex(regex):

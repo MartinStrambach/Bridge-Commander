@@ -65,16 +65,13 @@ struct CreateWorktreeButtonReducer {
 			case let .branchesLoaded(branches):
 				state.availableBranches = branches
 				state.isLoadingBranches = false
-				// Set default to master or main if available
-				let branchNames = branches.map(\.name)
-				if branchNames.contains("master") {
-					state.selectedBaseBranch = "master"
-				}
-				else if branchNames.contains("main") {
-					state.selectedBaseBranch = "main"
-				}
-				else if let first = branchNames.first {
-					state.selectedBaseBranch = first
+				// Pre-select the per-group default branch, falling back to master/main.
+				let configured = state.groupSettings[state.repositoryPath]?.defaultBranch ?? ""
+				if let resolved = DefaultBranchResolver.resolveBaseBranch(
+					configured: configured,
+					available: branches.map(\.name)
+				) {
+					state.selectedBaseBranch = resolved
 				}
 				return .none
 

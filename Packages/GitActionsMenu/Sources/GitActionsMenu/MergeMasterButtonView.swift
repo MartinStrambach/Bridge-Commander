@@ -10,7 +10,10 @@ struct MergeMasterButtonView: View {
 		Button {
 			store.send(.mergeMasterTapped)
 		} label: {
-			Label("Merge Master", systemImage: "arrow.triangle.merge")
+			Label(
+				"Merge \(store.defaultBranch.isEmpty ? "master" : store.defaultBranch)",
+				systemImage: "arrow.triangle.merge"
+			)
 		}
 	}
 }

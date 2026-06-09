@@ -721,7 +721,8 @@ private func buildGroup(
 			ticketIdRegex: settings.ticketIdRegex,
 			xcodeFilePreference: settings.xcodeFilePreference,
 			supportsWeb: settings.supportsWeb,
-			webIndexPath: settings.webIndexPath
+			webIndexPath: settings.webIndexPath,
+			defaultBranch: settings.defaultBranch
 		)
 	}
 	guard let header = allRows.first(where: { !$0.isWorktree }) else {
@@ -780,7 +781,8 @@ private func mergeGroupRows(
 				ticketIdRegex: rowSettings.ticketIdRegex,
 				xcodeFilePreference: rowSettings.xcodeFilePreference,
 				supportsWeb: rowSettings.supportsWeb,
-				webIndexPath: rowSettings.webIndexPath
+				webIndexPath: rowSettings.webIndexPath,
+				defaultBranch: rowSettings.defaultBranch
 			))
 		}
 	}
@@ -878,6 +880,8 @@ private func applySettings(
 	else {
 		row.webButton = nil
 	}
+	row.defaultBranch = settings.defaultBranch
+	row.gitActionsMenu.setDefaultBranch(settings.defaultBranch)
 }
 
 private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {

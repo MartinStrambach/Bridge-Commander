@@ -25,6 +25,9 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	public var supportsWeb: Bool = false
 	/// Repo-relative (or absolute) path to an HTML file opened in the default browser.
 	public var webIndexPath: String = ""
+	/// The repo's default/integration branch (e.g. "main", "develop").
+	/// When empty, the app auto-resolves: prefers "master", then "main".
+	public var defaultBranch: String = ""
 
 	/// Memberwise initializer with default values
 	public init(
@@ -37,7 +40,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		xcodeFilePreference: XcodeFilePreference = .auto,
 		worktreeCopyPaths: [String] = [],
 		supportsWeb: Bool = false,
-		webIndexPath: String = ""
+		webIndexPath: String = "",
+		defaultBranch: String = ""
 	) {
 		self.supportsIOS = supportsIOS
 		self.supportsAndroid = supportsAndroid
@@ -49,6 +53,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.worktreeCopyPaths = worktreeCopyPaths
 		self.supportsWeb = supportsWeb
 		self.webIndexPath = webIndexPath
+		self.defaultBranch = defaultBranch
 	}
 
 	// Custom decoder: uses decodeIfPresent so keys missing from older JSON
@@ -71,5 +76,6 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.worktreeCopyPaths = try c.decodeIfPresent([String].self, forKey: .worktreeCopyPaths) ?? []
 		self.supportsWeb = try c.decodeIfPresent(Bool.self, forKey: .supportsWeb) ?? false
 		self.webIndexPath = try c.decodeIfPresent(String.self, forKey: .webIndexPath) ?? ""
+		self.defaultBranch = try c.decodeIfPresent(String.self, forKey: .defaultBranch) ?? ""
 	}
 }

@@ -59,6 +59,8 @@ struct RepositoryRowReducer {
 		var iosSubfolderPath: String
 		/// Regex for extracting ticket IDs from branch names. Empty = no ticket parsing.
 		var ticketIdRegex: String
+		/// Per-group configured default branch. Empty = master/main fallback.
+		var defaultBranch: String
 
 		@Presents
 		var repositoryDetail: RepositoryDetail.State?
@@ -83,7 +85,8 @@ struct RepositoryRowReducer {
 			ticketIdRegex: String = "",
 			xcodeFilePreference: XcodeFilePreference = .auto,
 			supportsWeb: Bool = false,
-			webIndexPath: String = ""
+			webIndexPath: String = "",
+			defaultBranch: String = ""
 		) {
 			self.id = path
 			self.path = path
@@ -101,6 +104,7 @@ struct RepositoryRowReducer {
 				}
 			self.ticketId = ticketId
 			self.ticketIdRegex = ticketIdRegex
+			self.defaultBranch = defaultBranch
 			self.unstagedChangesCount = 0
 			self.stagedChangesCount = 0
 
@@ -137,7 +141,7 @@ struct RepositoryRowReducer {
 			)
 			self.deleteWorktreeButton = .init(name: branchName ?? name, path: path)
 			self.createWorktreeButton = .init(repositoryPath: path)
-			self.gitActionsMenu = .init(repositoryPath: path, currentBranch: name)
+			self.gitActionsMenu = .init(repositoryPath: path, currentBranch: name, defaultBranch: defaultBranch)
 		}
 	}
 
@@ -365,8 +369,12 @@ struct RepositoryRowReducer {
 	}
 
 	private func fetchPullRequest(for state: State) -> EffectOf<RepositoryRowReducer> {
-		.run { [path = state.path, branchName = state.branchName ?? state.name] send in
-			guard !["master", "main"].contains(branchName.lowercased()) else {
+		.run { [
+			path = state.path,
+			branchName = state.branchName ?? state.name,
+			defaultBranch = state.defaultBranch
+		] send in
+			guard !DefaultBranchResolver.isDefaultBranch(branchName, configured: defaultBranch) else {
 				await send(.didFetchPullRequest(nil))
 				return
 			}
