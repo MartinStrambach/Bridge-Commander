@@ -138,6 +138,15 @@ Packages/
 - ⌘R in Xcode
 - Or: `open -a BridgeCommander`
 
+**Test:**
+- Unit tests live in per-package `Tests/` targets and use Swift Testing (`import Testing`, `@Test`/`#expect`).
+- Run a single package's tests: `swift test --package-path Packages/<Name>` (e.g. `swift test --package-path Packages/GitCore`).
+- Existing test targets:
+  - `Packages/GitCore/Tests/GitCoreTests` — e.g. `DefaultBranchResolver`
+  - `Packages/Settings/Tests/SettingsTests` — e.g. `RepoGroupSettings` decoding
+- When adding tests to a package that has none, add a `.testTarget(name: "<Name>Tests", dependencies: ["<Name>"])` to that package's `Package.swift`.
+- Prefer pure, dependency-free logic (helpers, models) for unit tests; code that shells out to git is verified by build + manual run.
+
 ## Dependencies
 
 **External:**
