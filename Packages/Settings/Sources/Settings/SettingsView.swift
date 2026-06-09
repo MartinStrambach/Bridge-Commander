@@ -519,6 +519,19 @@ public struct SettingsView: View {
 			}
 
 			HStack {
+				Text("Default Branch")
+					.font(.caption)
+					.foregroundColor(.secondary)
+					.frame(width: 140, alignment: .leading)
+				TextField("master / main (auto)", text: Binding(
+					get: { settings.defaultBranch },
+					set: { store.send(.setGroupDefaultBranch(groupId: groupId, value: $0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
+			}
+
+			HStack {
 				Text("Ticket ID Regex")
 					.font(.caption)
 					.foregroundColor(.secondary)
