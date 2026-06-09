@@ -23,5 +23,9 @@ let package = Package(
                 .product(name: "GitHosting", package: "GitHosting"),
             ]
         ),
+        .testTarget(
+            name: "SettingsTests",
+            dependencies: ["Settings"]
+        ),
     ]
 )
