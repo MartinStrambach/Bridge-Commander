@@ -43,4 +43,15 @@ struct DefaultBranchResolverTests {
 	func emptyAvailableReturnsNil() {
 		#expect(DefaultBranchResolver.resolveBaseBranch(configured: "master", available: []) == nil)
 	}
+
+	@Test("whitespace-only config is treated as empty")
+	func whitespaceConfigTreatedAsEmpty() {
+		#expect(DefaultBranchResolver.isDefaultBranch("master", configured: "   "))
+		#expect(DefaultBranchResolver.resolveBaseBranch(configured: "   ", available: ["master", "main"]) == "master")
+	}
+
+	@Test("configured branch matches available case-insensitively and returns the actual name")
+	func configuredMatchesCaseInsensitively() {
+		#expect(DefaultBranchResolver.resolveBaseBranch(configured: "Develop", available: ["develop", "main"]) == "develop")
+	}
 }
