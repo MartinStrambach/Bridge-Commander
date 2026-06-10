@@ -18,7 +18,7 @@ public nonisolated enum TuistAction: Equatable {
 			"generate"
 
 		case .generateWithoutCache:
-			"generate --no-binary-cache"
+			"generate --cache-profile none"
 
 		case .install:
 			"install"

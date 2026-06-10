@@ -35,10 +35,10 @@ public nonisolated enum TuistCacheType: String, Equatable, CaseIterable, Sendabl
 	internal var commandFlag: String {
 		switch self {
 		case .externalOnly:
-			"--external-only"
+			"--cache-profile only-external"
 
 		case .all:
-			""
+			"--cache-profile all-possible"
 		}
 	}
 }

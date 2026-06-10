@@ -288,7 +288,7 @@ public struct SettingsView: View {
 			.pickerStyle(.segmented)
 
 			Text(
-				"Select which targets to cache. 'External Only' caches only external dependencies, while 'All Targets' caches all project targets."
+				"Select the cache profile for warming. 'External Only' uses the 'only-external' profile (external dependencies only), while 'All Targets' uses 'all-possible' (internal targets too)."
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
