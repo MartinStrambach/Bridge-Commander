@@ -84,6 +84,10 @@ struct TerminalPanelView: View {
 
 			Spacer()
 
+			if let tuistStore = store.scope(\.tuistButton, action: \.tuistButton) {
+				TuistButtonView(store: tuistStore)
+			}
+
 			if let rowState = activeRowState, rowState.unpushedCommitCount > 0 || store.isPushing {
 				Button {
 					if let path = store.activeRepositoryPath {
@@ -113,10 +117,6 @@ struct TerminalPanelView: View {
 					provider: activeRowState?.prProvider,
 					state: activeRowState?.prState
 				)
-			}
-
-			if let tuistStore = store.scope(\.tuistButton, action: \.tuistButton) {
-				TuistButtonView(store: tuistStore)
 			}
 
 			if let xcodeStore = store.scope(\.xcodeButton, action: \.xcodeButton) {
