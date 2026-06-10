@@ -236,21 +236,22 @@ struct RepositoryRowView: View {
 			if let androidCR = store.androidCR {
 				let waiting = androidCR == .passed || androidCR == .notApplicable || store
 					.ticketState != .waitingToCodeReview
+				let activeColor: Color = androidCR == .inProgress ? .green : .orange
 				HStack(spacing: 4) {
 					Image("android")
 						.resizable()
 						.renderingMode(.template)
 						.scaledToFit()
 						.frame(height: 12)
-						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
+						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
 					Text(androidCR.rawValue)
 						.font(.caption)
-						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
+						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
 						.lineLimit(1)
 					if let reviewerName = store.androidReviewerName {
 						Text("(\(reviewerName))")
 							.font(.caption2)
-							.foregroundColor(waiting ? .secondary : .orange)
+							.foregroundColor(waiting ? .secondary : activeColor)
 							.lineLimit(1)
 					}
 				}
@@ -260,18 +261,19 @@ struct RepositoryRowView: View {
 
 			if let iosCR = store.iosCR {
 				let waiting = iosCR == .passed || iosCR == .notApplicable || store.ticketState != .waitingToCodeReview
+				let activeColor: Color = iosCR == .inProgress ? .green : .orange
 				HStack(spacing: 4) {
 					Image(systemName: "apple.logo")
 						.renderingMode(.template)
-						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
+						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
 					Text(iosCR.rawValue)
 						.font(.caption)
-						.foregroundColor(waiting ? .secondary : .orange.opacity(0.75))
+						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
 						.lineLimit(1)
 					if let reviewerName = store.iosReviewerName {
 						Text("(\(reviewerName))")
 							.font(.caption2)
-							.foregroundColor(waiting ? .secondary : .orange)
+							.foregroundColor(waiting ? .secondary : activeColor)
 							.lineLimit(1)
 					}
 				}
