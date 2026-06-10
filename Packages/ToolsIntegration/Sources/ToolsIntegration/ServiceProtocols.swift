@@ -6,6 +6,7 @@ import Foundation
 public nonisolated enum CodeReviewState: String, Equatable {
 	case passed = "Passed"
 	case waiting = "Waiting"
+	case inProgress = "In Progress"
 	case notApplicable = "N/A"
 
 	public init?(rawValue: String) {
@@ -14,6 +15,8 @@ public nonisolated enum CodeReviewState: String, Equatable {
 			self = .passed
 		case "waiting":
 			self = .waiting
+		case "in progress":
+			self = .inProgress
 		case "n/a":
 			self = .notApplicable
 		default:
