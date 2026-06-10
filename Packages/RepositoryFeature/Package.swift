@@ -35,7 +35,12 @@ let package = Package(
 		),
 		.testTarget(
 			name: "RepositoryFeatureTests",
-			dependencies: ["RepositoryFeature"]
+			dependencies: [
+				"RepositoryFeature",
+				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+				.product(name: "GitCore", package: "GitCore"),
+				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
+			]
 		),
 	]
 )

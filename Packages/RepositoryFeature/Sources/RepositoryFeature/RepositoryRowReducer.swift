@@ -149,7 +149,7 @@ struct RepositoryRowReducer {
 		case onAppear
 		case refresh
 		case didFetchStatus(GitPorcelainStatus, Bool)
-		case didFetchYouTrack(IssueDetails)
+		case didFetchYouTrack(IssueDetails?)
 		case didFetchPullRequest(PullRequestDetails?)
 		case openRepositoryDetail
 		case openTerminalForRepo
@@ -235,8 +235,6 @@ struct RepositoryRowReducer {
 				state.isLoaded = true
 				return .merge(
 					fetchBranchInfo(for: state),
-					fetchYouTrack(for: state),
-					fetchPullRequest(for: state),
 					.send(.gitActionsMenu(.onAppear)),
 					.send(.xcodeButton(.onAppear))
 				)
@@ -244,8 +242,6 @@ struct RepositoryRowReducer {
 			case .refresh:
 				return .merge(
 					fetchBranchInfo(for: state),
-					fetchYouTrack(for: state),
-					fetchPullRequest(for: state),
 					.send(.gitActionsMenu(.refresh)),
 					.send(.xcodeButton(.refresh))
 				)
@@ -275,14 +271,20 @@ struct RepositoryRowReducer {
 				state.gitActionsMenu.stashButton.hasChanges = hasChanges
 				state.gitActionsMenu.unpushedCommitsCount = status.unpushedCount
 				state.gitActionsMenu.hasRemoteBranch = status.hasRemoteBranch
-				return .none
+				// YouTrack and PR fetches are keyed on the ticket/branch resolved
+				// above — running them in parallel with the status fetch would use
+				// the pre-refresh values and resurrect stale state after a branch switch.
+				return .merge(
+					fetchYouTrack(for: state),
+					fetchPullRequest(for: state)
+				)
 
 			case let .didFetchYouTrack(details):
-				state.androidCR = details.androidCR
-				state.iosCR = details.iosCR
-				state.androidReviewerName = details.androidReviewerName
-				state.iosReviewerName = details.iosReviewerName
-				state.ticketState = details.ticketState
+				state.androidCR = details?.androidCR
+				state.iosCR = details?.iosCR
+				state.androidReviewerName = details?.androidReviewerName
+				state.iosReviewerName = details?.iosReviewerName
+				state.ticketState = details?.ticketState
 				return .none
 
 			case let .didFetchPullRequest(details):
@@ -350,7 +352,7 @@ struct RepositoryRowReducer {
 
 	private func fetchYouTrack(for state: State) -> EffectOf<RepositoryRowReducer> {
 		guard let ticketId = state.ticketId else {
-			return .none
+			return .send(.didFetchYouTrack(nil))
 		}
 
 		@Shared(.youtrackAuthToken)
