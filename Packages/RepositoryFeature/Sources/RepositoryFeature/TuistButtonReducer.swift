@@ -41,6 +41,7 @@ struct TuistButtonReducer {
 		case installTapped
 		case installUpdateTapped
 		case cacheTapped
+		case installCacheAndGenerateTapped
 		case editTapped
 		case inspectDependenciesTapped
 		case actionCompleted(TuistAction, Result<String, Error>)
@@ -187,6 +188,60 @@ struct TuistButtonReducer {
 					await send(.actionCompleted(.cache(cacheType), result))
 				}
 
+			case .installCacheAndGenerateTapped:
+				guard state.runningAction == nil else {
+					return .none
+				}
+
+				let cacheType = state.tuistCacheType
+				state.runningAction = .installCacheAndGenerate(cacheType)
+				return .run { [
+					repositoryPath = state.repositoryPath,
+					iosSubfolderPath = state.iosSubfolderPath,
+					shouldOpen = state.openXcodeAfterGenerate,
+					cacheType,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
+				] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+						in: repositoryPath,
+						iosSubfolderPath: iosSubfolderPath
+					)
+
+					let installResult = await TuistCommandHelper.runCommand(
+						.install,
+						at: iosFlashscorePath,
+						shouldOpenXcode: false,
+						misePath: misePath,
+						runMode: runMode
+					)
+					if case let .failure(error) = installResult {
+						await send(.actionCompleted(.installCacheAndGenerate(cacheType), .failure(error)))
+						return
+					}
+
+					let cacheResult = await TuistCommandHelper.runCommand(
+						.cache(cacheType),
+						at: iosFlashscorePath,
+						shouldOpenXcode: false,
+						misePath: misePath,
+						runMode: runMode
+					)
+					if case let .failure(error) = cacheResult {
+						await send(.actionCompleted(.installCacheAndGenerate(cacheType), .failure(error)))
+						return
+					}
+
+					let generateResult = await TuistCommandHelper.runCommand(
+						.generate,
+						at: iosFlashscorePath,
+						shouldOpenXcode: shouldOpen,
+						misePath: misePath,
+						runMode: runMode
+					)
+					await send(.actionCompleted(.installCacheAndGenerate(cacheType), generateResult))
+				}
+
 			case .editTapped:
 				guard state.runningAction == nil else {
 					return .none
@@ -260,6 +315,7 @@ struct TuistButtonReducer {
 						case .install: "Tuist Install Failed"
 						case .installUpdate: "Tuist Install Failed"
 						case .cache: "Tuist Cache Failed"
+						case .installCacheAndGenerate: "Tuist Install, Cache & Generate Failed"
 						case .edit: "Tuist Edit Failed"
 						case .inspectDependencies: "Tuist Inspect Failed"
 						}

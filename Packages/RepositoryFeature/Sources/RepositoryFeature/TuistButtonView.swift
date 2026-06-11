@@ -51,6 +51,12 @@ struct TuistButtonView: View {
 					}
 
 					Button {
+						store.send(.installCacheAndGenerateTapped)
+					} label: {
+						Label("Install, Cache & Generate", systemImage: "wand.and.stars")
+					}
+
+					Button {
 						store.send(.editTapped)
 					} label: {
 						Label("Edit", systemImage: "pencil")
@@ -84,6 +90,8 @@ struct TuistButtonView: View {
 			"Installing..."
 		case .cache:
 			"Caching..."
+		case .installCacheAndGenerate:
+			"Installing, Caching & Generating..."
 		case .edit:
 			"Opening..."
 		case .inspectDependencies:
@@ -103,6 +111,8 @@ struct TuistButtonView: View {
 			"Installing and updating Tuist dependencies..."
 		case .cache:
 			"Caching Tuist targets..."
+		case .installCacheAndGenerate:
+			"Running install, cache and generate..."
 		case .edit:
 			"Opening Tuist project for editing..."
 		case .inspectDependencies:
