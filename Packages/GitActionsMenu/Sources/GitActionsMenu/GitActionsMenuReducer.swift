@@ -64,6 +64,13 @@ public struct GitActionsMenuReducer {
 		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 	}
 
+	@Dependency(\.continuousClock)
+	private var clock
+
+	private enum CancelID: Hashable {
+		case mergeStatusPolling(String)
+	}
+
 	public var body: some Reducer<State, Action> {
 		Scope(\.fetchButton, action: \.fetchButton) {
 			FetchButtonReducer()
@@ -223,7 +230,22 @@ public struct GitActionsMenuReducer {
 
 			case let .didCheckGitStatus(isMergeInProgress):
 				state.isMergeInProgress = isMergeInProgress
-				return .none
+				guard isMergeInProgress else {
+					return .cancel(id: CancelID.mergeStatusPolling(state.repositoryPath))
+				}
+				// A merge can be finished (or aborted) from the embedded terminal, where
+				// no app action fires. Poll the cheap MERGE_HEAD file check until the
+				// operation ends so the banner clears without waiting for the periodic refresh.
+				return .run { [path = state.repositoryPath, clock] send in
+					while true {
+						try await clock.sleep(for: .seconds(2))
+						if !GitMergeDetector.isGitOperationInProgress(at: path) {
+							await send(.didCheckGitStatus(isMergeInProgress: false))
+							return
+						}
+					}
+				}
+				.cancellable(id: CancelID.mergeStatusPolling(state.repositoryPath), cancelInFlight: true)
 
 			default:
 				return .none

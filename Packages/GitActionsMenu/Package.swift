@@ -21,5 +21,9 @@ let package = Package(
                 .product(name: "AppUI", package: "AppUI"),
             ]
         ),
+        .testTarget(
+            name: "GitActionsMenuTests",
+            dependencies: ["GitActionsMenu"]
+        ),
     ]
 )
