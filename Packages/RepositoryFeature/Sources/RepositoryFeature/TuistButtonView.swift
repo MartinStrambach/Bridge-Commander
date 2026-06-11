@@ -82,7 +82,7 @@ struct TuistButtonView: View {
 			"Generating..."
 		case .install, .installUpdate:
 			"Installing..."
-		case .cache:
+		case .cache, .installCacheAndGenerate:
 			"Caching..."
 		case .edit:
 			"Opening..."
@@ -103,6 +103,8 @@ struct TuistButtonView: View {
 			"Installing and updating Tuist dependencies..."
 		case .cache:
 			"Caching Tuist targets..."
+		case .installCacheAndGenerate:
+			"Installing, caching, and generating..."
 		case .edit:
 			"Opening Tuist project for editing..."
 		case .inspectDependencies:
