@@ -19,15 +19,14 @@ public nonisolated struct GitRemote: Equatable, Sendable {
 }
 
 public nonisolated enum GitRemoteHelper {
+	/// Git config lives in the common git directory, so every worktree of a repository
+	/// shares one origin remote — and it effectively never changes. Successful lookups
+	/// are therefore cached for the app's lifetime and concurrent lookups coalesced,
+	/// instead of spawning one `git config` process per row on every refresh.
+	private static let cache = OriginRemoteCache()
+
 	public static func getOriginRemote(at path: String) async -> GitRemote? {
-		let result = await ProcessRunner.runGit(
-			arguments: ["config", "--get", "remote.origin.url"],
-			at: path
-		)
-		guard result.success else {
-			return nil
-		}
-		return parse(result.trimmedOutput)
+		await cache.remote(at: path)
 	}
 
 	static func parse(_ url: String) -> GitRemote? {
@@ -73,5 +72,47 @@ public nonisolated enum GitRemoteHelper {
 			return nil
 		}
 		return GitRemote(host: host, owner: owner, repo: repo)
+	}
+}
+
+// MARK: -
+
+/// Caches origin remotes keyed by the repository's common git directory, so all
+/// worktrees of one repository share a single cached value. Only successful lookups
+/// are cached — a repo without an origin remote keeps retrying, same as before.
+private actor OriginRemoteCache {
+	private var cached: [String: GitRemote] = [:]
+	private var inFlight: [String: Task<GitRemote?, Never>] = [:]
+
+	func remote(at path: String) async -> GitRemote? {
+		let key = GitDirectoryResolver.resolveCommonGitDirectory(at: path) ?? path
+		if let hit = cached[key] {
+			return hit
+		}
+		if let existing = inFlight[key] {
+			return await existing.value
+		}
+
+		let task = Task<GitRemote?, Never> { @concurrent in
+			let result = await ProcessRunner.runGit(
+				arguments: ["config", "--get", "remote.origin.url"],
+				at: path
+			)
+			guard result.success else {
+				return nil
+			}
+			return GitRemoteHelper.parse(result.trimmedOutput)
+		}
+		inFlight[key] = task
+
+		let remote = await task.value
+		if let remote {
+			cached[key] = remote
+		}
+		// Only clear our own entry — a waiter resuming late must not evict a newer in-flight task.
+		if inFlight[key] == task {
+			inFlight[key] = nil
+		}
+		return remote
 	}
 }
