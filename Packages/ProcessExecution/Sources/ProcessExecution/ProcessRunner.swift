@@ -128,6 +128,24 @@ public nonisolated enum ProcessRunner {
 		}
 	}
 
+	/// `/usr/bin/git` is Apple's xcode-select shim, which re-resolves the active developer
+	/// directory on every invocation (~5ms per call). The app spawns dozens of git processes
+	/// per refresh, so the binary the shim points at is resolved once and used directly.
+	/// Falls back to the shim if resolution fails (e.g., no Xcode/CLT installed).
+	private static let resolvedGitExecutable = Task<URL, Never> { @concurrent in
+		let fallback = URL(filePath: "/usr/bin/git")
+		let result = await run(
+			executableURL: URL(filePath: "/usr/bin/xcrun"),
+			arguments: ["--find", "git"]
+		)
+		let path = result.trimmedOutput
+		guard result.success, !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) else {
+			return fallback
+		}
+
+		return URL(filePath: path)
+	}
+
 	/// Convenience method for running git commands
 	/// - Parameters:
 	///   - arguments: Git command arguments (e.g., ["status", "--short"])
@@ -138,7 +156,7 @@ public nonisolated enum ProcessRunner {
 		at repositoryPath: String
 	) async -> ProcessResult {
 		await run(
-			executableURL: URL(filePath: "/usr/bin/git"),
+			executableURL: resolvedGitExecutable.value,
 			arguments: arguments,
 			currentDirectory: URL(filePath: repositoryPath),
 			environment: EnvironmentHelper.setupEnvironment()
