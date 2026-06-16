@@ -119,6 +119,12 @@ struct TerminalPanelView: View {
 				)
 			}
 
+			if let pipelineUrl = activeRowState?.pipelineUrl,
+			   let url = URL(string: pipelineUrl),
+			   let pipelineState = activeRowState?.pipelineState {
+				PipelineStatusButton(url: url, state: pipelineState)
+			}
+
 			if let xcodeStore = store.scope(\.xcodeButton, action: \.xcodeButton) {
 				XcodeProjectButtonView(store: xcodeStore, style: .compact)
 			}

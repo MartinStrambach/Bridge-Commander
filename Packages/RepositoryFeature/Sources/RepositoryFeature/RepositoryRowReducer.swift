@@ -30,6 +30,8 @@ struct RepositoryRowReducer {
 		var prUrl: String?
 		var prState: PullRequestState?
 		var prProvider: PullRequestProvider?
+		var pipelineState: PipelineState?
+		var pipelineUrl: String?
 		var androidCR: CodeReviewState?
 		var iosCR: CodeReviewState?
 		var androidReviewerName: String?
@@ -291,6 +293,8 @@ struct RepositoryRowReducer {
 				state.prUrl = details?.url
 				state.prState = details?.state
 				state.prProvider = details?.provider
+				state.pipelineState = details?.pipeline?.state
+				state.pipelineUrl = details?.pipeline?.url
 				state.shareButton.updatePRURL(details?.url)
 				return .none
 

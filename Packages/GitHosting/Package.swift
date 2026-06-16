@@ -22,5 +22,9 @@ let package = Package(
                 .product(name: "GitCore", package: "GitCore"),
             ]
         ),
+        .testTarget(
+            name: "GitHostingTests",
+            dependencies: ["GitHosting"]
+        ),
     ]
 )
