@@ -323,6 +323,13 @@ struct RepositoryRowView: View {
 				)
 			}
 
+			// GitLab pipeline status (conditional)
+			if let pipelineUrl = store.pipelineUrl,
+			   let url = URL(string: pipelineUrl),
+			   let pipelineState = store.pipelineState {
+				PipelineStatusButton(url: url, state: pipelineState)
+			}
+
 			ShareButtonView(store: store.scope(
 				\.shareButton,
 				action: \.shareButton
