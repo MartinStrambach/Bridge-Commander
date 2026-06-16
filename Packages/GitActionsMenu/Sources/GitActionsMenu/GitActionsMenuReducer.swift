@@ -235,6 +235,9 @@ public struct GitActionsMenuReducer {
 						isError: false
 					)
 				}
+				// No checkStatusEffect here (unlike the other completions): the row reducer
+				// routes .discardButton(.discardCompleted) to its own .refresh, which re-runs
+				// the status fetch and recomputes the discard-button visibility flags.
 				return .none
 
 			case .onAppear:
