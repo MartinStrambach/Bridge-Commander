@@ -10,9 +10,9 @@ public struct DiscardButtonReducer {
 	public struct State: Equatable {
 		let repositoryPath: String
 		/// "Discard Tracked Changes" is shown when there are tracked modifications.
-		var hasTrackedChanges = false
+		public var hasTrackedChanges = false
 		/// "Discard All Changes" is shown when there are untracked files to clean.
-		var hasUntrackedFiles = false
+		public var hasUntrackedFiles = false
 		var isProcessing = false
 		@Presents var confirmationDialog: ConfirmationDialogState<Action.ConfirmAction>?
 

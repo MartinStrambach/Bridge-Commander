@@ -16,7 +16,7 @@ public struct GitActionsMenuReducer {
 		public var hasRemoteBranch = false
 		public var unpushedCommitsCount = 0
 		public var stashButton: StashButtonReducer.State
-		var discardButton: DiscardButtonReducer.State
+		public var discardButton: DiscardButtonReducer.State
 
 		let repositoryPath: String
 		var fetchButton: FetchButtonReducer.State
