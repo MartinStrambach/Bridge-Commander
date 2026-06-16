@@ -9,6 +9,7 @@ public enum GitError: LocalizedError, Equatable {
 	case stashFailed(String)
 	case stashPopFailed(String)
 	case abortMergeFailed(String)
+	case discardFailed(String)
 	case worktreeCreationFailed(String)
 	case worktreeRemovalFailed(String)
 	case stagingFailed(String)
@@ -32,6 +33,8 @@ public enum GitError: LocalizedError, Equatable {
 			"Failed to pop stash: \(message)"
 		case let .abortMergeFailed(message):
 			"Failed to abort merge: \(message)"
+		case let .discardFailed(message):
+			"Failed to discard changes: \(message)"
 		case let .worktreeCreationFailed(message):
 			"Failed to create worktree: \(message)"
 		case let .worktreeRemovalFailed(message):

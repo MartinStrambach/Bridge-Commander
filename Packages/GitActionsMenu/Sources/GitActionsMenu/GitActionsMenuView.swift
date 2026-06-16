@@ -53,6 +53,13 @@ public struct GitActionsMenuView: View {
 					helpText: store.stashButton.hasStash ? "Restoring stashed changes..." : "Stashing changes..."
 				)
 			}
+			else if store.discardButton.isProcessing {
+				GitOperationProgressView(
+					text: "Discarding...",
+					color: .red,
+					helpText: "Discarding local changes..."
+				)
+			}
 			else {
 				Menu {
 					if store.isMergeInProgress {
@@ -70,6 +77,7 @@ public struct GitActionsMenuView: View {
 
 					if !store.isMergeInProgress {
 						StashButtonView(store: store.scope(\.stashButton, action: \.stashButton))
+						DiscardButtonView(store: store.scope(\.discardButton, action: \.discardButton))
 					}
 
 					if !DefaultBranchResolver.isDefaultBranch(store.currentBranch, configured: store.defaultBranch),
@@ -92,6 +100,9 @@ public struct GitActionsMenuView: View {
 		.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
+		.confirmationDialog(
+			$store.scope(state: \.discardButton.confirmationDialog, action: \.discardButton.confirmationDialog)
+		)
 	}
 
 	public init(store: StoreOf<GitActionsMenuReducer>) {

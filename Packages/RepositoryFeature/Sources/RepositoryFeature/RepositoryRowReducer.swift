@@ -271,6 +271,13 @@ struct RepositoryRowReducer {
 				state.unpushedCommitCount = status.unpushedCount
 				let hasChanges = unstaged > 0 || staged > 0
 				state.gitActionsMenu.stashButton.hasChanges = hasChanges
+				// Untracked files are reported in the unstaged array (status `.untracked`);
+				// distinguish them so each discard button only shows when it would do work.
+				let hasUntracked = !isMerge && status.unstaged.contains { $0.status == .untracked }
+				let hasTrackedChanges = !isMerge
+					&& (staged > 0 || status.unstaged.contains { $0.status != .untracked })
+				state.gitActionsMenu.discardButton.hasTrackedChanges = hasTrackedChanges
+				state.gitActionsMenu.discardButton.hasUntrackedFiles = hasUntracked
 				state.gitActionsMenu.unpushedCommitsCount = status.unpushedCount
 				state.gitActionsMenu.hasRemoteBranch = status.hasRemoteBranch
 				// YouTrack and PR fetches are keyed on the ticket/branch resolved
@@ -313,6 +320,7 @@ struct RepositoryRowReducer {
 			case let .gitActionsMenu(action):
 				switch action {
 				case .abortMergeButton(.abortMergeCompleted),
+				     .discardButton(.discardCompleted),
 				     .fetchButton(.fetchCompleted),
 				     .mergeMasterButton(.mergeMasterCompleted),
 				     .pullButton(.pullCompleted),
