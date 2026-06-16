@@ -1,3 +1,4 @@
+import AppUI
 import ComposableArchitecture
 import Testing
 @testable import GitActionsMenu
@@ -40,6 +41,39 @@ struct DiscardButtonTests {
 
 		await store.send(.discardCompleted(success: true, error: nil)) {
 			$0.isProcessing = false
+		}
+	}
+}
+
+@MainActor
+struct GitActionsMenuDiscardWiringTests {
+	@Test("Successful discard shows a success alert")
+	func successAlert() async {
+		let store = TestStore(
+			initialState: GitActionsMenuReducer.State(repositoryPath: "/tmp/repo", currentBranch: "feature")
+		) {
+			GitActionsMenuReducer()
+		}
+
+		await store.send(.discardButton(.discardCompleted(success: true, error: nil))) {
+			$0.alert = ScrollableAlertReducer.State(
+				title: "Changes Discarded",
+				message: "Local changes have been discarded successfully.",
+				isError: false
+			)
+		}
+	}
+
+	@Test("Failed discard shows an error alert")
+	func errorAlert() async {
+		let store = TestStore(
+			initialState: GitActionsMenuReducer.State(repositoryPath: "/tmp/repo", currentBranch: "feature")
+		) {
+			GitActionsMenuReducer()
+		}
+
+		await store.send(.discardButton(.discardCompleted(success: false, error: "boom"))) {
+			$0.alert = ScrollableAlertReducer.State(title: "Discard Failed", message: "boom", isError: true)
 		}
 	}
 }

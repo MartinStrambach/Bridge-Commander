@@ -16,6 +16,7 @@ public struct GitActionsMenuReducer {
 		public var hasRemoteBranch = false
 		public var unpushedCommitsCount = 0
 		public var stashButton: StashButtonReducer.State
+		var discardButton: DiscardButtonReducer.State
 
 		let repositoryPath: String
 		var fetchButton: FetchButtonReducer.State
@@ -41,6 +42,7 @@ public struct GitActionsMenuReducer {
 			)
 			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
 			self.stashButton = StashButtonReducer.State(repositoryPath: repositoryPath, currentBranch: currentBranch)
+			self.discardButton = DiscardButtonReducer.State(repositoryPath: repositoryPath)
 		}
 
 		/// Updates the configured default branch and keeps the merge button in sync.
@@ -61,6 +63,7 @@ public struct GitActionsMenuReducer {
 		case mergeMasterButton(MergeMasterButtonReducer.Action)
 		case abortMergeButton(AbortMergeButtonReducer.Action)
 		case stashButton(StashButtonReducer.Action)
+		case discardButton(DiscardButtonReducer.Action)
 		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 	}
 
@@ -94,6 +97,10 @@ public struct GitActionsMenuReducer {
 
 		Scope(\.stashButton, action: \.stashButton) {
 			StashButtonReducer()
+		}
+
+		Scope(\.discardButton, action: \.discardButton) {
+			DiscardButtonReducer()
 		}
 
 		Reduce { state, action in
@@ -216,6 +223,19 @@ public struct GitActionsMenuReducer {
 					)
 				}
 				return .send(.stashButton(.checkStashStatus))
+
+			case let .discardButton(.discardCompleted(success, error)):
+				if let error {
+					state.alert = ScrollableAlertReducer.State(title: "Discard Failed", message: error, isError: true)
+				}
+				else if success {
+					state.alert = ScrollableAlertReducer.State(
+						title: "Changes Discarded",
+						message: "Local changes have been discarded successfully.",
+						isError: false
+					)
+				}
+				return .none
 
 			case .onAppear:
 				guard !state.isLoaded else {
