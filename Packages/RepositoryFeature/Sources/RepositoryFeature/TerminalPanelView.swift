@@ -125,6 +125,10 @@ struct TerminalPanelView: View {
 				PipelineStatusButton(url: url, state: pipelineState)
 			}
 
+			if let ticketStore = store.scope(\.ticketButton, action: \.ticketButton) {
+				TicketButtonView(store: ticketStore)
+			}
+
 			if let xcodeStore = store.scope(\.xcodeButton, action: \.xcodeButton) {
 				XcodeProjectButtonView(store: xcodeStore, style: .compact)
 			}
