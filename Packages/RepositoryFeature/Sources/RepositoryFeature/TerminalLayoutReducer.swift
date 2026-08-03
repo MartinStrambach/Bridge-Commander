@@ -17,6 +17,7 @@ struct TerminalLayoutReducer {
 		var androidStudioButton: AndroidStudioButtonReducer.State?
 		var webButton: WebButtonReducer.State?
 		var tuistButton: TuistButtonReducer.State?
+		var ticketButton: TicketButtonReducer.State?
 
 		@Presents
 		var stagingDetail: RepositoryDetail.State?
@@ -41,6 +42,7 @@ struct TerminalLayoutReducer {
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case webButton(WebButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
+		case ticketButton(TicketButtonReducer.Action)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -136,6 +138,9 @@ struct TerminalLayoutReducer {
 
 			case .tuistButton:
 				return .none
+
+			case .ticketButton:
+				return .none
 			}
 		}
 		.ifLet(\.$stagingDetail, action: \.stagingDetail) {
@@ -152,6 +157,9 @@ struct TerminalLayoutReducer {
 		}
 		.ifLet(\.tuistButton, action: \.tuistButton) {
 			TuistButtonReducer()
+		}
+		.ifLet(\.ticketButton, action: \.ticketButton) {
+			TicketButtonReducer()
 		}
 	}
 }

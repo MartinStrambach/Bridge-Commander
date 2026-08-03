@@ -901,12 +901,14 @@ private func syncTerminalButtons(for path: String, in state: inout RepositoryLis
 		state.terminalLayout?.androidStudioButton = nil
 		state.terminalLayout?.webButton = nil
 		state.terminalLayout?.tuistButton = nil
+		state.terminalLayout?.ticketButton = nil
 		return
 	}
 	state.terminalLayout?.xcodeButton = rowState.supportsIOS ? rowState.xcodeButton : nil
 	state.terminalLayout?.androidStudioButton = rowState.supportsAndroid ? rowState.androidStudioButton : nil
 	state.terminalLayout?.webButton = rowState.webButton
 	state.terminalLayout?.tuistButton = terminalTuistButton(for: rowState)
+	state.terminalLayout?.ticketButton = rowState.ticketButton
 }
 
 /// The terminal header shows the Tuist menu under the same gate as the repository row:
