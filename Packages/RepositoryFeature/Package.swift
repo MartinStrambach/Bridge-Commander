@@ -8,7 +8,7 @@ let package = Package(
 		.library(name: "RepositoryFeature", targets: ["RepositoryFeature"]),
 	],
 	dependencies: [
-		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.0"),
+		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
 		.package(path: "../GitCore"),
 		.package(path: "../AppUI"),
 		.package(path: "../Settings"),
