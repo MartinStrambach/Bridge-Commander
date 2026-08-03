@@ -52,6 +52,10 @@ struct RepositoryRowReducer {
 
 		var isLoaded = false
 
+		/// True while a progress-tracked refresh of this row is in flight.
+		/// The list derives its refresh spinner from these flags.
+		var isRefreshing = false
+
 		var supportsIOS: Bool
 		var supportsAndroid: Bool
 		var supportsTuist: Bool
@@ -169,6 +173,11 @@ struct RepositoryRowReducer {
 		case gitActionsMenu(GitActionsMenuReducer.Action)
 		case worktreeDeleted
 		case worktreeCreated
+		/// Same work as `refresh`, but marks the row as refreshing so the list can
+		/// show progress until it finishes.
+		case refreshWithProgress
+		/// All async fetches kicked off by a refresh have settled.
+		case refreshDidFinish
 	}
 
 	@Dependency(GitClient.self)
@@ -242,15 +251,20 @@ struct RepositoryRowReducer {
 				)
 
 			case .refresh:
-				return .merge(
-					fetchBranchInfo(for: state),
-					.send(.gitActionsMenu(.refresh)),
-					.send(.xcodeButton(.refresh))
-				)
+				return refreshEffects(for: state)
+
+			case .refreshWithProgress:
+				state.isRefreshing = true
+				return refreshEffects(for: state)
+
+			case .refreshDidFinish:
+				state.isRefreshing = false
+				return .none
 
 			case let .didFetchStatus(status, isMerge):
 				guard status.didSucceed else {
-					return .none
+					// The refresh chain ends here; no YouTrack/PR fetches will run.
+					return .send(.refreshDidFinish)
 				}
 
 				let branch = status.branch ?? state.branchName ?? state.name
@@ -283,10 +297,22 @@ struct RepositoryRowReducer {
 				// YouTrack and PR fetches are keyed on the ticket/branch resolved
 				// above — running them in parallel with the status fetch would use
 				// the pre-refresh values and resurrect stale state after a branch switch.
-				return .merge(
-					fetchYouTrack(for: state),
-					fetchPullRequest(for: state)
-				)
+				// Once both settle, the row reports its refresh as finished.
+				return .run { [
+					ticketId = state.ticketId,
+					path = state.path,
+					defaultBranch = state.defaultBranch
+				] send in
+					async let youTrackFetch: Void = fetchYouTrack(ticketId: ticketId, send: send)
+					async let pullRequestFetch: Void = fetchPullRequest(
+						path: path,
+						branchName: branch,
+						defaultBranch: defaultBranch,
+						send: send
+					)
+					_ = await (youTrackFetch, pullRequestFetch)
+					await send(.refreshDidFinish)
+				}
 
 			case let .didFetchYouTrack(details):
 				state.androidCR = details?.androidCR
@@ -354,6 +380,14 @@ struct RepositoryRowReducer {
 
 	// MARK: - Private Effect Builders
 
+	private func refreshEffects(for state: State) -> EffectOf<RepositoryRowReducer> {
+		.merge(
+			fetchBranchInfo(for: state),
+			.send(.gitActionsMenu(.refresh)),
+			.send(.xcodeButton(.refresh))
+		)
+	}
+
 	private func fetchBranchInfo(for state: State) -> EffectOf<RepositoryRowReducer> {
 		.run { [path = state.path] send in
 			let info = await gitClient.getCurrentBranch(at: path)
@@ -362,43 +396,41 @@ struct RepositoryRowReducer {
 		}
 	}
 
-	private func fetchYouTrack(for state: State) -> EffectOf<RepositoryRowReducer> {
-		guard let ticketId = state.ticketId else {
-			return .send(.didFetchYouTrack(nil))
+	private func fetchYouTrack(ticketId: String?, send: Send<Action>) async {
+		guard let ticketId else {
+			await send(.didFetchYouTrack(nil))
+			return
 		}
 
 		@Shared(.youtrackAuthToken)
 		var authToken = ""
 
-		return .run { [authToken] send in
-			do {
-				let details = try await youTrackClient.fetchIssueDetails(for: ticketId, authToken: authToken)
-				await send(.didFetchYouTrack(details))
-			}
-			catch {
-				// Silently fail - YouTrack might be unavailable
-				print("Failed to fetch YouTrack details for \(ticketId): \(error.localizedDescription)")
-			}
+		do {
+			let details = try await youTrackClient.fetchIssueDetails(for: ticketId, authToken: authToken)
+			await send(.didFetchYouTrack(details))
+		}
+		catch {
+			// Silently fail - YouTrack might be unavailable
+			print("Failed to fetch YouTrack details for \(ticketId): \(error.localizedDescription)")
 		}
 	}
 
-	private func fetchPullRequest(for state: State) -> EffectOf<RepositoryRowReducer> {
-		.run { [
-			path = state.path,
-			branchName = state.branchName ?? state.name,
-			defaultBranch = state.defaultBranch
-		] send in
-			guard !DefaultBranchResolver.isDefaultBranch(branchName, configured: defaultBranch) else {
-				await send(.didFetchPullRequest(nil))
-				return
-			}
-			guard let remote = await gitClient.getOriginRemote(at: path) else {
-				await send(.didFetchPullRequest(nil))
-				return
-			}
-
-			let details = await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
-			await send(.didFetchPullRequest(details))
+	private func fetchPullRequest(
+		path: String,
+		branchName: String,
+		defaultBranch: String,
+		send: Send<Action>
+	) async {
+		guard !DefaultBranchResolver.isDefaultBranch(branchName, configured: defaultBranch) else {
+			await send(.didFetchPullRequest(nil))
+			return
 		}
+		guard let remote = await gitClient.getOriginRemote(at: path) else {
+			await send(.didFetchPullRequest(nil))
+			return
+		}
+
+		let details = await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
+		await send(.didFetchPullRequest(details))
 	}
 }

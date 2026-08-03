@@ -168,14 +168,14 @@ struct RepositoryListView: View {
 							action: { send(.refreshButtonTapped) }
 						)
 						.keyboardShortcut("r", modifiers: .command)
-						.opacity(store.isScanning ? 0 : 1)
+						.opacity(store.isRefreshing ? 0 : 1)
 						.overlay {
-							if store.isScanning {
+							if store.isRefreshing {
 								ProgressView()
 									.scaleEffect(0.55)
 							}
 						}
-						.disabled(store.isScanning)
+						.disabled(store.isRefreshing)
 
 						HeaderButton(
 							icon: "plus",

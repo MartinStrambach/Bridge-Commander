@@ -21,6 +21,12 @@ struct RepositoryListReducer {
 		fileprivate(set) var isScanning = false
 		fileprivate(set) var sortMode: SortMode = .state
 
+		/// True while a directory scan or any row's tracked refresh is in flight.
+		/// Drives the refresh button's spinner.
+		var isRefreshing: Bool {
+			isScanning || isAnyRowRefreshing(in: repositoryGroups)
+		}
+
 		var searchText: String = ""
 
 		var terminalSessions: IdentifiedArrayOf<TerminalSession> = []
@@ -82,7 +88,9 @@ struct RepositoryListReducer {
 		case checkSystemEventsPermission
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
-		case refreshRepositories
+		/// User-initiated refreshes pass `tracksProgress: true` to show the spinner
+		/// until every row finishes; the periodic refresh passes `false` to stay unobtrusive.
+		case refreshRepositories(tracksProgress: Bool)
 		case repositoryGroups(IdentifiedActionOf<RepoGroupReducer>)
 		case scanCompleted
 		case scanFailed
@@ -220,7 +228,7 @@ struct RepositoryListReducer {
 			case .view(.refreshButtonTapped):
 				state.isSystemEventsPermissionGranted = nil
 				state.isAccessibilityPermissionGranted = nil
-				return .send(.refreshRepositories)
+				return .send(.refreshRepositories(tracksProgress: true))
 
 			case .view(.openHomeTerminalButtonTapped):
 				return openTerminal(for: NSHomeDirectory(), in: &state)
@@ -383,36 +391,46 @@ struct RepositoryListReducer {
 
 			// MARK: - Refresh
 
-			case .refreshRepositories:
+			case let .refreshRepositories(tracksProgress):
 				guard !state.repositoryGroups.isEmpty else {
 					return .none
 				}
 
-				let refreshEffects = state.repositoryGroups.flatMap { group -> [EffectOf<RepositoryListReducer>] in
-					let headerEffect = EffectOf<RepositoryListReducer>.send(
-						.repositoryGroups(.element(id: group.id, action: .header(.refresh)))
-					)
-					let worktreeEffects = group.worktrees.map { row in
-						EffectOf<RepositoryListReducer>.send(
-							.repositoryGroups(.element(
-								id: group.id,
-								action: .worktrees(.element(id: row.id, action: .refresh))
-							))
-						)
-					}
-					return [headerEffect] + worktreeEffects
+				let groupIDs = state.repositoryGroups.map { group in
+					(id: group.id, worktreeIDs: group.worktrees.map(\.id))
 				}
-				// Use concatenate instead of merge to stagger row refreshes.
-				// Merging all effects at once spawns 7×N git processes simultaneously (thundering herd).
-				// Concatenating serializes them so git load ramps up gradually.
-				return .concatenate([.send(.startScan)] + refreshEffects)
+
+				// Dispatch the rows one at a time instead of merging them: sending every
+				// row at once spawns 7×N git processes simultaneously (thundering herd),
+				// so ordered dispatch lets git load ramp up gradually.
+				return .run { send in
+					await send(.startScan)
+
+					// Rows flag themselves while a tracked refresh runs, which is what
+					// keeps the spinner up — nothing here awaits the rows' async work.
+					// Built per send: `Action` is not Sendable, so each one has to be a fresh value.
+					func rowAction() -> RepositoryRowReducer.Action {
+						tracksProgress ? .refreshWithProgress : .refresh
+					}
+
+					for group in groupIDs {
+						await send(.repositoryGroups(.element(id: group.id, action: .header(rowAction()))))
+
+						for worktreeID in group.worktreeIDs {
+							await send(.repositoryGroups(.element(
+								id: group.id,
+								action: .worktrees(.element(id: worktreeID, action: rowAction()))
+							)))
+						}
+					}
+				}
 
 			case .startPeriodicRefresh:
 				let interval = state.periodicRefreshInterval.timeInterval
 				return .run { send in
 					while true {
 						try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
-						await send(.refreshRepositories)
+						await send(.refreshRepositories(tracksProgress: false))
 					}
 				}
 				.cancellable(id: CancellableId.periodicRefresh, cancelInFlight: true)
@@ -748,6 +766,12 @@ private func buildGroup(
 		worktrees: IdentifiedArrayOf(uniqueElements: worktrees),
 		settings: settings
 	)
+}
+
+/// True when any row in `groups` is mid-refresh. Each row owns its own flag, so a
+/// row removed mid-refresh takes its flag with it and can't strand the spinner.
+func isAnyRowRefreshing(in groups: IdentifiedArrayOf<RepoGroupReducer.State>) -> Bool {
+	groups.contains { $0.header.isRefreshing || $0.worktrees.contains(where: \.isRefreshing) }
 }
 
 private func mergeGroupRows(
