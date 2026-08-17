@@ -9,6 +9,9 @@ struct RepoGroupView: View {
 	/// Terminal session status keyed by repository path. O(1) lookup per row, built once by the parent.
 	let statusByPath: [String: TerminalSessionStatus]
 
+	/// Active branch-name query. Empty shows every row.
+	var searchText: String = ""
+
 	var body: some View {
 		let isExpanded = Binding(
 			get: { !store.isCollapsed },
@@ -18,27 +21,35 @@ struct RepoGroupView: View {
 				}
 			}
 		)
+		// Resolved here rather than by the parent so a keystroke invalidates each group's own body
+		// instead of the whole list's.
+		let visibility = store.state.searchVisibility(query: searchText)
+		let hasVisibleWorktrees = store.worktrees.contains { visibility.includesWorktree(id: $0.id) }
 
-		Section(isExpanded: isExpanded) {
-			ForEach(store.scope(\.worktrees, action: \.worktrees)) { rowStore in
+		if !visibility.isHidden {
+			Section(isExpanded: isExpanded) {
+				ForEach(store.scope(\.worktrees, action: \.worktrees)) { rowStore in
+					if visibility.includesWorktree(id: rowStore.id) {
+						RepositoryRowView(
+							store: rowStore,
+							terminalSessionStatus: statusByPath[rowStore.path]
+						)
+						.padding(.leading, 20)
+						.listRowInsets(EdgeInsets())
+					}
+				}
+			} header: {
 				RepositoryRowView(
-					store: rowStore,
-					terminalSessionStatus: statusByPath[rowStore.path]
+					store: store.scope(\.header, action: \.header),
+					terminalSessionStatus: statusByPath[store.header.path],
+					isGroupCollapsed: store.isCollapsed,
+					onToggleCollapse: hasVisibleWorktrees
+						? { isExpanded.wrappedValue = !isExpanded.wrappedValue } : nil,
+					onRemove: { store.send(.remove) }
 				)
-				.padding(.leading, 20)
-				.listRowInsets(EdgeInsets())
 			}
-		} header: {
-			RepositoryRowView(
-				store: store.scope(\.header, action: \.header),
-				terminalSessionStatus: statusByPath[store.header.path],
-				isGroupCollapsed: store.isCollapsed,
-				onToggleCollapse: store.worktrees
-					.isEmpty ? nil : { isExpanded.wrappedValue = !isExpanded.wrappedValue },
-				onRemove: { store.send(.remove) }
-			)
+			.listSectionSeparator(.hidden)
 		}
-		.listSectionSeparator(.hidden)
 	}
 }
 

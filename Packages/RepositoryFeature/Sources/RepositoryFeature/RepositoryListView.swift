@@ -295,11 +295,15 @@ struct RepositoryListView: View {
 			store.terminalSessions.map { ($0.repositoryPath, $0.status) },
 			uniquingKeysWith: { first, _ in first }
 		)
+		// Scope into the stored groups, not a filtered copy of them: each group resolves the query
+		// against its own rows (see BranchSearchVisibility), so a keystroke neither rebuilds group
+		// state nor re-filters the whole list once per child-store read.
 		return List {
-			ForEach(store.scope(\.filteredRepositoryGroups, action: \.repositoryGroups)) { groupStore in
+			ForEach(store.scope(\.repositoryGroups, action: \.repositoryGroups)) { groupStore in
 				RepoGroupView(
 					store: groupStore,
-					statusByPath: statusByPath
+					statusByPath: statusByPath,
+					searchText: store.searchText
 				)
 			}
 		}

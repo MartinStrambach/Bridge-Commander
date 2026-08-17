@@ -47,22 +47,6 @@ struct RepositoryListReducer {
 		fileprivate var isAccessibilityPermissionGranted: Bool?
 		fileprivate var isAccessibilityPermissionWarningDismissed = false
 
-		var filteredRepositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> {
-			// `repositoryGroups` is kept sorted by header name at mutation time (see sortGroupsByName),
-			// so the common no-search path is a cheap passthrough — no per-body re-sort or re-wrap.
-			guard !searchText.isEmpty else {
-				return repositoryGroups
-			}
-
-			let query = searchText
-			return IdentifiedArrayOf(uniqueElements: repositoryGroups.filter { group in
-				if group.header.branchName?.localizedCaseInsensitiveContains(query) == true {
-					return true
-				}
-				return group.worktrees.contains { $0.branchName?.localizedCaseInsensitiveContains(query) == true }
-			})
-		}
-
 		var showPermissionDialog: Bool {
 			isSystemEventsPermissionGranted == false && !isPermissionWarningDismissed
 		}
@@ -651,7 +635,7 @@ struct RepositoryListReducer {
 // MARK: - Private Free Functions
 
 /// Sorts the top-level repository groups alphabetically by header name.
-/// Called once whenever a group is added so `filteredRepositoryGroups` can skip re-sorting on every read.
+/// Called once whenever a group is added so the list never re-sorts while rendering.
 private func sortGroupsByName(in state: inout RepositoryListReducer.State) {
 	state.repositoryGroups.sort {
 		$0.header.name.localizedCaseInsensitiveCompare($1.header.name) == .orderedAscending
