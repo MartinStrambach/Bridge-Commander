@@ -101,7 +101,7 @@ public struct GitActionsMenuView: View {
 			ScrollableAlertView(store: alertStore)
 		}
 		.confirmationDialog(
-			$store.scope(state: \.discardButton.confirmationDialog, action: \.discardButton.confirmationDialog)
+			$store.scope(\.discardButton.$confirmationDialog, action: \.discardButton.confirmationDialog)
 		)
 	}
 

@@ -388,24 +388,25 @@ struct RepositoryListReducer {
 					return .none
 				}
 
-				let refreshEffects = state.repositoryGroups.flatMap { group -> [EffectOf<RepositoryListReducer>] in
-					let headerEffect = EffectOf<RepositoryListReducer>.send(
-						.repositoryGroups(.element(id: group.id, action: .header(.refresh)))
-					)
-					let worktreeEffects = group.worktrees.map { row in
-						EffectOf<RepositoryListReducer>.send(
-							.repositoryGroups(.element(
-								id: group.id,
-								action: .worktrees(.element(id: row.id, action: .refresh))
-							))
-						)
-					}
-					return [headerEffect] + worktreeEffects
+				// Capture only the ids (Sendable) and rebuild the actions inside the effect.
+				let refreshTargets = state.repositoryGroups.map { group in
+					(groupId: group.id, worktreeIds: group.worktrees.map(\.id))
 				}
-				// Use concatenate instead of merge to stagger row refreshes.
+				// Send the refreshes sequentially instead of merging to stagger row refreshes.
 				// Merging all effects at once spawns 7×N git processes simultaneously (thundering herd).
-				// Concatenating serializes them so git load ramps up gradually.
-				return .concatenate([.send(.startScan)] + refreshEffects)
+				// Sequencing them means git load ramps up gradually.
+				return .run { send in
+					await send(.startScan)
+					for target in refreshTargets {
+						await send(.repositoryGroups(.element(id: target.groupId, action: .header(.refresh))))
+						for worktreeId in target.worktreeIds {
+							await send(.repositoryGroups(.element(
+								id: target.groupId,
+								action: .worktrees(.element(id: worktreeId, action: .refresh))
+							)))
+						}
+					}
+				}
 
 			case .startPeriodicRefresh:
 				let interval = state.periodicRefreshInterval.timeInterval
@@ -464,12 +465,15 @@ struct RepositoryListReducer {
 					return .none
 				}
 
-				@Dependency(\.mainQueue)
-				var mainQueue
+				@Dependency(\.continuousClock)
+				var clock
 
 				// Debounce: many rows fetch in parallel — sort once after the burst settles
-				return .send(.performDebouncedSort)
-					.debounce(id: CancellableId.sortAfterFetch, for: .milliseconds(300), scheduler: mainQueue)
+				return .run { send in
+					try await clock.sleep(for: .milliseconds(300))
+					await send(.performDebouncedSort)
+				}
+				.cancellable(id: CancellableId.sortAfterFetch, cancelInFlight: true)
 
 			case .performDebouncedSort:
 				sortGroupsInState(in: &state)
