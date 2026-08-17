@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "GitHosting", targets: ["GitHosting"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.14.1"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.15.0"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.9.1"),
         .package(path: "../GitCore"),
     ],

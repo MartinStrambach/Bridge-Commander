@@ -9,7 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
-        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.14.1"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.15.0"),
         .package(path: "../ProcessExecution"),
     ],
     targets: [
