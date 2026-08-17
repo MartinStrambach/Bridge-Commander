@@ -269,9 +269,7 @@ struct RepositoryDetail {
 					let firstId = ids.first,
 					let file = state.staged.files.first(where: { $0.id == firstId })
 				else {
-					state.diffViewer.fileId = nil
-					state.diffViewer.fileIsStaged = nil
-					state.diffViewer.fileDiff = nil
+					state.diffViewer.clearSelection()
 					return .none
 				}
 
@@ -283,9 +281,7 @@ struct RepositoryDetail {
 					let firstId = ids.first,
 					let file = state.unstaged.files.first(where: { $0.id == firstId })
 				else {
-					state.diffViewer.fileId = nil
-					state.diffViewer.fileIsStaged = nil
-					state.diffViewer.fileDiff = nil
+					state.diffViewer.clearSelection()
 					return .none
 				}
 
@@ -421,9 +417,7 @@ struct RepositoryDetail {
 				return .send(.selectFile(firstStaged, isStaged: true))
 			}
 		}
-		state.diffViewer.fileId = nil
-		state.diffViewer.fileIsStaged = nil
-		state.diffViewer.fileDiff = nil
+		state.diffViewer.clearSelection()
 		return .none
 	}
 }

@@ -1,33 +1,21 @@
-import ComposableArchitecture
-import SwiftUI
 import AppUI
+import ComposableArchitecture
 import GitCore
+import SwiftUI
 
 struct FileDiffViewerView: View {
 	let store: StoreOf<FileDiffViewer>
 
 	var body: some View {
-		if let gitDiff = store.fileDiff {
+		if let diff = store.displayDiff {
 			DiffViewer(
-				diff: gitDiff.toAppUI(),
+				diff: diff,
 				isStaged: store.fileIsStaged ?? false,
-				onStageHunk: { appUIHunk in
-					if let hunk = gitDiff.hunks.first(where: { $0.id == appUIHunk.id }) {
-						store.send(.stageHunk(hunk))
-					}
-				},
-				onUnstageHunk: { appUIHunk in
-					if let hunk = gitDiff.hunks.first(where: { $0.id == appUIHunk.id }) {
-						store.send(.unstageHunk(hunk))
-					}
-				},
-				onDiscardHunk: { appUIHunk in
-					if let hunk = gitDiff.hunks.first(where: { $0.id == appUIHunk.id }) {
-						store.send(.discardHunk(hunk))
-					}
-				}
+				onStageHunk: { store.send(.stageHunk(hunkId: $0.id)) },
+				onUnstageHunk: { store.send(.unstageHunk(hunkId: $0.id)) },
+				onDiscardHunk: { store.send(.discardHunk(hunkId: $0.id)) }
 			)
-			.id(gitDiff.fileChange.id)
+			.id(diff.fileChange.id)
 		}
 		else {
 			EmptyStateView(
