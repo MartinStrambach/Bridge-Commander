@@ -64,37 +64,50 @@ struct RepositoryRowView: View {
 							.contentShape(Rectangle())
 					}
 					.buttonStyle(.plain)
+					.padding(.vertical, 12)
 				}
 				else {
 					Image(systemName: "chevron.right")
 						.font(.caption)
 						.padding(.horizontal, 8)
+						.padding(.vertical, 12)
 						.hidden()
 				}
 			}
-			TerminalStatusDotView(status: terminalSessionStatus, size: 18)
-			RepositoryIcon(
-				isWorktree: store.isWorktree,
-				isMergeInProgress: store.gitActionsMenu.isMergeInProgress
+			// The double-tap target deliberately covers only the informational part of
+			// the row, never `repositoryActions` or the disclosure chevron. A
+			// `TapGesture(count: 2)` above a button forces every click on that button
+			// to wait out the double-click interval before the gesture system can
+			// resolve which one wins, which makes the buttons feel sluggish;
+			// `simultaneousGesture` avoids the wait only by firing both.
+			HStack(alignment: .center, spacing: 16) {
+				TerminalStatusDotView(status: terminalSessionStatus, size: 18)
+				RepositoryIcon(
+					isWorktree: store.isWorktree,
+					isMergeInProgress: store.gitActionsMenu.isMergeInProgress
+				)
+				repositoryInfo
+				Spacer(minLength: 0)
+			}
+			// Own the vertical padding rather than inheriting it from the outer stack,
+			// so the hit region covers the full row height instead of stopping at the
+			// content. Every sibling carries the same padding, which keeps the row
+			// height identical to putting it on the outer stack. Deliberately no
+			// `frame(maxHeight: .infinity)`: that would make this container flexible,
+			// so the stack would size itself from the shorter action buttons instead.
+			.padding(.vertical, 12)
+			.contentShape(Rectangle())
+			.gesture(
+				TapGesture(count: 2)
+					.onEnded {
+						store.send(.openTerminalForRepo)
+					}
 			)
-			repositoryInfo
-			Spacer()
 			repositoryActions
+				.padding(.vertical, 12)
 		}
 		.padding(.horizontal, 16)
-		.padding(.vertical, 12)
 		.background(backgroundColorForState)
-		.contentShape(Rectangle())
-		.simultaneousGesture(
-			TapGesture(count: 2)
-				.onEnded {
-					store.send(.openTerminalForRepo)
-				}
-//				.exclusively(before: TapGesture(count: 1)
-//					.onEnded {
-//						store.send(.openRepositoryDetail)
-//					})
-		)
 		.task {
 			store.send(.onAppear)
 		}
