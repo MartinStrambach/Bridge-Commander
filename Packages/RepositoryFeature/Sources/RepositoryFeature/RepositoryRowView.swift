@@ -72,7 +72,7 @@ struct RepositoryRowView: View {
 						.hidden()
 				}
 			}
-			TerminalStatusDotView(status: terminalSessionStatus)
+			TerminalStatusDotView(status: terminalSessionStatus, size: 18)
 			RepositoryIcon(
 				isWorktree: store.isWorktree,
 				isMergeInProgress: store.gitActionsMenu.isMergeInProgress
