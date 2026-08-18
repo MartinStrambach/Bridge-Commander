@@ -12,6 +12,10 @@ struct RepoGroupView: View {
 	/// Active branch-name query. Empty shows every row.
 	var searchText: String = ""
 
+	/// Repository paths with a live terminal session, or `nil` when the active-terminal filter is
+	/// off. Built once by the parent.
+	var livePaths: Set<String>?
+
 	var body: some View {
 		let isExpanded = Binding(
 			get: { !store.isCollapsed },
@@ -23,7 +27,7 @@ struct RepoGroupView: View {
 		)
 		// Resolved here rather than by the parent so a keystroke invalidates each group's own body
 		// instead of the whole list's.
-		let visibility = store.state.searchVisibility(query: searchText)
+		let visibility = store.state.rowVisibility(query: searchText, livePaths: livePaths)
 		let hasVisibleWorktrees = store.worktrees.contains { visibility.includesWorktree(id: $0.id) }
 
 		if !visibility.isHidden {

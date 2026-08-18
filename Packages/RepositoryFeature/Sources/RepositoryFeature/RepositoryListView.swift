@@ -127,10 +127,34 @@ struct RepositoryListView: View {
 
 	private var headerView: some View {
 		HStack {
-			VStack(alignment: .leading, spacing: 4) {
+			// Title and the list filter read as one unit, set apart from the action buttons.
+			HStack(spacing: 12) {
 				Text("Bridge Commander")
 					.font(.title2)
 					.fontWeight(.bold)
+
+				if !store.repositoryGroups.isEmpty {
+					// Bound manually rather than with @Bindable: the flag is fileprivate(set) and
+					// all mutation goes through the reducer, same as the search field below.
+					Toggle(
+						"Active terminals",
+						isOn: Binding(
+							get: { store.showsActiveTerminalsOnly },
+							set: { send(.activeTerminalFilterChanged($0)) }
+						)
+					)
+					.toggleStyle(.switch)
+					.controlSize(.small)
+					.padding(.horizontal, 10)
+					.padding(.vertical, 6)
+					// Opaque rather than a `.secondary.opacity(…)` tint, so the chip reads as one
+					// solid control against the window background.
+					.background(
+						Color(nsColor: .controlBackgroundColor),
+						in: RoundedRectangle(cornerRadius: 6)
+					)
+					.help("Show only repositories with an open terminal")
+				}
 			}
 
 			HeaderButton(
@@ -295,15 +319,22 @@ struct RepositoryListView: View {
 			store.terminalSessions.map { ($0.repositoryPath, $0.status) },
 			uniquingKeysWith: { first, _ in first }
 		)
-		// Scope into the stored groups, not a filtered copy of them: each group resolves the query
-		// against its own rows (see BranchSearchVisibility), so a keystroke neither rebuilds group
-		// state nor re-filters the whole list once per child-store read.
+		// Only sessions with a usable terminal count; `.failed` ones linger in state but show no
+		// dot. Built from the sessions array rather than `statusByPath` so a repo whose first tab
+		// died but whose second is alive still counts as active.
+		let livePaths: Set<String>? = store.showsActiveTerminalsOnly
+			? Set(store.terminalSessions.filter(\.status.isLive).map(\.repositoryPath))
+			: nil
+		// Scope into the stored groups, not a filtered copy of them: each group resolves the filters
+		// against its own rows (see RowVisibility), so a keystroke neither rebuilds group state nor
+		// re-filters the whole list once per child-store read.
 		return List {
 			ForEach(store.scope(\.repositoryGroups, action: \.repositoryGroups)) { groupStore in
 				RepoGroupView(
 					store: groupStore,
 					statusByPath: statusByPath,
-					searchText: store.searchText
+					searchText: store.searchText,
+					livePaths: livePaths
 				)
 			}
 		}

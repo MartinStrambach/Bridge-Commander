@@ -21,6 +21,10 @@ struct RepositoryListReducer {
 		fileprivate(set) var isScanning = false
 		fileprivate(set) var sortMode: SortMode = .state
 
+		/// Hides rows without a live terminal session. Deliberately not persisted — like `sortMode`,
+		/// it resets to off on every launch.
+		fileprivate(set) var showsActiveTerminalsOnly = false
+
 		var searchText: String = ""
 
 		var terminalSessions: IdentifiedArrayOf<TerminalSession> = []
@@ -77,6 +81,7 @@ struct RepositoryListReducer {
 		case terminalLayout(TerminalLayoutReducer.Action)
 
 		enum ViewAction {
+			case activeTerminalFilterChanged(Bool)
 			case clearButtonTapped
 			case addRepository(String)
 			case dismissAccessibilityPermissionWarningButtonTapped
@@ -154,6 +159,12 @@ struct RepositoryListReducer {
 					case .branch: state.sortMode = .state
 					}
 					sortGroupsInState(in: &state)
+				}
+				return .none
+
+			case let .view(.activeTerminalFilterChanged(isOn)):
+				withAnimation {
+					state.showsActiveTerminalsOnly = isOn
 				}
 				return .none
 
