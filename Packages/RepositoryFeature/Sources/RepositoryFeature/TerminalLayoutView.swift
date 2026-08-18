@@ -170,7 +170,7 @@ struct TerminalLayoutView: View {
 			store.send(.selectRepo(repositoryPath: NSHomeDirectory()))
 		} label: {
 			HStack(spacing: 8) {
-				TerminalStatusDotView(status: status)
+				TerminalStatusDotView(status: status, size: 12)
 				VStack(alignment: .leading, spacing: 2) {
 					Text("Home Directory")
 						.font(.caption)

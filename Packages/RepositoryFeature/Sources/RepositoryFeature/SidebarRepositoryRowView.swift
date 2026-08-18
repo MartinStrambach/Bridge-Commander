@@ -20,7 +20,7 @@ struct SidebarRepositoryRowView: View {
 		Button(action: onTap) {
 			HStack(spacing: 8) {
 				// Terminal-active indicator dot
-				TerminalStatusDotView(status: sessionStatus)
+				TerminalStatusDotView(status: sessionStatus, size: 12)
 
 				VStack(alignment: .leading, spacing: 2) {
 					HStack(spacing: 4) {
