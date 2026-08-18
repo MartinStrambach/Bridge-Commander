@@ -4,8 +4,10 @@ import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
 
-// `searchVisibility(query:)` backs the "Filter by branch name…" field: the list scopes into the
-// stored groups and asks each one what the query reveals, so filtering never rebuilds group state.
+// `rowVisibility(query:livePaths:)` backs the "Filter by branch name…" field: the list scopes into
+// the stored groups and asks each one what the query reveals, so filtering never rebuilds group
+// state. These cases cover the query on its own; the terminal filter lives in
+// RepositoryListTerminalFilterTests.
 // Filtering is row-level — a group shows only when its own branch or one of its worktrees matches,
 // and only the matching worktrees show. The header row always renders (it is the section header),
 // so a header-only match leaves a visible group with no visible worktrees.
@@ -22,7 +24,7 @@ struct RepositoryListFilterTests {
 			"/repos/beta": .unfiltered,
 		])
 		// `.unfiltered` reveals rows without the caller having to enumerate ids.
-		#expect(BranchSearchVisibility.unfiltered.includesWorktree(id: "/repos/anything"))
+		#expect(RowVisibility.unfiltered.includesWorktree(id: "/repos/anything"))
 	}
 
 	@Test("a worktree match hides the group's non-matching worktrees")
@@ -60,7 +62,7 @@ struct RepositoryListFilterTests {
 			"/repos/alpha": .worktrees([]),
 			"/repos/beta": .worktrees([]),
 		])
-		#expect(!BranchSearchVisibility.worktrees([]).includesWorktree(id: "/repos/alpha-fix"))
+		#expect(!RowVisibility.worktrees([]).includesWorktree(id: "/repos/alpha-fix"))
 	}
 
 	@Test("matching is case-insensitive and matches on substrings")
@@ -106,11 +108,11 @@ struct RepositoryListFilterTests {
 	/// What the list would render for the current query, keyed by group id.
 	private func visibility(
 		_ store: TestStoreOf<RepositoryListReducer>
-	) -> [String: BranchSearchVisibility] {
+	) -> [String: RowVisibility] {
 		let query = store.state.searchText
 		return Dictionary(
 			uniqueKeysWithValues: store.state.repositoryGroups.map {
-				($0.id, $0.searchVisibility(query: query))
+				($0.id, $0.rowVisibility(query: query))
 			}
 		)
 	}
