@@ -45,7 +45,8 @@ struct RepoGroupView: View {
 					isGroupCollapsed: store.isCollapsed,
 					onToggleCollapse: hasVisibleWorktrees
 						? { isExpanded.wrappedValue = !isExpanded.wrappedValue } : nil,
-					onRemove: { store.send(.remove) }
+					onRemove: { store.send(.remove) },
+					worktreeCount: store.worktrees.count
 				)
 			}
 			.listSectionSeparator(.hidden)

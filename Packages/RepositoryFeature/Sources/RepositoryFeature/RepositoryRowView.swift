@@ -22,6 +22,9 @@ struct RepositoryRowView: View {
 	/// Non-nil when this row is a repo group section header.
 	/// Renders a remove button in the action bar.
 	var onRemove: (() -> Void)?
+	/// Total number of worktrees belonging to this repo. Non-nil only for group header rows.
+	/// Deliberately the full count, not the search-filtered one — it describes the repo, not the filter.
+	var worktreeCount: Int?
 
 	private var backgroundColorForState: Color {
 		if isGroupCollapsed != nil {
@@ -134,6 +137,9 @@ struct RepositoryRowView: View {
 						Text(isGroupCollapsed != nil ? store.name : store.formattedBranchName)
 							.font(.headline)
 							.lineLimit(1)
+						if let worktreeCount, worktreeCount > 0 {
+							worktreeCountBadge(worktreeCount)
+						}
 						changesIndicator
 					}
 
@@ -181,6 +187,24 @@ struct RepositoryRowView: View {
 				codeReviewSection
 			}
 		}
+	}
+
+	// MARK: - Worktree Count Badge
+
+	/// Matches the worktree row icon (`tree.fill`, blue) so the badge reads as "this repo has N worktrees".
+	private func worktreeCountBadge(_ count: Int) -> some View {
+		HStack(spacing: 3) {
+			Image(systemName: "tree.fill")
+				.font(.caption2)
+			Text("\(count)")
+				.font(.caption)
+				.lineLimit(1)
+		}
+		.foregroundColor(.blue)
+		.padding(.horizontal, 6)
+		.padding(.vertical, 2)
+		.background(Color.blue.opacity(0.15), in: Capsule())
+		.help(count == 1 ? "1 worktree" : "\(count) worktrees")
 	}
 
 	// MARK: - Changes Indicator
