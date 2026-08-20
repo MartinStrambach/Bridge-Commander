@@ -154,8 +154,7 @@ struct RepositoryListFilterTests {
 			name: name,
 			directory: path,
 			isWorktree: false,
-			branchName: "master",
-			isMergeInProgress: false
+			branchName: "master"
 		)
 	}
 
@@ -165,8 +164,7 @@ struct RepositoryListFilterTests {
 			name: name,
 			directory: path,
 			isWorktree: true,
-			branchName: branch,
-			isMergeInProgress: false
+			branchName: branch
 		)
 	}
 }

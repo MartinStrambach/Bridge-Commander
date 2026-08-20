@@ -56,6 +56,9 @@ public struct GitActionsMenuReducer {
 	public enum Action: Equatable {
 		case onAppear
 		case refresh
+		/// Merge status is owned by the parent: `RepositoryRowReducer` probes the repository once
+		/// per status fetch and feeds the result in here, rather than the menu running the same
+		/// filesystem check a second time on every refresh.
 		case didCheckGitStatus(isMergeInProgress: Bool)
 		case fetchButton(FetchButtonReducer.Action)
 		case pullButton(PullButtonReducer.Action)
@@ -126,7 +129,7 @@ public struct GitActionsMenuReducer {
 						}
 					state.alert = ScrollableAlertReducer.State(title: "Fetch Successful", message: message, isError: false)
 				}
-				return checkStatusEffect(path: state.repositoryPath)
+				return refreshStashStatusEffect
 
 			case let .pullButton(.pullCompleted(result, error)):
 				if let error {
@@ -149,7 +152,7 @@ public struct GitActionsMenuReducer {
 						}
 					state.alert = ScrollableAlertReducer.State(title: "Pull Successful", message: message, isError: false)
 				}
-				return checkStatusEffect(path: state.repositoryPath)
+				return refreshStashStatusEffect
 
 			case let .pushButton(.pushCompleted(result, error)):
 				if let error {
@@ -165,7 +168,7 @@ public struct GitActionsMenuReducer {
 						: "Successfully pushed commits to remote branch."
 					state.alert = ScrollableAlertReducer.State(title: "Push Successful", message: message, isError: false)
 				}
-				return checkStatusEffect(path: state.repositoryPath)
+				return refreshStashStatusEffect
 
 			case let .mergeMasterButton(.mergeMasterCompleted(result)):
 				switch result {
@@ -183,7 +186,7 @@ public struct GitActionsMenuReducer {
 						isError: true
 					)
 				}
-				return checkStatusEffect(path: state.repositoryPath)
+				return refreshStashStatusEffect
 
 			case let .abortMergeButton(.abortMergeCompleted(success, error)):
 				if let error {
@@ -196,7 +199,7 @@ public struct GitActionsMenuReducer {
 						isError: false
 					)
 				}
-				return checkStatusEffect(path: state.repositoryPath)
+				return refreshStashStatusEffect
 
 			case let .stashButton(.stashCompleted(success, error)):
 				if let error {
@@ -235,7 +238,7 @@ public struct GitActionsMenuReducer {
 						isError: false
 					)
 				}
-				// No checkStatusEffect here (unlike the other completions): the row reducer
+				// No stash re-check here (unlike the other completions): the row reducer
 				// routes .discardButton(.discardCompleted) to its own .refresh, which re-runs
 				// the status fetch and recomputes the discard-button visibility flags.
 				return .none
@@ -246,10 +249,10 @@ public struct GitActionsMenuReducer {
 				}
 
 				state.isLoaded = true
-				return checkStatusEffect(path: state.repositoryPath)
+				return refreshStashStatusEffect
 
 			case .refresh:
-				return checkStatusEffect(path: state.repositoryPath)
+				return refreshStashStatusEffect
 
 			case let .didCheckGitStatus(isMergeInProgress):
 				state.isMergeInProgress = isMergeInProgress
@@ -281,13 +284,11 @@ public struct GitActionsMenuReducer {
 
 	public init() {}
 
-	private func checkStatusEffect(path: String) -> EffectOf<GitActionsMenuReducer> {
-		.merge(
-			.run { send in
-				let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-				await send(.didCheckGitStatus(isMergeInProgress: isMergeInProgress))
-			},
-			.send(.stashButton(.checkStashStatus))
-		)
+	/// Merge status deliberately isn't probed here — see `didCheckGitStatus`. Every action that
+	/// returns this effect also routes up to `RepositoryRowReducer.refresh`, whose status fetch
+	/// performs the single merge probe and feeds it back down, so the banner still updates after
+	/// fetch/pull/push/merge/abort.
+	private var refreshStashStatusEffect: EffectOf<GitActionsMenuReducer> {
+		.send(.stashButton(.checkStashStatus))
 	}
 }

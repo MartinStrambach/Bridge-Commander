@@ -37,16 +37,17 @@ public nonisolated enum GitWorktreeScanner {
 
 			// Branch name is available directly in the porcelain block as
 			// "branch refs/heads/<name>" — no extra file I/O needed.
+			// Merge state is deliberately not probed here: each row resolves it from its own
+			// status fetch (see RepositoryRowReducer.fetchBranchInfo), so doing it per worktree
+			// during the scan was a filesystem hit nothing ever read.
 			let branchName = extractBranch(from: trimmed)
-			let mergeInProgress = GitMergeDetector.isGitOperationInProgress(at: worktreePath)
 
 			let repo = ScannedRepository(
 				path: worktreePath,
 				name: name,
 				directory: directory,
 				isWorktree: isWorktree,
-				branchName: branchName,
-				isMergeInProgress: mergeInProgress
+				branchName: branchName
 			)
 			repositories.append(repo)
 		}
