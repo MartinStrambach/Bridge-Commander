@@ -74,6 +74,11 @@ struct RepositoryListView: View {
 		.background { focusSearchShortcut }
 		.onAppear { send(.onAppear) }
 		.onDisappear { send(.onDisappear) }
+		// Returning to the app is when a permission granted in System Settings should take
+		// effect. Nothing re-probes on refresh any more, so this is what clears the banners.
+		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+			send(.didBecomeActive)
+		}
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
 			send(.periodicRefreshIntervalChanged)
 		}

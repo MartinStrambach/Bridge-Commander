@@ -192,8 +192,7 @@ struct RepositoryListTerminalFilterTests {
 			name: name,
 			directory: path,
 			isWorktree: isWorktree,
-			branchName: branch,
-			isMergeInProgress: false
+			branchName: branch
 		)
 	}
 }

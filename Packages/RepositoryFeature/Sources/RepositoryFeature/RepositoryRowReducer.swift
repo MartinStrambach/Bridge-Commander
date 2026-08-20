@@ -249,8 +249,15 @@ struct RepositoryRowReducer {
 				)
 
 			case let .didFetchStatus(status, isMerge):
+				// `fetchBranchInfo` is the only place the repository is probed for an in-progress
+				// merge; the menu used to repeat the same filesystem check on every refresh, so it
+				// now takes the answer from here instead. Sent before the success guard so the
+				// banner still clears when the status fetch itself fails.
+				let syncMergeStatus: EffectOf<RepositoryRowReducer> =
+					.send(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: isMerge)))
+
 				guard status.didSucceed else {
-					return .none
+					return syncMergeStatus
 				}
 
 				let branch = status.branch ?? state.branchName ?? state.name
@@ -284,6 +291,7 @@ struct RepositoryRowReducer {
 				// above — running them in parallel with the status fetch would use
 				// the pre-refresh values and resurrect stale state after a branch switch.
 				return .merge(
+					syncMergeStatus,
 					fetchYouTrack(for: state),
 					fetchPullRequest(for: state)
 				)

@@ -47,6 +47,9 @@ struct RepositoryListReducer {
 
 		fileprivate var isSystemEventsPermissionGranted: Bool?
 		fileprivate var isPermissionWarningDismissed = false
+		/// Guards against a second osascript probe while one is still running: launch triggers
+		/// both `onAppear` and `didBecomeActive`, and the probe is far too expensive to run twice.
+		fileprivate var isSystemEventsProbeInFlight = false
 
 		fileprivate var isAccessibilityPermissionGranted: Bool?
 		fileprivate var isAccessibilityPermissionWarningDismissed = false
@@ -67,6 +70,7 @@ struct RepositoryListReducer {
 		case addRepositorySucceeded(rootPath: String, scanned: [ScannedRepository])
 		case alert(PresentationAction<Alert>)
 		case checkAccessibilityPermission
+		case checkPermissions
 		case checkSystemEventsPermission
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
@@ -84,6 +88,7 @@ struct RepositoryListReducer {
 			case activeTerminalFilterChanged(Bool)
 			case clearButtonTapped
 			case addRepository(String)
+			case didBecomeActive
 			case dismissAccessibilityPermissionWarningButtonTapped
 			case dismissPermissionWarningButtonTapped
 			case groupSettingsChanged
@@ -118,7 +123,10 @@ struct RepositoryListReducer {
 			// MARK: - View Actions
 
 			case .view(.onAppear):
-				return .merge(.send(.startScan), .send(.startPeriodicRefresh))
+				return .merge(.send(.startScan), .send(.startPeriodicRefresh), .send(.checkPermissions))
+
+			case .view(.didBecomeActive):
+				return .send(.checkPermissions)
 
 			case .stopPeriodicRefresh,
 			     .view(.onDisappear):
@@ -213,8 +221,6 @@ struct RepositoryListReducer {
 				return .none
 
 			case .view(.refreshButtonTapped):
-				state.isSystemEventsPermissionGranted = nil
-				state.isAccessibilityPermissionGranted = nil
 				return .send(.refreshRepositories)
 
 			case .view(.openHomeTerminalButtonTapped):
@@ -291,9 +297,9 @@ struct RepositoryListReducer {
 
 				state.isScanning = true
 				let paths = Array(state.trackedRepoPaths)
+				// Permission checks deliberately don't hang off the scan: refreshRepositories
+				// routes through here, so every ⌘R used to re-run them (see .checkPermissions).
 				return .merge(
-					.send(.checkAccessibilityPermission),
-					.send(.checkSystemEventsPermission),
 					.run { send in
 						await withTaskGroup(of: (String, [ScannedRepository]).self) { group in
 							for path in paths {
@@ -601,24 +607,42 @@ struct RepositoryListReducer {
 
 			// MARK: - Permissions
 
+			case .checkPermissions:
+				// Both permissions can only be changed outside the app, so launch and
+				// re-activation are the only moments worth checking — and then only for what
+				// isn't already granted.
+				//
+				// This used to hang off .startScan with the manual refresh clearing both flags
+				// first, which meant every ⌘R re-ran the System Events probe: an osascript
+				// process that asks System Events to enumerate every running process, measured at
+				// 110-290ms, and which hid the warning banner for as long as it took to answer.
+				//
+				// A granted permission being revoked mid-session is rare and self-announcing —
+				// the terminal action fails while the user is looking right at it — so a granted
+				// result is never re-probed.
+				return .merge(
+					state.isAccessibilityPermissionGranted == true ? .none : .send(.checkAccessibilityPermission),
+					state.isSystemEventsPermissionGranted == true ? .none : .send(.checkSystemEventsPermission)
+				)
+
 			case .checkAccessibilityPermission:
-				guard state.isAccessibilityPermissionGranted == nil else {
-					return .none
-				}
+				// In-process and free, unlike the System Events probe below.
 				state.isAccessibilityPermissionGranted = PermissionChecker.isAccessibilityPermitted()
 				return .none
 
 			case .checkSystemEventsPermission:
-				guard state.isSystemEventsPermissionGranted == nil else {
+				guard !state.isSystemEventsProbeInFlight else {
 					return .none
 				}
 
+				state.isSystemEventsProbeInFlight = true
 				return .run { send in
 					let granted = await PermissionChecker.isSystemEventsAutomationPermitted()
 					await send(.didReceiveSystemEventsPermission(granted))
 				}
 
 			case let .didReceiveSystemEventsPermission(granted):
+				state.isSystemEventsProbeInFlight = false
 				state.isSystemEventsPermissionGranted = granted
 				return .none
 

@@ -93,7 +93,7 @@ public final class TerminalViewStore {
 /// Subclass of LocalProcessTerminalView that monitors terminal content for the
 /// Claude Code waiting-for-input prompt (❯, U+276F) and reports status changes.
 public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
-	private static let claudePromptCharacter: Character = "❯" // U+276F
+	private static let claudePromptScalar: UInt32 = 0x276F // ❯
 
 	public var repositoryPath: String = ""
 	public var sessionId: UUID = .init()
@@ -178,15 +178,32 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	/// After 1.5 s of silence from the process, check whether the Claude prompt
 	/// character is visible — if so, Claude is waiting for input.
+	///
+	/// Runs on the main thread after every burst of output, for every open session, so the scan
+	/// is kept off the slow paths:
+	/// - Rows are walked bottom-up. The prompt sits on the last written line, so a hit exits
+	///   almost immediately instead of after a full grid traversal.
+	/// - Only the trimmed length of each row is read; untouched cells can't hold the prompt, and
+	///   blank rows below the cursor cost nothing.
+	/// - Cells are compared by Unicode scalar value. `Character == Character` runs a
+	///   normalization-aware comparison that only short-circuits when the two match, so on the
+	///   common miss it was the dominant cost: measured 156 µs per scan of a 50x200 grid
+	///   versus 65 µs comparing scalars.
 	private func checkIfWaiting() {
 		guard let t = terminal else {
 			return
 		}
 
-		let buf = t.buffer
-		for row in 0 ..< t.rows {
-			for col in 0 ..< t.cols {
-				if buf.getChar(at: Position(col: col, row: row)).getCharacter() == Self.claudePromptCharacter {
+		for row in stride(from: t.rows - 1, through: 0, by: -1) {
+			guard let line = t.getLine(row: row) else {
+				continue
+			}
+
+			// Bounded by the visible width as well as the row's own storage: a buffer line can
+			// stay wider than the terminal after a resize, and those cells aren't on screen.
+			let limit = min(line.getTrimmedLength(), min(line.count, t.cols))
+			for col in 0 ..< limit {
+				if line[col].getCharacter().unicodeScalars.first?.value == Self.claudePromptScalar {
 					reportStatus(.waitingForInput)
 					return
 				}
