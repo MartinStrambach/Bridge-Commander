@@ -15,11 +15,12 @@ struct TerminalLayoutView: View {
 
 	// MARK: - Helpers
 
-	private var filteredSidebarGroups: [(group: RepoGroupReducer.State, showHeader: Bool, worktrees: [RepositoryRowReducer.State])] {
-		let sessionPaths = Set(sessions.map(\.repositoryPath))
-		return repositoryGroups.compactMap { group in
-			let showHeader = sessionPaths.contains(group.header.path)
-			let filteredWorktrees = group.worktrees.filter { sessionPaths.contains($0.path) }
+	private func filteredSidebarGroups(
+		statusByPath: [String: TerminalSessionStatus]
+	) -> [(group: RepoGroupReducer.State, showHeader: Bool, worktrees: [RepositoryRowReducer.State])] {
+		repositoryGroups.compactMap { group in
+			let showHeader = statusByPath[group.header.path] != nil
+			let filteredWorktrees = group.worktrees.filter { statusByPath[$0.path] != nil }
 			guard showHeader || !filteredWorktrees.isEmpty else { return nil }
 			return (group, showHeader, Array(filteredWorktrees))
 		}
@@ -41,13 +42,16 @@ struct TerminalLayoutView: View {
 		return nil
 	}
 
-	private var homeSessionStatus: TerminalSessionStatus? {
-		sessions.first(where: { $0.repositoryPath == NSHomeDirectory() })?.status
-	}
-
 	var body: some View {
-		HStack(spacing: 0) {
-			sidebar
+		// Build a path → status map once so each sidebar row, the home row and the terminal
+		// filter all do an O(1) lookup instead of scanning the whole sessions array.
+		// Same reasoning as RepositoryListView.repositoryListView.
+		let statusByPath = Dictionary(
+			sessions.map { ($0.repositoryPath, $0.status) },
+			uniquingKeysWith: { first, _ in first }
+		)
+		return HStack(spacing: 0) {
+			sidebar(statusByPath: statusByPath)
 				.frame(width: 200)
 
 			Divider()
@@ -79,7 +83,7 @@ struct TerminalLayoutView: View {
 
 	// MARK: - Sidebar
 
-	private var sidebar: some View {
+	private func sidebar(statusByPath: [String: TerminalSessionStatus]) -> some View {
 		VStack(spacing: 0) {
 			HStack {
 				Text("REPOSITORIES")
@@ -106,25 +110,25 @@ struct TerminalLayoutView: View {
 
 			ScrollView {
 				LazyVStack(alignment: .leading, spacing: 2) {
-					if let status = homeSessionStatus {
+					if let status = statusByPath[NSHomeDirectory()] {
 						homeSessionRow(status: status)
 					}
 					if showOnlyWithTerminals {
-						ForEach(filteredSidebarGroups, id: \.group.id) { item in
+						ForEach(filteredSidebarGroups(statusByPath: statusByPath), id: \.group.id) { item in
 							sidebarGroupLabel(for: item.group)
 							if item.showHeader {
-								sidebarRow(for: item.group.header)
+								sidebarRow(for: item.group.header, statusByPath: statusByPath)
 							}
 							ForEach(item.worktrees, id: \.id) { rowState in
-								sidebarRow(for: rowState)
+								sidebarRow(for: rowState, statusByPath: statusByPath)
 							}
 						}
 					} else {
 						ForEach(repositoryGroups) { group in
 							sidebarGroupLabel(for: group)
-							sidebarRow(for: group.header)
+							sidebarRow(for: group.header, statusByPath: statusByPath)
 							ForEach(group.worktrees) { rowState in
-								sidebarRow(for: rowState)
+								sidebarRow(for: rowState, statusByPath: statusByPath)
 							}
 						}
 					}
@@ -200,11 +204,14 @@ struct TerminalLayoutView: View {
 		}
 	}
 
-	private func sidebarRow(for rowState: RepositoryRowReducer.State) -> some View {
+	private func sidebarRow(
+		for rowState: RepositoryRowReducer.State,
+		statusByPath: [String: TerminalSessionStatus]
+	) -> some View {
 		SidebarRepositoryRowView(
 			rowState: rowState,
 			isActive: store.activeRepositoryPath == rowState.path,
-			sessionStatus: sessions.first(where: { $0.repositoryPath == rowState.path })?.status,
+			sessionStatus: statusByPath[rowState.path],
 			onTap: {
 				store.send(.selectRepo(repositoryPath: rowState.path))
 			},
