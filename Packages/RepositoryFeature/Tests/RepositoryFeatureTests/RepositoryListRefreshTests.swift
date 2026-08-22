@@ -190,6 +190,36 @@ struct RepositoryListRefreshTests {
 		await store.finish()
 	}
 
+	@Test("terminal ⌘R re-detects the Xcode project shown in the terminal toolbar")
+	func terminalRefreshRedetectsToolbarXcodeProject() async {
+		// The toolbar's Xcode button is a copy of the row's state taken when the terminal
+		// opened. A project generated afterwards (e.g. via tuist in the embedded shell)
+		// only appears if ⌘R re-runs the on-disk lookup on the copy, not just on the row.
+		let store = makeStore(
+			terminalActiveRepositoryPath: "/repos/alpha",
+			terminalXcodeButton: XcodeProjectButtonReducer.State(
+				repositoryPath: "/repos/alpha",
+				iosSubfolderPath: ""
+			)
+		)
+		store.dependencies[XcodeClient.self].findXcodeProject = { _, _, _ in
+			"/repos/alpha/App.xcodeproj"
+		}
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+
+		await store.send(.terminalLayout(.refreshActiveRepoRequested))
+
+		await store.receive(\.terminalLayout.xcodeButton.refresh)
+		await store.receive(\.terminalLayout.xcodeButton.foundProjectPath)
+		#expect(store.state.terminalLayout?.xcodeButton?.projectPath == "/repos/alpha/App.xcodeproj")
+
+		await store.finish()
+	}
+
 	@Test("terminal ⌘R does nothing when the opened session has no repo row")
 	func terminalRefreshIgnoresPathsWithoutARow() async {
 		// The home-directory session is the one path selectable in the sidebar that
@@ -226,12 +256,14 @@ struct RepositoryListRefreshTests {
 	private func makeStore(
 		clock: any Clock<Duration> = ImmediateClock(),
 		terminalActiveRepositoryPath: String? = nil,
-		terminalLayoutOpen: Bool = false
+		terminalLayoutOpen: Bool = false,
+		terminalXcodeButton: XcodeProjectButtonReducer.State? = nil
 	) -> TestStoreOf<RepositoryListReducer> {
 		var initialState = RepositoryListReducer.State()
 		if terminalActiveRepositoryPath != nil || terminalLayoutOpen {
 			initialState.terminalLayout = TerminalLayoutReducer.State(
-				activeRepositoryPath: terminalActiveRepositoryPath
+				activeRepositoryPath: terminalActiveRepositoryPath,
+				xcodeButton: terminalXcodeButton
 			)
 		}
 		return TestStore(initialState: initialState) {

@@ -129,8 +129,14 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .refreshActiveRepoRequested:
-				// Forwarded up to RepositoryListReducer
-				return .none
+				// The row refresh is routed by RepositoryListReducer. The toolbar's Xcode
+				// button is a copy of the row's state (synced only on open/selectRepo), so it
+				// must re-detect the project on disk itself — otherwise a project generated
+				// while the terminal is open never shows up here.
+				guard state.xcodeButton != nil else {
+					return .none
+				}
+				return .send(.xcodeButton(.refresh))
 
 			case .xcodeButton:
 				return .none
