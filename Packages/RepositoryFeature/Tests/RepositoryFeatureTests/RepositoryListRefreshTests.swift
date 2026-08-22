@@ -1,11 +1,13 @@
 import ComposableArchitecture
+import Foundation
 import GitCore
 import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
 
-// Covers the two effects in RepositoryListReducer that fan out to child rows:
-// the staggered refresh sequence and the debounced re-sort after a YouTrack burst.
+// Covers the effects in RepositoryListReducer that route refreshes to child rows:
+// the staggered full-refresh sequence, the debounced re-sort after a YouTrack burst,
+// and the terminal-mode ⌘R that refreshes only the opened repo.
 @Suite("Repository list refresh fan-out")
 @MainActor
 struct RepositoryListRefreshTests {
@@ -137,12 +139,102 @@ struct RepositoryListRefreshTests {
 		await store.finish()
 	}
 
+	// MARK: - Terminal-mode single-repo refresh (⌘R)
+
+	@Test("terminal ⌘R refreshes only the opened main repo, not the whole list")
+	func terminalRefreshTargetsActiveHeaderRow() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
+		]))
+		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+			mainRepo("/repos/beta", name: "beta"),
+		]))
+		store.exhaustivity = .on
+
+		await store.send(.terminalLayout(.refreshActiveRepoRequested))
+
+		// Exhaustive: the alpha header refresh must be the first and only action the
+		// request produces — a `startScan` or any other row's refresh fails here.
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+
+		// The received refresh runs the row reducer, whose own fan-out (git status,
+		// actions menu, Xcode lookup) is out of scope — same as the full-refresh test.
+		store.exhaustivity = .off
+		await store.finish()
+	}
+
+	@Test("terminal ⌘R on a worktree refreshes that worktree, not its group header")
+	func terminalRefreshTargetsActiveWorktreeRow() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha-one")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
+			worktree("/repos/alpha-two", name: "alpha-two", branch: "feature-two"),
+		]))
+		store.exhaustivity = .on
+
+		await store.send(.terminalLayout(.refreshActiveRepoRequested))
+
+		// Exhaustive: a header refresh arriving first (or instead) fails here.
+		await store.receive {
+			isWorktreeRefresh($0, groupId: "/repos/alpha", worktreeId: "/repos/alpha-one")
+		}
+
+		store.exhaustivity = .off
+		await store.finish()
+	}
+
+	@Test("terminal ⌘R does nothing when the opened session has no repo row")
+	func terminalRefreshIgnoresPathsWithoutARow() async {
+		// The home-directory session is the one path selectable in the sidebar that
+		// has no repository row behind it.
+		let store = makeStore(terminalActiveRepositoryPath: NSHomeDirectory())
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		store.exhaustivity = .on
+
+		// Exhaustive: any row refresh — or a fall-through to the full refresh — fails here.
+		await store.send(.terminalLayout(.refreshActiveRepoRequested))
+		await store.finish()
+	}
+
+	@Test("terminal ⌘R is a no-op while no repository is selected in the sidebar")
+	func terminalRefreshWithoutActiveRepoIsANoOp() async {
+		let store = makeStore(terminalActiveRepositoryPath: nil, terminalLayoutOpen: true)
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		store.exhaustivity = .on
+
+		await store.send(.terminalLayout(.refreshActiveRepoRequested))
+		await store.finish()
+	}
+
 	// MARK: - Helpers
 
 	private func makeStore(
-		clock: any Clock<Duration> = ImmediateClock()
+		clock: any Clock<Duration> = ImmediateClock(),
+		terminalActiveRepositoryPath: String? = nil,
+		terminalLayoutOpen: Bool = false
 	) -> TestStoreOf<RepositoryListReducer> {
-		TestStore(initialState: RepositoryListReducer.State()) {
+		var initialState = RepositoryListReducer.State()
+		if terminalActiveRepositoryPath != nil || terminalLayoutOpen {
+			initialState.terminalLayout = TerminalLayoutReducer.State(
+				activeRepositoryPath: terminalActiveRepositoryPath
+			)
+		}
+		return TestStore(initialState: initialState) {
 			RepositoryListReducer()
 		} withDependencies: {
 			$0.continuousClock = clock
