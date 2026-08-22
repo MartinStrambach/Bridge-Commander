@@ -602,6 +602,14 @@ struct RepositoryListReducer {
 				state.terminalSessions[id: sessionId]?.status = status
 				return .none
 
+			case .terminalLayout(.refreshActiveRepoRequested):
+				// ⌘R in terminal mode refreshes just the opened repo. The home-directory
+				// session has no repo row, so refreshRow falls through to .none there.
+				guard let path = state.terminalLayout?.activeRepositoryPath else {
+					return .none
+				}
+				return refreshRow(for: path, in: state)
+
 			case .terminalLayout:
 				return .none
 

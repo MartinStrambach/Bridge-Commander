@@ -38,6 +38,7 @@ struct TerminalLayoutReducer {
 		case newTabRequested
 		case selectTab(sessionId: UUID)
 		case retryTab(sessionId: UUID)
+		case refreshActiveRepoRequested
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case webButton(WebButtonReducer.Action)
@@ -124,6 +125,10 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .retryTab:
+				// Forwarded up to RepositoryListReducer
+				return .none
+
+			case .refreshActiveRepoRequested:
 				// Forwarded up to RepositoryListReducer
 				return .none
 

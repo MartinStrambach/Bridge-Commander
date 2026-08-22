@@ -154,6 +154,14 @@ struct TerminalLayoutView: View {
 			Button("") { store.send(.hideTerminalMode) }
 				.keyboardShortcut("§", modifiers: .command)
 				.hidden()
+			// ⌘R here refreshes only the repo opened in the terminal; the full-list
+			// refresh in RepositoryListView hands the shortcut off while we're open.
+			// The staging sheet claims ⌘R for its own refresh, so yield it there.
+			if store.stagingDetail == nil {
+				Button("") { store.send(.refreshActiveRepoRequested) }
+					.keyboardShortcut("r", modifiers: .command)
+					.hidden()
+			}
 		}
 	}
 
