@@ -21,17 +21,22 @@ struct TerminalLayoutReducer {
 
 		@Presents
 		var stagingDetail: RepositoryDetail.State?
+
+		@Presents
+		var gitGraph: GitGraphReducer.State?
 	}
 
 	enum Action {
 		case selectRepo(repositoryPath: String)
 		case hideTerminalMode
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
+		case gitGraphButtonTapped(repositoryPath: String, repositoryName: String)
 		case pushButtonTapped(repositoryPath: String)
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
 		case finishMergeButtonTapped(repositoryPath: String)
 		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
+		case gitGraph(PresentationAction<GitGraphReducer.Action>)
 		case sessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
 		case killTab(sessionId: UUID)
 		case killRepo(repositoryPath: String)
@@ -47,6 +52,37 @@ struct TerminalLayoutReducer {
 	}
 
 	var body: some Reducer<State, Action> {
+		// The core and its children are split into separate properties because
+		// one long .ifLet chain exceeds the type-checker's expression budget.
+		core
+			.ifLet(\.$stagingDetail, action: \.stagingDetail) {
+				RepositoryDetail()
+			}
+			.ifLet(\.$gitGraph, action: \.gitGraph) {
+				GitGraphReducer()
+			}
+	}
+
+	private var core: some Reducer<State, Action> {
+		coreReduce
+			.ifLet(\.xcodeButton, action: \.xcodeButton) {
+				XcodeProjectButtonReducer()
+			}
+			.ifLet(\.androidStudioButton, action: \.androidStudioButton) {
+				AndroidStudioButtonReducer()
+			}
+			.ifLet(\.webButton, action: \.webButton) {
+				WebButtonReducer()
+			}
+			.ifLet(\.tuistButton, action: \.tuistButton) {
+				TuistButtonReducer()
+			}
+			.ifLet(\.ticketButton, action: \.ticketButton) {
+				TicketButtonReducer()
+			}
+	}
+
+	private var coreReduce: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case let .selectRepo(repositoryPath):
@@ -59,6 +95,10 @@ struct TerminalLayoutReducer {
 
 			case let .stagingButtonTapped(repositoryPath, iosSubfolderPath):
 				state.stagingDetail = RepositoryDetail.State(repositoryPath: repositoryPath, iosSubfolderPath: iosSubfolderPath)
+				return .none
+
+			case let .gitGraphButtonTapped(repositoryPath, repositoryName):
+				state.gitGraph = GitGraphReducer.State(repositoryPath: repositoryPath, repositoryName: repositoryName)
 				return .none
 
 			case let .pushButtonTapped(repositoryPath):
@@ -102,6 +142,9 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .stagingDetail:
+				return .none
+
+			case .gitGraph:
 				return .none
 
 			case .sessionStatusChanged:
@@ -153,24 +196,6 @@ struct TerminalLayoutReducer {
 			case .ticketButton:
 				return .none
 			}
-		}
-		.ifLet(\.$stagingDetail, action: \.stagingDetail) {
-			RepositoryDetail()
-		}
-		.ifLet(\.xcodeButton, action: \.xcodeButton) {
-			XcodeProjectButtonReducer()
-		}
-		.ifLet(\.androidStudioButton, action: \.androidStudioButton) {
-			AndroidStudioButtonReducer()
-		}
-		.ifLet(\.webButton, action: \.webButton) {
-			WebButtonReducer()
-		}
-		.ifLet(\.tuistButton, action: \.tuistButton) {
-			TuistButtonReducer()
-		}
-		.ifLet(\.ticketButton, action: \.ticketButton) {
-			TicketButtonReducer()
 		}
 	}
 }

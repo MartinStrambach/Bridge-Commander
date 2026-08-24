@@ -55,6 +55,12 @@ public nonisolated extension SharedReaderKey where Self == FileStorageKey<[Strin
 	}
 }
 
+public nonisolated extension SharedReaderKey where Self == FileStorageKey<GitGraphColumnWidths> {
+	static var gitGraphColumnWidths: Self {
+		.fileStorage(applicationSupportURL(name: "gitGraphColumnWidths.json"))
+	}
+}
+
 private nonisolated func applicationSupportURL(name: String) -> URL {
 	let urls = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
 	let appSupport = urls.first ?? URL(fileURLWithPath: NSHomeDirectory())

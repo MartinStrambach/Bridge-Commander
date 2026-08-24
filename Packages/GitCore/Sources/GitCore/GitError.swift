@@ -16,6 +16,7 @@ public enum GitError: LocalizedError, Equatable {
 	case projectGenerationFailed(String)
 	case commitFailed(String)
 	case fileOperationFailed(String)
+	case logFailed(String)
 
 	public var errorDescription: String? {
 		switch self {
@@ -47,6 +48,8 @@ public enum GitError: LocalizedError, Equatable {
 			"Failed to commit: \(message)"
 		case let .fileOperationFailed(message):
 			"File operation failed: \(message)"
+		case let .logFailed(message):
+			"Failed to load commit history: \(message)"
 		}
 	}
 }

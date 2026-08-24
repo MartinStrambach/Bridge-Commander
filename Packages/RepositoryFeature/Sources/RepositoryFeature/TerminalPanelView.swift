@@ -50,6 +50,19 @@ struct TerminalPanelView: View {
 					maxHeight: .infinity
 				)
 		}
+		.sheet(
+			item: $store.scope(\.$gitGraph, action: \.gitGraph)
+		) { graphStore in
+			GitGraphView(store: graphStore)
+				.frame(
+					minWidth: 1000,
+					idealWidth: 1200,
+					maxWidth: .infinity,
+					minHeight: 600,
+					idealHeight: 800,
+					maxHeight: .infinity
+				)
+		}
 	}
 
 	// MARK: - Toolbar
@@ -151,6 +164,18 @@ struct TerminalPanelView: View {
 //				.controlSize(.small)
 //			}
 			
+			Button("Graph") {
+				if let path = store.activeRepositoryPath {
+					store.send(.gitGraphButtonTapped(
+						repositoryPath: path,
+						repositoryName: activeRowState?.name ?? ""
+					))
+				}
+			}
+			.buttonStyle(.bordered)
+			.controlSize(.small)
+			.help("Show commit graph")
+
 			Button("Staging") {
 				if let path = store.activeRepositoryPath {
 					store.send(.stagingButtonTapped(
