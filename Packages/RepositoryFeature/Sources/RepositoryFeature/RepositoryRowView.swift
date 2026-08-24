@@ -358,6 +358,15 @@ struct RepositoryRowView: View {
 					provider: store.prProvider,
 					state: store.prState
 				)
+
+				// Unresolved review discussions (conditional)
+				if let count = store.prUnresolvedDiscussions, count > 0 {
+					UnresolvedDiscussionsBadge(
+						count: count,
+						url: url,
+						provider: store.prProvider
+					)
+				}
 			}
 
 			// GitLab pipeline status (conditional)

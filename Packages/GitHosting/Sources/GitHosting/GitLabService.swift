@@ -57,6 +57,7 @@ public nonisolated enum GitLabService {
 				url: first.web_url,
 				state: first.mappedState,
 				provider: .gitlab,
+				number: first.iid,
 				pipeline: pipeline
 			)
 		}
@@ -107,6 +108,60 @@ public nonisolated enum GitLabService {
 			return nil
 		}
 	}
+
+	/// Best-effort fetch of the MR's unresolved discussion count. The REST API only exposes
+	/// the paginated discussions list, so this uses the GraphQL counts instead (one request,
+	/// exact numbers). Returns `nil` on any failure.
+	public static func fetchUnresolvedDiscussionsCount(
+		projectPath: String,
+		iid: Int,
+		token: String
+	) async -> Int? {
+		guard !token.isEmpty, let url = URL(string: "https://gitlab.com/api/graphql") else {
+			return nil
+		}
+
+		let query = """
+		query($fullPath: ID!, $iid: String!) {
+			project(fullPath: $fullPath) {
+				mergeRequest(iid: $iid) {
+					resolvableDiscussionsCount
+					resolvedDiscussionsCount
+				}
+			}
+		}
+		"""
+
+		var request = URLRequest(url: url)
+		request.httpMethod = "POST"
+		request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+		do {
+			request.httpBody = try JSONEncoder().encode(
+				GitLabGraphQLRequest(
+					query: query,
+					variables: .init(fullPath: projectPath, iid: String(iid))
+				)
+			)
+
+			print("GitLabService: Fetching discussion counts for \(projectPath)!\(iid)")
+			let (data, response) = try await URLSession.shared.data(for: request)
+
+			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+				print("GitLabService: Discussion counts fetch failed with status code \(statusCode)")
+				return nil
+			}
+
+			return try JSONDecoder().decode(GitLabDiscussionCountsResponse.self, from: data).unresolvedCount
+		}
+		catch {
+			print("GitLabService: Discussion counts fetch error: \(error)")
+			return nil
+		}
+	}
 }
 
 private struct GitLabMergeRequest: Decodable {
@@ -133,6 +188,46 @@ private struct GitLabMergeRequest: Decodable {
 
 private struct GitLabMergeRequestDetail: Decodable {
 	let head_pipeline: GitLabHeadPipeline?
+}
+
+private struct GitLabGraphQLRequest: Encodable {
+	struct Variables: Encodable {
+		let fullPath: String
+		let iid: String
+	}
+
+	let query: String
+	let variables: Variables
+}
+
+/// Internal (not private) so the count derivation is unit-testable from fixture JSON.
+nonisolated struct GitLabDiscussionCountsResponse: Decodable {
+	struct DataContainer: Decodable {
+		let project: Project?
+	}
+
+	struct Project: Decodable {
+		let mergeRequest: MergeRequest?
+	}
+
+	struct MergeRequest: Decodable {
+		let resolvableDiscussionsCount: Int?
+		let resolvedDiscussionsCount: Int?
+	}
+
+	let data: DataContainer?
+
+	/// Unresolved = resolvable − resolved, clamped at 0. `nil` when the MR or counts are missing.
+	var unresolvedCount: Int? {
+		guard
+			let mergeRequest = data?.project?.mergeRequest,
+			let resolvable = mergeRequest.resolvableDiscussionsCount,
+			let resolved = mergeRequest.resolvedDiscussionsCount
+		else {
+			return nil
+		}
+		return max(0, resolvable - resolved)
+	}
 }
 
 private struct GitLabHeadPipeline: Decodable {

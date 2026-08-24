@@ -10,6 +10,12 @@ public nonisolated enum PullRequestState: String, Sendable, Equatable {
 	case ready
 	case merged
 	case closed
+
+	/// Whether the MR/PR is still open for review. Merged/closed ones skip follow-up
+	/// queries like the unresolved discussion count.
+	public var isOpen: Bool {
+		self == .draft || self == .ready
+	}
 }
 
 public nonisolated enum PipelineState: String, Sendable, Equatable {
@@ -72,17 +78,22 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 	public let url: String
 	public let state: PullRequestState
 	public let provider: PullRequestProvider
+	/// MR iid (GitLab) / PR number (GitHub) — identifies the MR/PR for follow-up
+	/// queries like the unresolved discussion count.
+	public let number: Int
 	public let pipeline: PipelineStatus?
 
 	public init(
 		url: String,
 		state: PullRequestState,
 		provider: PullRequestProvider,
+		number: Int,
 		pipeline: PipelineStatus? = nil
 	) {
 		self.url = url
 		self.state = state
 		self.provider = provider
+		self.number = number
 		self.pipeline = pipeline
 	}
 }

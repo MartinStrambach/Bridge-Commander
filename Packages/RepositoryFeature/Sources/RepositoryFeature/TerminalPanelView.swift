@@ -131,6 +131,14 @@ struct TerminalPanelView: View {
 					provider: activeRowState?.prProvider,
 					state: activeRowState?.prState
 				)
+
+				if let count = activeRowState?.prUnresolvedDiscussions, count > 0 {
+					UnresolvedDiscussionsBadge(
+						count: count,
+						url: url,
+						provider: activeRowState?.prProvider
+					)
+				}
 			}
 
 			if let pipelineUrl = activeRowState?.pipelineUrl,
