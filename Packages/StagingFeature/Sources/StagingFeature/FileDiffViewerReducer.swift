@@ -4,9 +4,9 @@ import Foundation
 import GitCore
 
 @Reducer
-struct FileDiffViewer {
+public struct FileDiffViewer: Sendable {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		/// The git model, kept so hunk actions can be resolved back to a patchable hunk.
 		var fileDiff: GitCore.FileDiff?
@@ -33,7 +33,7 @@ struct FileDiffViewer {
 		}
 	}
 
-	enum Action {
+	public enum Action {
 		case load(FileChange, isStaged: Bool)
 		case loadResponse(GitCore.FileDiff?)
 		case stageHunk(hunkId: String)
@@ -42,7 +42,7 @@ struct FileDiffViewer {
 		case delegate(Delegate)
 
 		@CasePathable
-		enum Delegate {
+		public enum Delegate {
 			case fileHasNoChanges(fileId: String, isStaged: Bool)
 			case stageHunk(FileChange, GitCore.DiffHunk)
 			case unstageHunk(FileChange, GitCore.DiffHunk)
@@ -57,7 +57,7 @@ struct FileDiffViewer {
 	@Dependency(GitStagingClient.self)
 	private var gitStagingClient
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case let .load(file, isStaged):

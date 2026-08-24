@@ -11,17 +11,23 @@ macOS app for managing Git repositories and worktrees. Built with SwiftUI + TCA 
 
 ## Project Structure
 
-The app is modularized into 6 SPM packages under `Packages/`, with the thin app target in `BridgeCommander/`.
+The app is modularized into SPM packages under `Packages/`, with the thin app target in `BridgeCommander/`.
 
 ```
 BridgeCommander/          # App entry point (BridgeCommanderApp.swift)
 Packages/
-  GitCore/                # Git operations, models, process running
+  ProcessExecution/       # Shelling out to external processes (ProcessRunner)
+  GitCore/                # Git operations and models
+  GitHosting/             # GitHub/GitLab pull request + pipeline services
   AppUI/                  # Shared UI components and diff viewer
   Settings/               # Settings state, view, and app-wide keys
   ToolsIntegration/       # Xcode, YouTrack, Android Studio, Terminal, Claude Code
   TerminalFeature/        # Embedded terminal (session, view, store)
-  RepositoryFeature/      # All repository list/row/detail views and reducers
+  ActionButtons/          # Android Studio button Reducer+View pair
+  GitActionsMenu/         # Git actions menu (push/pull/fetch/stash/merge/discard/abort)
+  GitGraphFeature/        # Commit graph view
+  StagingFeature/         # File staging panel (detail view, diff, commit)
+  RepositoryFeature/      # Repository list/row views and reducers (top-level feature)
 ```
 
 ### Package Details
@@ -55,16 +61,20 @@ Packages/
 **TerminalFeature** — embedded terminal panel
 - `TerminalSession`, `TerminalViewStore`, `TerminalViewRepresentable`, `TerminalStatusDotView`
 
-**RepositoryFeature** — all feature UI and reducers
+**StagingFeature** — file staging panel
+- `RepositoryDetail` (reducer) / `RepositoryDetailView` — the staging panel; the public entry point presented by RepositoryFeature
+- `FileChangeListReducer` / `FileChangeListView` — staged/unstaged file lists
+- `FileDiffViewerReducer` / `FileDiffViewerView` — diff pane with hunk stage/unstage/discard
+- `CommitReducer` / `CommitView` — commit sheet
+- `MergeStatusReducer` / `MergeStatusBannerView` — merge-in-progress banner
+- `GitCoreToAppUIMapping` — converts GitCore diff models to AppUI display models
+
+**RepositoryFeature** — top-level feature UI and reducers
 - `RepositoryListReducer` / `RepositoryListView` — main list state
 - `RepositoryRowReducer` / `RepositoryRowView` — per-row state and actions
-- `RepositoryDetailReducer` / `RepositoryDetailView` — file staging panel
 - `RepoGroupReducer` / `RepoGroupView` — grouped repo display
-- Per-button Reducer+View pairs: `PushButton`, `PullButton`, `FetchButton`, `StashButton`, `MergeMasterButton`, `AbortMergeButton`, `CreateWorktreeButton`, `DeleteWorktreeButton`, `TerminalButton`, `ClaudeCodeButton`, `AndroidStudioButton`, `XcodeProjectButton`, `TuistButton`, `TicketButton`, `ShareButton`
-- `CommitReducer` / `CommitView`, `FileDiffViewerReducer` / `FileDiffViewerView`
+- Per-button Reducer+View pairs: `CreateWorktreeButton`, `DeleteWorktreeButton`, `TerminalButton`, `ClaudeCodeButton`, `XcodeProjectButton`, `TuistButton`, `TicketButton`, `ShareButton`, `WebButton`
 - `TerminalLayoutReducer` / `TerminalLayoutView` / `TerminalPanelView`
-- `GitActionsMenuReducer` / `GitActionsMenuView`
-- `MergeStatusReducer` / `MergeStatusBannerView`
 
 ## Architecture
 

@@ -4,11 +4,15 @@ import ComposableArchitecture
 import GitCore
 import SwiftUI
 
-struct RepositoryDetailView: View {
+public struct RepositoryDetailView: View {
 	@Bindable
 	var store: StoreOf<RepositoryDetail>
 
-	var body: some View {
+	public init(store: StoreOf<RepositoryDetail>) {
+		self.store = store
+	}
+
+	public var body: some View {
 		VStack(spacing: 0) {
 			// Custom Header
 			HStack {

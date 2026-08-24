@@ -4,6 +4,7 @@ import ComposableArchitecture
 import GitActionsMenu
 import GitHosting
 import Settings
+import StagingFeature
 import SwiftUI
 import TerminalFeature
 import ToolsIntegration

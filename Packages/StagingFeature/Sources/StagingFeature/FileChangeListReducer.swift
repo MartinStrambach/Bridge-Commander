@@ -4,14 +4,14 @@ import GitCore
 import ToolsIntegration
 
 @Reducer
-struct FileChangeList {
+public struct FileChangeList: Sendable {
 	enum ListType: Equatable {
 		case staged
 		case unstaged
 	}
 
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		let iosSubfolderPath: String
 		let listType: ListType
@@ -29,7 +29,7 @@ struct FileChangeList {
 		}
 	}
 
-	enum Action {
+	public enum Action {
 		case updateSelection(Set<String>)
 		case toggleTapped(FileChange)
 		case toggleSelectedTapped
@@ -40,9 +40,9 @@ struct FileChangeList {
 		case alert(PresentationAction<Alert>)
 		case delegate(Delegate)
 
-		enum Alert: Equatable {}
+		public enum Alert: Equatable {}
 
-		enum Delegate {
+		public enum Delegate {
 			case toggleAll([FileChange])
 			case discardChanges([FileChange])
 			case deleteUntracked([FileChange])
@@ -50,7 +50,7 @@ struct FileChangeList {
 		}
 	}
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case let .updateSelection(ids):

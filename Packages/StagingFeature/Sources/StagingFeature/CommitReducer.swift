@@ -4,9 +4,9 @@ import AppUI
 import GitCore
 
 @Reducer
-struct CommitReducer {
+public struct CommitReducer: Sendable {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		var message: String = ""
 		var isCommitting: Bool = false
@@ -15,7 +15,7 @@ struct CommitReducer {
 		var alert: ScrollableAlertReducer.State?
 	}
 
-	enum Action: BindableAction {
+	public enum Action: BindableAction {
 		case binding(BindingAction<State>)
 		case commitTapped
 		case commitAndPushTapped
@@ -25,7 +25,7 @@ struct CommitReducer {
 		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 		case delegate(Delegate)
 
-		enum Delegate {
+		public enum Delegate {
 			case commitSucceeded
 		}
 	}
@@ -36,7 +36,7 @@ struct CommitReducer {
 	@Dependency(\.dismiss)
 	private var dismiss
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		BindingReducer()
 		Reduce { state, action in
 			switch action {

@@ -5,6 +5,7 @@ import GitActionsMenu
 import GitCore
 import GitHosting
 import Settings
+import StagingFeature
 import ToolsIntegration
 
 // MARK: - Repository Row Reducer

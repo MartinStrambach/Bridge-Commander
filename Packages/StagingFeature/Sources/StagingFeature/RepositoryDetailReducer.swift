@@ -5,7 +5,7 @@ import GitCore
 import Settings
 import ToolsIntegration
 
-typealias FileChange = GitCore.FileChange
+public typealias FileChange = GitCore.FileChange
 typealias FileChangeStatus = GitCore.FileChangeStatus
 
 struct PendingSelection: Equatable {
@@ -14,9 +14,9 @@ struct PendingSelection: Equatable {
 }
 
 @Reducer
-struct RepositoryDetail {
+public struct RepositoryDetail: Sendable {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		var diffViewer: FileDiffViewer.State
 		var mergeStatus: MergeStatus.State
@@ -43,7 +43,7 @@ struct RepositoryDetail {
 			(staged.files + unstaged.files).compactMap(\.removedLines).reduce(0, +)
 		}
 
-		init(repositoryPath: String, iosSubfolderPath: String) {
+		public init(repositoryPath: String, iosSubfolderPath: String) {
 			self.repositoryPath = repositoryPath
 			self.diffViewer = FileDiffViewer.State(repositoryPath: repositoryPath)
 			self.mergeStatus = MergeStatus.State(repositoryPath: repositoryPath)
@@ -52,7 +52,7 @@ struct RepositoryDetail {
 		}
 	}
 
-	enum Action {
+	public enum Action {
 		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 		case cancelButtonTapped
 		case commitButtonTapped
@@ -93,7 +93,9 @@ struct RepositoryDetail {
 	@Shared(.terminalOpeningBehavior)
 	private var terminalOpeningBehavior = TerminalOpeningBehavior.newTab
 
-	var body: some Reducer<State, Action> {
+	public init() {}
+
+	public var body: some Reducer<State, Action> {
 		Scope(\.staged, action: \.staged) { FileChangeList() }
 		Scope(\.unstaged, action: \.unstaged) { FileChangeList() }
 		Scope(\.diffViewer, action: \.diffViewer) { FileDiffViewer() }

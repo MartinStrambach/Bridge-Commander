@@ -3,7 +3,7 @@ import ComposableArchitecture
 import Foundation
 import GitCore
 import Testing
-@testable import RepositoryFeature
+@testable import StagingFeature
 
 // The diff viewer used to convert the whole GitCore diff into AppUI models inside the view body,
 // so every line was rebuilt on each render. The conversion now happens once, when the diff loads,

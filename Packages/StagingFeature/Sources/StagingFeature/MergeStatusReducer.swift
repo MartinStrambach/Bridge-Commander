@@ -3,26 +3,26 @@ import Foundation
 import GitCore
 
 @Reducer
-struct MergeStatus {
+public struct MergeStatus: Sendable {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		var isMergeInProgress = false
 		var isLoading = false
 	}
 
-	enum Action {
+	public enum Action {
 		case finishMergeButtonTapped
 		case finishMergeCompleted(Result<Void, Error>)
 		case loadStatusResponse(Bool)
 		case delegate(Delegate)
 
-		enum Delegate {
+		public enum Delegate {
 			case operationCompleted(Result<Void, Error>)
 		}
 	}
 
-	var body: some Reducer<State, Action> {
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case let .loadStatusResponse(isMergeInProgress):

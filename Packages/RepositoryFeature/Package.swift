@@ -18,6 +18,7 @@ let package = Package(
 		.package(path: "../TerminalFeature"),
 		.package(path: "../GitActionsMenu"),
 		.package(path: "../ActionButtons"),
+		.package(path: "../StagingFeature"),
 	],
 	targets: [
 		.target(
@@ -33,6 +34,7 @@ let package = Package(
 				.product(name: "TerminalFeature", package: "TerminalFeature"),
 				.product(name: "GitActionsMenu", package: "GitActionsMenu"),
 				.product(name: "ActionButtons", package: "ActionButtons"),
+				.product(name: "StagingFeature", package: "StagingFeature"),
 			]
 		),
 		.testTarget(

@@ -4,6 +4,7 @@ import Foundation
 import TerminalFeature
 import GitCore
 import GitGraphFeature
+import StagingFeature
 
 @Reducer
 struct TerminalLayoutReducer {
