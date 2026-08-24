@@ -877,10 +877,10 @@ private func stateSortPriority(_ state: TicketState?) -> Int {
 	}
 
 	switch state {
-	case .inProgress: return 0
-	case .waitingToCodeReview: return 1
-	case .waitingForTesting: return 2
-	case .open: return 3
+	case .open: return 0
+	case .inProgress: return 1
+	case .waitingToCodeReview: return 2
+	case .waitingForTesting: return 3
 	case .accepted,
 	     .waitingToAcceptation: return 5
 	case .done: return 6

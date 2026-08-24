@@ -26,6 +26,11 @@ struct RepositoryRowView: View {
 	/// Deliberately the full count, not the search-filtered one — it describes the repo, not the filter.
 	var worktreeCount: Int?
 
+	/// An "Open" ticket means work hasn't started yet — the row is inactive.
+	private var isInactive: Bool {
+		store.ticketState == .open
+	}
+
 	private var backgroundColorForState: Color {
 		if isGroupCollapsed != nil {
 			return Color.primary.opacity(0.1)
@@ -90,6 +95,8 @@ struct RepositoryRowView: View {
 					isMergeInProgress: store.gitActionsMenu.isMergeInProgress
 				)
 				repositoryInfo
+					// Grey out texts of not-yet-started (Open) tickets; explicit child colors stay.
+					.foregroundColor(isInactive ? .secondary : nil)
 				Spacer(minLength: 0)
 			}
 			// Own the vertical padding rather than inheriting it from the outer stack,
