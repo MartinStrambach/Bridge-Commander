@@ -78,6 +78,11 @@ struct RepositoryListView: View {
 			if store.terminalLayout == nil, !store.repositoryGroups.isEmpty {
 				toggleActiveTerminalsShortcut
 			}
+			// ⌘⇧§ reopens the terminal panel on an existing session — the counterpart
+			// to ⌘§ inside TerminalLayoutView, which closes it.
+			if store.terminalLayout == nil {
+				showTerminalsShortcut
+			}
 		}
 		.onAppear { send(.onAppear) }
 		.onDisappear { send(.onDisappear) }
@@ -302,6 +307,12 @@ struct RepositoryListView: View {
 	private var toggleActiveTerminalsShortcut: some View {
 		Button("") { send(.activeTerminalFilterChanged(!store.showsActiveTerminalsOnly)) }
 			.keyboardShortcut("a", modifiers: .command)
+			.hidden()
+	}
+
+	private var showTerminalsShortcut: some View {
+		Button("") { send(.showTerminalsRequested) }
+			.keyboardShortcut("§", modifiers: [.command, .shift])
 			.hidden()
 	}
 

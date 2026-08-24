@@ -100,6 +100,7 @@ struct RepositoryListReducer {
 			case periodicRefreshIntervalChanged
 			case refreshButtonTapped
 			case searchTextChanged(String)
+			case showTerminalsRequested
 			case sortModeButtonTapped
 		}
 
@@ -225,6 +226,20 @@ struct RepositoryListReducer {
 
 			case .view(.openHomeTerminalButtonTapped):
 				return openTerminal(for: NSHomeDirectory(), in: &state)
+
+			case .view(.showTerminalsRequested):
+				guard state.terminalLayout == nil else {
+					return .none
+				}
+				// Prefer a live session so the panel opens on a working terminal
+				// rather than a lingering failed tab.
+				guard
+					let session = state.terminalSessions.first(where: \.status.isLive)
+						?? state.terminalSessions.first
+				else {
+					return .none
+				}
+				return openTerminal(for: session.repositoryPath, in: &state)
 
 			// MARK: - Add Repository
 
