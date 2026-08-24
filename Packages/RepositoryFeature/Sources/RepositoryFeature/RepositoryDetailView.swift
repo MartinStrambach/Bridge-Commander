@@ -16,6 +16,11 @@ struct RepositoryDetailView: View {
 					.font(.title2)
 					.fontWeight(.semibold)
 
+				if store.hasChanges {
+					LineStatsView(addedLines: store.totalAddedLines, removedLines: store.totalRemovedLines)
+						.help("Total added/removed lines across staged and unstaged changes")
+				}
+
 				Spacer()
 
 				if !store.staged.files.isEmpty {

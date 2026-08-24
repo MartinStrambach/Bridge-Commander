@@ -46,6 +46,8 @@ public nonisolated struct FileChange: Identifiable, Equatable, Sendable {
 	public let path: String
 	public let status: FileChangeStatus
 	public let oldPath: String? // For renames
+	public let addedLines: Int? // nil when unknown (e.g. binary files)
+	public let removedLines: Int?
 
 	public var fileName: String {
 		(path as NSString).lastPathComponent
@@ -55,11 +57,29 @@ public nonisolated struct FileChange: Identifiable, Equatable, Sendable {
 		(path as NSString).deletingLastPathComponent
 	}
 
-	public init(path: String, status: FileChangeStatus, oldPath: String? = nil) {
+	public init(path: String, status: FileChangeStatus, oldPath: String? = nil, addedLines: Int? = nil, removedLines: Int? = nil) {
 		self.id = path
 		self.path = path
 		self.status = status
 		self.oldPath = oldPath
+		self.addedLines = addedLines
+		self.removedLines = removedLines
+	}
+
+	public func withLineStats(_ stats: GitLineStats?) -> FileChange {
+		FileChange(path: path, status: status, oldPath: oldPath, addedLines: stats?.added, removedLines: stats?.removed)
+	}
+}
+
+// MARK: - Line Stats
+
+public nonisolated struct GitLineStats: Equatable, Sendable {
+	public let added: Int
+	public let removed: Int
+
+	public init(added: Int, removed: Int) {
+		self.added = added
+		self.removed = removed
 	}
 }
 
