@@ -154,7 +154,6 @@ struct RepositoryRowReducer {
 		case didFetchStatus(GitPorcelainStatus, Bool)
 		case didFetchYouTrack(IssueDetails?)
 		case didFetchPullRequest(PullRequestDetails?)
-		case didFetchUnresolvedDiscussions(Int?)
 		case openRepositoryDetail
 		case openTerminalForRepo
 		case repositoryDetail(PresentationAction<RepositoryDetail.Action>)
@@ -307,28 +306,16 @@ struct RepositoryRowReducer {
 				return .none
 
 			case let .didFetchPullRequest(details):
-				// Keep the previous count while the same PR refreshes — resetting it
-				// unconditionally would make the badge blink on every periodic refresh.
-				if details?.url != state.prUrl {
-					state.prUnresolvedDiscussions = nil
-				}
 				state.prUrl = details?.url
 				state.prState = details?.state
 				state.prProvider = details?.provider
 				state.pipelineState = details?.pipeline?.state
 				state.pipelineUrl = details?.pipeline?.url
+				// Merged/closed PRs hide the badge — their discussions are no longer actionable.
+				state.prUnresolvedDiscussions = details?.state.isOpen == true
+					? details?.unresolvedDiscussionsCount
+					: nil
 				state.shareButton.updatePRURL(details?.url)
-				// The count needs an extra request per provider, so it arrives as a
-				// follow-up instead of delaying the PR button, and merged/closed
-				// PRs skip it entirely — their discussions are no longer actionable.
-				guard let details, details.state.isOpen else {
-					state.prUnresolvedDiscussions = nil
-					return .none
-				}
-				return fetchUnresolvedDiscussions(for: state, number: details.number)
-
-			case let .didFetchUnresolvedDiscussions(count):
-				state.prUnresolvedDiscussions = count
 				return .none
 
 			case let .deleteWorktreeButton(action):
@@ -425,20 +412,6 @@ struct RepositoryRowReducer {
 
 			let details = await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
 			await send(.didFetchPullRequest(details))
-		}
-	}
-
-	private func fetchUnresolvedDiscussions(for state: State, number: Int) -> EffectOf<RepositoryRowReducer> {
-		.run { [path = state.path] send in
-			// Cached for the app's lifetime (see OriginRemoteCache), so this is a lookup,
-			// not another git process.
-			guard let remote = await gitClient.getOriginRemote(at: path) else {
-				await send(.didFetchUnresolvedDiscussions(nil))
-				return
-			}
-
-			let count = await pullRequestClient.fetchUnresolvedDiscussionsCount(remote: remote, number: number)
-			await send(.didFetchUnresolvedDiscussions(count))
 		}
 	}
 }

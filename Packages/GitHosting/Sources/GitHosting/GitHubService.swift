@@ -1,8 +1,11 @@
 import Foundation
 
 public nonisolated enum GitHubService {
-	private static let baseURL = "https://api.github.com"
+	private static let graphQLURL = "https://api.github.com/graphql"
 
+	/// Fetches the branch's most recently created PR — state, draft flag, and unresolved
+	/// review-thread count — in a single GraphQL request. REST would need two (it does not
+	/// expose thread resolution at all).
 	public static func fetchPullRequest(
 		owner: String,
 		repo: String,
@@ -13,73 +16,22 @@ public nonisolated enum GitHubService {
 			print("GitHubService: No token configured, skipping PR fetch")
 			return nil
 		}
-		guard
-			let encodedBranch = branch.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-			let encodedOwner = owner.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
-		else {
+		guard let url = URL(string: graphQLURL) else {
 			return nil
 		}
 
-		let urlString =
-			"\(baseURL)/repos/\(owner)/\(repo)/pulls?head=\(encodedOwner):\(encodedBranch)&state=all&per_page=1&sort=created&direction=desc"
-		guard let url = URL(string: urlString) else {
-			return nil
-		}
-
-		var request = URLRequest(url: url)
-		request.httpMethod = "GET"
-		request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-		request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-		request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-
-		do {
-			print("GitHubService: Fetching \(urlString)")
-			let (data, response) = try await URLSession.shared.data(for: request)
-
-			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-				print("GitHubService: Failed with status code \(statusCode)")
-				return nil
-			}
-
-			let pulls = try JSONDecoder().decode([GitHubPullRequest].self, from: data)
-			guard let first = pulls.first else {
-				print("GitHubService: No PR found for \(owner)/\(repo) on branch \(branch)")
-				return nil
-			}
-
-			return PullRequestDetails(
-				url: first.html_url,
-				state: first.mappedState,
-				provider: .github,
-				number: first.number
-			)
-		}
-		catch {
-			print("GitHubService: Error: \(error)")
-			return nil
-		}
-	}
-
-	/// Best-effort fetch of the PR's unresolved review-thread count. The REST API does not
-	/// expose thread resolution, so this uses GraphQL. Returns `nil` on any failure.
-	public static func fetchUnresolvedReviewThreadCount(
-		owner: String,
-		repo: String,
-		number: Int,
-		token: String
-	) async -> Int? {
-		guard !token.isEmpty, let url = URL(string: "\(baseURL)/graphql") else {
-			return nil
-		}
-
-		// First 100 threads only — enough in practice; counting is best-effort anyway.
+		// First 100 review threads only — enough in practice; the count is best-effort anyway.
 		let query = """
-		query($owner: String!, $name: String!, $number: Int!) {
+		query($owner: String!, $name: String!, $branch: String!) {
 			repository(owner: $owner, name: $name) {
-				pullRequest(number: $number) {
-					reviewThreads(first: 100) {
-						nodes { isResolved }
+				pullRequests(headRefName: $branch, first: 1, orderBy: {field: CREATED_AT, direction: DESC}) {
+					nodes {
+						url
+						state
+						isDraft
+						reviewThreads(first: 100) {
+							nodes { isResolved }
+						}
 					}
 				}
 			}
@@ -96,46 +48,36 @@ public nonisolated enum GitHubService {
 			request.httpBody = try JSONEncoder().encode(
 				GitHubGraphQLRequest(
 					query: query,
-					variables: .init(owner: owner, name: repo, number: number)
+					variables: .init(owner: owner, name: repo, branch: branch)
 				)
 			)
 
-			print("GitHubService: Fetching review threads for \(owner)/\(repo)#\(number)")
+			print("GitHubService: Fetching PR for \(owner)/\(repo) on branch \(branch)")
 			let (data, response) = try await URLSession.shared.data(for: request)
 
 			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-				print("GitHubService: Review threads fetch failed with status code \(statusCode)")
+				print("GitHubService: Failed with status code \(statusCode)")
 				return nil
 			}
 
-			return try JSONDecoder().decode(GitHubReviewThreadsResponse.self, from: data).unresolvedCount
+			let decoded = try JSONDecoder().decode(GitHubPullRequestResponse.self, from: data)
+			guard let pullRequest = decoded.pullRequest else {
+				print("GitHubService: No PR found for \(owner)/\(repo) on branch \(branch)")
+				return nil
+			}
+
+			return PullRequestDetails(
+				url: pullRequest.url,
+				state: pullRequest.mappedState,
+				provider: .github,
+				unresolvedDiscussionsCount: pullRequest.unresolvedCount
+			)
 		}
 		catch {
-			print("GitHubService: Review threads fetch error: \(error)")
+			print("GitHubService: Error: \(error)")
 			return nil
 		}
-	}
-}
-
-private struct GitHubPullRequest: Decodable {
-	let number: Int
-	let html_url: String
-	let state: String
-	let draft: Bool?
-	let merged_at: String?
-
-	var mappedState: PullRequestState {
-		if merged_at != nil {
-			return .merged
-		}
-		if state == "closed" {
-			return .closed
-		}
-		if draft == true {
-			return .draft
-		}
-		return .ready
 	}
 }
 
@@ -143,25 +85,55 @@ private struct GitHubGraphQLRequest: Encodable {
 	struct Variables: Encodable {
 		let owner: String
 		let name: String
-		let number: Int
+		let branch: String
 	}
 
 	let query: String
 	let variables: Variables
 }
 
-/// Internal (not private) so the count derivation is unit-testable from fixture JSON.
-nonisolated struct GitHubReviewThreadsResponse: Decodable {
+/// Internal (not private) so the response mapping is unit-testable from fixture JSON.
+nonisolated struct GitHubPullRequestResponse: Decodable {
 	struct DataContainer: Decodable {
 		let repository: Repository?
 	}
 
 	struct Repository: Decodable {
-		let pullRequest: PullRequest?
+		let pullRequests: PullRequests?
+	}
+
+	struct PullRequests: Decodable {
+		let nodes: [PullRequest]?
 	}
 
 	struct PullRequest: Decodable {
+		let url: String
+		let state: String
+		let isDraft: Bool?
 		let reviewThreads: ReviewThreads?
+
+		var mappedState: PullRequestState {
+			switch state.uppercased() {
+			case "MERGED":
+				return .merged
+			case "CLOSED":
+				return .closed
+			default:
+				// "OPEN"
+				if isDraft == true {
+					return .draft
+				}
+				return .ready
+			}
+		}
+
+		/// Number of unresolved threads among the fetched page (first 100). `nil` when missing.
+		var unresolvedCount: Int? {
+			guard let nodes = reviewThreads?.nodes else {
+				return nil
+			}
+			return nodes.count { !$0.isResolved }
+		}
 	}
 
 	struct ReviewThreads: Decodable {
@@ -174,11 +146,8 @@ nonisolated struct GitHubReviewThreadsResponse: Decodable {
 
 	let data: DataContainer?
 
-	/// `nil` when the PR or its threads are missing from the response.
-	var unresolvedCount: Int? {
-		guard let nodes = data?.repository?.pullRequest?.reviewThreads?.nodes else {
-			return nil
-		}
-		return nodes.count { !$0.isResolved }
+	/// The branch's most recently created PR, or `nil` when none exists.
+	var pullRequest: PullRequest? {
+		data?.repository?.pullRequests?.nodes?.first
 	}
 }

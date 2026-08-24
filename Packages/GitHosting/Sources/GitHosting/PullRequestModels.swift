@@ -78,22 +78,22 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 	public let url: String
 	public let state: PullRequestState
 	public let provider: PullRequestProvider
-	/// MR iid (GitLab) / PR number (GitHub) — identifies the MR/PR for follow-up
-	/// queries like the unresolved discussion count.
-	public let number: Int
 	public let pipeline: PipelineStatus?
+	/// Number of unresolved review discussions (GitLab) / review threads (GitHub).
+	/// `nil` when the count could not be determined, so the UI can tell "0" from "unknown".
+	public let unresolvedDiscussionsCount: Int?
 
 	public init(
 		url: String,
 		state: PullRequestState,
 		provider: PullRequestProvider,
-		number: Int,
-		pipeline: PipelineStatus? = nil
+		pipeline: PipelineStatus? = nil,
+		unresolvedDiscussionsCount: Int? = nil
 	) {
 		self.url = url
 		self.state = state
 		self.provider = provider
-		self.number = number
 		self.pipeline = pipeline
+		self.unresolvedDiscussionsCount = unresolvedDiscussionsCount
 	}
 }
