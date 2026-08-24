@@ -100,31 +100,42 @@ struct GitGraphView: View {
 			// header: a layout-taking vertical scroller insets only the scroll
 			// content, so a header outside would be wider than the rows and the
 			// column boundaries would no longer line up.
-			ScrollView {
-				LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-					Section {
-						ForEach(store.rows) { row in
-							GitGraphRowView(row: row, widths: effectiveWidths, columnGap: Self.columnGap)
-						}
-
-						if store.canLoadMore {
-							Button("Load More") {
-								store.send(.loadMoreButtonTapped)
+			ScrollViewReader { proxy in
+				ScrollView {
+					LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+						Section {
+							ForEach(store.rows) { row in
+								GitGraphRowView(row: row, widths: effectiveWidths, columnGap: Self.columnGap)
 							}
-							.buttonStyle(.bordered)
-							.controlSize(.small)
-							.disabled(store.isLoading)
-							.padding(.vertical, 12)
-						}
-					} header: {
-						VStack(spacing: 0) {
-							columnHeader
-							Divider()
+
+							if store.canLoadMore {
+								Button("Load More") {
+									store.send(.loadMoreButtonTapped)
+								}
+								.buttonStyle(.bordered)
+								.controlSize(.small)
+								.disabled(store.isLoading)
+								.padding(.vertical, 12)
+							}
+						} header: {
+							VStack(spacing: 0) {
+								columnHeader
+								Divider()
+							}
 						}
 					}
 				}
+				.background(Color(nsColor: .textBackgroundColor))
+				.onAppear {
+					// This branch only renders once rows are loaded, so onAppear
+					// fires exactly once per open — refresh and Load More replace
+					// the rows without recreating the ScrollView.
+					guard let headRowID = store.rows.first(where: \.commit.isHead)?.id else {
+						return
+					}
+					proxy.scrollTo(headRowID, anchor: .center)
+				}
 			}
-			.background(Color(nsColor: .textBackgroundColor))
 		}
 	}
 
@@ -263,6 +274,7 @@ private struct GitGraphRowView: View {
 
 				Text(row.commit.subject)
 					.font(.callout)
+					.fontWeight(row.commit.isHead ? .semibold : .regular)
 					.lineLimit(1)
 					.truncationMode(.tail)
 			}
@@ -295,6 +307,11 @@ private struct GitGraphRowView: View {
 		}
 		.padding(.trailing, 12)
 		.frame(height: Self.rowHeight)
+		.background {
+			if row.commit.isHead {
+				Color.accentColor.opacity(0.12)
+			}
+		}
 		.contextMenu {
 			Button("Copy Commit Hash") {
 				NSPasteboard.general.clearContents()
@@ -387,13 +404,8 @@ private struct GitGraphRowView: View {
 		}
 		.padding(.horizontal, 6)
 		.padding(.vertical, 2)
-		.background(refColor(ref.kind).opacity(ref.isHead ? 0.35 : 0.18), in: Capsule())
-		.overlay {
-			if ref.isHead {
-				Capsule().strokeBorder(refColor(ref.kind), lineWidth: 1)
-			}
-		}
-		.foregroundStyle(refColor(ref.kind))
+		.background(refColor(ref.kind).opacity(ref.isHead ? 1 : 0.18), in: Capsule())
+		.foregroundStyle(ref.isHead ? Color.white : refColor(ref.kind))
 	}
 
 	private func refIcon(_ kind: GitCommitRef.Kind) -> String {
