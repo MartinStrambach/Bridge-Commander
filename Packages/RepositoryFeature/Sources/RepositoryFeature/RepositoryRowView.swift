@@ -351,22 +351,28 @@ struct RepositoryRowView: View {
 				action: { openInFinder(store.path) }
 			)
 
-			// Open PR button (conditional)
+			// Open PR button (conditional), with unresolved discussions stacked below
 			if let prUrl = store.prUrl, let url = URL(string: prUrl) {
-				PullRequestButton(
-					url: url,
-					provider: store.prProvider,
-					state: store.prState
-				)
-
-				// Unresolved review discussions (conditional)
-				if let count = store.prUnresolvedDiscussions, count > 0 {
-					UnresolvedDiscussionsBadge(
-						count: count,
+				VStack(alignment: .center, spacing: 2) {
+					PullRequestButton(
 						url: url,
-						provider: store.prProvider
+						provider: store.prProvider,
+						state: store.prState
 					)
+
+					// Unresolved review discussions (conditional)
+					if let count = store.prUnresolvedDiscussions, count > 0 {
+						UnresolvedDiscussionsBadge(
+							count: count,
+							url: url,
+							provider: store.prProvider
+						)
+					}
 				}
+				// The action bar can be narrower than its ideal width (narrow sidebar
+				// pane); without this the HStack compresses the badge, deleting the
+				// count text and leaving an off-center bubble icon.
+				.fixedSize(horizontal: true, vertical: false)
 			}
 
 			// GitLab pipeline status (conditional)

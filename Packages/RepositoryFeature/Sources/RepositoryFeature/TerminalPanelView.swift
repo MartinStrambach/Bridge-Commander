@@ -126,19 +126,24 @@ struct TerminalPanelView: View {
 			}
 
 			if let prUrl = activeRowState?.prUrl, let url = URL(string: prUrl) {
-				PullRequestButton(
-					url: url,
-					provider: activeRowState?.prProvider,
-					state: activeRowState?.prState
-				)
-
-				if let count = activeRowState?.prUnresolvedDiscussions, count > 0 {
-					UnresolvedDiscussionsBadge(
-						count: count,
+				VStack(alignment: .center, spacing: 2) {
+					PullRequestButton(
 						url: url,
-						provider: activeRowState?.prProvider
+						provider: activeRowState?.prProvider,
+						state: activeRowState?.prState
 					)
+
+					if let count = activeRowState?.prUnresolvedDiscussions, count > 0 {
+						UnresolvedDiscussionsBadge(
+							count: count,
+							url: url,
+							provider: activeRowState?.prProvider
+						)
+					}
 				}
+				// Keeps the badge's count text from being compressed away when the
+				// toolbar runs out of width; also pins the badge to the button's width.
+				.fixedSize(horizontal: true, vertical: false)
 			}
 
 			if let pipelineUrl = activeRowState?.pipelineUrl,
