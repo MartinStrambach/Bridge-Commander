@@ -71,7 +71,14 @@ struct RepositoryListView: View {
 		}
 		.windowMinSize(width: store.terminalLayout != nil ? 800 : 600, height: 400)
 		.animation(.spring(duration: 0.3), value: store.terminalLayout != nil)
-		.background { focusSearchShortcut }
+		.background {
+			focusSearchShortcut
+			// ⌘A hands off to the terminal panel (select-all) while it's open, and is
+			// meaningless with no repositories — matches the toggle's own visibility.
+			if store.terminalLayout == nil, !store.repositoryGroups.isEmpty {
+				toggleActiveTerminalsShortcut
+			}
+		}
 		.onAppear { send(.onAppear) }
 		.onDisappear { send(.onDisappear) }
 		// Returning to the app is when a permission granted in System Settings should take
@@ -158,7 +165,7 @@ struct RepositoryListView: View {
 						Color(nsColor: .controlBackgroundColor),
 						in: RoundedRectangle(cornerRadius: 6)
 					)
-					.help("Show only repositories with an open terminal")
+					.help("Show only repositories with an open terminal (⌘A)")
 				}
 			}
 
@@ -292,6 +299,12 @@ struct RepositoryListView: View {
 			.hidden()
 	}
 
+	private var toggleActiveTerminalsShortcut: some View {
+		Button("") { send(.activeTerminalFilterChanged(!store.showsActiveTerminalsOnly)) }
+			.keyboardShortcut("a", modifiers: .command)
+			.hidden()
+	}
+
 	private var searchBarView: some View {
 		HStack(spacing: 6) {
 			Image(systemName: "magnifyingglass")
@@ -319,6 +332,7 @@ struct RepositoryListView: View {
 
 	// MARK: - Repository List View
 
+	@ViewBuilder
 	private var repositoryListView: some View {
 		// Build a path → status map once so each row does an O(1) lookup instead of
 		// scanning the whole sessions array.
@@ -332,21 +346,37 @@ struct RepositoryListView: View {
 		let livePaths: Set<String>? = store.showsActiveTerminalsOnly
 			? Set(store.terminalSessions.filter(\.status.isLive).map(\.repositoryPath))
 			: nil
-		// Scope into the stored groups, not a filtered copy of them: each group resolves the filters
-		// against its own rows (see RowVisibility), so a keystroke neither rebuilds group state nor
-		// re-filters the whole list once per child-store read.
-		return List {
-			ForEach(store.scope(\.repositoryGroups, action: \.repositoryGroups)) { groupStore in
-				RepoGroupView(
-					store: groupStore,
-					statusByPath: statusByPath,
-					searchText: store.searchText,
-					livePaths: livePaths
-				)
-			}
+
+		// Checked per group rather than as `livePaths.isEmpty` so a live session that maps to no
+		// row (e.g. the home-directory terminal) still counts as "nothing to show".
+		if let livePaths,
+			store.repositoryGroups.allSatisfy({
+				$0.rowVisibility(query: store.searchText, livePaths: livePaths).isHidden
+			})
+		{
+			EmptyStateView(
+				title: "No Active Terminals",
+				systemImage: "terminal",
+				description: "Open a terminal in a repository, or turn off the Active terminals filter."
+			)
 		}
-		.listStyle(.plain)
-		.onDrop(of: [UTType.folder], isTargeted: nil, perform: handleDrop)
+		else {
+			// Scope into the stored groups, not a filtered copy of them: each group resolves the filters
+			// against its own rows (see RowVisibility), so a keystroke neither rebuilds group state nor
+			// re-filters the whole list once per child-store read.
+			List {
+				ForEach(store.scope(\.repositoryGroups, action: \.repositoryGroups)) { groupStore in
+					RepoGroupView(
+						store: groupStore,
+						statusByPath: statusByPath,
+						searchText: store.searchText,
+						livePaths: livePaths
+					)
+				}
+			}
+			.listStyle(.plain)
+			.onDrop(of: [UTType.folder], isTargeted: nil, perform: handleDrop)
+		}
 	}
 
 	// MARK: - Repository Selection
