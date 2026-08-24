@@ -10,12 +10,67 @@ public nonisolated enum GitStagingHelper {
 	// MARK: - Fetch File Changes
 
 	public static func fetchFileChanges(at path: String) async -> GitFileChanges {
-		let status = await GitStatusDetector.getStatus(at: path)
+		async let statusTask = GitStatusDetector.getStatus(at: path)
+		async let stagedStatsTask = fetchLineStats(at: path, staged: true)
+		async let unstagedStatsTask = fetchLineStats(at: path, staged: false)
+
+		let status = await statusTask
+		let stagedStats = await stagedStatsTask
+		let unstagedStats = await unstagedStatsTask
+
 		return GitFileChanges(
-			staged: status.staged.sorted { $0.path < $1.path },
-			unstaged: status.unstaged.sorted { $0.path < $1.path },
+			staged: status.staged
+				.sorted { $0.path < $1.path }
+				.map { $0.withLineStats(stagedStats[$0.path]) },
+			unstaged: status.unstaged
+				.sorted { $0.path < $1.path }
+				.map { $0.withLineStats($0.status == .untracked ? untrackedLineStats(at: path, file: $0) : unstagedStats[$0.path]) },
 			unpushedCount: status.unpushedCount
 		)
+	}
+
+	// MARK: - Line Stats
+
+	private static func fetchLineStats(at repositoryPath: String, staged: Bool) async -> [String: GitLineStats] {
+		var arguments = ["diff", "--numstat", "-z", "-M"]
+		if staged {
+			arguments.append("--cached")
+		}
+
+		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)
+		guard result.success else {
+			return [:]
+		}
+
+		return GitNumstatParser.parse(result.outputString)
+	}
+
+	/// Untracked files never appear in `git diff`, so count their lines directly.
+	/// Returns nil for binary or unusually large files.
+	private static func untrackedLineStats(at repositoryPath: String, file: FileChange) -> GitLineStats? {
+		let maxCountableFileSize = 4 * 1024 * 1024
+		let fullPath = (repositoryPath as NSString).appendingPathComponent(file.path)
+
+		guard
+			let attributes = try? FileManager.default.attributesOfItem(atPath: fullPath),
+			let size = attributes[.size] as? Int,
+			size <= maxCountableFileSize
+		else {
+			return nil
+		}
+		guard size > 0 else {
+			return GitLineStats(added: 0, removed: 0)
+		}
+		guard let data = FileManager.default.contents(atPath: fullPath), !data.contains(0) else {
+			return nil // unreadable or binary
+		}
+
+		let newline = UInt8(ascii: "\n")
+		var lines = data.count(where: { $0 == newline })
+		if data.last != newline {
+			lines += 1
+		}
+		return GitLineStats(added: lines, removed: 0)
 	}
 
 	// MARK: - Fetch Diff

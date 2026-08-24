@@ -54,6 +54,10 @@ public struct FileChangeRow: View {
 			}
 
 			Spacer()
+
+			if let addedLines = file.addedLines, let removedLines = file.removedLines {
+				LineStatsView(addedLines: addedLines, removedLines: removedLines)
+			}
 		}
 		.padding(.vertical, 4)
 	}

@@ -18,7 +18,7 @@ extension GitCore.FileChangeStatus {
 
 extension GitCore.FileChange {
 	func toAppUI() -> AppUI.FileChange {
-		AppUI.FileChange(id: id, path: path, status: status.toAppUI())
+		AppUI.FileChange(id: id, path: path, status: status.toAppUI(), addedLines: addedLines, removedLines: removedLines)
 	}
 }
 

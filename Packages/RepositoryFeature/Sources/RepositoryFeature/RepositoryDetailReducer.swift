@@ -35,6 +35,14 @@ struct RepositoryDetail {
 			!staged.files.isEmpty || !unstaged.files.isEmpty
 		}
 
+		var totalAddedLines: Int {
+			(staged.files + unstaged.files).compactMap(\.addedLines).reduce(0, +)
+		}
+
+		var totalRemovedLines: Int {
+			(staged.files + unstaged.files).compactMap(\.removedLines).reduce(0, +)
+		}
+
 		init(repositoryPath: String, iosSubfolderPath: String) {
 			self.repositoryPath = repositoryPath
 			self.diffViewer = FileDiffViewer.State(repositoryPath: repositoryPath)

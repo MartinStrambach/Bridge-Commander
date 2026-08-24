@@ -45,6 +45,8 @@ public struct FileChange: Identifiable, Equatable, Sendable {
 	public let id: String
 	public let path: String
 	public let status: FileChangeStatus
+	public let addedLines: Int? // nil when unknown (e.g. binary files)
+	public let removedLines: Int?
 
 	public var fileName: String {
 		(path as NSString).lastPathComponent
@@ -54,10 +56,12 @@ public struct FileChange: Identifiable, Equatable, Sendable {
 		(path as NSString).deletingLastPathComponent
 	}
 
-	public init(id: String, path: String, status: FileChangeStatus) {
+	public init(id: String, path: String, status: FileChangeStatus, addedLines: Int? = nil, removedLines: Int? = nil) {
 		self.id = id
 		self.path = path
 		self.status = status
+		self.addedLines = addedLines
+		self.removedLines = removedLines
 	}
 }
 
