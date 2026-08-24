@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Settings
+@testable import GitGraphFeature
 
 @Suite("GitGraphColumnWidths")
 struct GitGraphColumnWidthsTests {

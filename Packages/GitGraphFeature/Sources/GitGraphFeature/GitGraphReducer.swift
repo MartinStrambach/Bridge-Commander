@@ -3,9 +3,9 @@ import Foundation
 import GitCore
 
 @Reducer
-struct GitGraphReducer {
+public struct GitGraphReducer {
 	@ObservableState
-	struct State: Equatable {
+	public struct State: Equatable {
 		let repositoryPath: String
 		let repositoryName: String
 		var rows: [GitGraphRow] = []
@@ -15,9 +15,14 @@ struct GitGraphReducer {
 
 		/// True when the last load filled the limit, so older commits likely exist
 		var canLoadMore = false
+
+		public init(repositoryPath: String, repositoryName: String) {
+			self.repositoryPath = repositoryPath
+			self.repositoryName = repositoryName
+		}
 	}
 
-	enum Action {
+	public enum Action {
 		case task
 		case refreshButtonTapped
 		case loadMoreButtonTapped
@@ -33,7 +38,9 @@ struct GitGraphReducer {
 	@Dependency(\.dismiss)
 	private var dismiss
 
-	var body: some Reducer<State, Action> {
+	public init() {}
+
+	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .task, .refreshButtonTapped:
@@ -44,7 +51,7 @@ struct GitGraphReducer {
 				return loadCommits(state: &state)
 
 			case .closeButtonTapped:
-				return .run { _ in await dismiss() }
+				return .run { [dismiss] _ in await dismiss() }
 
 			case let .commitsLoaded(commits):
 				state.isLoading = false

@@ -1,10 +1,9 @@
 import AppKit
 import ComposableArchitecture
 import GitCore
-import Settings
 import SwiftUI
 
-struct GitGraphView: View {
+public struct GitGraphView: View {
 	@Bindable
 	var store: StoreOf<GitGraphReducer>
 
@@ -24,7 +23,11 @@ struct GitGraphView: View {
 
 	private static let columnGap: CGFloat = 9
 
-	var body: some View {
+	public init(store: StoreOf<GitGraphReducer>) {
+		self.store = store
+	}
+
+	public var body: some View {
 		VStack(spacing: 0) {
 			header
 			Divider()

@@ -1,6 +1,7 @@
 import ActionButtons
 import AppUI
 import ComposableArchitecture
+import GitGraphFeature
 import SwiftTerm
 import SwiftUI
 import Settings

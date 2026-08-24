@@ -1,4 +1,5 @@
 import Foundation
+import GitCore
 
 /// One row of the commit graph: a commit dot plus the line segments
 /// needed to render its cell. All segments are self-contained within the

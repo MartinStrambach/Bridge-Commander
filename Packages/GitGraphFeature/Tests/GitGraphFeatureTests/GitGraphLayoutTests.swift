@@ -1,6 +1,7 @@
 import Foundation
+import GitCore
 import Testing
-@testable import GitCore
+@testable import GitGraphFeature
 
 @Suite("GitGraphLayout")
 struct GitGraphLayoutTests {

@@ -3,6 +3,7 @@ import ComposableArchitecture
 import Foundation
 import TerminalFeature
 import GitCore
+import GitGraphFeature
 
 @Reducer
 struct TerminalLayoutReducer {

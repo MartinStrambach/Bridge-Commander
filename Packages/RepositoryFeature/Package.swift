@@ -10,6 +10,7 @@ let package = Package(
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
 		.package(path: "../GitCore"),
+		.package(path: "../GitGraphFeature"),
 		.package(path: "../AppUI"),
 		.package(path: "../Settings"),
 		.package(path: "../ToolsIntegration"),
@@ -24,6 +25,7 @@ let package = Package(
 			dependencies: [
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "GitCore", package: "GitCore"),
+				.product(name: "GitGraphFeature", package: "GitGraphFeature"),
 				.product(name: "AppUI", package: "AppUI"),
 				.product(name: "Settings", package: "Settings"),
 				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
