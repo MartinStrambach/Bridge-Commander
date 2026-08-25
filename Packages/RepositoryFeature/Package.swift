@@ -45,6 +45,7 @@ let package = Package(
 				.product(name: "GitCore", package: "GitCore"),
 				.product(name: "GitActionsMenu", package: "GitActionsMenu"),
 				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
+				.product(name: "AppUI", package: "AppUI"),
 			]
 		),
 	]

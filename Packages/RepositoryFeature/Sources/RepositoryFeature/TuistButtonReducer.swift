@@ -44,6 +44,7 @@ struct TuistButtonReducer {
 		case installCacheAndGenerateTapped
 		case editTapped
 		case inspectDependenciesTapped
+		case cleanTapped(TuistCleanCategory?)
 		case actionCompleted(TuistAction, Result<String, Error>)
 		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 	}
@@ -294,6 +295,33 @@ struct TuistButtonReducer {
 					await send(.actionCompleted(.inspectDependencies, result))
 				}
 
+			case let .cleanTapped(category):
+				guard state.runningAction == nil else {
+					return .none
+				}
+
+				state.runningAction = .clean(category)
+				return .run { [
+					repositoryPath = state.repositoryPath,
+					iosSubfolderPath = state.iosSubfolderPath,
+					category,
+					misePath = state.misePath,
+					runMode = state.tuistRunMode
+				] send in
+					let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+						in: repositoryPath,
+						iosSubfolderPath: iosSubfolderPath
+					)
+					let result = await TuistCommandHelper.runCommand(
+						.clean(category),
+						at: iosFlashscorePath,
+						shouldOpenXcode: false,
+						misePath: misePath,
+						runMode: runMode
+					)
+					await send(.actionCompleted(.clean(category), result))
+				}
+
 			case let .actionCompleted(tuistAction, result):
 				state.runningAction = nil
 				switch result {
@@ -318,6 +346,7 @@ struct TuistButtonReducer {
 						case .installCacheAndGenerate: "Tuist Install, Cache & Generate Failed"
 						case .edit: "Tuist Edit Failed"
 						case .inspectDependencies: "Tuist Inspect Failed"
+						case .clean: "Tuist Clean Failed"
 						}
 					state.alert = .init(
 						title: title,

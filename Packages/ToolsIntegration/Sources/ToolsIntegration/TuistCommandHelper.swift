@@ -3,7 +3,7 @@ import ProcessExecution
 
 // MARK: - Tuist Action
 
-public nonisolated enum TuistAction: Equatable {
+public nonisolated enum TuistAction: Equatable, Sendable {
 	case generate
 	case generateWithoutCache
 	case install
@@ -12,6 +12,8 @@ public nonisolated enum TuistAction: Equatable {
 	case cache(TuistCacheType)
 	case edit
 	case inspectDependencies
+	/// A `nil` category cleans every category, matching the CLI's default.
+	case clean(TuistCleanCategory?)
 
 	public var commandString: String {
 		switch self {
@@ -38,6 +40,9 @@ public nonisolated enum TuistAction: Equatable {
 
 		case .inspectDependencies:
 			"inspect dependencies --only implicit"
+
+		case let .clean(category):
+			"clean \(category?.rawValue ?? "")".trimmingCharacters(in: .whitespaces)
 		}
 	}
 }
@@ -59,17 +64,12 @@ public nonisolated enum TuistCommandHelper {
 		misePath: String,
 		runMode: TuistRunMode
 	) async -> Result<String, Error> {
-		let commandString = action.commandString
-
-		// Add --no-open flag for generate action when Xcode should not open
-		let flags = ((action == .generate || action == .generateWithoutCache) && !shouldOpenXcode) ? " --no-open" : ""
-		let fullCommand: String
-		switch runMode {
-		case .mise:
-			fullCommand = "\(misePath) exec -- tuist \(commandString)\(flags)"
-		case .native:
-			fullCommand = "tuist \(commandString)\(flags)"
-		}
+		let fullCommand = shellCommand(
+			for: action,
+			shouldOpenXcode: shouldOpenXcode,
+			misePath: misePath,
+			runMode: runMode
+		)
 
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/bin/zsh"),
@@ -94,6 +94,25 @@ public nonisolated enum TuistCommandHelper {
 				userInfo: [NSLocalizedDescriptionKey: errorMessage]
 			)
 			return .failure(error)
+		}
+	}
+
+	/// Builds the shell command that `runCommand` executes for the given action.
+	internal static func shellCommand(
+		for action: TuistAction,
+		shouldOpenXcode: Bool,
+		misePath: String,
+		runMode: TuistRunMode
+	) -> String {
+		let commandString = action.commandString
+
+		// Add --no-open flag for generate action when Xcode should not open
+		let flags = ((action == .generate || action == .generateWithoutCache) && !shouldOpenXcode) ? " --no-open" : ""
+		switch runMode {
+		case .mise:
+			return "\(misePath) exec -- tuist \(commandString)\(flags)"
+		case .native:
+			return "tuist \(commandString)\(flags)"
 		}
 	}
 }

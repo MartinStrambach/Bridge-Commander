@@ -67,6 +67,26 @@ struct TuistButtonView: View {
 					} label: {
 						Label("Inspect", systemImage: "magnifyingglass")
 					}
+
+					Menu {
+						Button {
+							store.send(.cleanTapped(nil))
+						} label: {
+							Label("Everything", systemImage: "paintbrush")
+						}
+
+						Divider()
+
+						ForEach(TuistCleanCategory.allCases, id: \.self) { category in
+							Button {
+								store.send(.cleanTapped(category))
+							} label: {
+								Label(category.displayName, systemImage: category.systemImage)
+							}
+						}
+					} label: {
+						Label("Clean", systemImage: "paintbrush")
+					}
 				} label: {
 					Text("Tuist")
 						.font(.system(size: 12))
@@ -96,6 +116,8 @@ struct TuistButtonView: View {
 			"Opening..."
 		case .inspectDependencies:
 			"Inspecting..."
+		case .clean:
+			"Cleaning..."
 		}
 	}
 
@@ -117,6 +139,13 @@ struct TuistButtonView: View {
 			"Opening Tuist project for editing..."
 		case .inspectDependencies:
 			"Inspecting implicit dependencies..."
+		case let .clean(category):
+			if let category {
+				"Cleaning the Tuist \(category.displayName) cache..."
+			}
+			else {
+				"Cleaning all Tuist caches..."
+			}
 		}
 	}
 }
