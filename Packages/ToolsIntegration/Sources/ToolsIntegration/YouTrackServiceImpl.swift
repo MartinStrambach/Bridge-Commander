@@ -12,7 +12,7 @@ public struct YouTrackClient: Sendable {
 extension YouTrackClient: DependencyKey {
 	public static let liveValue = YouTrackClient(
 		fetchIssueDetails: { ticketId, authToken in
-			let (androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState) = await YouTrackService
+			let (androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState) = try await YouTrackService
 				.fetchIssueDetails(for: ticketId, authToken: authToken)
 
 			return IssueDetails(

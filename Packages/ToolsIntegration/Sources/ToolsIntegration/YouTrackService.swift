@@ -1,5 +1,14 @@
 import Foundation
 
+/// Thrown when a YouTrack fetch could not complete. Distinct from a completed
+/// fetch of an issue that simply lacks the code-review fields, which returns
+/// nils — only the latter means the ticket genuinely has nothing to show.
+public nonisolated enum YouTrackServiceError: Error {
+	case missingToken
+	case invalidURL
+	case httpFailure(statusCode: Int)
+}
+
 public nonisolated enum YouTrackService {
 	private static let baseURL = "https://youtrack.livesport.eu/api"
 
@@ -8,8 +17,10 @@ public nonisolated enum YouTrackService {
 	///   - ticketId: The YouTrack ticket ID (e.g., "MOB-1963")
 	///   - authToken: The YouTrack authentication token
 	/// - Returns: A tuple containing (androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState), any
-	/// of which may be nil if not found
-	public static func fetchIssueDetails(for ticketId: String, authToken: String) async
+	/// of which may be nil if not found. All-nil is also returned for a 404 — the ticket does not exist.
+	/// - Throws: when the answer is unknown (missing token, network, non-404 HTTP, decoding), so callers
+	/// can keep last-known state rather than treating the ticket as field-less.
+	public static func fetchIssueDetails(for ticketId: String, authToken: String) async throws
 		-> (
 			androidCR: CodeReviewState?,
 			iosCR: CodeReviewState?,
@@ -21,13 +32,13 @@ public nonisolated enum YouTrackService {
 		// Validate that a token is configured
 		guard !authToken.isEmpty else {
 			print("YouTrackService: Cannot fetch issue details without a valid auth token")
-			return (nil, nil, nil, nil, nil)
+			throw YouTrackServiceError.missingToken
 		}
 
 		let issueURL = "\(baseURL)/issues/\(ticketId)?fields=customFields(name,value(text,name))"
 
 		guard let url = URL(string: issueURL) else {
-			return (nil, nil, nil, nil, nil)
+			throw YouTrackServiceError.invalidURL
 		}
 
 		var request = URLRequest(url: url)
@@ -35,51 +46,50 @@ public nonisolated enum YouTrackService {
 		request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
 		request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-		do {
-			print("YouTrackService: Fetching \(issueURL)")
-			let (data, response) = try await URLSession.shared.data(for: request)
+		print("YouTrackService: Fetching \(issueURL)")
+		let (data, response) = try await URLSession.shared.data(for: request)
 
-			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-				print("YouTrackService: Failed with status code \(statusCode)")
+		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+			let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+			if statusCode == 404 {
+				// The ticket ID parsed from the branch has no matching issue —
+				// a definitive answer, not a failure.
+				print("YouTrackService: Issue \(ticketId) not found")
 				return (nil, nil, nil, nil, nil)
 			}
-
-			let decoder = JSONDecoder()
-			let issue = try decoder.decode(YouTrackIssue.self, from: data)
-			print("YouTrackService: Successfully fetched issue \(issue.key ?? "unknown")")
-
-			let androidCRString = extractCustomFieldValue(from: issue, fieldName: "Android CR")
-			let androidCR = androidCRString.flatMap { CodeReviewState(rawValue: $0) }
-			let iosCRString = extractCustomFieldValue(from: issue, fieldName: "iOS CR")
-			let iosCR = iosCRString.flatMap { CodeReviewState(rawValue: $0) }
-			let androidReviewerName = extractCustomFieldValue(from: issue, fieldName: "Android CR Assignee")
-			let iosReviewerName = extractCustomFieldValue(from: issue, fieldName: "iOS CR Assignee")
-			let ticketStateString = extractCustomFieldValue(from: issue, fieldName: "State")
-			let ticketState = ticketStateString.flatMap { TicketState(rawValue: $0) }
-
-			if let androidCRString {
-				print("YouTrackService: Found Android CR: \(androidCRString) -> \(androidCR?.rawValue ?? "unknown")")
-			}
-			if let iosCRString {
-				print("YouTrackService: Found iOS CR: \(iosCRString) -> \(iosCR?.rawValue ?? "unknown")")
-			}
-			if let androidReviewerName {
-				print("YouTrackService: Found Android CR Assignee: \(androidReviewerName)")
-			}
-			if let iosReviewerName {
-				print("YouTrackService: Found iOS CR Assignee: \(iosReviewerName)")
-			}
-			if let ticketStateString {
-				print("YouTrackService: Found State: \(ticketStateString) -> \(ticketState?.rawValue ?? "unknown")")
-			}
-
-			return (androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState)
+			throw YouTrackServiceError.httpFailure(statusCode: statusCode)
 		}
-		catch {
-			print("YouTrackService: Error decoding response: \(error)")
-			return (nil, nil, nil, nil, nil)
+
+		let decoder = JSONDecoder()
+		let issue = try decoder.decode(YouTrackIssue.self, from: data)
+		print("YouTrackService: Successfully fetched issue \(issue.key ?? "unknown")")
+
+		let androidCRString = extractCustomFieldValue(from: issue, fieldName: "Android CR")
+		let androidCR = androidCRString.flatMap { CodeReviewState(rawValue: $0) }
+		let iosCRString = extractCustomFieldValue(from: issue, fieldName: "iOS CR")
+		let iosCR = iosCRString.flatMap { CodeReviewState(rawValue: $0) }
+		let androidReviewerName = extractCustomFieldValue(from: issue, fieldName: "Android CR Assignee")
+		let iosReviewerName = extractCustomFieldValue(from: issue, fieldName: "iOS CR Assignee")
+		let ticketStateString = extractCustomFieldValue(from: issue, fieldName: "State")
+		let ticketState = ticketStateString.flatMap { TicketState(rawValue: $0) }
+
+		if let androidCRString {
+			print("YouTrackService: Found Android CR: \(androidCRString) -> \(androidCR?.rawValue ?? "unknown")")
 		}
+		if let iosCRString {
+			print("YouTrackService: Found iOS CR: \(iosCRString) -> \(iosCR?.rawValue ?? "unknown")")
+		}
+		if let androidReviewerName {
+			print("YouTrackService: Found Android CR Assignee: \(androidReviewerName)")
+		}
+		if let iosReviewerName {
+			print("YouTrackService: Found iOS CR Assignee: \(iosReviewerName)")
+		}
+		if let ticketStateString {
+			print("YouTrackService: Found State: \(ticketStateString) -> \(ticketState?.rawValue ?? "unknown")")
+		}
+
+		return (androidCR, iosCR, androidReviewerName, iosReviewerName, ticketState)
 	}
 
 	/// Extracts a custom field value by field name

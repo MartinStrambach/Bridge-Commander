@@ -6,18 +6,22 @@ public nonisolated enum GitHubService {
 	/// Fetches the branch's most recently created PR — state, draft flag, and unresolved
 	/// review-thread count — in a single GraphQL request. REST would need two (it does not
 	/// expose thread resolution at all).
+	///
+	/// Returns `nil` only when the API confirmed no PR exists for the branch; any failure
+	/// to get an answer (missing token, network, HTTP, decoding) throws instead, so
+	/// callers can keep last-known state rather than treating the branch as PR-less.
 	public static func fetchPullRequest(
 		owner: String,
 		repo: String,
 		branch: String,
 		token: String
-	) async -> PullRequestDetails? {
+	) async throws -> PullRequestDetails? {
 		guard !token.isEmpty else {
 			print("GitHubService: No token configured, skipping PR fetch")
-			return nil
+			throw GitHostingError.missingToken
 		}
 		guard let url = URL(string: graphQLURL) else {
-			return nil
+			throw GitHostingError.invalidURL
 		}
 
 		// First 100 review threads only — enough in practice; the count is best-effort anyway.
@@ -44,40 +48,33 @@ public nonisolated enum GitHubService {
 		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 		request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-		do {
-			request.httpBody = try JSONEncoder().encode(
-				GitHubGraphQLRequest(
-					query: query,
-					variables: .init(owner: owner, name: repo, branch: branch)
-				)
+		request.httpBody = try JSONEncoder().encode(
+			GitHubGraphQLRequest(
+				query: query,
+				variables: .init(owner: owner, name: repo, branch: branch)
 			)
+		)
 
-			print("GitHubService: Fetching PR for \(owner)/\(repo) on branch \(branch)")
-			let (data, response) = try await URLSession.shared.data(for: request)
+		print("GitHubService: Fetching PR for \(owner)/\(repo) on branch \(branch)")
+		let (data, response) = try await URLSession.shared.data(for: request)
 
-			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-				print("GitHubService: Failed with status code \(statusCode)")
-				return nil
-			}
-
-			let decoded = try JSONDecoder().decode(GitHubPullRequestResponse.self, from: data)
-			guard let pullRequest = decoded.pullRequest else {
-				print("GitHubService: No PR found for \(owner)/\(repo) on branch \(branch)")
-				return nil
-			}
-
-			return PullRequestDetails(
-				url: pullRequest.url,
-				state: pullRequest.mappedState,
-				provider: .github,
-				unresolvedDiscussionsCount: pullRequest.unresolvedCount
-			)
+		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+			let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+			throw GitHostingError.httpFailure(statusCode: statusCode)
 		}
-		catch {
-			print("GitHubService: Error: \(error)")
+
+		let decoded = try JSONDecoder().decode(GitHubPullRequestResponse.self, from: data)
+		guard let pullRequest = decoded.pullRequest else {
+			print("GitHubService: No PR found for \(owner)/\(repo) on branch \(branch)")
 			return nil
 		}
+
+		return PullRequestDetails(
+			url: pullRequest.url,
+			state: pullRequest.mappedState,
+			provider: .github,
+			unresolvedDiscussionsCount: pullRequest.unresolvedCount
+		)
 	}
 }
 

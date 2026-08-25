@@ -265,10 +265,29 @@ struct RepositoryRowReducer {
 				let branch = status.branch ?? state.branchName ?? state.name
 				let unstaged = isMerge ? 0 : status.unstagedCount
 				let staged = isMerge ? 0 : status.stagedCount
+				// Failed YouTrack/PR fetches keep last-known state, so it must be dropped
+				// here the moment its key changes — otherwise a checkout followed by a
+				// failed fetch would keep showing the previous branch's data.
+				if branch != state.branchName {
+					state.prUrl = nil
+					state.prState = nil
+					state.prProvider = nil
+					state.pipelineState = nil
+					state.pipelineUrl = nil
+					state.prUnresolvedDiscussions = nil
+					state.shareButton.updatePRURL(nil)
+				}
 				state.branchName = branch
 				let newTicketId = state.ticketIdRegex.isEmpty
 					? nil
 					: GitBranchDetector.extractTicketId(from: branch, pattern: state.ticketIdRegex)
+				if newTicketId != state.ticketId {
+					state.androidCR = nil
+					state.iosCR = nil
+					state.androidReviewerName = nil
+					state.iosReviewerName = nil
+					state.ticketState = nil
+				}
 				state.ticketId = newTicketId
 				state.ticketButton = newTicketId.map { TicketButtonReducer.State(ticketId: $0) }
 				state.shareButton.updateTicketURL(newTicketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? "")
@@ -390,7 +409,8 @@ struct RepositoryRowReducer {
 				await send(.didFetchYouTrack(details))
 			}
 			catch {
-				// Silently fail - YouTrack might be unavailable
+				// YouTrack unreachable or unauthorized — the answer is unknown, so keep
+				// the last-known code review state instead of clearing it.
 				print("Failed to fetch YouTrack details for \(ticketId): \(error.localizedDescription)")
 			}
 		}
@@ -411,8 +431,15 @@ struct RepositoryRowReducer {
 				return
 			}
 
-			let details = await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
-			await send(.didFetchPullRequest(details))
+			do {
+				let details = try await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
+				await send(.didFetchPullRequest(details))
+			}
+			catch {
+				// Provider unreachable or unauthorized — the answer is unknown, so keep
+				// the last-known PR state instead of clearing it like a confirmed "no PR".
+				print("Failed to fetch PR details for \(branchName): \(error)")
+			}
 		}
 	}
 }

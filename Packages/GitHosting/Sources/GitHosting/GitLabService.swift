@@ -5,17 +5,21 @@ public nonisolated enum GitLabService {
 
 	/// Fetches the branch's most recently created MR — state, head pipeline, and unresolved
 	/// discussion count — in a single GraphQL request.
+	///
+	/// Returns `nil` only when the API confirmed no MR exists for the branch; any failure
+	/// to get an answer (missing token, network, HTTP, decoding) throws instead, so
+	/// callers can keep last-known state rather than treating the branch as MR-less.
 	public static func fetchMergeRequest(
 		projectPath: String,
 		branch: String,
 		token: String
-	) async -> PullRequestDetails? {
+	) async throws -> PullRequestDetails? {
 		guard !token.isEmpty else {
 			print("GitLabService: No token configured, skipping MR fetch")
-			return nil
+			throw GitHostingError.missingToken
 		}
 		guard let url = URL(string: graphQLURL) else {
-			return nil
+			throw GitHostingError.invalidURL
 		}
 
 		let query = """
@@ -44,41 +48,34 @@ public nonisolated enum GitLabService {
 		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 		request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-		do {
-			request.httpBody = try JSONEncoder().encode(
-				GitLabGraphQLRequest(
-					query: query,
-					variables: .init(fullPath: projectPath, branch: branch)
-				)
+		request.httpBody = try JSONEncoder().encode(
+			GitLabGraphQLRequest(
+				query: query,
+				variables: .init(fullPath: projectPath, branch: branch)
 			)
+		)
 
-			print("GitLabService: Fetching MR for \(projectPath) on branch \(branch)")
-			let (data, response) = try await URLSession.shared.data(for: request)
+		print("GitLabService: Fetching MR for \(projectPath) on branch \(branch)")
+		let (data, response) = try await URLSession.shared.data(for: request)
 
-			guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-				let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-				print("GitLabService: Failed with status code \(statusCode)")
-				return nil
-			}
-
-			let decoded = try JSONDecoder().decode(GitLabMergeRequestResponse.self, from: data)
-			guard let mergeRequest = decoded.mergeRequest else {
-				print("GitLabService: No MR found for \(projectPath) on branch \(branch)")
-				return nil
-			}
-
-			return PullRequestDetails(
-				url: mergeRequest.webUrl,
-				state: mergeRequest.mappedState,
-				provider: .gitlab,
-				pipeline: mergeRequest.pipelineStatus,
-				unresolvedDiscussionsCount: mergeRequest.unresolvedCount
-			)
+		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+			let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+			throw GitHostingError.httpFailure(statusCode: statusCode)
 		}
-		catch {
-			print("GitLabService: Error: \(error)")
+
+		let decoded = try JSONDecoder().decode(GitLabMergeRequestResponse.self, from: data)
+		guard let mergeRequest = decoded.mergeRequest else {
+			print("GitLabService: No MR found for \(projectPath) on branch \(branch)")
 			return nil
 		}
+
+		return PullRequestDetails(
+			url: mergeRequest.webUrl,
+			state: mergeRequest.mappedState,
+			provider: .gitlab,
+			pipeline: mergeRequest.pipelineStatus,
+			unresolvedDiscussionsCount: mergeRequest.unresolvedCount
+		)
 	}
 }
 
