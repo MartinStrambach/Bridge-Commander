@@ -495,6 +495,20 @@ struct RepositoryListReducer {
 				sortGroupsInState(in: &state)
 				return .none
 
+			// MARK: - Terminal git menu sync
+
+			// Fired once per row status fetch (see RepositoryRowReducer.didFetchStatus), by which
+			// point the row's own menu state is already updated — copy it into the terminal header's
+			// menu when that row is the one opened in the terminal.
+			case let .repositoryGroups(.element(id: groupId, action: .header(.gitActionsMenu(.didCheckGitStatus)))):
+				guard let path = state.repositoryGroups[id: groupId]?.header.path else {
+					return .none
+				}
+				return syncTerminalGitMenu(for: path, in: &state)
+
+			case let .repositoryGroups(.element(_, .worktrees(.element(id: path, .gitActionsMenu(.didCheckGitStatus))))):
+				return syncTerminalGitMenu(for: path, in: &state)
+
 			// MARK: - Terminal Layout
 
 			case let .terminalLayout(.selectRepo(repositoryPath)):
@@ -624,6 +638,27 @@ struct RepositoryListReducer {
 					return .none
 				}
 				return refreshRow(for: path, in: state)
+
+			case let .terminalLayout(.gitActionsMenu(menuAction)):
+				// Same completion routing as RepositoryRowReducer.gitActionsMenu: a finished
+				// operation re-runs the row's status fetch, which then syncs back into this copy.
+				switch menuAction {
+				case .abortMergeButton(.abortMergeCompleted),
+				     .discardButton(.discardCompleted),
+				     .fetchButton(.fetchCompleted),
+				     .mergeMasterButton(.mergeMasterCompleted),
+				     .pullButton(.pullCompleted),
+				     .pushButton(.pushCompleted),
+				     .stashButton(.stashCompleted),
+				     .stashButton(.stashPopCompleted):
+					guard let path = state.terminalLayout?.activeRepositoryPath else {
+						return .none
+					}
+					return refreshRow(for: path, in: state)
+
+				default:
+					return .none
+				}
 
 			case .terminalLayout:
 				return .none
@@ -952,6 +987,7 @@ private func syncTerminalButtons(for path: String, in state: inout RepositoryLis
 		state.terminalLayout?.webButton = nil
 		state.terminalLayout?.tuistButton = nil
 		state.terminalLayout?.ticketButton = nil
+		state.terminalLayout?.gitActionsMenu = nil
 		return
 	}
 	state.terminalLayout?.xcodeButton = rowState.supportsIOS ? rowState.xcodeButton : nil
@@ -959,6 +995,36 @@ private func syncTerminalButtons(for path: String, in state: inout RepositoryLis
 	state.terminalLayout?.webButton = rowState.webButton
 	state.terminalLayout?.tuistButton = terminalTuistButton(for: rowState)
 	state.terminalLayout?.ticketButton = rowState.ticketButton
+	state.terminalLayout?.gitActionsMenu = rowState.gitActionsMenu
+}
+
+/// The terminal header's git menu is a copy of the row's state (see `syncTerminalButtons`),
+/// synced only when a repo is opened or selected. The fields gating which menu items show
+/// (remote branch, unpushed count, stash/discard flags, merge status) must be re-copied
+/// whenever the row's status fetch lands, or the copy drifts from reality.
+private func syncTerminalGitMenu(
+	for path: String,
+	in state: inout RepositoryListReducer.State
+) -> EffectOf<RepositoryListReducer> {
+	guard
+		state.terminalLayout?.activeRepositoryPath == path,
+		state.terminalLayout?.gitActionsMenu != nil,
+		let rowState = findRowState(for: path, in: state)
+	else {
+		return .none
+	}
+
+	let rowMenu = rowState.gitActionsMenu
+	state.terminalLayout?.gitActionsMenu?.currentBranch = rowMenu.currentBranch
+	state.terminalLayout?.gitActionsMenu?.isMergeInProgress = rowMenu.isMergeInProgress
+	state.terminalLayout?.gitActionsMenu?.hasRemoteBranch = rowMenu.hasRemoteBranch
+	state.terminalLayout?.gitActionsMenu?.unpushedCommitsCount = rowMenu.unpushedCommitsCount
+	state.terminalLayout?.gitActionsMenu?.stashButton.hasChanges = rowMenu.stashButton.hasChanges
+	state.terminalLayout?.gitActionsMenu?.discardButton.hasTrackedChanges = rowMenu.discardButton.hasTrackedChanges
+	state.terminalLayout?.gitActionsMenu?.discardButton.hasUntrackedFiles = rowMenu.discardButton.hasUntrackedFiles
+	state.terminalLayout?.gitActionsMenu?.setDefaultBranch(rowMenu.defaultBranch)
+	// The stash-list state is internal to the menu, so the copy re-checks it itself.
+	return .send(.terminalLayout(.gitActionsMenu(.refresh)))
 }
 
 /// The terminal header shows the Tuist menu under the same gate as the repository row:

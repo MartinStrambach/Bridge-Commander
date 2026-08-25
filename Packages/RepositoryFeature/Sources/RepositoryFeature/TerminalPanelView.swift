@@ -1,6 +1,7 @@
 import ActionButtons
 import AppUI
 import ComposableArchitecture
+import GitActionsMenu
 import GitGraphFeature
 import StagingFeature
 import SwiftTerm
@@ -98,6 +99,10 @@ struct TerminalPanelView: View {
 			}
 
 			Spacer()
+
+			if let gitActionsStore = store.scope(\.gitActionsMenu, action: \.gitActionsMenu) {
+				GitActionsMenuView(store: gitActionsStore)
+			}
 
 			if let tuistStore = store.scope(\.tuistButton, action: \.tuistButton) {
 				TuistButtonView(store: tuistStore)

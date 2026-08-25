@@ -2,6 +2,7 @@ import ActionButtons
 import ComposableArchitecture
 import Foundation
 import TerminalFeature
+import GitActionsMenu
 import GitCore
 import GitGraphFeature
 import StagingFeature
@@ -20,6 +21,7 @@ struct TerminalLayoutReducer {
 		var webButton: WebButtonReducer.State?
 		var tuistButton: TuistButtonReducer.State?
 		var ticketButton: TicketButtonReducer.State?
+		var gitActionsMenu: GitActionsMenuReducer.State?
 
 		@Presents
 		var stagingDetail: RepositoryDetail.State?
@@ -51,6 +53,7 @@ struct TerminalLayoutReducer {
 		case webButton(WebButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
+		case gitActionsMenu(GitActionsMenuReducer.Action)
 	}
 
 	var body: some Reducer<State, Action> {
@@ -62,6 +65,9 @@ struct TerminalLayoutReducer {
 			}
 			.ifLet(\.$gitGraph, action: \.gitGraph) {
 				GitGraphReducer()
+			}
+			.ifLet(\.gitActionsMenu, action: \.gitActionsMenu) {
+				GitActionsMenuReducer()
 			}
 	}
 
@@ -196,6 +202,10 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .ticketButton:
+				return .none
+
+			case .gitActionsMenu:
+				// Completions are routed to a row refresh by RepositoryListReducer
 				return .none
 			}
 		}

@@ -43,6 +43,7 @@ let package = Package(
 				"RepositoryFeature",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "GitCore", package: "GitCore"),
+				.product(name: "GitActionsMenu", package: "GitActionsMenu"),
 				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
 			]
 		),
