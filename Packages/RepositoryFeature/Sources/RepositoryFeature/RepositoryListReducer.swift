@@ -878,16 +878,20 @@ private func sortByState(
 	_ r1: RepositoryRowReducer.State,
 	_ r2: RepositoryRowReducer.State
 ) -> Bool {
-	let p1 = stateSortPriority(r1.ticketState)
-	let p2 = stateSortPriority(r2.ticketState)
+	let p1 = stateSortPriority(r1)
+	let p2 = stateSortPriority(r2)
 	if p1 != p2 {
 		return p1 < p2
 	}
 	return (r1.ticketId ?? "").localizedCaseInsensitiveCompare(r2.ticketId ?? "") == .orderedDescending
 }
 
-private func stateSortPriority(_ state: TicketState?) -> Int {
-	guard let state else {
+private func stateSortPriority(_ row: RepositoryRowReducer.State) -> Int {
+	guard row.ticketId != nil else {
+		return -1
+	}
+
+	guard let state = row.ticketState else {
 		return 4
 	}
 
