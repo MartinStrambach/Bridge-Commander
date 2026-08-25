@@ -160,6 +160,30 @@ struct TerminalGitActionsMenuTests {
 		await store.finish()
 	}
 
+	@Test("the header menu's merge flag follows the row's just-reported merge status")
+	func statusFetchSyncsHeaderMenuMergeFlag() async {
+		let store = makeStore()
+		store.exhaustivity = .off
+
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+		#expect(store.state.terminalLayout?.gitActionsMenu?.isMergeInProgress == false)
+
+		// Unlike the other gating fields — set by the row reducer before it reports the status
+		// — the merge flag is set by the row's *menu* while handling this very action. The copy
+		// still sees it because `forEach` runs the row before the parent; a sync moved ahead of
+		// the child (or a merge probe of its own) would lag a refresh behind and fail here.
+		await store.send(.repositoryGroups(.element(
+			id: "/repos/alpha",
+			action: .header(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: true)))
+		)))
+
+		#expect(store.state.terminalLayout?.gitActionsMenu?.isMergeInProgress == true)
+		await store.finish()
+	}
+
 	@Test("another row's status fetch leaves the header menu alone")
 	func otherRowStatusFetchIsIgnored() async {
 		let store = makeStore()

@@ -251,6 +251,81 @@ struct RepositoryListRefreshTests {
 		await store.finish()
 	}
 
+	// MARK: - Terminal-mode refresh after an in-panel operation
+
+	@Test("a successful push from the terminal toolbar refreshes the opened repo's row")
+	func toolbarPushRefreshesActiveRow() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		store.exhaustivity = .on
+
+		await store.send(.terminalLayout(.pushCompleted(
+			result: GitPushHelper.PushResult(isUpToDate: false, message: "pushed 2 commits"),
+			error: nil
+		)))
+
+		// The toolbar's own Push button has no other route back to the row, so without this
+		// refresh the unpushed count it renders keeps the pre-push value. Exhaustive: any
+		// other action — or none at all — fails here.
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+
+		store.exhaustivity = .off
+		await store.finish()
+	}
+
+	@Test("a failed push from the terminal toolbar alerts instead of refreshing")
+	func toolbarPushFailureAlertsWithoutRefreshing() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		store.exhaustivity = .on
+
+		let error = GitError.pushFailed("rejected: non-fast-forward")
+		// A rejected push leaves the local commits — and the count rendering them — exactly
+		// as they were, so it reports the failure rather than re-running the status fetch.
+		// Exhaustive: a row refresh reaching the queue fails here.
+		await store.send(.terminalLayout(.pushCompleted(result: nil, error: error))) {
+			$0.alert = AlertState {
+				TextState("Push Failed")
+			} message: {
+				TextState(error.localizedDescription)
+			}
+		}
+		await store.finish()
+	}
+
+	@Test("closing the staging sheet in terminal mode refreshes the opened repo's row")
+	func stagingSheetDismissalRefreshesActiveRow() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		await store.send(.terminalLayout(.stagingButtonTapped(
+			repositoryPath: "/repos/alpha",
+			iosSubfolderPath: ""
+		)))
+		store.exhaustivity = .on
+
+		// Same parity the row gets in list mode (RepositoryRowReducer.repositoryDetail(.dismiss)):
+		// a commit made in the sheet changes the row's counts, so re-run its status fetch.
+		await store.send(.terminalLayout(.stagingDetail(.dismiss))) {
+			$0.terminalLayout?.stagingDetail = nil
+		}
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+
+		store.exhaustivity = .off
+		await store.finish()
+	}
+
 	// MARK: - Helpers
 
 	private func makeStore(

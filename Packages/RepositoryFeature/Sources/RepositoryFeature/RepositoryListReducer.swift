@@ -627,6 +627,32 @@ struct RepositoryListReducer {
 				}
 				return refreshRow(for: repositoryPath, in: state)
 
+			case let .terminalLayout(.pushCompleted(_, error)):
+				// The toolbar's Push button is the one git operation in the panel that doesn't go
+				// through the header's actions menu, so it needs the same completion routing: the
+				// unpushed count it renders comes from the row, and nothing else re-reads it.
+				if let error {
+					state.alert = AlertState {
+						TextState("Push Failed")
+					} message: {
+						TextState(error.localizedDescription)
+					}
+					return .none
+				}
+				guard let path = state.terminalLayout?.activeRepositoryPath else {
+					return .none
+				}
+				return refreshRow(for: path, in: state)
+
+			case .terminalLayout(.stagingDetail(.dismiss)):
+				// Parity with RepositoryRowReducer.repositoryDetail(.dismiss), which covers the
+				// same sheet opened from a row: a commit or push made inside it changes the row's
+				// counts, so re-run its status fetch once the sheet closes.
+				guard let path = state.terminalLayout?.activeRepositoryPath else {
+					return .none
+				}
+				return refreshRow(for: path, in: state)
+
 			case let .terminalLayout(.sessionStatusChanged(sessionId, status)):
 				state.terminalSessions[id: sessionId]?.status = status
 				return .none
