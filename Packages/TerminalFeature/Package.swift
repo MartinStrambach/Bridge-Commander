@@ -21,5 +21,6 @@ let package = Package(
 				.product(name: "AppUI", package: "AppUI"),
 			]
 		),
+		.testTarget(name: "TerminalFeatureTests", dependencies: ["TerminalFeature"]),
 	]
 )

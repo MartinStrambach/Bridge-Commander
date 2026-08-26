@@ -92,8 +92,21 @@ public final class TerminalViewStore {
 
 /// Subclass of LocalProcessTerminalView that monitors terminal content for the
 /// Claude Code waiting-for-input prompt (❯, U+276F) and reports status changes.
+///
+/// The signal is silence from the process, qualified by the prompt being on screen. Since a waiting
+/// session writes nothing, every path that reports `.active` has to arrange for its own re-check —
+/// otherwise the status stays where the last event left it for as long as Claude stays quiet.
 public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	private static let claudePromptScalar: UInt32 = 0x276F // ❯
+
+	/// Claude draws its input prompt at column 0 and the arrow of a selected option at column 1.
+	/// The bound leaves room for small layout changes while rejecting the glyph where it can only be
+	/// ordinary output — mid-line in a diff, a log message, or a file being printed.
+	private static let maxPromptColumn = 4
+
+	/// Both prompt shapes sit on the last rendered lines, so the walk gives up after this many
+	/// non-empty rows. A `❯` further up the screen is scrollback, not a live prompt.
+	private static let maxInspectedRows = 12
 
 	public var repositoryPath: String = ""
 	public var sessionId: UUID = .init()
@@ -101,6 +114,16 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	private var currentStatus: TerminalSessionStatus = .active
 	private var debounceWorkItem: DispatchWorkItem?
+
+	/// Whether the render that ended at the last silence drew the prompt glyph. Read when the grid
+	/// itself can't be trusted because the user has scrolled the live screen out of view.
+	private var lastRenderDrewPrompt = false
+
+	/// Set once an idle check runs, so the next burst of output is recognised as the start of a new
+	/// render rather than a continuation of the one already judged.
+	private var idleCheckDidRun = false
+
+	private var promptGlyphScanner = PromptGlyphScanner()
 
 	// MARK: - Init
 
@@ -148,6 +171,17 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// the session is waiting for user input.
 	override public func dataReceived(slice: ArraySlice<UInt8>) {
 		super.dataReceived(slice: slice)
+
+		// A burst that follows an idle check opens a new render window: whatever the previous one
+		// drew has been judged already and may no longer be on screen.
+		if idleCheckDidRun {
+			idleCheckDidRun = false
+			lastRenderDrewPrompt = false
+		}
+		if promptGlyphScanner.scan(slice) {
+			lastRenderDrewPrompt = true
+		}
+
 		// Data is flowing → Claude is working, not waiting.
 		if currentStatus == .waitingForInput {
 			reportStatus(.active)
@@ -161,6 +195,10 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		if currentStatus == .waitingForInput {
 			reportStatus(.active)
 		}
+		// Keystrokes are the other way into `.active`, so they have to re-arm the check too. A key
+		// that Claude doesn't echo produces no output, and without this the session would sit on a
+		// stale `.active` until it wrote something again.
+		scheduleIdleCheck()
 	}
 
 	private func scheduleIdleCheck() {
@@ -176,13 +214,19 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: workItem)
 	}
 
-	/// After 1.5 s of silence from the process, check whether the Claude prompt
-	/// character is visible — if so, Claude is waiting for input.
+	/// After 1.5 s of silence from the process, check whether Claude is sitting at a prompt — its
+	/// input box, or the arrow marking the selected option of a dialog.
+	///
+	/// The glyph alone is weak evidence, so it is qualified twice over: the pane must have Claude in
+	/// the foreground, and the hit must land where Claude puts a prompt rather than anywhere on
+	/// screen.
 	///
 	/// Runs on the main thread after every burst of output, for every open session, so the scan
 	/// is kept off the slow paths:
-	/// - Rows are walked bottom-up. The prompt sits on the last written line, so a hit exits
-	///   almost immediately instead of after a full grid traversal.
+	/// - Panes that aren't running Claude skip the grid walk altogether.
+	/// - Rows are walked bottom-up and only the leftmost columns of each are read. The prompt sits on
+	///   the last written line, so a hit exits almost immediately instead of after a full grid
+	///   traversal.
 	/// - Only the trimmed length of each row is read; untouched cells can't hold the prompt, and
 	///   blank rows below the cursor cost nothing.
 	/// - Cells are compared by Unicode scalar value. `Character == Character` runs a
@@ -190,10 +234,30 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	///   common miss it was the dominant cost: measured 156 µs per scan of a 50x200 grid
 	///   versus 65 µs comparing scalars.
 	private func checkIfWaiting() {
+		idleCheckDidRun = true
+
 		guard let t = terminal else {
 			return
 		}
 
+		// A shell prompt theme, a diff, or scrollback can all put `❯` on screen, so the glyph only
+		// carries meaning while Claude owns the pane. An unidentifiable foreground process falls
+		// through to the scan.
+		if PtyForegroundProcess.isClaude(ptyDescriptor: process?.childfd ?? -1) == false {
+			reportStatus(.active)
+			return
+		}
+
+		// `Terminal.getLine(row:)` is relative to the scroll position, so a user reading back through
+		// scrollback would have the prompt scanned for on a screen that no longer holds it. Judge the
+		// render itself in that case: the last frame Claude drew before going quiet is what the live
+		// screen still shows.
+		guard isShowingLiveScreen else {
+			reportStatus(lastRenderDrewPrompt ? .waitingForInput : .active)
+			return
+		}
+
+		var inspectedRows = 0
 		for row in stride(from: t.rows - 1, through: 0, by: -1) {
 			guard let line = t.getLine(row: row) else {
 				continue
@@ -201,16 +265,33 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 			// Bounded by the visible width as well as the row's own storage: a buffer line can
 			// stay wider than the terminal after a resize, and those cells aren't on screen.
-			let limit = min(line.getTrimmedLength(), min(line.count, t.cols))
+			let trimmedLength = line.getTrimmedLength()
+			guard trimmedLength > 0 else {
+				continue
+			}
+
+			let limit = min(trimmedLength, line.count, t.cols, Self.maxPromptColumn + 1)
 			for col in 0 ..< limit {
 				if line[col].getCharacter().unicodeScalars.first?.value == Self.claudePromptScalar {
 					reportStatus(.waitingForInput)
 					return
 				}
 			}
+
+			inspectedRows += 1
+			if inspectedRows == Self.maxInspectedRows {
+				break
+			}
 		}
 		// No prompt visible — terminal is idle but not at Claude's input.
 		reportStatus(.active)
+	}
+
+	/// Whether the viewport is showing the bottom of the buffer, where the live screen sits.
+	/// `canScroll` is false while there is no scrollback to move through, and for the alternate
+	/// buffer, both of which only ever display the live screen.
+	private var isShowingLiveScreen: Bool {
+		!canScroll || scrollPosition >= 1
 	}
 
 	private func reportStatus(_ status: TerminalSessionStatus) {
