@@ -8,6 +8,7 @@ import StagingFeature
 import SwiftUI
 import TerminalFeature
 import ToolsIntegration
+import YouTrackMenu
 
 struct RepositoryRowView: View {
 	@Bindable
@@ -320,6 +321,12 @@ struct RepositoryRowView: View {
 					\.tuistButton,
 					action: \.tuistButton
 				))
+			}
+
+			// Grouped with the other dropdowns rather than next to the ticket icon, so the
+			// text-label menus stay together on the left of the icon buttons.
+			if let youtrackButtonStore = store.scope(\.youtrackButton, action: \.youtrackButton) {
+				YouTrackButtonView(store: youtrackButtonStore)
 			}
 
 			// Copy path button

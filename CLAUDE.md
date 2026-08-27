@@ -25,6 +25,7 @@ Packages/
   TerminalFeature/        # Embedded terminal (session, view, store)
   ActionButtons/          # Android Studio button Reducer+View pair
   GitActionsMenu/         # Git actions menu (push/pull/fetch/stash/merge/discard/abort)
+  YouTrackMenu/           # YouTrack ticket menu (move to a reachable state)
   GitGraphFeature/        # Commit graph view
   StagingFeature/         # File staging panel (detail view, diff, commit)
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature)
@@ -57,6 +58,10 @@ Packages/
 - `TerminalLauncher`, `ClaudeCodeLauncher`, `AndroidStudioLauncher`
 - `XcodeProjectDetector`, `XcodeProjectGenerator`, `XcodeDerivedDataHelper`
 - `TuistCommandHelper`, `BranchNameFormatter`, `FileOpener`, `PermissionChecker`
+
+**YouTrackMenu** — YouTrack ticket menu
+- `YouTrackButtonReducer` / `YouTrackButtonView` — moves a ticket to a different state
+- Offers only the transitions YouTrack reports as reachable (`IssueDetails.stateTransitions`); the row supplies them, this package only applies the chosen one
 
 **TerminalFeature** — embedded terminal panel
 - `TerminalSession`, `TerminalViewStore`, `TerminalViewRepresentable`, `TerminalStatusDotView`

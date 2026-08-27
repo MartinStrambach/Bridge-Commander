@@ -30,6 +30,7 @@
 		93A44E5A2F92DBBC000EC92E /* GitHosting */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = GitHosting; path = Packages/GitHosting; sourceTree = "<group>"; };
 		93C9515E2F807809002EB9A8 /* ActionButtons */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ActionButtons; path = Packages/ActionButtons; sourceTree = "<group>"; };
 		93D4B2C12FAB515100AE9EB8 /* StagingFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = StagingFeature; path = Packages/StagingFeature; sourceTree = "<group>"; };
+		93E7A1D42FB0000100AE9EB8 /* YouTrackMenu */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = YouTrackMenu; path = Packages/YouTrackMenu; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -71,6 +72,7 @@
 				93D4B2C12FAB515100AE9EB8 /* StagingFeature */,
 				932CED7E2F793C71004ED67F /* TerminalFeature */,
 				932CED7F2F793C71004ED67F /* ToolsIntegration */,
+				93E7A1D42FB0000100AE9EB8 /* YouTrackMenu */,
 				93351BB62ECD3F1A006D4609 /* BridgeCommander */,
 				93351BB52ECD3F1A006D4609 /* Products */,
 			);

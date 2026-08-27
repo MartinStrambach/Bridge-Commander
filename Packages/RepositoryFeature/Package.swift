@@ -19,6 +19,7 @@ let package = Package(
 		.package(path: "../GitActionsMenu"),
 		.package(path: "../ActionButtons"),
 		.package(path: "../StagingFeature"),
+		.package(path: "../YouTrackMenu"),
 	],
 	targets: [
 		.target(
@@ -35,6 +36,7 @@ let package = Package(
 				.product(name: "GitActionsMenu", package: "GitActionsMenu"),
 				.product(name: "ActionButtons", package: "ActionButtons"),
 				.product(name: "StagingFeature", package: "StagingFeature"),
+				.product(name: "YouTrackMenu", package: "YouTrackMenu"),
 			]
 		),
 		.testTarget(
@@ -46,6 +48,7 @@ let package = Package(
 				.product(name: "GitActionsMenu", package: "GitActionsMenu"),
 				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
 				.product(name: "AppUI", package: "AppUI"),
+				.product(name: "YouTrackMenu", package: "YouTrackMenu"),
 			]
 		),
 	]

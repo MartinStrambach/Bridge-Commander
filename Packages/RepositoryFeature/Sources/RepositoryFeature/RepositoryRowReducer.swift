@@ -7,6 +7,7 @@ import GitHosting
 import Settings
 import StagingFeature
 import ToolsIntegration
+import YouTrackMenu
 
 // MARK: - Repository Row Reducer
 
@@ -46,6 +47,9 @@ struct RepositoryRowReducer {
 		var claudeCodeButton: ClaudeCodeButtonReducer.State
 		var androidStudioButton: AndroidStudioButtonReducer.State
 		var ticketButton: TicketButtonReducer.State?
+		/// Nil until a YouTrack fetch reports a state-machine State field with reachable
+		/// transitions — there is nothing to offer otherwise, so the menu stays hidden.
+		var youtrackButton: YouTrackButtonReducer.State?
 		var webButton: WebButtonReducer.State?
 		var shareButton: ShareButtonReducer.State
 		var deleteWorktreeButton: DeleteWorktreeButtonReducer.State
@@ -164,6 +168,7 @@ struct RepositoryRowReducer {
 		case claudeCodeButton(ClaudeCodeButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
+		case youtrackButton(YouTrackButtonReducer.Action)
 		case webButton(WebButtonReducer.Action)
 		case shareButton(ShareButtonReducer.Action)
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
@@ -287,6 +292,7 @@ struct RepositoryRowReducer {
 					state.androidReviewerName = nil
 					state.iosReviewerName = nil
 					state.ticketState = nil
+					state.youtrackButton = nil
 				}
 				state.ticketId = newTicketId
 				state.ticketButton = newTicketId.map { TicketButtonReducer.State(ticketId: $0) }
@@ -323,6 +329,11 @@ struct RepositoryRowReducer {
 				state.androidReviewerName = details?.androidReviewerName
 				state.iosReviewerName = details?.iosReviewerName
 				state.ticketState = details?.ticketState
+				state.youtrackButton = makeYouTrackButton(
+					ticketId: state.ticketId,
+					details: details,
+					existing: state.youtrackButton
+				)
 				return .none
 
 			case let .didFetchPullRequest(details):
@@ -366,6 +377,11 @@ struct RepositoryRowReducer {
 					return .none
 				}
 
+			case .youtrackButton(.delegate(.stateChanged)):
+				// Re-read the issue: the state chip and the set of reachable transitions both
+				// changed, and only YouTrack knows the new ones.
+				return fetchYouTrack(for: state)
+
 			case .repositoryDetail(.dismiss):
 				// Refresh when detail view is closed to pick up any staging changes
 				return .send(.refresh)
@@ -377,12 +393,50 @@ struct RepositoryRowReducer {
 		.ifLet(\.ticketButton, action: \.ticketButton) {
 			TicketButtonReducer()
 		}
+		.ifLet(\.youtrackButton, action: \.youtrackButton) {
+			YouTrackButtonReducer()
+		}
 		.ifLet(\.webButton, action: \.webButton) {
 			WebButtonReducer()
 		}
 		.ifLet(\.$repositoryDetail, action: \.repositoryDetail) {
 			RepositoryDetail()
 		}
+	}
+
+	// MARK: - Private Helpers
+
+	/// Builds the YouTrack menu's state, or nil when there is nothing to offer — no ticket, a
+	/// failed fetch, or a State field that reports no reachable transitions.
+	///
+	/// A periodic refresh can land mid-transition, so the in-flight flag and any error alert are
+	/// carried over from `existing`: dropping them would abort the progress indicator, dismiss
+	/// the alert under the user, and re-open the double-tap the flag exists to prevent.
+	private func makeYouTrackButton(
+		ticketId: String?,
+		details: IssueDetails?,
+		existing: YouTrackButtonReducer.State?
+	) -> YouTrackButtonReducer.State? {
+		guard
+			let ticketId,
+			let details,
+			let stateFieldId = details.stateFieldId,
+			!details.stateTransitions.isEmpty
+		else {
+			return nil
+		}
+
+		var button = YouTrackButtonReducer.State(
+			ticketId: ticketId,
+			stateFieldId: stateFieldId,
+			currentState: details.ticketState,
+			transitions: details.stateTransitions
+		)
+		if let existing, existing.ticketId == ticketId {
+			button.isApplying = existing.isApplying
+			button.alert = existing.alert
+		}
+		return button
 	}
 
 	// MARK: - Private Effect Builders
