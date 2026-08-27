@@ -16,6 +16,10 @@ struct RepoGroupView: View {
 	/// off. Built once by the parent.
 	var livePaths: Set<String>?
 
+	/// The list's active sort. Decides what the worktree rows are split under: state headers, ticket
+	/// headers, or nothing.
+	var sortMode: SortMode = .state
+
 	var body: some View {
 		let isExpanded = Binding(
 			get: { !store.isCollapsed },
@@ -29,11 +33,20 @@ struct RepoGroupView: View {
 		// instead of the whole list's.
 		let visibility = store.state.rowVisibility(query: searchText, livePaths: livePaths)
 		let hasVisibleWorktrees = store.worktrees.contains { visibility.includesWorktree(id: $0.id) }
+		// Resolved alongside `visibility` for the same reason: only this group's rows are read, so a
+		// header appearing or moving invalidates one group's body rather than the whole list's.
+		let sectionHeaders = store.state.sectionHeaders(sortMode: sortMode, visibility: visibility)
 
 		if !visibility.isHidden {
 			Section(isExpanded: isExpanded) {
 				ForEach(store.scope(\.worktrees, action: \.worktrees)) { rowStore in
 					if visibility.includesWorktree(id: rowStore.id) {
+						if let sectionHeader = sectionHeaders[rowStore.id] {
+							RowSectionHeaderView(header: sectionHeader)
+								.padding(.leading, 20)
+								.listRowInsets(EdgeInsets())
+								.listRowSeparator(.hidden)
+						}
 						RepositoryRowView(
 							store: rowStore,
 							terminalSessionStatus: statusByPath[rowStore.path]

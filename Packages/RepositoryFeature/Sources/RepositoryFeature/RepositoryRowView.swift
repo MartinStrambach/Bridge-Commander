@@ -27,34 +27,13 @@ struct RepositoryRowView: View {
 	/// Deliberately the full count, not the search-filtered one — it describes the repo, not the filter.
 	var worktreeCount: Int?
 
-	/// An "Open" ticket means work hasn't started yet — the row is inactive.
-	private var isInactive: Bool {
-		store.ticketState == .open
-	}
-
-	private var backgroundColorForState: Color {
-		if isGroupCollapsed != nil {
-			return Color.primary.opacity(0.1)
-		}
-		if let ticketState = store.ticketState {
-			switch ticketState {
-			case .done:
-				return Color.mint.opacity(0.1)
-
-			case .accepted,
-			     .waitingToAcceptation:
-				return Color.blue.opacity(0.15)
-
-			case .inProgress:
-				return Color.orange.opacity(0.1)
-
-			case .open,
-			     .waitingForTesting,
-			     .waitingToCodeReview:
-				return Color(NSColor.controlBackgroundColor).opacity(0.5)
-			}
-		}
-		return Color(NSColor.controlBackgroundColor).opacity(0.5)
+	/// Ticket state deliberately doesn't colour the row at all — neither its background nor its
+	/// text. Sorting by state groups the rows under state headers, and in the other sort modes a
+	/// per-row tint only made the list noisy.
+	private var backgroundColor: Color {
+		isGroupCollapsed != nil
+			? Color.primary.opacity(0.1)
+			: Color(NSColor.controlBackgroundColor).opacity(0.5)
 	}
 
 	var body: some View {
@@ -96,8 +75,6 @@ struct RepositoryRowView: View {
 					isMergeInProgress: store.gitActionsMenu.isMergeInProgress
 				)
 				repositoryInfo
-					// Grey out texts of not-yet-started (Open) tickets; explicit child colors stay.
-					.foregroundColor(isInactive ? .secondary : nil)
 				Spacer(minLength: 0)
 			}
 			// Own the vertical padding rather than inheriting it from the outer stack,
@@ -118,7 +95,7 @@ struct RepositoryRowView: View {
 				.padding(.vertical, 12)
 		}
 		.padding(.horizontal, 16)
-		.background(backgroundColorForState)
+		.background(backgroundColor)
 		.task {
 			store.send(.onAppear)
 		}

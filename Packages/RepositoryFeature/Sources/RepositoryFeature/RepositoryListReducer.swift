@@ -935,36 +935,18 @@ private func sortRepositories(
 	}
 }
 
+/// Orders rows by ``TicketStateSection`` — the same buckets the list draws headers for — then by
+/// ticket id within a bucket.
 private func sortByState(
 	_ r1: RepositoryRowReducer.State,
 	_ r2: RepositoryRowReducer.State
 ) -> Bool {
-	let p1 = stateSortPriority(r1)
-	let p2 = stateSortPriority(r2)
-	if p1 != p2 {
-		return p1 < p2
+	let s1 = TicketStateSection(row: r1)
+	let s2 = TicketStateSection(row: r2)
+	if s1 != s2 {
+		return s1 < s2
 	}
 	return (r1.ticketId ?? "").localizedCaseInsensitiveCompare(r2.ticketId ?? "") == .orderedDescending
-}
-
-private func stateSortPriority(_ row: RepositoryRowReducer.State) -> Int {
-	guard row.ticketId != nil else {
-		return -1
-	}
-
-	guard let state = row.ticketState else {
-		return 4
-	}
-
-	switch state {
-	case .open: return 0
-	case .inProgress: return 1
-	case .waitingToCodeReview: return 2
-	case .waitingForTesting: return 3
-	case .accepted,
-	     .waitingToAcceptation: return 5
-	case .done: return 6
-	}
 }
 
 private func applySettings(

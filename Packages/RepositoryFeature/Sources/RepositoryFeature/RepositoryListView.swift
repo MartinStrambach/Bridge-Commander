@@ -381,7 +381,8 @@ struct RepositoryListView: View {
 						store: groupStore,
 						statusByPath: statusByPath,
 						searchText: store.searchText,
-						livePaths: livePaths
+						livePaths: livePaths,
+						sortMode: store.sortMode
 					)
 				}
 			}
