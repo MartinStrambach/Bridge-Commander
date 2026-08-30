@@ -3,7 +3,7 @@
 SHELL := /bin/bash
 SCRIPTS := scripts
 
-.PHONY: help build-release notarize-app dmg notarize-dmg release clean check-tools
+.PHONY: help build-release notarize-app dmg notarize-dmg release publish clean check-tools
 
 help:
 	@echo "Targets:"
@@ -13,6 +13,7 @@ help:
 	@echo "  make dmg            Wrap the stapled .app in a signed DMG"
 	@echo "  make notarize-dmg   Submit the DMG to Apple notary and staple"
 	@echo "  make release        Full pipeline (check-tools, build, notarize, dmg, notarize)"
+	@echo "  make publish        Tag the commit and publish the DMG as a GitHub release"
 	@echo "  make clean          Remove build/ and dist/"
 
 check-tools:
@@ -32,6 +33,11 @@ notarize-dmg: dmg
 
 release: check-tools notarize-dmg
 	@echo "Release complete."
+
+# Intentionally not dependent on `release` — publishing should not silently
+# rebuild. The script verifies the DMG exists, is stapled, and is not stale.
+publish:
+	@bash $(SCRIPTS)/publish-github.sh
 
 clean:
 	@rm -rf build dist

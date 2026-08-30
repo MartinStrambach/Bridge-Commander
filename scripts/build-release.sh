@@ -64,4 +64,6 @@ codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 echo "==> spctl --assess (pre-notarization; warnings here are expected)"
 spctl --assess --type execute -vv "$APP_PATH" || true
 
+git -C "$PROJECT_ROOT" rev-parse HEAD > "$REVISION_FILE" 2>/dev/null || rm -f "$REVISION_FILE"
+
 echo "Built $APP_PATH (version $VERSION)"

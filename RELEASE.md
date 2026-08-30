@@ -49,7 +49,24 @@ Each phase is also a standalone target, useful when iterating:
 | `make notarize-app` | same `.app`, stapled |
 | `make dmg` | `dist/BridgeCommander-<version>.dmg` (signed, not notarized) |
 | `make notarize-dmg` | same DMG, stapled |
+| `make publish` | GitHub release + tag, with the DMG attached |
 | `make clean` | removes `build/` and `dist/` |
+
+## Publish to GitHub
+
+Requires the [GitHub CLI](https://cli.github.com) (`brew install gh`) authenticated with `gh auth login`.
+
+```sh
+make publish
+```
+
+Tags the current commit `<version>`, pushes the tag, and creates a GitHub release with `dist/BridgeCommander-<version>.dmg` attached. Release notes are generated from the commits since the previous tag.
+
+`DRAFT=1 make publish` creates the release as a draft so you can edit the notes before making it public.
+
+The target does **not** rebuild — run `make release` first. It refuses to publish if the working tree is dirty, `HEAD` is not pushed, the DMG is missing or unstapled, the DMG was built from a different commit than `HEAD`, or a release for that version already exists.
+
+`make build-release` records the source commit in `dist/.build-revision` (gitignored); the freshness check compares it against `HEAD`. DMGs built before this file existed are treated as stale and must be rebuilt.
 
 ## Version bump
 

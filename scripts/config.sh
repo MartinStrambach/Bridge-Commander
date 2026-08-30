@@ -57,7 +57,13 @@ fi
 
 DMG_PATH="$DIST_DIR/BridgeCommander-$VERSION.dmg"
 
+# Records the git commit the artifacts in dist/ were built from, so publishing
+# can refuse to ship a DMG that predates the current checkout. File mtimes are
+# not usable for this: stapling and validating both touch the DMG.
+REVISION_FILE="$DIST_DIR/.build-revision"
+
 mkdir -p "$BUILD_DIR" "$DIST_DIR"
 
 export SCRIPT_DIR PROJECT_ROOT APP_NAME SCHEME BUNDLE_ID XCODEPROJ \
-       BUILD_DIR DIST_DIR ARCHIVE_PATH APP_PATH ZIP_PATH VERSION DMG_PATH
+       BUILD_DIR DIST_DIR ARCHIVE_PATH APP_PATH ZIP_PATH VERSION DMG_PATH \
+       REVISION_FILE
