@@ -343,6 +343,18 @@ struct RepositoryRowView: View {
 				action: { openInFinder(store.path) }
 			)
 
+			// PR/MR fetch failure (conditional) — sits where the PR badge would, so a
+			// missing or stale badge and its cause are read in the same place.
+			if let prFetchError = store.prFetchError {
+				Image(systemName: "exclamationmark.triangle.fill")
+					.resizable()
+					.scaledToFit()
+					.padding(4)
+					.frame(width: 25, height: 25)
+					.foregroundColor(.orange)
+					.help(prFetchError)
+			}
+
 			// Open PR button (conditional), with unresolved discussions stacked below
 			if let prUrl = store.prUrl, let url = URL(string: prUrl) {
 				VStack(alignment: .center, spacing: 2) {

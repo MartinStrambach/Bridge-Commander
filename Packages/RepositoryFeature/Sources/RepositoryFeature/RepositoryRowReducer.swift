@@ -35,6 +35,9 @@ struct RepositoryRowReducer {
 		var pipelineState: PipelineState?
 		var pipelineUrl: String?
 		var prUnresolvedDiscussions: Int?
+		/// Why the last PR/MR fetch failed, as row-tooltip text. Nil while fetches
+		/// succeed — including a confirmed "no PR" — so the warning self-clears.
+		var prFetchError: String?
 		var androidCR: CodeReviewState?
 		var iosCR: CodeReviewState?
 		var androidReviewerName: String?
@@ -159,6 +162,7 @@ struct RepositoryRowReducer {
 		case didFetchStatus(GitPorcelainStatus, Bool)
 		case didFetchYouTrack(IssueDetails?)
 		case didFetchPullRequest(PullRequestDetails?)
+		case didFetchPullRequestFailed(String)
 		case openRepositoryDetail
 		case openTerminalForRepo
 		case repositoryDetail(PresentationAction<RepositoryDetail.Action>)
@@ -280,6 +284,7 @@ struct RepositoryRowReducer {
 					state.pipelineState = nil
 					state.pipelineUrl = nil
 					state.prUnresolvedDiscussions = nil
+					state.prFetchError = nil
 					state.shareButton.updatePRURL(nil)
 				}
 				state.branchName = branch
@@ -346,7 +351,12 @@ struct RepositoryRowReducer {
 				state.prUnresolvedDiscussions = details?.state.isOpen == true
 					? details?.unresolvedDiscussionsCount
 					: nil
+				state.prFetchError = nil
 				state.shareButton.updatePRURL(details?.url)
+				return .none
+
+			case let .didFetchPullRequestFailed(message):
+				state.prFetchError = message
 				return .none
 
 			case let .deleteWorktreeButton(action):
@@ -489,11 +499,33 @@ struct RepositoryRowReducer {
 				let details = try await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
 				await send(.didFetchPullRequest(details))
 			}
+			catch GitHostingError.missingToken {
+				// No token is a deliberate absence (PR integration not set up), not a
+				// failure — stay silent instead of flagging every feature-branch row.
+			}
 			catch {
 				// Provider unreachable or unauthorized — the answer is unknown, so keep
-				// the last-known PR state instead of clearing it like a confirmed "no PR".
+				// the last-known PR state instead of clearing it like a confirmed "no PR",
+				// and surface the reason on the row.
 				print("Failed to fetch PR details for \(branchName): \(error)")
+				await send(.didFetchPullRequestFailed(fetchErrorMessage(for: error, host: remote.host)))
 			}
+		}
+	}
+
+	/// Condenses a provider fetch error into row-tooltip text; the raw error still
+	/// goes to the console above.
+	private func fetchErrorMessage(for error: Error, host: String) -> String {
+		let subject = host.lowercased() == "gitlab.com" ? "GitLab MR" : "GitHub PR"
+		switch error {
+		case GitHostingError.httpFailure(statusCode: 401):
+			return "\(subject) fetch failed: HTTP 401 — check your token in Settings"
+
+		case let GitHostingError.httpFailure(statusCode):
+			return "\(subject) fetch failed: HTTP \(statusCode)"
+
+		default:
+			return "\(subject) fetch failed: \(error.localizedDescription)"
 		}
 	}
 }

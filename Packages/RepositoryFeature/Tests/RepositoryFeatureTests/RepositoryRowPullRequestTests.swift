@@ -114,13 +114,16 @@ struct RepositoryRowPullRequestTests {
 	}
 
 	@MainActor
-	private func makeFailingFetchStore(state: RepositoryRowReducer.State) -> TestStoreOf<RepositoryRowReducer> {
+	private func makeFailingFetchStore(
+		state: RepositoryRowReducer.State,
+		error: GitHostingError = .httpFailure(statusCode: 500)
+	) -> TestStoreOf<RepositoryRowReducer> {
 		let store = TestStore(initialState: state) {
 			RepositoryRowReducer()
 		} withDependencies: {
 			$0[GitClient.self].getOriginRemote = { _ in GitRemote(host: "gitlab.com", owner: "g", repo: "app") }
 			$0[PullRequestClient.self].fetchDetails = { _, _ in
-				throw GitHostingError.httpFailure(statusCode: 500)
+				throw error
 			}
 		}
 		store.exhaustivity = .off
@@ -157,5 +160,71 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.pipelineState == nil)
 		#expect(store.state.pipelineUrl == nil)
 		#expect(store.state.prUnresolvedDiscussions == nil)
+	}
+
+	// MARK: - Fetch error surfacing
+
+	@Test("a failed fetch surfaces a condensed provider-aware error message")
+	@MainActor
+	func failedFetchSetsErrorMessage() async {
+		let store = makeFailingFetchStore(state: makeRow())
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
+		await store.receive(\.didFetchPullRequestFailed)
+
+		#expect(store.state.prFetchError == "GitLab MR fetch failed: HTTP 500")
+	}
+
+	@Test("a 401 points the user at the token in Settings")
+	@MainActor
+	func unauthorizedFetchHintsAtSettings() async {
+		let store = makeFailingFetchStore(state: makeRow(), error: .httpFailure(statusCode: 401))
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
+		await store.receive(\.didFetchPullRequestFailed)
+
+		#expect(store.state.prFetchError == "GitLab MR fetch failed: HTTP 401 — check your token in Settings")
+	}
+
+	@Test("a missing token stays silent — unconfigured integration is not an error")
+	@MainActor
+	func missingTokenShowsNoError() async {
+		let store = makeFailingFetchStore(state: makeRow(), error: .missingToken)
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
+		await store.finish()
+		// Apply anything the effects did send, so the nil below can't pass on a
+		// buffered-but-unapplied failure action.
+		await store.skipReceivedActions(strict: false)
+
+		#expect(store.state.prFetchError == nil)
+	}
+
+	@Test("any completed fetch clears the error, including a confirmed no-PR answer")
+	@MainActor
+	func completedFetchClearsError() async {
+		var row = makeRow()
+		row.prFetchError = "GitLab MR fetch failed: HTTP 500"
+		let store = makeStore(state: row)
+
+		await store.send(.didFetchPullRequest(nil))
+
+		#expect(store.state.prFetchError == nil)
+	}
+
+	@Test("a branch switch drops the previous branch's fetch error")
+	@MainActor
+	func branchSwitchClearsError() async {
+		var row = makePopulatedRow()
+		row.prFetchError = "GitLab MR fetch failed: HTTP 500"
+		// The new branch's fetch is silent (missing token), so a surviving message
+		// could only be the stale one.
+		let store = makeFailingFetchStore(state: row, error: .missingToken)
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-9999_other"), false))
+		await store.finish()
+		await store.skipReceivedActions(strict: false)
+
+		#expect(store.state.prFetchError == nil)
 	}
 }
