@@ -12,6 +12,7 @@ public enum GitError: LocalizedError, Equatable {
 	case discardFailed(String)
 	case worktreeCreationFailed(String)
 	case worktreeRemovalFailed(String)
+	case branchDeletionFailed(String)
 	case stagingFailed(String)
 	case projectGenerationFailed(String)
 	case commitFailed(String)
@@ -40,6 +41,8 @@ public enum GitError: LocalizedError, Equatable {
 			"Failed to create worktree: \(message)"
 		case let .worktreeRemovalFailed(message):
 			"Failed to remove worktree: \(message)"
+		case let .branchDeletionFailed(message):
+			"Failed to delete branch: \(message)"
 		case let .stagingFailed(message):
 			"Operation failed: \(message)"
 		case let .projectGenerationFailed(message):

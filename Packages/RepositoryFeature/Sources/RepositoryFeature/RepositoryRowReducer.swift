@@ -161,7 +161,7 @@ struct RepositoryRowReducer {
 				branchName: branchName ?? name,
 				ticketURL: issueURL ?? ""
 			)
-			self.deleteWorktreeButton = .init(name: branchName ?? name, path: path)
+			self.deleteWorktreeButton = .init(name: branchName ?? name, path: path, defaultBranch: defaultBranch)
 			self.createWorktreeButton = .init(repositoryPath: path)
 			self.gitActionsMenu = .init(repositoryPath: path, currentBranch: name, defaultBranch: defaultBranch)
 		}
@@ -375,10 +375,15 @@ struct RepositoryRowReducer {
 				return .none
 
 			case let .deleteWorktreeButton(action):
-				if case .didRemoveSuccessfully = action {
+				switch action {
+				// On the warning path the rescan waits for the alert's dismissal —
+				// refreshing immediately would rebuild the rows and destroy the
+				// alert before the user can read it.
+				case .didRemoveSuccessfully, .removalWarningAlert(.dismiss):
 					return .send(.worktreeDeleted)
+				default:
+					return .none
 				}
-				return .none
 
 			case let .createWorktreeButton(action):
 				if case .didCreateSuccessfully = action {

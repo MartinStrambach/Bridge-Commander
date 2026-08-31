@@ -25,6 +25,6 @@ struct DeleteWorktreeButtonView: View {
 			DeleteWorktreeConfirmationView(store: confirmStore)
 		}
 		.alert($store.scope(\.$errorAlert, action: \.errorAlert))
-		.alert($store.scope(\.$derivedDataWarningAlert, action: \.derivedDataWarningAlert))
+		.alert($store.scope(\.$removalWarningAlert, action: \.removalWarningAlert))
 	}
 }

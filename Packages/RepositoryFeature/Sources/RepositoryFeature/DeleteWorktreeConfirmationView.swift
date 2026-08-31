@@ -40,6 +40,19 @@ struct DeleteWorktreeConfirmationView: View {
 			.frame(maxWidth: .infinity, alignment: .leading)
 			.padding(.horizontal)
 
+			Toggle(isOn: $store.deleteLocalBranch) {
+				VStack(alignment: .leading, spacing: 4) {
+					Text("Delete local branch")
+						.font(.body)
+					Text("Also delete the checked-out branch, even if it is unmerged; the default branch is never deleted")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+				}
+			}
+			.toggleStyle(.checkbox)
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.padding(.horizontal)
+
 			HStack(spacing: 12) {
 				Button("Cancel") {
 					store.send(.cancelTapped)
@@ -48,7 +61,10 @@ struct DeleteWorktreeConfirmationView: View {
 				.buttonStyle(.bordered)
 
 				Button("Remove", role: .destructive) {
-					store.send(.confirmTapped(forceRemoval: store.forceRemoval))
+					store.send(.confirmTapped(
+						forceRemoval: store.forceRemoval,
+						deleteLocalBranch: store.deleteLocalBranch
+					))
 				}
 				.keyboardShortcut(.defaultAction)
 				.buttonStyle(.borderedProminent)
@@ -65,7 +81,8 @@ struct DeleteWorktreeConfirmationView: View {
 		store: Store(
 			initialState: DeleteWorktreeButtonReducer.State(
 				name: "worktree",
-				path: "/path/to/worktree"
+				path: "/path/to/worktree",
+				defaultBranch: ""
 			),
 			reducer: {
 				DeleteWorktreeButtonReducer()
