@@ -13,6 +13,8 @@ public struct YouTrackButtonReducer: Sendable {
 	@ObservableState
 	public struct State: Equatable {
 		public let ticketId: String
+		/// Base URL of the YouTrack instance the ticket lives on, from the repo group's settings.
+		public let baseURL: String
 		/// The issue's State field, needed to address the write. Per-project, so it comes from
 		/// the fetch rather than a constant.
 		public let stateFieldId: String
@@ -24,11 +26,13 @@ public struct YouTrackButtonReducer: Sendable {
 
 		public init(
 			ticketId: String,
+			baseURL: String,
 			stateFieldId: String,
 			currentState: TicketState?,
 			transitions: [TicketStateTransition]
 		) {
 			self.ticketId = ticketId
+			self.baseURL = baseURL
 			self.stateFieldId = stateFieldId
 			self.currentState = currentState
 			self.transitions = transitions
@@ -70,6 +74,7 @@ public struct YouTrackButtonReducer: Sendable {
 				return .run { [
 					ticketId = state.ticketId,
 					fieldId = state.stateFieldId,
+					baseURL = state.baseURL,
 					transition,
 					authToken
 				] send in
@@ -78,6 +83,7 @@ public struct YouTrackButtonReducer: Sendable {
 							ticketId,
 							fieldId,
 							transition.eventId,
+							baseURL,
 							authToken
 						)
 						await send(.transitionCompleted(transition, .success(())))

@@ -11,7 +11,8 @@ struct RepositoryRowCodeReviewStateTests {
 			path: "/repos/app",
 			name: "app",
 			branchName: "LS-1234_feature",
-			ticketIdRegex: "[A-Z]+-\\d+"
+			ticketIdRegex: "[A-Z]+-\\d+",
+			youtrackBaseURL: "https://youtrack.example.com"
 		)
 		state.androidCR = .waiting
 		state.iosCR = .waiting
@@ -47,7 +48,7 @@ struct RepositoryRowCodeReviewStateTests {
 		let store = TestStore(initialState: state) {
 			RepositoryRowReducer()
 		} withDependencies: {
-			$0[YouTrackClient.self].fetchIssueDetails = { _, _ in
+			$0[YouTrackClient.self].fetchIssueDetails = { _, _, _ in
 				throw YouTrackServiceError.httpFailure(statusCode: 500)
 			}
 			$0[GitClient.self].getOriginRemote = { _ in nil }

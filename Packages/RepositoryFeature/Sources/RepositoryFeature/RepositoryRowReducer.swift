@@ -70,6 +70,9 @@ struct RepositoryRowReducer {
 		var iosSubfolderPath: String
 		/// Regex for extracting ticket IDs from branch names. Empty = no ticket parsing.
 		var ticketIdRegex: String
+		/// Per-group YouTrack instance base URL. Empty = YouTrack integration off (no ticket
+		/// button, no issue fetch); ticket ID parsing itself stays governed by `ticketIdRegex`.
+		var youtrackBaseURL: String
 		/// Per-group configured default branch. Empty = master/main fallback.
 		var defaultBranch: String
 
@@ -81,6 +84,12 @@ struct RepositoryRowReducer {
 			var regex = "[a-zA-Z]+-\\d+[_/]"
 
 			return BranchNameFormatter.format(branchName, ticketId: ticketId, branchNameRegex: regex)
+		}
+
+		/// A ticket was extracted but the group has no YouTrack URL, so the integration this row
+		/// is configured for silently does nothing — surface that where the ticket button would be.
+		var showsMissingYouTrackURLWarning: Bool {
+			ticketId != nil && YouTrackURLBuilder.normalizedBase(youtrackBaseURL).isEmpty
 		}
 
 		init(
@@ -97,7 +106,8 @@ struct RepositoryRowReducer {
 			xcodeFilePreference: XcodeFilePreference = .auto,
 			supportsWeb: Bool = false,
 			webIndexPath: String = "",
-			defaultBranch: String = ""
+			defaultBranch: String = "",
+			youtrackBaseURL: String = ""
 		) {
 			self.id = path
 			self.path = path
@@ -115,6 +125,7 @@ struct RepositoryRowReducer {
 				}
 			self.ticketId = ticketId
 			self.ticketIdRegex = ticketIdRegex
+			self.youtrackBaseURL = youtrackBaseURL
 			self.defaultBranch = defaultBranch
 			self.unstagedChangesCount = 0
 			self.stagedChangesCount = 0
@@ -138,17 +149,17 @@ struct RepositoryRowReducer {
 			self.terminalButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
 			self.claudeCodeButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
 			self.androidStudioButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
-			if let ticketId {
-				self.ticketButton = .init(ticketId: ticketId)
+			let issueURL = ticketId.flatMap { YouTrackURLBuilder.issueURL(baseURL: youtrackBaseURL, ticketId: $0) }
+			if let ticketId, let issueURL {
+				self.ticketButton = .init(ticketId: ticketId, ticketURL: issueURL)
 			}
 			if supportsWeb, !webIndexPath.isEmpty {
 				self.webButton = .init(repositoryPath: path, webIndexPath: webIndexPath)
 			}
 
-			let ticketURL = ticketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? ""
 			self.shareButton = .init(
 				branchName: branchName ?? name,
-				ticketURL: ticketURL
+				ticketURL: issueURL ?? ""
 			)
 			self.deleteWorktreeButton = .init(name: branchName ?? name, path: path)
 			self.createWorktreeButton = .init(repositoryPath: path)
@@ -300,8 +311,11 @@ struct RepositoryRowReducer {
 					state.youtrackButton = nil
 				}
 				state.ticketId = newTicketId
-				state.ticketButton = newTicketId.map { TicketButtonReducer.State(ticketId: $0) }
-				state.shareButton.updateTicketURL(newTicketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? "")
+				state.ticketButton = newTicketId.flatMap { id in
+					YouTrackURLBuilder.issueURL(baseURL: state.youtrackBaseURL, ticketId: id)
+						.map { TicketButtonReducer.State(ticketId: id, ticketURL: $0) }
+				}
+				state.shareButton.updateTicketURL(state.ticketButton?.ticketURL ?? "")
 				state.unstagedChangesCount = unstaged
 				state.stagedChangesCount = staged
 				state.gitActionsMenu.currentBranch = branch
@@ -336,6 +350,7 @@ struct RepositoryRowReducer {
 				state.ticketState = details?.ticketState
 				state.youtrackButton = makeYouTrackButton(
 					ticketId: state.ticketId,
+					baseURL: state.youtrackBaseURL,
 					details: details,
 					existing: state.youtrackButton
 				)
@@ -424,6 +439,7 @@ struct RepositoryRowReducer {
 	/// the alert under the user, and re-open the double-tap the flag exists to prevent.
 	private func makeYouTrackButton(
 		ticketId: String?,
+		baseURL: String,
 		details: IssueDetails?,
 		existing: YouTrackButtonReducer.State?
 	) -> YouTrackButtonReducer.State? {
@@ -438,11 +454,12 @@ struct RepositoryRowReducer {
 
 		var button = YouTrackButtonReducer.State(
 			ticketId: ticketId,
+			baseURL: baseURL,
 			stateFieldId: stateFieldId,
 			currentState: details.ticketState,
 			transitions: details.stateTransitions
 		)
-		if let existing, existing.ticketId == ticketId {
+		if let existing, existing.ticketId == ticketId, existing.baseURL == baseURL {
 			button.isApplying = existing.isApplying
 			button.alert = existing.alert
 		}
@@ -460,7 +477,10 @@ struct RepositoryRowReducer {
 	}
 
 	private func fetchYouTrack(for state: State) -> EffectOf<RepositoryRowReducer> {
-		guard let ticketId = state.ticketId else {
+		// No configured instance = integration disabled; report nil so stale CR
+		// state and the state menu clear on the next refresh.
+		let baseURL = YouTrackURLBuilder.normalizedBase(state.youtrackBaseURL)
+		guard let ticketId = state.ticketId, !baseURL.isEmpty else {
 			return .send(.didFetchYouTrack(nil))
 		}
 
@@ -469,7 +489,11 @@ struct RepositoryRowReducer {
 
 		return .run { [authToken] send in
 			do {
-				let details = try await youTrackClient.fetchIssueDetails(for: ticketId, authToken: authToken)
+				let details = try await youTrackClient.fetchIssueDetails(
+					for: ticketId,
+					baseURL: baseURL,
+					authToken: authToken
+				)
 				await send(.didFetchYouTrack(details))
 			}
 			catch {

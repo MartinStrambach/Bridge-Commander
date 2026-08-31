@@ -14,6 +14,9 @@ struct RepositoryRowView: View {
 	@Bindable
 	var store: StoreOf<RepositoryRowReducer>
 
+	@Environment(\.openSettings)
+	private var openSettings
+
 	var terminalSessionStatus: TerminalSessionStatus?
 
 	/// Non-nil when this row is a repo group section header.
@@ -393,6 +396,15 @@ struct RepositoryRowView: View {
 
 			if let ticketButtonStore = store.scope(\.ticketButton, action: \.ticketButton) {
 				TicketButtonView(store: ticketButtonStore)
+			}
+			else if store.showsMissingYouTrackURLWarning {
+				ActionButton(
+					icon: .systemImage("exclamationmark.triangle.fill"),
+					tooltip: "Ticket \(store.ticketId ?? "") detected, but this repository has no YouTrack URL. "
+						+ "Set it in Settings to enable ticket integration.",
+					color: .orange,
+					action: { openSettings() }
+				)
 			}
 
 			if let webButtonStore = store.scope(\.webButton, action: \.webButton) {

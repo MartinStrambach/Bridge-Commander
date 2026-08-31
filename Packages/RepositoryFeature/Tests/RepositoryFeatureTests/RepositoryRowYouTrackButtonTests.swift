@@ -18,7 +18,8 @@ struct RepositoryRowYouTrackButtonTests {
 			path: "/repos/app",
 			name: "app",
 			branchName: "MOB-4432_feature",
-			ticketIdRegex: "[A-Z]+-\\d+"
+			ticketIdRegex: "[A-Z]+-\\d+",
+			youtrackBaseURL: "https://youtrack.example.com"
 		)
 	}
 
@@ -75,6 +76,7 @@ struct RepositoryRowYouTrackButtonTests {
 		var state = makeRow()
 		state.youtrackButton = .init(
 			ticketId: "MOB-4432",
+			baseURL: "https://youtrack.example.com",
 			stateFieldId: "84-950",
 			currentState: .open,
 			transitions: transitions
@@ -95,6 +97,7 @@ struct RepositoryRowYouTrackButtonTests {
 		var state = makeRow()
 		state.youtrackButton = .init(
 			ticketId: "MOB-4432",
+			baseURL: "https://youtrack.example.com",
 			stateFieldId: "84-950",
 			currentState: .open,
 			transitions: transitions
@@ -117,6 +120,7 @@ struct RepositoryRowYouTrackButtonTests {
 		var state = makeRow()
 		var button = YouTrackButtonReducer.State(
 			ticketId: "MOB-4432",
+			baseURL: "https://youtrack.example.com",
 			stateFieldId: "84-950",
 			currentState: .open,
 			transitions: transitions
@@ -141,6 +145,7 @@ struct RepositoryRowYouTrackButtonTests {
 		var state = makeRow()
 		state.youtrackButton = .init(
 			ticketId: "MOB-4432",
+			baseURL: "https://youtrack.example.com",
 			stateFieldId: "84-950",
 			currentState: .open,
 			transitions: transitions
@@ -152,7 +157,7 @@ struct RepositoryRowYouTrackButtonTests {
 		let store = TestStore(initialState: state) {
 			RepositoryRowReducer()
 		} withDependencies: {
-			$0[YouTrackClient.self].fetchIssueDetails = { _, _ in updated }
+			$0[YouTrackClient.self].fetchIssueDetails = { _, _, _ in updated }
 		}
 		store.exhaustivity = .off
 

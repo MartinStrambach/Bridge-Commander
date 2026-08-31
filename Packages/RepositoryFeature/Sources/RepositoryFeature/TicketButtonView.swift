@@ -20,7 +20,8 @@ struct TicketButtonView: View {
 	TicketButtonView(
 		store: Store(
 			initialState: TicketButtonReducer.State(
-				ticketId: "MOB-1234"
+				ticketId: "MOB-1234",
+				ticketURL: "https://youtrack.example.com/issue/MOB-1234"
 			),
 			reducer: {
 				TicketButtonReducer()

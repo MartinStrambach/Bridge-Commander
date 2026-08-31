@@ -65,6 +65,7 @@ public struct YouTrackButtonView: View {
 		store: Store(
 			initialState: YouTrackButtonReducer.State(
 				ticketId: "MOB-1234",
+				baseURL: "https://youtrack.example.com",
 				stateFieldId: "84-950",
 				currentState: .inProgress,
 				transitions: [

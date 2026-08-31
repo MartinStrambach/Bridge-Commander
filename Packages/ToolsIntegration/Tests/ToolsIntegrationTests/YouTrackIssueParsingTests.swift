@@ -4,7 +4,7 @@ import Testing
 
 @Suite("YouTrack issue parsing")
 struct YouTrackIssueParsingTests {
-	/// Shape captured from a real `youtrack.livesport.eu` response for an issue in "In Progress".
+	/// Shape captured from a real YouTrack response for an issue in "In Progress".
 	private let stateMachineIssue = Data("""
 	{
 	  "id": "3-12345",

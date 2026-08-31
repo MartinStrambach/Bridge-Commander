@@ -34,15 +34,17 @@ struct ShareButtonReducer {
 	private static func buildShareText(branchName: String?, ticketURL: String?, prURL: String?) -> String {
 		var shareTexts: [String] = []
 
-		if let branchName {
+		if let branchName, !branchName.isEmpty {
 			shareTexts.append("Branch: \(branchName)")
 		}
 
-		if let ticketURL {
+		// Empty means no ticket (or no YouTrack instance configured) — skip the line
+		// rather than sharing a dangling "Ticket: ".
+		if let ticketURL, !ticketURL.isEmpty {
 			shareTexts.append("Ticket: \(ticketURL)")
 		}
 
-		if let prURL {
+		if let prURL, !prURL.isEmpty {
 			shareTexts.append("PR: \(prURL)")
 		}
 

@@ -19,6 +19,7 @@ struct RepoGroupSettingsCodableTests {
 		#expect(settings.supportsWeb == false)
 		#expect(settings.webIndexPath == "")
 		#expect(settings.defaultBranch == "")
+		#expect(settings.youtrackBaseURL == "")
 	}
 
 	@Test("an empty JSON object decodes to all defaults")
@@ -40,7 +41,8 @@ struct RepoGroupSettingsCodableTests {
 			worktreeCopyPaths: ["secrets.xcconfig", "Tuist/.env"],
 			supportsWeb: true,
 			webIndexPath: "dist/index.html",
-			defaultBranch: "develop"
+			defaultBranch: "develop",
+			youtrackBaseURL: "https://youtrack.example.com"
 		)
 		let data = try JSONEncoder().encode(original)
 		let decoded = try JSONDecoder().decode(RepoGroupSettings.self, from: data)
@@ -64,6 +66,7 @@ struct RepoGroupSettingsCodableTests {
 		#expect(decoded.supportsWeb == false)
 		#expect(decoded.webIndexPath == "")
 		#expect(decoded.defaultBranch == "")
+		#expect(decoded.youtrackBaseURL == "")
 	}
 
 	@Test("an unknown xcodeFilePreference value does not wipe the rest of the settings")

@@ -100,6 +100,7 @@ public struct SettingsReducer {
 		case setGroupSupportsWeb(groupId: String, value: Bool)
 		case setGroupWebIndexPath(groupId: String, path: String)
 		case setGroupDefaultBranch(groupId: String, value: String)
+		case setGroupYouTrackBaseURL(groupId: String, value: String)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
@@ -268,6 +269,14 @@ public struct SettingsReducer {
 				// keeping every downstream consumer (resolver, merge, alerts) consistent.
 				let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].defaultBranch = trimmed }
+				return .none
+
+			case let .setGroupYouTrackBaseURL(groupId, value):
+				// Whitespace-trim only; trailing slashes and a pasted "/api" suffix are handled at
+				// consumption by YouTrackURLBuilder — stripping "/" here would fight the
+				// per-keystroke TextField binding (typing "https://" would collapse).
+				let trimmedURL = value.trimmingCharacters(in: .whitespacesAndNewlines)
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].youtrackBaseURL = trimmedURL }
 				return .none
 
 			case let .setBranchNameRegex(regex):

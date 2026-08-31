@@ -21,7 +21,7 @@ struct ShareButtonView: View {
 		store: Store(
 			initialState: ShareButtonReducer.State(
 				branchName: "MOB-1234-feature-name",
-				ticketURL: "https://youtrack.livesport.eu/issue/MOB-1234",
+				ticketURL: "https://youtrack.example.com/issue/MOB-1234",
 			),
 			reducer: {
 				ShareButtonReducer()

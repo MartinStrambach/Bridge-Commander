@@ -73,11 +73,6 @@ public nonisolated struct TicketStateTransition: Equatable, Sendable, Identifiab
 	}
 }
 
-public protocol YouTrackServiceType: Sendable {
-	func fetchIssueDetails(for ticketId: String, authToken: String) async throws -> IssueDetails
-	func applyStateEvent(for ticketId: String, fieldId: String, eventId: String, authToken: String) async throws
-}
-
 public nonisolated struct IssueDetails: Equatable, Sendable {
 	public let androidCR: CodeReviewState?
 	public let iosCR: CodeReviewState?

@@ -840,7 +840,8 @@ private func buildGroup(
 			xcodeFilePreference: settings.xcodeFilePreference,
 			supportsWeb: settings.supportsWeb,
 			webIndexPath: settings.webIndexPath,
-			defaultBranch: settings.defaultBranch
+			defaultBranch: settings.defaultBranch,
+			youtrackBaseURL: settings.youtrackBaseURL
 		)
 	}
 	guard let header = allRows.first(where: { !$0.isWorktree }) else {
@@ -900,7 +901,8 @@ private func mergeGroupRows(
 				xcodeFilePreference: rowSettings.xcodeFilePreference,
 				supportsWeb: rowSettings.supportsWeb,
 				webIndexPath: rowSettings.webIndexPath,
-				defaultBranch: rowSettings.defaultBranch
+				defaultBranch: rowSettings.defaultBranch,
+				youtrackBaseURL: rowSettings.youtrackBaseURL
 			))
 		}
 	}
@@ -962,13 +964,16 @@ private func applySettings(
 	row.iosSubfolderPath = settings.iosSubfolderPath
 	row.supportsTuist = settings.supportsTuist
 	row.ticketIdRegex = settings.ticketIdRegex
+	row.youtrackBaseURL = settings.youtrackBaseURL
 	let newTicketId = settings.ticketIdRegex.isEmpty
 		? nil
 		: GitBranchDetector.extractTicketId(from: row.branchName ?? row.name, pattern: settings.ticketIdRegex)
 	row.ticketId = newTicketId
-	row.ticketButton = newTicketId.map { TicketButtonReducer.State(ticketId: $0) }
-	let newTicketURL = newTicketId.map { "https://youtrack.livesport.eu/issue/\($0)" } ?? ""
-	row.shareButton.updateTicketURL(newTicketURL)
+	row.ticketButton = newTicketId.flatMap { id in
+		YouTrackURLBuilder.issueURL(baseURL: settings.youtrackBaseURL, ticketId: id)
+			.map { TicketButtonReducer.State(ticketId: id, ticketURL: $0) }
+	}
+	row.shareButton.updateTicketURL(row.ticketButton?.ticketURL ?? "")
 	row.tuistButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.xcodeButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.xcodeButton.xcodeFilePreference = settings.xcodeFilePreference

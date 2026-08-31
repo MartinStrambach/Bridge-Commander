@@ -28,6 +28,10 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	/// The repo's default/integration branch (e.g. "main", "develop").
 	/// When empty, the app auto-resolves: prefers "master", then "main".
 	public var defaultBranch: String = ""
+	/// Base URL of the group's YouTrack instance (e.g. "https://org.youtrack.cloud"); may include
+	/// a path for path-hosted instances. When empty, the YouTrack integration is disabled —
+	/// no ticket button, no issue fetch, no state menu. Ticket ID parsing stays available.
+	public var youtrackBaseURL: String = ""
 
 	/// Memberwise initializer with default values
 	public init(
@@ -41,7 +45,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		worktreeCopyPaths: [String] = [],
 		supportsWeb: Bool = false,
 		webIndexPath: String = "",
-		defaultBranch: String = ""
+		defaultBranch: String = "",
+		youtrackBaseURL: String = ""
 	) {
 		self.supportsIOS = supportsIOS
 		self.supportsAndroid = supportsAndroid
@@ -54,6 +59,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.supportsWeb = supportsWeb
 		self.webIndexPath = webIndexPath
 		self.defaultBranch = defaultBranch
+		self.youtrackBaseURL = youtrackBaseURL
 	}
 
 	// Custom decoder: uses decodeIfPresent so keys missing from older JSON
@@ -77,5 +83,6 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.supportsWeb = try c.decodeIfPresent(Bool.self, forKey: .supportsWeb) ?? false
 		self.webIndexPath = try c.decodeIfPresent(String.self, forKey: .webIndexPath) ?? ""
 		self.defaultBranch = try c.decodeIfPresent(String.self, forKey: .defaultBranch) ?? ""
+		self.youtrackBaseURL = try c.decodeIfPresent(String.self, forKey: .youtrackBaseURL) ?? ""
 	}
 }

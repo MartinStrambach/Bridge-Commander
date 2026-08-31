@@ -5,13 +5,12 @@ import Foundation
 /// nils — only the latter means the ticket genuinely has nothing to show.
 public nonisolated enum YouTrackServiceError: Error {
 	case missingToken
+	case missingBaseURL
 	case invalidURL
 	case httpFailure(statusCode: Int)
 }
 
 public nonisolated enum YouTrackService {
-	private static let baseURL = "https://youtrack.livesport.eu/api"
-
 	/// The `$type` YouTrack reports for a custom field driven by a state-machine workflow. Only
 	/// these fields carry `possibleEvents`, and only they are written with an event.
 	private static let stateMachineFieldType = "StateMachineIssueCustomField"
@@ -19,22 +18,33 @@ public nonisolated enum YouTrackService {
 	/// Fetches code review fields from a YouTrack issue
 	/// - Parameters:
 	///   - ticketId: The YouTrack ticket ID (e.g., "MOB-1963")
+	///   - baseURL: The YouTrack instance base URL (e.g., "https://org.youtrack.cloud")
 	///   - authToken: The YouTrack authentication token
 	/// - Returns: Details whose fields may individually be nil/empty if not found. An all-empty
 	/// value is also returned for a 404 — the ticket does not exist.
-	/// - Throws: when the answer is unknown (missing token, network, non-404 HTTP, decoding), so callers
-	/// can keep last-known state rather than treating the ticket as field-less.
-	public static func fetchIssueDetails(for ticketId: String, authToken: String) async throws -> IssueDetails {
+	/// - Throws: when the answer is unknown (missing token/URL, network, non-404 HTTP, decoding), so
+	/// callers can keep last-known state rather than treating the ticket as field-less.
+	public static func fetchIssueDetails(
+		for ticketId: String,
+		baseURL: String,
+		authToken: String
+	) async throws -> IssueDetails {
 		// Validate that a token is configured
 		guard !authToken.isEmpty else {
 			print("YouTrackService: Cannot fetch issue details without a valid auth token")
 			throw YouTrackServiceError.missingToken
 		}
 
+		let base = YouTrackURLBuilder.normalizedBase(baseURL)
+		guard !base.isEmpty else {
+			print("YouTrackService: Cannot fetch issue details without a base URL")
+			throw YouTrackServiceError.missingBaseURL
+		}
+
 		// `possibleEvents` rides along on the request that already reads State and the CR
 		// fields, so offering state transitions costs no extra round trip per row.
 		let issueURL =
-			"\(baseURL)/issues/\(ticketId)?fields=customFields($type,id,name,value(text,name),possibleEvents(id,presentation))"
+			"\(base)/api/issues/\(ticketId)?fields=customFields($type,id,name,value(text,name),possibleEvents(id,presentation))"
 
 		guard let url = URL(string: issueURL) else {
 			throw YouTrackServiceError.invalidURL
@@ -134,11 +144,13 @@ public nonisolated enum YouTrackService {
 	///
 	/// State-machine fields ignore a plain `value` write, so the transition is expressed as an
 	/// event id taken from ``IssueDetails/stateTransitions``.
-	/// - Throws: when the token is missing, the URL is malformed, or YouTrack rejects the event.
+	/// - Throws: when the token or base URL is missing, the URL is malformed, or YouTrack rejects
+	/// the event.
 	public static func applyStateEvent(
 		for ticketId: String,
 		fieldId: String,
 		eventId: String,
+		baseURL: String,
 		authToken: String
 	) async throws {
 		guard !authToken.isEmpty else {
@@ -146,7 +158,13 @@ public nonisolated enum YouTrackService {
 			throw YouTrackServiceError.missingToken
 		}
 
-		guard let url = URL(string: "\(baseURL)/issues/\(ticketId)/customFields/\(fieldId)") else {
+		let base = YouTrackURLBuilder.normalizedBase(baseURL)
+		guard !base.isEmpty else {
+			print("YouTrackService: Cannot change state without a base URL")
+			throw YouTrackServiceError.missingBaseURL
+		}
+
+		guard let url = URL(string: "\(base)/api/issues/\(ticketId)/customFields/\(fieldId)") else {
 			throw YouTrackServiceError.invalidURL
 		}
 

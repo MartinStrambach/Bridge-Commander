@@ -12,6 +12,7 @@ struct YouTrackButtonTests {
 	private func makeState(isApplying: Bool = false) -> YouTrackButtonReducer.State {
 		var state = YouTrackButtonReducer.State(
 			ticketId: "MOB-4039",
+			baseURL: "https://youtrack.example.com",
 			stateFieldId: "84-950",
 			currentState: .inProgress,
 			transitions: [toReview, done]
@@ -27,8 +28,8 @@ struct YouTrackButtonTests {
 		let store = TestStore(initialState: makeState()) {
 			YouTrackButtonReducer()
 		} withDependencies: {
-			$0[YouTrackClient.self].applyStateEvent = { ticketId, fieldId, eventId, authToken in
-				recorded.withValue { $0 = [ticketId, fieldId, eventId, authToken] }
+			$0[YouTrackClient.self].applyStateEvent = { ticketId, fieldId, eventId, baseURL, authToken in
+				recorded.withValue { $0 = [ticketId, fieldId, eventId, baseURL, authToken] }
 			}
 		}
 
@@ -40,7 +41,7 @@ struct YouTrackButtonTests {
 		}
 		await store.receive(\.delegate.stateChanged)
 
-		#expect(recorded.value.prefix(3) == ["MOB-4039", "84-950", "to review"])
+		#expect(recorded.value.prefix(4) == ["MOB-4039", "84-950", "to review", "https://youtrack.example.com"])
 	}
 
 	@Test("a second tap is ignored while a transition is in flight")
@@ -61,7 +62,7 @@ struct YouTrackButtonTests {
 		let store = TestStore(initialState: makeState()) {
 			YouTrackButtonReducer()
 		} withDependencies: {
-			$0[YouTrackClient.self].applyStateEvent = { _, _, _, _ in
+			$0[YouTrackClient.self].applyStateEvent = { _, _, _, _, _ in
 				throw YouTrackServiceError.httpFailure(statusCode: 400)
 			}
 		}

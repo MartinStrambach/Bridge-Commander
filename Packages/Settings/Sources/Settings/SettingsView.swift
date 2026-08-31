@@ -602,6 +602,19 @@ public struct SettingsView: View {
 				.font(.system(.body, design: .monospaced))
 			}
 
+			HStack {
+				Text("YouTrack URL")
+					.font(.caption)
+					.foregroundColor(.secondary)
+					.frame(width: 140, alignment: .leading)
+				TextField("https://org.youtrack.cloud (empty = disabled)", text: Binding(
+					get: { settings.youtrackBaseURL },
+					set: { store.send(.setGroupYouTrackBaseURL(groupId: groupId, value: $0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
+			}
+
 			Divider()
 				.padding(.vertical, 4)
 

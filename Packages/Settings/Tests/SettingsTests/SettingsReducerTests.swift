@@ -29,6 +29,28 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Group YouTrack base URL trimming
+
+	@Test("setGroupYouTrackBaseURL trims surrounding whitespace and newlines")
+	func setGroupYouTrackBaseURLTrimsWhitespace() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setGroupYouTrackBaseURL(groupId: "repo", value: "  https://youtrack.example.com \n")) {
+			$0.groupSettings["repo"] = RepoGroupSettings(youtrackBaseURL: "https://youtrack.example.com")
+		}
+	}
+
+	@Test("setGroupYouTrackBaseURL stores a whitespace-only value as empty (integration disabled)")
+	func setGroupYouTrackBaseURLWhitespaceOnlyBecomesEmpty() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setGroupYouTrackBaseURL(groupId: "repo", value: "   \n\t")) {
+			$0.groupSettings["repo"] = RepoGroupSettings(youtrackBaseURL: "")
+		}
+	}
+
 	// MARK: - Token trimming
 
 	@Test("token setters trim pasted whitespace and newlines")
