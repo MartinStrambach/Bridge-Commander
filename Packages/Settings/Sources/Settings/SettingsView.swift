@@ -170,11 +170,21 @@ public struct SettingsView: View {
 				.textFieldStyle(.roundedBorder)
 				.font(.system(.body, design: .monospaced))
 
-			Button(action: { store.send(.clearGitHubToken) }) {
-				Label("Clear Token", systemImage: "xmark.circle")
+			HStack(spacing: 8) {
+				Button(action: { store.send(.clearGitHubToken) }) {
+					Label("Clear Token", systemImage: "xmark.circle")
+				}
+				.buttonStyle(.bordered)
+				.foregroundColor(.red)
+
+				Button(action: { store.send(.testGitHubTokenButtonTapped) }) {
+					Label("Test Connection", systemImage: "checkmark.shield")
+				}
+				.buttonStyle(.bordered)
+				.disabled(store.githubTokenTest == .testing)
 			}
-			.buttonStyle(.bordered)
-			.foregroundColor(.red)
+
+			tokenTestResult(store.githubTokenTest)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
@@ -196,15 +206,63 @@ public struct SettingsView: View {
 				.textFieldStyle(.roundedBorder)
 				.font(.system(.body, design: .monospaced))
 
-			Button(action: { store.send(.clearGitLabToken) }) {
-				Label("Clear Token", systemImage: "xmark.circle")
+			HStack(spacing: 8) {
+				Button(action: { store.send(.clearGitLabToken) }) {
+					Label("Clear Token", systemImage: "xmark.circle")
+				}
+				.buttonStyle(.bordered)
+				.foregroundColor(.red)
+
+				Button(action: { store.send(.testGitLabTokenButtonTapped) }) {
+					Label("Test Connection", systemImage: "checkmark.shield")
+				}
+				.buttonStyle(.bordered)
+				.disabled(store.gitlabTokenTest == .testing)
 			}
-			.buttonStyle(.bordered)
-			.foregroundColor(.red)
+
+			tokenTestResult(store.gitlabTokenTest)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
 		.cornerRadius(8)
+	}
+
+	/// Inline verdict shown under a token's buttons. Idle renders nothing so the
+	/// section keeps its compact height until a test has actually run.
+	@ViewBuilder
+	private func tokenTestResult(_ test: TokenTestState) -> some View {
+		switch test {
+		case .idle:
+			EmptyView()
+
+		case .testing:
+			HStack(spacing: 6) {
+				ProgressView()
+					.controlSize(.small)
+				Text("Testing…")
+					.font(.caption)
+					.foregroundColor(.secondary)
+			}
+
+		case let .success(username):
+			HStack(spacing: 6) {
+				Image(systemName: "checkmark.circle.fill")
+					.foregroundColor(.green)
+				Text("Authenticated as \(username)")
+					.font(.caption)
+					.foregroundColor(.secondary)
+			}
+
+		case let .failure(message):
+			HStack(alignment: .firstTextBaseline, spacing: 6) {
+				Image(systemName: "exclamationmark.triangle.fill")
+					.foregroundColor(.orange)
+				Text(message)
+					.font(.caption)
+					.foregroundColor(.secondary)
+					.textSelection(.enabled)
+			}
+		}
 	}
 
 	private var repositoryRefreshSection: some View {

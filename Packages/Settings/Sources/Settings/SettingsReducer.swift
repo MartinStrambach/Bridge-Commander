@@ -3,6 +3,14 @@ import Foundation
 import GitHosting
 import ToolsIntegration
 
+/// Outcome of a "Test Connection" run against a hosting provider token.
+public enum TokenTestState: Equatable, Sendable {
+	case idle
+	case testing
+	case success(username: String)
+	case failure(message: String)
+}
+
 @Reducer
 public struct SettingsReducer {
 	@ObservableState
@@ -61,6 +69,9 @@ public struct SettingsReducer {
 		@Shared(.terminalColorTheme)
 		public var terminalColorTheme = TerminalColorTheme.basicDark
 
+		public var githubTokenTest = TokenTestState.idle
+		public var gitlabTokenTest = TokenTestState.idle
+
 		@Presents
 		public var alert: AlertState<Action.Alert>?
 
@@ -73,6 +84,10 @@ public struct SettingsReducer {
 		case setGitLabToken(String)
 		case clearGitHubToken
 		case clearGitLabToken
+		case testGitHubTokenButtonTapped
+		case testGitLabTokenButtonTapped
+		case gitHubTokenTestFinished(TokenTestState)
+		case gitLabTokenTestFinished(TokenTestState)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setGroupSupportsIOS(groupId: String, value: Bool)
 		case setGroupSupportsAndroid(groupId: String, value: Bool)
@@ -106,7 +121,44 @@ public struct SettingsReducer {
 		}
 	}
 
+	@Dependency(TokenVerificationClient.self)
+	private var tokenVerification
+
 	public init() {}
+
+	/// Runs a verification call and condenses its result into displayable state.
+	private static func tokenTestOutcome(
+		_ verify: @Sendable () async throws -> String
+	) async -> TokenTestState {
+		do {
+			return try await .success(username: verify())
+		}
+		catch {
+			return .failure(message: tokenTestFailureMessage(for: error))
+		}
+	}
+
+	private static func tokenTestFailureMessage(for error: Error) -> String {
+		switch error {
+		case GitHostingError.missingToken:
+			"Enter a token first."
+
+		case GitHostingError.httpFailure(statusCode: 401):
+			"HTTP 401 — the token is invalid, revoked, or expired."
+
+		case GitHostingError.httpFailure(statusCode: 403):
+			"HTTP 403 — the token lacks API access; check its scopes."
+
+		case let GitHostingError.httpFailure(statusCode):
+			"HTTP \(statusCode)."
+
+		case GitHostingError.unauthenticated:
+			"The request was accepted but resolved to no user — the token likely lacks the API scope."
+
+		default:
+			error.localizedDescription
+		}
+	}
 
 	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -119,18 +171,48 @@ public struct SettingsReducer {
 
 			case let .setGitHubToken(token):
 				state.$githubToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
+				// A verdict describes the token it was run against — a different token
+				// must not inherit it.
+				state.githubTokenTest = .idle
 				return .none
 
 			case let .setGitLabToken(token):
 				state.$gitlabToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
+				state.gitlabTokenTest = .idle
 				return .none
 
 			case .clearGitHubToken:
 				state.$githubToken.withLock { $0 = "" }
+				state.githubTokenTest = .idle
 				return .none
 
 			case .clearGitLabToken:
 				state.$gitlabToken.withLock { $0 = "" }
+				state.gitlabTokenTest = .idle
+				return .none
+
+			case .testGitHubTokenButtonTapped:
+				state.githubTokenTest = .testing
+				return .run { [token = state.githubToken, tokenVerification] send in
+					await send(.gitHubTokenTestFinished(Self.tokenTestOutcome {
+						try await tokenVerification.verifyGitHubToken(token)
+					}))
+				}
+
+			case .testGitLabTokenButtonTapped:
+				state.gitlabTokenTest = .testing
+				return .run { [token = state.gitlabToken, tokenVerification] send in
+					await send(.gitLabTokenTestFinished(Self.tokenTestOutcome {
+						try await tokenVerification.verifyGitLabToken(token)
+					}))
+				}
+
+			case let .gitHubTokenTestFinished(outcome):
+				state.githubTokenTest = outcome
+				return .none
+
+			case let .gitLabTokenTestFinished(outcome):
+				state.gitlabTokenTest = outcome
 				return .none
 
 			case let .setPeriodicRefreshInterval(interval):

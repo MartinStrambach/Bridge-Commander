@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import GitHosting
 import Testing
 @testable import Settings
 
@@ -43,6 +44,90 @@ struct SettingsReducerTests {
 		}
 		await store.send(.setYouTrackToken("perm:abc.123\t\n")) {
 			$0.youtrackAuthToken = "perm:abc.123"
+		}
+	}
+
+	// MARK: - Token connection test
+
+	@Test("a passing GitLab token test reports the authenticated username")
+	func gitLabTokenTestSuccess() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitLabToken = { _ in "branislav.bily1" }
+		}
+		await store.send(.testGitLabTokenButtonTapped) {
+			$0.gitlabTokenTest = .testing
+		}
+		await store.receive(\.gitLabTokenTestFinished) {
+			$0.gitlabTokenTest = .success(username: "branislav.bily1")
+		}
+	}
+
+	@Test("a passing GitHub token test reports the authenticated login")
+	func gitHubTokenTestSuccess() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitHubToken = { _ in "octocat" }
+		}
+		await store.send(.testGitHubTokenButtonTapped) {
+			$0.githubTokenTest = .testing
+		}
+		await store.receive(\.gitHubTokenTestFinished) {
+			$0.githubTokenTest = .success(username: "octocat")
+		}
+	}
+
+	@Test("a 401 failure explains the token is invalid")
+	func tokenTestUnauthorized() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitLabToken = { _ in
+				throw GitHostingError.httpFailure(statusCode: 401)
+			}
+		}
+		await store.send(.testGitLabTokenButtonTapped) {
+			$0.gitlabTokenTest = .testing
+		}
+		await store.receive(\.gitLabTokenTestFinished) {
+			$0.gitlabTokenTest = .failure(message: "HTTP 401 — the token is invalid, revoked, or expired.")
+		}
+	}
+
+	@Test("an empty token fails with a prompt to enter one")
+	func tokenTestMissingToken() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitLabToken = { _ in
+				throw GitHostingError.missingToken
+			}
+		}
+		await store.send(.testGitLabTokenButtonTapped) {
+			$0.gitlabTokenTest = .testing
+		}
+		await store.receive(\.gitLabTokenTestFinished) {
+			$0.gitlabTokenTest = .failure(message: "Enter a token first.")
+		}
+	}
+
+	@Test("editing or clearing a token drops its stale test verdict")
+	func tokenEditResetsTestState() async {
+		var state = SettingsReducer.State()
+		state.gitlabTokenTest = .success(username: "someone")
+		state.githubTokenTest = .failure(message: "HTTP 500.")
+		let store = TestStore(initialState: state) {
+			SettingsReducer()
+		}
+		await store.send(.setGitLabToken("glpat-new")) {
+			$0.gitlabToken = "glpat-new"
+			$0.gitlabTokenTest = .idle
+		}
+		await store.send(.clearGitHubToken) {
+			$0.githubToken = ""
+			$0.githubTokenTest = .idle
 		}
 	}
 

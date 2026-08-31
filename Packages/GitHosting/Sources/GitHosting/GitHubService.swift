@@ -76,6 +76,54 @@ public nonisolated enum GitHubService {
 			unresolvedDiscussionsCount: pullRequest.unresolvedCount
 		)
 	}
+
+	/// Verifies the token against the same GraphQL endpoint the PR fetch uses,
+	/// returning the login it authenticates as.
+	public static func verifyToken(_ token: String) async throws -> String {
+		guard !token.isEmpty else {
+			throw GitHostingError.missingToken
+		}
+		guard let url = URL(string: graphQLURL) else {
+			throw GitHostingError.invalidURL
+		}
+
+		var request = URLRequest(url: url)
+		request.httpMethod = "POST"
+		request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.setValue("application/json", forHTTPHeaderField: "Accept")
+		request.httpBody = try JSONEncoder().encode(
+			BareGraphQLRequest(query: "{ viewer { login } }")
+		)
+
+		let (data, response) = try await URLSession.shared.data(for: request)
+		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+			throw GitHostingError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
+		}
+
+		let decoded = try JSONDecoder().decode(GitHubViewerResponse.self, from: data)
+		guard let login = decoded.login else {
+			throw GitHostingError.unauthenticated
+		}
+		return login
+	}
+}
+
+/// Internal (not private) so the response mapping is unit-testable from fixture JSON.
+nonisolated struct GitHubViewerResponse: Decodable {
+	struct DataContainer: Decodable {
+		let viewer: Viewer?
+	}
+
+	struct Viewer: Decodable {
+		let login: String
+	}
+
+	let data: DataContainer?
+
+	var login: String? {
+		data?.viewer?.login
+	}
 }
 
 private struct GitHubGraphQLRequest: Encodable {

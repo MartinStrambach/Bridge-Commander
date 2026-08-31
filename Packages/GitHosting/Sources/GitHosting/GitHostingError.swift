@@ -7,4 +7,7 @@ public nonisolated enum GitHostingError: Error {
 	case missingToken
 	case invalidURL
 	case httpFailure(statusCode: Int)
+	/// The request succeeded but resolved to no authenticated user — the token was
+	/// accepted at the HTTP layer yet grants no API identity (e.g. missing scope).
+	case unauthenticated
 }

@@ -77,6 +77,54 @@ public nonisolated enum GitLabService {
 			unresolvedDiscussionsCount: mergeRequest.unresolvedCount
 		)
 	}
+
+	/// Verifies the token against the same GraphQL endpoint the MR fetch uses,
+	/// returning the username it authenticates as.
+	public static func verifyToken(_ token: String) async throws -> String {
+		guard !token.isEmpty else {
+			throw GitHostingError.missingToken
+		}
+		guard let url = URL(string: graphQLURL) else {
+			throw GitHostingError.invalidURL
+		}
+
+		var request = URLRequest(url: url)
+		request.httpMethod = "POST"
+		request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.setValue("application/json", forHTTPHeaderField: "Accept")
+		request.httpBody = try JSONEncoder().encode(
+			BareGraphQLRequest(query: "{ currentUser { username } }")
+		)
+
+		let (data, response) = try await URLSession.shared.data(for: request)
+		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+			throw GitHostingError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
+		}
+
+		let decoded = try JSONDecoder().decode(GitLabCurrentUserResponse.self, from: data)
+		guard let username = decoded.username else {
+			throw GitHostingError.unauthenticated
+		}
+		return username
+	}
+}
+
+/// Internal (not private) so the response mapping is unit-testable from fixture JSON.
+nonisolated struct GitLabCurrentUserResponse: Decodable {
+	struct DataContainer: Decodable {
+		let currentUser: User?
+	}
+
+	struct User: Decodable {
+		let username: String
+	}
+
+	let data: DataContainer?
+
+	var username: String? {
+		data?.currentUser?.username
+	}
 }
 
 private struct GitLabGraphQLRequest: Encodable {
