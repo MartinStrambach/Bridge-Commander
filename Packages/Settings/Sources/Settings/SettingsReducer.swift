@@ -128,17 +128,18 @@ public struct SettingsReducer {
 
 	/// Runs a verification call and condenses its result into displayable state.
 	private static func tokenTestOutcome(
+		provider: PullRequestProvider,
 		_ verify: @Sendable () async throws -> String
 	) async -> TokenTestState {
 		do {
 			return try await .success(username: verify())
 		}
 		catch {
-			return .failure(message: tokenTestFailureMessage(for: error))
+			return .failure(message: tokenTestFailureMessage(for: error, provider: provider))
 		}
 	}
 
-	private static func tokenTestFailureMessage(for error: Error) -> String {
+	private static func tokenTestFailureMessage(for error: Error, provider: PullRequestProvider) -> String {
 		switch error {
 		case GitHostingError.missingToken:
 			"Enter a token first."
@@ -152,8 +153,11 @@ public struct SettingsReducer {
 		case let GitHostingError.httpFailure(statusCode):
 			"HTTP \(statusCode)."
 
+		case GitHostingError.unauthenticated where provider == .gitlab:
+			"GitLab accepted the request but returned no user. Fine-grained tokens cannot use the GraphQL API this app relies on — use a personal, project, or group token with the read_api scope."
+
 		case GitHostingError.unauthenticated:
-			"The request was accepted but resolved to no user — the token likely lacks the API scope."
+			"GitHub accepted the request but returned no user — the token likely cannot call the GraphQL API; check its type and permissions."
 
 		default:
 			error.localizedDescription
@@ -194,7 +198,7 @@ public struct SettingsReducer {
 			case .testGitHubTokenButtonTapped:
 				state.githubTokenTest = .testing
 				return .run { [token = state.githubToken, tokenVerification] send in
-					await send(.gitHubTokenTestFinished(Self.tokenTestOutcome {
+					await send(.gitHubTokenTestFinished(Self.tokenTestOutcome(provider: .github) {
 						try await tokenVerification.verifyGitHubToken(token)
 					}))
 				}
@@ -202,7 +206,7 @@ public struct SettingsReducer {
 			case .testGitLabTokenButtonTapped:
 				state.gitlabTokenTest = .testing
 				return .run { [token = state.gitlabToken, tokenVerification] send in
-					await send(.gitLabTokenTestFinished(Self.tokenTestOutcome {
+					await send(.gitLabTokenTestFinished(Self.tokenTestOutcome(provider: .gitlab) {
 						try await tokenVerification.verifyGitLabToken(token)
 					}))
 				}

@@ -96,6 +96,25 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("a GitLab identity-less response points at fine-grained token limits")
+	func gitLabTokenTestUnauthenticated() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitLabToken = { _ in
+				throw GitHostingError.unauthenticated
+			}
+		}
+		await store.send(.testGitLabTokenButtonTapped) {
+			$0.gitlabTokenTest = .testing
+		}
+		await store.receive(\.gitLabTokenTestFinished) {
+			$0.gitlabTokenTest = .failure(
+				message: "GitLab accepted the request but returned no user. Fine-grained tokens cannot use the GraphQL API this app relies on — use a personal, project, or group token with the read_api scope."
+			)
+		}
+	}
+
 	@Test("an empty token fails with a prompt to enter one")
 	func tokenTestMissingToken() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {

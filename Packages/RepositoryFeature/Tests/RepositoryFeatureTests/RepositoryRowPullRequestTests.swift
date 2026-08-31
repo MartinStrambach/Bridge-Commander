@@ -186,6 +186,20 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.prFetchError == "GitLab MR fetch failed: HTTP 401 — check your token in Settings")
 	}
 
+	@Test("a token without project access surfaces a settings hint")
+	@MainActor
+	func inaccessibleProjectSetsErrorMessage() async {
+		let store = makeFailingFetchStore(state: makeRow(), error: .unauthenticated)
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
+		await store.receive(\.didFetchPullRequestFailed)
+
+		#expect(
+			store.state.prFetchError ==
+				"GitLab MR fetch failed: the token can't access this project — check its type and scope in Settings"
+		)
+	}
+
 	@Test("a missing token stays silent — unconfigured integration is not an error")
 	@MainActor
 	func missingTokenShowsNoError() async {

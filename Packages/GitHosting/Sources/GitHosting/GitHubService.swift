@@ -64,6 +64,13 @@ public nonisolated enum GitHubService {
 		}
 
 		let decoded = try JSONDecoder().decode(GitHubPullRequestResponse.self, from: data)
+		// A 200 with a null repository means the token cannot see the repository —
+		// not that the branch has no PR. Only a visible repository with no nodes
+		// means that.
+		guard decoded.data?.repository != nil else {
+			print("GitHubService: Token cannot access \(owner)/\(repo)")
+			throw GitHostingError.unauthenticated
+		}
 		guard let pullRequest = decoded.pullRequest else {
 			print("GitHubService: No PR found for \(owner)/\(repo) on branch \(branch)")
 			return nil

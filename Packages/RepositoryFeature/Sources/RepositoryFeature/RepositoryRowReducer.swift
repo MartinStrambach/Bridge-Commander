@@ -524,6 +524,9 @@ struct RepositoryRowReducer {
 		case let GitHostingError.httpFailure(statusCode):
 			return "\(subject) fetch failed: HTTP \(statusCode)"
 
+		case GitHostingError.unauthenticated:
+			return "\(subject) fetch failed: the token can't access this project — check its type and scope in Settings"
+
 		default:
 			return "\(subject) fetch failed: \(error.localizedDescription)"
 		}

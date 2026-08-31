@@ -64,6 +64,13 @@ public nonisolated enum GitLabService {
 		}
 
 		let decoded = try JSONDecoder().decode(GitLabMergeRequestResponse.self, from: data)
+		// A 200 with a null project means the token cannot see the project (missing
+		// scope, no membership, or a fine-grained token's GraphQL gaps) — not that
+		// the branch has no MR. Only a visible project with no nodes means that.
+		guard decoded.data?.project != nil else {
+			print("GitLabService: Token cannot access \(projectPath)")
+			throw GitHostingError.unauthenticated
+		}
 		guard let mergeRequest = decoded.mergeRequest else {
 			print("GitLabService: No MR found for \(projectPath) on branch \(branch)")
 			return nil

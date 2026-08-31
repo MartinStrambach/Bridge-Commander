@@ -197,7 +197,7 @@ public struct SettingsView: View {
 				.font(.headline)
 
 			Text(
-				"Enter a GitLab access token (personal, project, or group) with `read_api` scope, or a fine-grained token with \"Merge request: Read\" and \"Pipeline: Read\" on the relevant projects. Used to detect open merge requests for the current branch."
+				"Enter a GitLab access token (personal, project, or group) with the `read_api` scope. Fine-grained tokens are not supported — the app uses GitLab's GraphQL API, which they cannot access yet. Used to detect open merge requests for the current branch."
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
