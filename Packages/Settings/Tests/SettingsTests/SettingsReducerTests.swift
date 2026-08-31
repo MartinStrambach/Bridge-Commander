@@ -28,6 +28,24 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Token trimming
+
+	@Test("token setters trim pasted whitespace and newlines")
+	func tokenSettersTrimWhitespace() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setGitLabToken("glpat-abc123\n")) {
+			$0.gitlabToken = "glpat-abc123"
+		}
+		await store.send(.setGitHubToken("  ghp_abc123 ")) {
+			$0.githubToken = "ghp_abc123"
+		}
+		await store.send(.setYouTrackToken("perm:abc.123\t\n")) {
+			$0.youtrackAuthToken = "perm:abc.123"
+		}
+	}
+
 	// MARK: - Group default insertion
 
 	@Test("mutating an unknown group inserts a default RepoGroupSettings with only that field changed")

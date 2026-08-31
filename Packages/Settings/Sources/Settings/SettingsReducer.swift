@@ -111,16 +111,18 @@ public struct SettingsReducer {
 	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
+			// Tokens are trimmed because a paste often carries a trailing newline, which
+			// corrupts the Bearer header and makes every request fail with a silent 401.
 			case let .setYouTrackToken(token):
-				state.$youtrackAuthToken.withLock { $0 = token }
+				state.$youtrackAuthToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
 				return .none
 
 			case let .setGitHubToken(token):
-				state.$githubToken.withLock { $0 = token }
+				state.$githubToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
 				return .none
 
 			case let .setGitLabToken(token):
-				state.$gitlabToken.withLock { $0 = token }
+				state.$gitlabToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
 				return .none
 
 			case .clearGitHubToken:

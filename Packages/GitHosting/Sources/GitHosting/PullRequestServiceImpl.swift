@@ -14,6 +14,8 @@ public struct PullRequestClient: Sendable {
 extension PullRequestClient: DependencyKey {
 	public static let liveValue = PullRequestClient(
 		fetchDetails: { remote, branch in
+			// Tokens saved before Settings started trimming may still carry pasted
+			// whitespace; a dirty Bearer header fails every request with a silent 401.
 			switch remote.host.lowercased() {
 			case "github.com":
 				@Shared(.githubToken)
@@ -22,7 +24,7 @@ extension PullRequestClient: DependencyKey {
 					owner: remote.owner,
 					repo: remote.repo,
 					branch: branch,
-					token: token
+					token: token.trimmingCharacters(in: .whitespacesAndNewlines)
 				)
 
 			case "gitlab.com":
@@ -31,7 +33,7 @@ extension PullRequestClient: DependencyKey {
 				return try await GitLabService.fetchMergeRequest(
 					projectPath: remote.projectPath,
 					branch: branch,
-					token: token
+					token: token.trimmingCharacters(in: .whitespacesAndNewlines)
 				)
 
 			default:
