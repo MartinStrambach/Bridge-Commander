@@ -107,6 +107,19 @@ struct RowSectionTests {
 		#expect(group(rows: []).sectionHeaders(sortMode: .state, visibility: .unfiltered).isEmpty)
 	}
 
+	@Test("a group without a ticket regex draws no headers")
+	func groupWithoutTicketRegexHasNoHeaders() {
+		// Ticket parsing is off for the whole group, so a "No ticket" header would state a fact
+		// about the branches that is really a fact about the configuration.
+		let group = group(
+			rows: [row("/w/a"), row("/w/b")],
+			ticketIdRegex: ""
+		)
+
+		#expect(group.sectionHeaders(sortMode: .state, visibility: .unfiltered).isEmpty)
+		#expect(group.sectionHeaders(sortMode: .ticket, visibility: .unfiltered).isEmpty)
+	}
+
 	// MARK: - Headers while sorting by ticket
 
 	@Test("sorting by ticket splits the rows into one ticketed and one ticketless section")
@@ -161,13 +174,16 @@ struct RowSectionTests {
 		return row
 	}
 
-	private func group(rows: [RepositoryRowReducer.State]) -> RepoGroupReducer.State {
+	private func group(
+		rows: [RepositoryRowReducer.State],
+		ticketIdRegex: String = "MOB-[0-9]+"
+	) -> RepoGroupReducer.State {
 		RepoGroupReducer.State(
 			id: "/repos/alpha",
 			isCollapsed: false,
 			header: row("/repos/alpha"),
 			worktrees: IdentifiedArrayOf(uniqueElements: rows),
-			settings: RepoGroupSettings()
+			settings: RepoGroupSettings(ticketIdRegex: ticketIdRegex)
 		)
 	}
 }

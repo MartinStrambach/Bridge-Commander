@@ -72,6 +72,13 @@ extension RepoGroupReducer.State {
 	/// repeated header describes that in-between state correctly where a single misplaced row would
 	/// not.
 	func sectionHeaders(sortMode: SortMode, visibility: RowVisibility) -> [String: RowSectionHeader] {
+		// Without a ticket regex the group has ticket parsing disabled entirely, so every row
+		// would land under one "No ticket" header — which reads as a fact about the branches
+		// rather than about the configuration. Draw no headers instead, like branch sort.
+		guard !settings.ticketIdRegex.isEmpty else {
+			return [:]
+		}
+
 		var runs: [(id: String, header: RowSectionHeader)] = []
 		for row in worktrees where visibility.includesWorktree(id: row.id) {
 			guard let section = RowSection(row: row, sortMode: sortMode) else {
