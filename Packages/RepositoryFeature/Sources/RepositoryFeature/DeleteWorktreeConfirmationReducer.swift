@@ -7,12 +7,13 @@ struct DeleteWorktreeConfirmationReducer {
 	struct State: Equatable {
 		let name: String
 		var forceRemoval: Bool = false
+		var deleteLocalBranch: Bool = true
 	}
 
 	enum Action: BindableAction {
 		case binding(BindingAction<State>)
 		case cancelTapped
-		case confirmTapped(forceRemoval: Bool)
+		case confirmTapped(forceRemoval: Bool, deleteLocalBranch: Bool)
 	}
 
 	var body: some Reducer<State, Action> {
