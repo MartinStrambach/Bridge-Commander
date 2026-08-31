@@ -181,6 +181,15 @@ struct TerminalGitActionsMenuTests {
 		)))
 
 		#expect(store.state.terminalLayout?.gitActionsMenu?.isMergeInProgress == true)
+
+		// And back: the terminal's merge banner renders from this copy, so the flag clearing
+		// (Finish Merge completion or the menu's own polling) must reach it the same way.
+		await store.send(.repositoryGroups(.element(
+			id: "/repos/alpha",
+			action: .header(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: false)))
+		)))
+
+		#expect(store.state.terminalLayout?.gitActionsMenu?.isMergeInProgress == false)
 		await store.finish()
 	}
 

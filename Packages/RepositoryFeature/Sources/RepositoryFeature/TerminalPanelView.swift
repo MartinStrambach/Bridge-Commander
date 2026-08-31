@@ -31,7 +31,12 @@ struct TerminalPanelView: View {
 		VStack(spacing: 0) {
 			toolbar
 			Divider()
-			if activeRowState?.gitActionsMenu.isMergeInProgress == true {
+			// Read the merge flag from the store's own synced menu copy, not from
+			// `activeRowState`: the row state arrives here as a plain value captured when an
+			// ancestor view last rebuilt, and clearing the flag on the row doesn't rebuild
+			// those ancestors — so a banner keyed on it never disappears. The store read is
+			// live and re-synced on every merge-status report from the opened row.
+			if store.gitActionsMenu?.isMergeInProgress == true {
 				mergeStatusBanner
 			}
 			if store.activeRepositoryPath != nil {
