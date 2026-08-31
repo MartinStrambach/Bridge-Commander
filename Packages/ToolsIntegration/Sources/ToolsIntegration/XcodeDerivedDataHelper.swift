@@ -10,6 +10,10 @@ public nonisolated enum XcodeDerivedDataHelper {
 			.homeDirectoryForCurrentUser
 			.appending(path: "Library/Developer/Xcode/DerivedData", directoryHint: .isDirectory)
 
+		try deleteDerivedData(forWorktreePath: path, in: derivedDataURL)
+	}
+
+	static func deleteDerivedData(forWorktreePath path: String, in derivedDataURL: URL) throws {
 		let subfolderURLs = (try? FileManager.default.contentsOfDirectory(
 			at: derivedDataURL,
 			includingPropertiesForKeys: [.isDirectoryKey],
@@ -29,9 +33,23 @@ public nonisolated enum XcodeDerivedDataHelper {
 				continue
 			}
 
-			if workspacePath.hasPrefix(path) {
+			if isWorkspacePath(workspacePath, inWorktreeAt: path) {
 				try FileManager.default.removeItem(at: folderURL)
 			}
 		}
+	}
+
+	/// A workspace belongs to the worktree only when it is the worktree directory itself
+	/// or lives somewhere inside it. A bare prefix match is not enough: it would also hit
+	/// sibling worktrees whose names share a prefix, e.g. "repo-2" when deleting "repo".
+	static func isWorkspacePath(_ workspacePath: String, inWorktreeAt worktreePath: String) -> Bool {
+		var worktree = worktreePath
+		while worktree.count > 1, worktree.hasSuffix("/") {
+			worktree.removeLast()
+		}
+		guard !worktree.isEmpty, worktree != "/" else {
+			return false
+		}
+		return workspacePath == worktree || workspacePath.hasPrefix(worktree + "/")
 	}
 }
