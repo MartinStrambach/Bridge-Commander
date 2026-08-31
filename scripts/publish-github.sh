@@ -68,7 +68,49 @@ fi
 echo "==> git push origin $VERSION"
 git push origin "refs/tags/$VERSION"
 
-RELEASE_ARGS=(--title "Bridge Commander $VERSION" --generate-notes)
+# GitHub's generated notes list merged PRs only, so commits pushed directly
+# to main would be dropped. Fetch the PR summary from the API and append a
+# section with the direct commits: first-parent non-merge commits, minus
+# squash-merged PRs, which land as plain commits with a "(#N)" suffix and
+# are already covered by the PR summary.
+echo "==> generating release notes"
+PREV_TAG="$(git describe --tags --abbrev=0 --exclude "$VERSION" HEAD 2>/dev/null || true)"
+
+GENERATE_ARGS=(-f tag_name="$VERSION" -f target_commitish="$HEAD_SHA")
+if [[ -n "$PREV_TAG" ]]; then
+  GENERATE_ARGS+=(-f previous_tag_name="$PREV_TAG")
+  COMMIT_RANGE="$PREV_TAG..HEAD"
+else
+  COMMIT_RANGE="HEAD"
+fi
+NOTES_BODY="$(gh api "repos/{owner}/{repo}/releases/generate-notes" "${GENERATE_ARGS[@]}" --jq .body)"
+
+DIRECT_COMMITS="$(git log "$COMMIT_RANGE" --first-parent --no-merges --pretty='* %s (%h)' \
+  | grep -Ev '\(#[0-9]+\) \([0-9a-f]+\)$' || true)"
+
+# Keep the generated "Full Changelog" compare link as the closing line.
+# When no PRs were merged the API body is only that line, so the removal
+# grep may legitimately match nothing.
+FULL_CHANGELOG_LINE="$(printf '%s\n' "$NOTES_BODY" | grep '^\*\*Full Changelog\*\*' || true)"
+if [[ -n "$FULL_CHANGELOG_LINE" ]]; then
+  NOTES_BODY="$(printf '%s\n' "$NOTES_BODY" | grep -v '^\*\*Full Changelog\*\*' || true)"
+fi
+
+NOTES_FILE="$(mktemp)"
+trap 'rm -f "$NOTES_FILE"' EXIT
+{
+  if [[ -n "$NOTES_BODY" ]]; then
+    printf '%s\n' "$NOTES_BODY"
+  fi
+  if [[ -n "$DIRECT_COMMITS" ]]; then
+    printf '\n## Direct commits\n%s\n' "$DIRECT_COMMITS"
+  fi
+  if [[ -n "$FULL_CHANGELOG_LINE" ]]; then
+    printf '\n%s\n' "$FULL_CHANGELOG_LINE"
+  fi
+} > "$NOTES_FILE"
+
+RELEASE_ARGS=(--title "Bridge Commander $VERSION" --notes-file "$NOTES_FILE")
 if [[ -n "${DRAFT:-}" ]]; then
   RELEASE_ARGS+=(--draft)
   echo "==> gh release create $VERSION (draft)"
