@@ -161,7 +161,7 @@ public struct SettingsView: View {
 				.font(.headline)
 
 			Text(
-				"Enter a GitHub personal access token (classic or fine-grained) with `pull_requests: read` scope. Used to detect open PRs for the current branch."
+				"Enter a GitHub personal access token. Fine-grained: grant the repository permission \"Pull requests: Read-only\" (Metadata is added automatically). Classic: `repo` scope. Used to detect open PRs for the current branch."
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
@@ -187,7 +187,7 @@ public struct SettingsView: View {
 				.font(.headline)
 
 			Text(
-				"Enter a GitLab personal access token with `read_api` scope. Used to detect open merge requests for the current branch."
+				"Enter a GitLab access token (personal, project, or group) with `read_api` scope, or a fine-grained token with \"Merge request: Read\" and \"Pipeline: Read\" on the relevant projects. Used to detect open merge requests for the current branch."
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
