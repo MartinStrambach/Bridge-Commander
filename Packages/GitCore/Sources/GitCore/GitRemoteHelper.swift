@@ -29,6 +29,29 @@ public nonisolated enum GitRemoteHelper {
 		await cache.remote(at: path)
 	}
 
+	/// Like `parse`, but for SSH-form remotes also resolves a possible ~/.ssh/config
+	/// host alias (`git@gitlab-work:...` in a multi-account setup) to the real
+	/// hostname, so host-based provider matching (github.com / gitlab.com) still works.
+	/// HTTPS hosts are real DNS names, so they skip the ssh lookup.
+	static func parseResolvingSSHAlias(_ url: String) async -> GitRemote? {
+		guard let remote = parse(url) else {
+			return nil
+		}
+		guard isSSHForm(url) else {
+			return remote
+		}
+		let resolved = await SSHHostResolver.resolveHostname(for: remote.host)
+		guard resolved.lowercased() != remote.host.lowercased() else {
+			return remote
+		}
+		return GitRemote(host: resolved, owner: remote.owner, repo: remote.repo)
+	}
+
+	private static func isSSHForm(_ url: String) -> Bool {
+		let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+		return trimmed.hasPrefix("git@") || trimmed.lowercased().hasPrefix("ssh://")
+	}
+
 	static func parse(_ url: String) -> GitRemote? {
 		let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !trimmed.isEmpty else {
@@ -101,7 +124,7 @@ private actor OriginRemoteCache {
 			guard result.success else {
 				return nil
 			}
-			return GitRemoteHelper.parse(result.trimmedOutput)
+			return await GitRemoteHelper.parseResolvingSSHAlias(result.trimmedOutput)
 		}
 		inFlight[key] = task
 
