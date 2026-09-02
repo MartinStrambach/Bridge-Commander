@@ -36,7 +36,7 @@ public struct GitActionsMenuView: View {
 				GitOperationProgressView(
 					text: "Merging...",
 					color: .orange,
-					helpText: "Merging \(store.defaultBranch.isEmpty ? "master" : store.defaultBranch) branch..."
+					helpText: "Merging \(store.defaultBranch.isEmpty ? "default" : store.defaultBranch) branch..."
 				)
 			}
 			else if store.abortMergeButton.isAbortingMerge {

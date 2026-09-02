@@ -54,4 +54,58 @@ struct DefaultBranchResolverTests {
 	func configuredMatchesCaseInsensitively() {
 		#expect(DefaultBranchResolver.resolveBaseBranch(configured: "Develop", available: ["develop", "main"]) == "develop")
 	}
+
+	// MARK: - resolveRemoteDefaultBranch
+
+	@Test("configured branch wins verbatim, even when origin/HEAD says otherwise")
+	func remoteConfiguredWins() {
+		let result = DefaultBranchResolver.resolveRemoteDefaultBranch(
+			configured: " develop ",
+			originHead: "origin/main",
+			remoteBranches: ["main", "master"]
+		)
+		#expect(result == "develop")
+	}
+
+	@Test("empty config uses origin/HEAD and strips the origin/ prefix")
+	func remoteUsesOriginHead() {
+		#expect(DefaultBranchResolver.resolveRemoteDefaultBranch(
+			configured: "",
+			originHead: "origin/main",
+			remoteBranches: ["master"]
+		) == "main")
+		#expect(DefaultBranchResolver.resolveRemoteDefaultBranch(
+			configured: "",
+			originHead: "trunk",
+			remoteBranches: []
+		) == "trunk")
+	}
+
+	@Test("without origin/HEAD, picks master then main from the remote branches")
+	func remoteFallsBackToMasterThenMain() {
+		#expect(DefaultBranchResolver.resolveRemoteDefaultBranch(
+			configured: "",
+			originHead: nil,
+			remoteBranches: ["feature/x", "main", "master"]
+		) == "master")
+		#expect(DefaultBranchResolver.resolveRemoteDefaultBranch(
+			configured: "",
+			originHead: nil,
+			remoteBranches: ["feature/x", "Main"]
+		) == "Main")
+	}
+
+	@Test("nothing known falls back to master")
+	func remoteFallsBackToMasterWhenUnknown() {
+		#expect(DefaultBranchResolver.resolveRemoteDefaultBranch(
+			configured: "",
+			originHead: "  ",
+			remoteBranches: ["feature/x"]
+		) == "master")
+		#expect(DefaultBranchResolver.resolveRemoteDefaultBranch(
+			configured: "",
+			originHead: nil,
+			remoteBranches: []
+		) == "master")
+	}
 }

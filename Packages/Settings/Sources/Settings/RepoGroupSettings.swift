@@ -26,7 +26,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	/// Repo-relative (or absolute) path to an HTML file opened in the default browser.
 	public var webIndexPath: String = ""
 	/// The repo's default/integration branch (e.g. "main", "develop").
-	/// When empty, the app auto-resolves: prefers "master", then "main".
+	/// When empty, the app auto-resolves: the remote's `origin/HEAD` where known,
+	/// otherwise prefers "master", then "main".
 	public var defaultBranch: String = ""
 	/// Base URL of the group's YouTrack instance (e.g. "https://org.youtrack.cloud"); may include
 	/// a path for path-hosted instances. When empty, the YouTrack integration is disabled —

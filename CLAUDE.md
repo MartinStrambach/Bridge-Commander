@@ -39,7 +39,7 @@ Packages/
 - `GitStatusDetector` — `getBranchAndChanges` returns all status in one git call
 - `GitStagingClient` / `GitStagingHelper` — staging operations
 - `ProcessRunner` — shells out to git via `runGit()`
-- Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitAbortMergeHelper`, `GitStashHelper`
+- Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitDefaultBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitAbortMergeHelper`, `GitStashHelper`
 
 **AppUI** — shared UI components
 - `ActionButton`, `ToolButton`, `HeaderButton`, `HunkActionButton`

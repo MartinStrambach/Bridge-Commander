@@ -173,7 +173,9 @@ public struct GitActionsMenuReducer {
 			case let .mergeMasterButton(.mergeMasterCompleted(result)):
 				switch result {
 				case let .success(mergeResult):
-					let branchName = state.defaultBranch.isEmpty ? "master" : state.defaultBranch
+					// Use the branch git actually merged: an empty setting is auto-detected
+					// (master vs. main), so the state alone can't name it.
+					let branchName = mergeResult.baseBranch
 					let (title, message) = mergeResult.commitsMerged
 						? ("Merge Successful", "Successfully merged commits from \(branchName).")
 						: ("Already Up to Date", "Branch is already up to date with \(branchName). No commits were merged.")

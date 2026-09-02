@@ -4,15 +4,22 @@ import ProcessExecution
 public nonisolated enum GitMergeHelper {
 	public struct MergeResult: Equatable {
 		public let commitsMerged: Bool
+		/// The remote branch that was actually merged (without the `origin/` prefix).
+		/// Callers should name this in UI rather than re-deriving it from settings,
+		/// because an empty setting is auto-detected here.
+		public let baseBranch: String
 
-		public init(commitsMerged: Bool) {
+		public init(commitsMerged: Bool, baseBranch: String) {
 			self.commitsMerged = commitsMerged
+			self.baseBranch = baseBranch
 		}
 	}
 
+	/// Fetches and merges `origin/<baseBranch>`. An empty `baseBranch` means
+	/// "auto-detect": the remote's advertised default (`origin/HEAD`), then
+	/// whichever of `origin/master` / `origin/main` exists locally.
 	public static func mergeDefaultBranch(at path: String, baseBranch: String) async throws -> MergeResult {
-		// Empty config preserves the historical behavior of merging origin/master.
-		let branch = baseBranch.isEmpty ? "master" : baseBranch
+		let branch = await GitDefaultBranchDetector.detectRemoteDefaultBranch(at: path, configured: baseBranch)
 
 		// First, fetch origin/<branch>
 		try await fetchOrigin(branch: branch, at: path)
@@ -64,6 +71,6 @@ public nonisolated enum GitMergeHelper {
 		let output = result.trimmedOutput
 		let alreadyUpToDate = output.isAlreadyUpToDate
 
-		return MergeResult(commitsMerged: !alreadyUpToDate)
+		return MergeResult(commitsMerged: !alreadyUpToDate, baseBranch: branch)
 	}
 }
