@@ -9,7 +9,7 @@ public struct MergeMasterButtonReducer {
 	@ObservableState
 	public struct State: Equatable {
 		var isMergingMaster = false
-		/// Per-group configured default branch. Empty = historical origin/master.
+		/// Per-group configured default branch. Empty = auto-detect (origin/HEAD, then master/main).
 		var defaultBranch: String
 
 		fileprivate let repositoryPath: String
