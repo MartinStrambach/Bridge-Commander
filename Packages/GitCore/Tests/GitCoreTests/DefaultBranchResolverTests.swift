@@ -108,4 +108,34 @@ struct DefaultBranchResolverTests {
 			remoteBranches: []
 		) == "master")
 	}
+
+	// MARK: - resolveDefaultBranch
+
+	@Test("checkout resolution accepts local-only candidates when there is no origin/HEAD")
+	func checkoutResolutionUsesLocalCandidates() {
+		#expect(DefaultBranchResolver.resolveDefaultBranch(
+			configured: "",
+			originHead: nil,
+			candidates: ["feature/x", "main"]
+		) == "main")
+		#expect(DefaultBranchResolver.resolveDefaultBranch(
+			configured: "",
+			originHead: nil,
+			candidates: ["main", "master"]
+		) == "master")
+	}
+
+	@Test("checkout resolution keeps the configured-then-origin/HEAD precedence")
+	func checkoutResolutionPrecedence() {
+		#expect(DefaultBranchResolver.resolveDefaultBranch(
+			configured: "develop",
+			originHead: "origin/main",
+			candidates: ["main"]
+		) == "develop")
+		#expect(DefaultBranchResolver.resolveDefaultBranch(
+			configured: "",
+			originHead: "origin/trunk",
+			candidates: ["main"]
+		) == "trunk")
+	}
 }

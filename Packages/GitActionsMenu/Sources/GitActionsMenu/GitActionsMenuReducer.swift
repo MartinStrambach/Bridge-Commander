@@ -23,6 +23,7 @@ public struct GitActionsMenuReducer {
 		var pullButton: PullButtonReducer.State
 		var pushButton: PushButtonReducer.State
 		var mergeMasterButton: MergeMasterButtonReducer.State
+		var checkoutDefaultBranchButton: CheckoutDefaultBranchButtonReducer.State
 		var abortMergeButton: AbortMergeButtonReducer.State
 		@Presents
 		var alert: ScrollableAlertReducer.State?
@@ -40,16 +41,21 @@ public struct GitActionsMenuReducer {
 				repositoryPath: repositoryPath,
 				defaultBranch: defaultBranch
 			)
+			self.checkoutDefaultBranchButton = CheckoutDefaultBranchButtonReducer.State(
+				repositoryPath: repositoryPath,
+				defaultBranch: defaultBranch
+			)
 			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
 			self.stashButton = StashButtonReducer.State(repositoryPath: repositoryPath, currentBranch: currentBranch)
 			self.discardButton = DiscardButtonReducer.State(repositoryPath: repositoryPath)
 		}
 
-		/// Updates the configured default branch and keeps the merge button in sync.
+		/// Updates the configured default branch and keeps the merge and checkout buttons in sync.
 		/// Called when group settings change (see RepositoryListReducer.applySettings).
 		public mutating func setDefaultBranch(_ branch: String) {
 			defaultBranch = branch
 			mergeMasterButton.defaultBranch = branch
+			checkoutDefaultBranchButton.defaultBranch = branch
 		}
 	}
 
@@ -64,6 +70,7 @@ public struct GitActionsMenuReducer {
 		case pullButton(PullButtonReducer.Action)
 		case pushButton(PushButtonReducer.Action)
 		case mergeMasterButton(MergeMasterButtonReducer.Action)
+		case checkoutDefaultBranchButton(CheckoutDefaultBranchButtonReducer.Action)
 		case abortMergeButton(AbortMergeButtonReducer.Action)
 		case stashButton(StashButtonReducer.Action)
 		case discardButton(DiscardButtonReducer.Action)
@@ -92,6 +99,10 @@ public struct GitActionsMenuReducer {
 
 		Scope(\.mergeMasterButton, action: \.mergeMasterButton) {
 			MergeMasterButtonReducer()
+		}
+
+		Scope(\.checkoutDefaultBranchButton, action: \.checkoutDefaultBranchButton) {
+			CheckoutDefaultBranchButtonReducer()
 		}
 
 		Scope(\.abortMergeButton, action: \.abortMergeButton) {
@@ -184,6 +195,24 @@ public struct GitActionsMenuReducer {
 				case let .failure(error):
 					state.alert = ScrollableAlertReducer.State(
 						title: "Merge Failed",
+						message: error.localizedDescription,
+						isError: true
+					)
+				}
+				return refreshStashStatusEffect
+
+			case let .checkoutDefaultBranchButton(.checkoutCompleted(result)):
+				switch result {
+				case let .success(branch):
+					state.alert = ScrollableAlertReducer.State(
+						title: "Checkout Successful",
+						message: "Switched to \(branch).",
+						isError: false
+					)
+
+				case let .failure(error):
+					state.alert = ScrollableAlertReducer.State(
+						title: "Checkout Failed",
 						message: error.localizedDescription,
 						isError: true
 					)

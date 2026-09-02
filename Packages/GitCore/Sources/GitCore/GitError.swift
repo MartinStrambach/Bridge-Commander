@@ -6,6 +6,7 @@ public enum GitError: LocalizedError, Equatable {
 	case pushFailed(String)
 	case fetchFailed(String)
 	case mergeFailed(String)
+	case checkoutFailed(String)
 	case stashFailed(String)
 	case stashPopFailed(String)
 	case abortMergeFailed(String)
@@ -29,6 +30,8 @@ public enum GitError: LocalizedError, Equatable {
 			"Failed to fetch: \(message)"
 		case let .mergeFailed(message):
 			"Failed to merge: \(message)"
+		case let .checkoutFailed(message):
+			"Failed to checkout: \(message)"
 		case let .stashFailed(message):
 			"Failed to stash: \(message)"
 		case let .stashPopFailed(message):
