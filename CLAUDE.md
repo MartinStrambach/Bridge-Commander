@@ -24,7 +24,7 @@ Packages/
   ToolsIntegration/       # Xcode, YouTrack, Android Studio, Terminal, Claude Code
   TerminalFeature/        # Embedded terminal (session, view, store)
   ActionButtons/          # Android Studio button Reducer+View pair
-  GitActionsMenu/         # Git actions menu (push/pull/fetch/stash/merge/discard/abort)
+  GitActionsMenu/         # Git actions menu (push/pull/fetch/stash/merge/checkout default/discard/abort)
   YouTrackMenu/           # YouTrack ticket menu (move to a reachable state)
   GitGraphFeature/        # Commit graph view
   StagingFeature/         # File staging panel (detail view, diff, commit)
@@ -39,7 +39,7 @@ Packages/
 - `GitStatusDetector` — `getBranchAndChanges` returns all status in one git call
 - `GitStagingClient` / `GitStagingHelper` — staging operations
 - `ProcessRunner` — shells out to git via `runGit()`
-- Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitDefaultBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitAbortMergeHelper`, `GitStashHelper`
+- Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitDefaultBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitCheckoutHelper`, `GitAbortMergeHelper`, `GitStashHelper`
 
 **AppUI** — shared UI components
 - `ActionButton`, `ToolButton`, `HeaderButton`, `HunkActionButton`

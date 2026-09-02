@@ -13,6 +13,8 @@ public struct GitClient: Sendable {
 	public var getOriginRemote: @Sendable (_ at: String) async -> GitRemote? = { _ in nil }
 
 	public var mergeDefaultBranch: @Sendable (_ at: String, _ baseBranch: String) async throws -> GitMergeHelper.MergeResult
+	/// Returns the branch name that was checked out.
+	public var checkoutDefaultBranch: @Sendable (_ at: String, _ baseBranch: String) async throws -> String
 	public var pull: @Sendable (_ at: String) async throws -> GitPullHelper.PullResult
 	public var fetch: @Sendable (_ at: String) async throws -> GitFetchHelper.FetchResult
 }
@@ -28,6 +30,9 @@ extension GitClient: DependencyKey {
 			},
 			mergeDefaultBranch: { at, baseBranch in
 				try await GitMergeHelper.mergeDefaultBranch(at: at, baseBranch: baseBranch)
+			},
+			checkoutDefaultBranch: { at, baseBranch in
+				try await GitCheckoutHelper.checkoutDefaultBranch(at: at, baseBranch: baseBranch)
 			},
 			pull: { at in
 				try await GitPullHelper.pull(at: at)

@@ -51,6 +51,17 @@ public nonisolated enum DefaultBranchResolver {
 		originHead: String?,
 		remoteBranches: [String]
 	) -> String {
+		resolveDefaultBranch(configured: configured, originHead: originHead, candidates: remoteBranches)
+	}
+
+	/// The branch name "checkout default branch" should switch to. Same precedence as
+	/// `resolveRemoteDefaultBranch`, but `candidates` may mix local and remote names,
+	/// so a repository with no remote at all still resolves to its local master/main.
+	public static func resolveDefaultBranch(
+		configured: String,
+		originHead: String?,
+		candidates: [String]
+	) -> String {
 		let configured = configured.trimmingCharacters(in: .whitespacesAndNewlines)
 		if !configured.isEmpty {
 			return configured
@@ -59,10 +70,10 @@ public nonisolated enum DefaultBranchResolver {
 			let prefix = "origin/"
 			return originHead.hasPrefix(prefix) ? String(originHead.dropFirst(prefix.count)) : originHead
 		}
-		if let master = remoteBranches.first(where: { $0.caseInsensitiveCompare("master") == .orderedSame }) {
+		if let master = candidates.first(where: { $0.caseInsensitiveCompare("master") == .orderedSame }) {
 			return master
 		}
-		if let main = remoteBranches.first(where: { $0.caseInsensitiveCompare("main") == .orderedSame }) {
+		if let main = candidates.first(where: { $0.caseInsensitiveCompare("main") == .orderedSame }) {
 			return main
 		}
 		return "master"

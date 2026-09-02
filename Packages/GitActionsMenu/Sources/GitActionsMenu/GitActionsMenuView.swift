@@ -39,6 +39,13 @@ public struct GitActionsMenuView: View {
 					helpText: "Merging \(store.defaultBranch.isEmpty ? "default" : store.defaultBranch) branch..."
 				)
 			}
+			else if store.checkoutDefaultBranchButton.isCheckingOut {
+				GitOperationProgressView(
+					text: "Checking out...",
+					color: .teal,
+					helpText: "Checking out \(store.defaultBranch.isEmpty ? "default" : store.defaultBranch) branch..."
+				)
+			}
 			else if store.abortMergeButton.isAbortingMerge {
 				GitOperationProgressView(
 					text: "Aborting...",
@@ -86,6 +93,10 @@ public struct GitActionsMenuView: View {
 						MergeMasterButtonView(store: store.scope(
 							\.mergeMasterButton,
 							action: \.mergeMasterButton
+						))
+						CheckoutDefaultBranchButtonView(store: store.scope(
+							\.checkoutDefaultBranchButton,
+							action: \.checkoutDefaultBranchButton
 						))
 					}
 				} label: {

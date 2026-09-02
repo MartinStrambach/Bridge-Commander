@@ -29,6 +29,28 @@ public nonisolated enum GitDefaultBranchDetector {
 		)
 	}
 
+	/// Returns the branch name to check out as the default branch. Unlike
+	/// `detectRemoteDefaultBranch`, local-only branches count as candidates too, so a
+	/// repository without a remote still resolves to whichever of master/main it has.
+	/// A non-empty `configured` value is returned as-is without spawning any git process.
+	public static func detectDefaultBranch(at path: String, configured: String) async -> String {
+		let trimmed = configured.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard trimmed.isEmpty else {
+			return trimmed
+		}
+
+		let originHead = await originHeadBranch(at: path)
+		let candidates = originHead == nil
+			? await GitBranchListHelper.listBranchesWithInfo(at: path).map(\.name)
+			: []
+
+		return DefaultBranchResolver.resolveDefaultBranch(
+			configured: trimmed,
+			originHead: originHead,
+			candidates: candidates
+		)
+	}
+
 	/// `origin/HEAD` as a short ref (e.g. "origin/main"), or nil when the remote's
 	/// default branch has never been recorded locally (repos that were `git init`ed
 	/// and had a remote added by hand, rather than cloned).

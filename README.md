@@ -14,6 +14,7 @@ A macOS application for managing Git repositories and worktrees, built with Swif
 ### Git Operations
 - **Pull**: Pull latest changes from remote with one click
 - **Merge Master**: Merge main/master branch into current branch
+- **Checkout Default Branch**: Switch back to the default branch from a feature branch
 - **Create Worktree**: Create new git worktrees from any branch
 - **Delete Worktree**: Remove worktrees safely
 - **Push Changes**: Push commits to remote repository

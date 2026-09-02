@@ -394,6 +394,7 @@ struct RepositoryRowReducer {
 			case let .gitActionsMenu(action):
 				switch action {
 				case .abortMergeButton(.abortMergeCompleted),
+				     .checkoutDefaultBranchButton(.checkoutCompleted),
 				     .discardButton(.discardCompleted),
 				     .fetchButton(.fetchCompleted),
 				     .mergeMasterButton(.mergeMasterCompleted),
