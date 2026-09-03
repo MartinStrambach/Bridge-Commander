@@ -190,6 +190,30 @@ struct ClaudeStatusDetectorTests {
 		#expect(reported.statuses == [.waitingForInput])
 	}
 
+	// MARK: - Stopping
+
+	@Test func reportsNothingOnceStopped() {
+		// A killed pane gets one last burst of output as its shell and Claude exit. Judging that
+		// screen would report a status for a session the reducer has already dropped.
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.checkIdleState()
+		#expect(reported.statuses == [.waitingForInput])
+
+		detector.stop()
+		detector.inputSent(Array("h".utf8)[...])
+		screen.rows = ["exited"]
+		screen.cursorRow = 0
+		detector.outputReceived(Array("exited".utf8)[...])
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput], "a stopped detector has nothing more to say")
+	}
+
 	@Test func outputAloneDoesNotReleaseTheWaitingState() {
 		// Every child repaints when the app resizes its pane. That output is not Claude working.
 		let screen = FakeScreen()

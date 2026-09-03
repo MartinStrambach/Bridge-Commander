@@ -41,7 +41,6 @@ struct TerminalLayoutReducer {
 		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
-		case sessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
 		case killTab(sessionId: UUID)
 		case killRepo(repositoryPath: String)
 		case newTabRequested
@@ -153,10 +152,6 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .gitGraph:
-				return .none
-
-			case .sessionStatusChanged:
-				// Forwarded up to RepositoryListReducer
 				return .none
 
 			case .killTab:

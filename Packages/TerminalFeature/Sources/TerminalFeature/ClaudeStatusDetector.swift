@@ -39,6 +39,11 @@ final class ClaudeStatusDetector {
 
 	private var currentStatus: TerminalSessionStatus = .active
 	private var pendingCheck: DispatchWorkItem?
+
+	/// Set once the pane's session is killed. The shell's exit writes a last frame, and judging it
+	/// would report a status for a session that no longer exists.
+	private var isStopped = false
+
 	private var renderTracker = RenderTracker()
 
 	/// Holds a waiting pane until a second idle check agrees it has gone back to work.
@@ -60,12 +65,20 @@ final class ClaudeStatusDetector {
 
 	/// Takes in a burst of output written by the child process.
 	func outputReceived(_ slice: ArraySlice<UInt8>) {
+		guard !isStopped else {
+			return
+		}
+
 		renderTracker.received(slice)
 		scheduleIdleCheck()
 	}
 
 	/// Takes in bytes sent to the child process, whether typed, pasted or dropped.
 	func inputSent(_ data: ArraySlice<UInt8>) {
+		guard !isStopped else {
+			return
+		}
+
 		// A focus report is the terminal answering the repository switch, not the user typing.
 		if FocusReport.matches(data) {
 			scheduleIdleCheck()
@@ -79,6 +92,14 @@ final class ClaudeStatusDetector {
 		// Input has to re-arm the check too. A key that Claude doesn't echo produces no output, and
 		// without this the pane would sit on a stale `.active` until it wrote something again.
 		scheduleIdleCheck()
+	}
+
+	/// Ends all reporting. Called when the pane's session is killed, before the shell is hung up:
+	/// the exit writes a last frame, and there is nobody left to hear what it looks like.
+	func stop() {
+		isStopped = true
+		pendingCheck?.cancel()
+		pendingCheck = nil
 	}
 
 	// MARK: - Idle checking
@@ -95,6 +116,10 @@ final class ClaudeStatusDetector {
 	/// Judges the pane's screen and reports the result, subject to the gate on leaving the waiting
 	/// state. Called on the debounce, and directly by tests so they need not wait one out.
 	func checkIdleState() {
+		guard !isStopped else {
+			return
+		}
+
 		renderTracker.markJudged()
 
 		guard let screen else {

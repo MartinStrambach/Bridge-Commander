@@ -71,6 +71,12 @@ private func firstChild(of pid: pid_t) async -> pid_t? {
 	return child
 }
 
+/// Collects what a pane reported, in order.
+@MainActor
+private final class Reported {
+	var statuses: [TerminalSessionStatus] = []
+}
+
 @MainActor
 @Suite(.serialized)
 struct TerminalViewStoreTests {
@@ -146,6 +152,33 @@ struct TerminalViewStoreTests {
 		#expect(await eventually { !isRunning(vanished.pid) })
 		#expect(isRunning(kept.pid))
 		store.killSession(sessionId: kept.session.id)
+	}
+
+	/// A killed pane gets one last burst of output as its shell exits, and the pane can outlive the
+	/// kill for a moment. Judging that screen would report a status for a session the reducer has
+	/// already dropped, and would do so after the terminal panel may have closed.
+	@Test func killSessionSilencesStatusReports() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let view = store.view(
+			for: session,
+			foregroundColor: .white,
+			backgroundColor: .black,
+			processDelegate: processDelegate,
+			onStatusChange: { _, status in
+				MainActor.assumeIsolated { reported.statuses.append(status) }
+			}
+		)
+		try #require(view.process.shellPid > 0)
+
+		store.killSession(sessionId: session.id)
+		let reportedBeforeOutput = reported.statuses
+		// What Claude's final frame looks like to the detector: the prompt glyph at column 0.
+		view.dataReceived(slice: Array("❯ ".utf8)[...])
+		try await Task.sleep(for: .seconds(2)) // past the detector's idle threshold
+
+		#expect(reported.statuses == reportedBeforeOutput, "a killed pane has nothing more to say")
 	}
 
 	/// The store goes with the window. Whatever it still holds must hang up rather than outlive it.

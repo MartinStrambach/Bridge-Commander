@@ -50,6 +50,13 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		hangUp()
 	}
 
+	/// Stops the pane reporting Claude's status. Called when its session is killed, before the
+	/// shell is hung up: the exit writes a last frame, and the session it would be judged for is
+	/// already gone. Left running, that judgement could land after the terminal panel has closed.
+	public func stopReportingStatus() {
+		detector.stop()
+	}
+
 	/// Ends the shell the way closing a terminal window does: it gets SIGHUP, exits, and passes the
 	/// signal on to its jobs, so a Claude Code session running in the pane goes down with it.
 	///

@@ -102,6 +102,7 @@ struct RepositoryListReducer {
 			case searchTextChanged(String)
 			case showTerminalsRequested
 			case sortModeButtonTapped
+			case terminalSessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
 		}
 
 		enum Alert: Equatable {
@@ -122,6 +123,14 @@ struct RepositoryListReducer {
 		Reduce { state, action in
 			switch action {
 			// MARK: - View Actions
+
+			case let .view(.terminalSessionStatusChanged(sessionId, status)):
+				// Reported by the pane itself, and kept on the session list rather than on the
+				// terminal panel: the panel can be closed while a session keeps running, and the
+				// dots in the repository list still have to move. A late report from a session
+				// that has already been killed finds no entry and changes nothing.
+				state.terminalSessions[id: sessionId]?.status = status
+				return .none
 
 			case .view(.onAppear):
 				return .merge(.send(.startScan), .send(.startPeriodicRefresh), .send(.checkPermissions))
@@ -652,10 +661,6 @@ struct RepositoryListReducer {
 					return .none
 				}
 				return refreshRow(for: path, in: state)
-
-			case let .terminalLayout(.sessionStatusChanged(sessionId, status)):
-				state.terminalSessions[id: sessionId]?.status = status
-				return .none
 
 			case .terminalLayout(.refreshActiveRepoRequested):
 				// ⌘R in terminal mode refreshes just the opened repo. The home-directory

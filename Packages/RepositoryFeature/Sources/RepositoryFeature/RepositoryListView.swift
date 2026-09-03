@@ -138,7 +138,7 @@ struct RepositoryListView: View {
 				terminalViewStore: terminalViewStore,
 				onStatusChange: { sessionId, status in
 					MainActor.assumeIsolated {
-						_ = store.send(.terminalLayout(.sessionStatusChanged(sessionId: sessionId, status: status)))
+						_ = send(.terminalSessionStatusChanged(sessionId: sessionId, status: status))
 					}
 				}
 			)

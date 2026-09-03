@@ -72,6 +72,7 @@ public final class TerminalViewStore {
 	public func killSession(sessionId: UUID) {
 		if let view = views[sessionId] {
 			view.processDelegate = nil // the shell is about to exit on purpose, not fail
+			view.stopReportingStatus()
 			view.hangUp()
 			view.removeFromSuperview()
 		}
