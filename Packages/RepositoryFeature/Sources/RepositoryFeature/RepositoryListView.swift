@@ -97,6 +97,12 @@ struct RepositoryListView: View {
 		.onChange(of: store.groupSettings) { _, _ in
 			send(.groupSettingsChanged)
 		}
+		// The reducer can drop a session without going through the buttons that kill panes
+		// directly, as it does when a worktree is deleted. Whatever the reason, a session that
+		// has left the state must hang up its shell rather than run on unseen.
+		.onChange(of: store.terminalSessions.ids) { _, ids in
+			terminalViewStore.killSessions(notIn: Set(ids))
+		}
 		.alert($store.scope(\.$alert, action: \.alert))
 	}
 

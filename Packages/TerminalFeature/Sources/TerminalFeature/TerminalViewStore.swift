@@ -7,7 +7,17 @@ import Observation
 public final class TerminalViewStore {
 	private var views: [UUID: ClaudeAwareTerminalView] = [:]
 
-	public init() {}
+	private let shellExecutable: String
+	private let shellArguments: [String]
+
+	/// - Parameters:
+	///   - shellExecutable: What each pane runs. The app runs the user's login shell; tests run
+	///     something cheaper.
+	///   - shellArguments: Arguments for `shellExecutable`.
+	public init(shellExecutable: String = "/bin/zsh", shellArguments: [String] = ["-l"]) {
+		self.shellExecutable = shellExecutable
+		self.shellArguments = shellArguments
+	}
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one.
 	/// The caller is responsible for creating `processDelegate` and keeping a strong reference
@@ -41,8 +51,8 @@ public final class TerminalViewStore {
 		terminalView.processDelegate = processDelegate
 
 		terminalView.startProcess(
-			executable: "/bin/zsh",
-			args: ["-l"],
+			executable: shellExecutable,
+			args: shellArguments,
 			environment: nil,
 			execName: nil,
 			currentDirectory: session.startingDirectory
@@ -61,11 +71,23 @@ public final class TerminalViewStore {
 
 	public func killSession(sessionId: UUID) {
 		if let view = views[sessionId] {
-			view.processDelegate = nil // prevent spurious .failed callback
-			view.removeFromSuperview() // remove from NSView container
+			view.processDelegate = nil // the shell is about to exit on purpose, not fail
+			view.hangUp()
+			view.removeFromSuperview()
 		}
 		views.removeValue(forKey: sessionId)
-		// Process gets SIGHUP when PTY closes on deallocation
+	}
+
+	/// Kills every session that is not in `sessionIds`.
+	///
+	/// The reducer owns the list of sessions and can drop one without going through this store,
+	/// as it does when a worktree is deleted. The view layer calls this whenever that list
+	/// changes, so no pane outlives its session whichever way the session went.
+	public func killSessions(notIn sessionIds: Set<UUID>) {
+		let stale = views.keys.filter { !sessionIds.contains($0) }
+		for id in stale {
+			killSession(sessionId: id)
+		}
 	}
 
 	public func killAllSessions(for repositoryPath: String) {
