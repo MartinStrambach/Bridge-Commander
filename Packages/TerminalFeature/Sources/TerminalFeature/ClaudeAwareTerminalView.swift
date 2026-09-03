@@ -43,6 +43,40 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		nil
 	}
 
+	/// A pane that goes away for any reason takes its shell with it. `TerminalViewStore` hangs up
+	/// explicitly when it kills a session; this covers the store itself being released, as it is
+	/// when the window closes.
+	isolated deinit {
+		hangUp()
+	}
+
+	/// Stops the pane reporting Claude's status. Called when its session is killed, before the
+	/// shell is hung up: the exit writes a last frame, and the session it would be judged for is
+	/// already gone. Left running, that judgement could land after the terminal panel has closed.
+	public func stopReportingStatus() {
+		detector.stop()
+	}
+
+	/// Ends the shell the way closing a terminal window does: it gets SIGHUP, exits, and passes the
+	/// signal on to its jobs, so a Claude Code session running in the pane goes down with it.
+	///
+	/// Dropping the view is not enough on its own. SwiftTerm closes its I/O channel without
+	/// stopping the read that is always pending on the pseudo-terminal, so the master side stays
+	/// open and no hangup ever reaches the shell; a killed pane left zsh and Claude running until
+	/// the app quit. SwiftTerm's own `terminate()` would not do either, since it sends SIGTERM and
+	/// interactive zsh ignores that.
+	///
+	/// Safe to call more than once and after the shell has already exited: `running` goes false
+	/// as soon as SwiftTerm reaps the child, and a pid that was never assigned is refused so the
+	/// signal can never go to this process's own group.
+	public func hangUp() {
+		guard let process, process.running, process.shellPid > 0 else {
+			return
+		}
+
+		kill(process.shellPid, SIGHUP)
+	}
+
 	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
 	override public func dataReceived(slice: ArraySlice<UInt8>) {
 		super.dataReceived(slice: slice)

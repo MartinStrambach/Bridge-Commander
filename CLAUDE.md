@@ -66,6 +66,7 @@ Packages/
 
 **TerminalFeature** — embedded terminal panel
 - `TerminalSession`, `TerminalViewStore`, `TerminalViewRepresentable`, `TerminalStatusDotView`
+- Killing a session must go through `TerminalViewStore.killSession` / `killSessions(notIn:)`, which hang up the shell with SIGHUP. Dropping the pane alone does not close the PTY (SwiftTerm leaves a read pending), and SwiftTerm's `terminate()` sends SIGTERM, which interactive zsh ignores. `RepositoryListView` calls `killSessions(notIn:)` whenever the session ids in state change, so reducer-side removals (worktree deletion) hang up too.
 
 **StagingFeature** — file staging panel
 - `RepositoryDetail` (reducer) / `RepositoryDetailView` — the staging panel; the public entry point presented by RepositoryFeature
