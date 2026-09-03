@@ -103,6 +103,41 @@ struct FileDiffViewerDisplayTests {
 		#expect(highlighted == ["newFunction"])
 	}
 
+	@Test("both sides of an image diff survive the conversion")
+	func imageDiffSurvivesConversion() async {
+		let file = GitCore.FileChange(path: "Assets/logo.png", status: .modified)
+		let oldBytes = Data([0x89, 0x50, 0x4E, 0x47, 0x01])
+		let newBytes = Data([0x89, 0x50, 0x4E, 0x47, 0x02])
+		let loaded = GitCore.FileDiff(
+			fileChange: file,
+			hunks: [],
+			isBinary: true,
+			imageDiff: GitCore.ImageDiff(oldImageData: oldBytes, newImageData: newBytes)
+		)
+		let store = makeStore(returning: loaded)
+
+		await store.send(.load(file, isStaged: false))
+		await store.receive(\.loadResponse)
+
+		let display = store.state.displayDiff
+		#expect(display?.isBinary == true)
+		#expect(display?.hunks.isEmpty == true)
+		#expect(display?.imageDiff?.oldImageData == oldBytes)
+		#expect(display?.imageDiff?.newImageData == newBytes)
+	}
+
+	@Test("a binary diff without image data leaves the display diff's image side empty")
+	func plainBinaryDiffHasNoImageDiff() async {
+		let file = GitCore.FileChange(path: "Assets/font.ttf", status: .modified)
+		let store = makeStore(returning: GitCore.FileDiff(fileChange: file, hunks: [], isBinary: true))
+
+		await store.send(.load(file, isStaged: false))
+		await store.receive(\.loadResponse)
+
+		#expect(store.state.displayDiff?.isBinary == true)
+		#expect(store.state.displayDiff?.imageDiff == nil)
+	}
+
 	@Test("a file with no changes clears both the git and display diffs")
 	func emptyResponseClearsDisplayDiff() async {
 		let file = modifiedFile()

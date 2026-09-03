@@ -30,7 +30,10 @@ public struct DiffViewer: View {
 				// Header
 				fileHeader
 
-				if diff.isBinary {
+				if let imageDiff = diff.imageDiff {
+					ImageDiffView(imageDiff: imageDiff)
+				}
+				else if diff.isBinary {
 					binaryFileView
 				}
 				else if diff.hunks.isEmpty {

@@ -107,16 +107,33 @@ public struct DiffHunk: Identifiable, Equatable, Sendable {
 	}
 }
 
+// MARK: - Image Diff
+
+/// Raw bytes of the two versions of a changed image. A side is nil when the file does not exist
+/// there: an added image has no old side, a deleted image has no new side.
+public struct ImageDiff: Equatable, Sendable {
+	public let oldImageData: Data?
+	public let newImageData: Data?
+
+	public init(oldImageData: Data?, newImageData: Data?) {
+		self.oldImageData = oldImageData
+		self.newImageData = newImageData
+	}
+}
+
 // MARK: - File Diff
 
 public struct FileDiff: Equatable, Sendable {
 	public let fileChange: FileChange
 	public let hunks: [DiffHunk]
 	public let isBinary: Bool
+	/// Present for binary changes to a renderable image; takes precedence over the binary placeholder.
+	public let imageDiff: ImageDiff?
 
-	public init(fileChange: FileChange, hunks: [DiffHunk], isBinary: Bool) {
+	public init(fileChange: FileChange, hunks: [DiffHunk], isBinary: Bool, imageDiff: ImageDiff? = nil) {
 		self.fileChange = fileChange
 		self.hunks = hunks
 		self.isBinary = isBinary
+		self.imageDiff = imageDiff
 	}
 }
