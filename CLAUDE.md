@@ -40,10 +40,11 @@ Packages/
 - `GitStagingClient` / `GitStagingHelper` — staging operations
 - `ProcessRunner` — shells out to git via `runGit()`
 - Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitDefaultBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitCheckoutHelper`, `GitAbortMergeHelper`, `GitStashHelper`
+- `GitImageDiffLoader` / `ImageDiffSides` / `ImageFileDetector` — load both versions of a changed image (`git cat-file blob`) so the staging view can render them instead of a binary placeholder
 
 **AppUI** — shared UI components
 - `ActionButton`, `ToolButton`, `HeaderButton`, `HunkActionButton`
-- `DiffViewer`, `DiffLineView`, `HunkView` — diff display
+- `DiffViewer`, `DiffLineView`, `HunkView`, `ImageDiffView` — diff display (images render side by side as Before/After)
 - `GitOperationProgressView`, `BannerView`, `EmptyStateView`, `ScrollableErrorAlertView`
 - `FileChangeRow`, `SectionHeader`, `RepositoryIcon`
 

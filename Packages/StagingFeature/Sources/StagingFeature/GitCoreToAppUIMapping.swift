@@ -47,8 +47,19 @@ extension GitCore.DiffHunk {
 	}
 }
 
+extension GitCore.ImageDiff {
+	func toAppUI() -> AppUI.ImageDiff {
+		AppUI.ImageDiff(oldImageData: oldImageData, newImageData: newImageData)
+	}
+}
+
 extension GitCore.FileDiff {
 	func toAppUI() -> AppUI.FileDiff {
-		AppUI.FileDiff(fileChange: fileChange.toAppUI(), hunks: hunks.map { $0.toAppUI() }, isBinary: isBinary)
+		AppUI.FileDiff(
+			fileChange: fileChange.toAppUI(),
+			hunks: hunks.map { $0.toAppUI() },
+			isBinary: isBinary,
+			imageDiff: imageDiff?.toAppUI()
+		)
 	}
 }

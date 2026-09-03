@@ -82,12 +82,12 @@ public nonisolated enum GitStagingHelper {
 	) async -> FileDiff? {
 		// For untracked files, create synthetic diff from file content
 		if file.status == .untracked {
-			return await createUntrackedFileDiff(at: repositoryPath, file: file)
+			return await createUntrackedFileDiff(at: repositoryPath, file: file, isStaged: isStaged)
 		}
 
 		// For added files in staged area, use synthetic diff
 		if file.status == .added, isStaged {
-			return await createUntrackedFileDiff(at: repositoryPath, file: file)
+			return await createUntrackedFileDiff(at: repositoryPath, file: file, isStaged: isStaged)
 		}
 
 		// For tracked files, use git diff
@@ -115,9 +115,8 @@ public nonisolated enum GitStagingHelper {
 			return nil
 		}
 
-		// Check if binary file
-		if diffOutput.contains("Binary files") {
-			return FileDiff(fileChange: file, hunks: [], isBinary: true)
+		if GitBinaryDiffDetector.isBinaryDiff(diffOutput) {
+			return await binaryFileDiff(at: repositoryPath, file: file, isStaged: isStaged)
 		}
 
 		let hunks = parseDiffIntoHunks(diffOutput, fileStatus: file.status)
@@ -266,7 +265,8 @@ public nonisolated enum GitStagingHelper {
 
 	private static func createUntrackedFileDiff(
 		at repositoryPath: String,
-		file: FileChange
+		file: FileChange,
+		isStaged: Bool
 	) async -> FileDiff? {
 		let fullPath = (repositoryPath as NSString).appendingPathComponent(file.path)
 		var isDirectory: ObjCBool = false
@@ -278,7 +278,7 @@ public nonisolated enum GitStagingHelper {
 			return nil
 		}
 		guard let content = try? String(contentsOf: URL(fileURLWithPath: fullPath), encoding: .utf8) else {
-			return FileDiff(fileChange: file, hunks: [], isBinary: true)
+			return await binaryFileDiff(at: repositoryPath, file: file, isStaged: isStaged)
 		}
 
 		var lines = content.split(separator: "\n", omittingEmptySubsequences: false)
@@ -299,6 +299,19 @@ public nonisolated enum GitStagingHelper {
 		)
 
 		return FileDiff(fileChange: file, hunks: [hunk], isBinary: false)
+	}
+
+	// MARK: - Binary File Diff
+
+	/// A binary change has no hunks; when the file is an image, both versions are loaded so the
+	/// viewer can show them instead of a placeholder.
+	private static func binaryFileDiff(
+		at repositoryPath: String,
+		file: FileChange,
+		isStaged: Bool
+	) async -> FileDiff {
+		let imageDiff = await GitImageDiffLoader.load(at: repositoryPath, file: file, isStaged: isStaged)
+		return FileDiff(fileChange: file, hunks: [], isBinary: true, imageDiff: imageDiff)
 	}
 
 	// MARK: - Private Helpers
