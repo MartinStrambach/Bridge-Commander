@@ -50,6 +50,12 @@ struct CreateWorktreeButtonReducer {
 		BindingReducer()
 		Reduce { state, action in
 			switch action {
+			case .binding(\.branchName):
+				// Git rejects whitespace in ref names; swap it for underscores as the user types
+				// so the field always shows the name that will actually be created.
+				state.branchName = GitBranchNameSanitizer.sanitize(state.branchName)
+				return .none
+
 			case .showDialog:
 				state.showCreateDialog = true
 				state.branchName = ""
@@ -83,7 +89,8 @@ struct CreateWorktreeButtonReducer {
 				return .none
 
 			case .confirmCreation:
-				guard !state.createNewBranch || !state.branchName.isEmpty else {
+				let branchName = GitBranchNameSanitizer.sanitize(state.branchName)
+				guard !state.createNewBranch || !branchName.isEmpty else {
 					return .none
 				}
 
@@ -91,7 +98,7 @@ struct CreateWorktreeButtonReducer {
 				state.isCreating = true
 				let copyPaths = state.groupSettings[state.repositoryPath]?.worktreeCopyPaths ?? []
 				return .run { [
-					branchName = state.branchName,
+					branchName,
 					baseBranch = state.selectedBaseBranch,
 					path = state.repositoryPath,
 					createNewBranch = state.createNewBranch,
