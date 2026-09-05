@@ -39,7 +39,7 @@ Packages/
 - `GitStatusDetector` — `getBranchAndChanges` returns all status in one git call
 - `GitStagingClient` / `GitStagingHelper` — staging operations
 - `ProcessRunner` — shells out to git via `runGit()`
-- Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitDefaultBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitCheckoutHelper`, `GitAbortMergeHelper`, `GitStashHelper`
+- Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitBranchNameSanitizer` (whitespace → underscores for typed branch names), `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitDefaultBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitCheckoutHelper`, `GitAbortMergeHelper`, `GitStashHelper`
 - `GitImageDiffLoader` / `ImageDiffSides` / `ImageFileDetector` — load both versions of a changed image (`git cat-file blob`) so the staging view can render them instead of a binary placeholder
 
 **AppUI** — shared UI components
