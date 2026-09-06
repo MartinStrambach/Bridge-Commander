@@ -44,7 +44,8 @@ Packages/
 
 **AppUI** — shared UI components
 - `ActionButton`, `ToolButton`, `HeaderButton`, `HunkActionButton`
-- `DiffViewer`, `DiffLineView`, `HunkView`, `ImageDiffView` — diff display (images render side by side as Before/After)
+- `DiffViewer`, `DiffLineView`, `HunkCard` (`HunkHeaderView`, `HunkFooterView`, `hunkCardRow()`), `ImageDiffView` — diff display (images render side by side as Before/After)
+- `DiffViewer` is one `LazyVStack`; each hunk is a `Section` whose header, lines and footer are direct lazy items. Never wrap a hunk's lines in their own stack: a nested `LazyVStack` re-measured every line of a whole-file hunk on each lazy phase change and hung the main thread for minutes (v0.6.6 hang report, 2026-09-06)
 - `GitOperationProgressView`, `BannerView`, `EmptyStateView`, `ScrollableErrorAlertView`
 - `FileChangeRow`, `SectionHeader`, `RepositoryIcon`
 
