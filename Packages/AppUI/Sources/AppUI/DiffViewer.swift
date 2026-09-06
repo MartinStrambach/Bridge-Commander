@@ -53,17 +53,33 @@ public struct DiffViewer: View {
 					.padding(.vertical, 60)
 				}
 				else {
-					// Hunks
+					// Every hunk header, line and footer is a direct item of this one lazy stack.
+					// Do not wrap a hunk's lines in a stack of their own: a nested lazy stack has to
+					// measure all of its rows whenever the outer stack sizes the hunk, and on a
+					// whole-file hunk that hangs the main thread for minutes (see HunkCard).
 					ForEach(diff.hunks) { hunk in
-						HunkView(
-							hunk: hunk,
-							isStaged: isStaged,
-							selectedLineIDs: selectedLineIDs,
-							onStage: { onStageHunk(hunk) },
-							onUnstage: { onUnstageHunk(hunk) },
-							onDiscard: { onDiscardHunk(hunk) },
-							onLineTap: handleLineTap
-						)
+						Section {
+							ForEach(hunk.lines) { line in
+								DiffLineView(
+									line: line,
+									oldLineNumber: line.oldLineNumber,
+									newLineNumber: line.newLineNumber,
+									isSelected: selectedLineIDs.contains(line.id),
+									onTap: { modifiers in handleLineTap(line, modifiers: modifiers) }
+								)
+								.hunkCardRow()
+							}
+						} header: {
+							HunkHeaderView(
+								hunk: hunk,
+								isStaged: isStaged,
+								onStage: { onStageHunk(hunk) },
+								onUnstage: { onUnstageHunk(hunk) },
+								onDiscard: { onDiscardHunk(hunk) }
+							)
+						} footer: {
+							HunkFooterView()
+						}
 					}
 				}
 			}
