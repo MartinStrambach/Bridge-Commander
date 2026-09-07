@@ -72,6 +72,7 @@ struct TerminalPanelView: View {
 					idealHeight: 900,
 					maxHeight: .infinity
 				)
+				.windowResizable()
 		}
 	}
 
