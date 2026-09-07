@@ -82,18 +82,22 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 	/// Number of unresolved review discussions (GitLab) / review threads (GitHub).
 	/// `nil` when the count could not be determined, so the UI can tell "0" from "unknown".
 	public let unresolvedDiscussionsCount: Int?
+	/// Review sign-off state. `nil` when the provider did not report it.
+	public let approvals: ApprovalStatus?
 
 	public init(
 		url: String,
 		state: PullRequestState,
 		provider: PullRequestProvider,
 		pipeline: PipelineStatus? = nil,
-		unresolvedDiscussionsCount: Int? = nil
+		unresolvedDiscussionsCount: Int? = nil,
+		approvals: ApprovalStatus? = nil
 	) {
 		self.url = url
 		self.state = state
 		self.provider = provider
 		self.pipeline = pipeline
 		self.unresolvedDiscussionsCount = unresolvedDiscussionsCount
+		self.approvals = approvals
 	}
 }

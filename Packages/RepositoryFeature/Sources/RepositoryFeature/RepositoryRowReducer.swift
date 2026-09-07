@@ -35,6 +35,7 @@ struct RepositoryRowReducer {
 		var pipelineState: PipelineState?
 		var pipelineUrl: String?
 		var prUnresolvedDiscussions: Int?
+		var prApprovals: ApprovalStatus?
 		/// Why the last PR/MR fetch failed, as row-tooltip text. Nil while fetches
 		/// succeed — including a confirmed "no PR" — so the warning self-clears.
 		var prFetchError: String?
@@ -90,6 +91,27 @@ struct RepositoryRowReducer {
 		/// is configured for silently does nothing — surface that where the ticket button would be.
 		var showsMissingYouTrackURLWarning: Bool {
 			ticketId != nil && YouTrackURLBuilder.normalizedBase(youtrackBaseURL).isEmpty
+		}
+
+		/// What the action bar's approval slot shows.
+		///
+		/// Draft PRs deliberately report `.draft` instead of their review state: nobody
+		/// is expected to review yet, so an "awaiting review" icon would read as a
+		/// missing sign-off rather than a change that is not ready to be looked at.
+		///
+		/// Nil while the fetch has not answered yet, and for merged/closed PRs, whose
+		/// review state is no longer actionable.
+		var approvalSlot: ApprovalSlot? {
+			switch prState {
+			case .draft:
+				.draft
+			case .ready:
+				prApprovals.map(ApprovalSlot.review)
+			case .merged,
+			     .closed,
+			     .none:
+				nil
+			}
 		}
 
 		init(
@@ -295,6 +317,7 @@ struct RepositoryRowReducer {
 					state.pipelineState = nil
 					state.pipelineUrl = nil
 					state.prUnresolvedDiscussions = nil
+					state.prApprovals = nil
 					state.prFetchError = nil
 					state.shareButton.updatePRURL(nil)
 				}
@@ -365,6 +388,11 @@ struct RepositoryRowReducer {
 				// Merged/closed PRs hide the badge — their discussions are no longer actionable.
 				state.prUnresolvedDiscussions = details?.state.isOpen == true
 					? details?.unresolvedDiscussionsCount
+					: nil
+				// Same reasoning for review state: once merged or closed there is nothing
+				// left to approve. `approvalSlot` narrows this further for drafts.
+				state.prApprovals = details?.state.isOpen == true
+					? details?.approvals
 					: nil
 				state.prFetchError = nil
 				state.shareButton.updatePRURL(details?.url)

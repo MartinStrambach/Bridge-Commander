@@ -389,6 +389,13 @@ struct RepositoryRowView: View {
 				PipelineStatusButton(url: url, state: pipelineState)
 			}
 
+			// Review sign-off, or a draft marker (conditional)
+			if let slot = store.approvalSlot,
+			   let prUrl = store.prUrl,
+			   let url = URL(string: prUrl) {
+				ApprovalSlotView(slot: slot, url: url, provider: store.prProvider)
+			}
+
 			ShareButtonView(store: store.scope(
 				\.shareButton,
 				action: \.shareButton

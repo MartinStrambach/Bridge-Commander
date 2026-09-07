@@ -163,6 +163,12 @@ struct TerminalPanelView: View {
 				PipelineStatusButton(url: url, state: pipelineState)
 			}
 
+			if let slot = activeRowState?.approvalSlot,
+			   let prUrl = activeRowState?.prUrl,
+			   let url = URL(string: prUrl) {
+				ApprovalSlotView(slot: slot, url: url, provider: activeRowState?.prProvider)
+			}
+
 			if let ticketStore = store.scope(\.ticketButton, action: \.ticketButton) {
 				TicketButtonView(store: ticketStore)
 			}
