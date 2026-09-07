@@ -101,12 +101,25 @@ struct RepositoryRowReducer {
 		///
 		/// Nil while the fetch has not answered yet, and for merged/closed PRs, whose
 		/// review state is no longer actionable.
+		///
+		/// Also nil when the project requires no approvals at all: every MR there is
+		/// trivially signed off, so the slot would sit on every row saying nothing.
+		/// Requested changes are the exception — a blocking review does not come from
+		/// an approval rule, so it is real regardless of how many approvals are
+		/// required, and it is the row's only sign that someone is holding the
+		/// change up.
 		var approvalSlot: ApprovalSlot? {
 			switch prState {
 			case .draft:
 				.draft
 			case .ready:
-				prApprovals.map(ApprovalSlot.review)
+				if let prApprovals,
+				   !prApprovals.requiresNoApprovals || prApprovals.decision == .changesRequested {
+					.review(prApprovals)
+				}
+				else {
+					nil
+				}
 			case .merged,
 			     .closed,
 			     .none:

@@ -127,11 +127,18 @@ public nonisolated struct ApprovalStatus: Equatable, Sendable {
 	public let approvedBy: [Reviewer]
 	public let changesRequestedBy: [Reviewer]
 	/// Number of approvals the project requires. `nil` when the provider does not
-	/// report one — always on GitHub, and on GitLab tiers without approval rules —
-	/// so the UI can tell "no denominator available" from "zero required".
+	/// report one — always on GitHub — so the UI can tell "no denominator
+	/// available" from the `0` a provider reports for a project that requires none.
 	public let approvalsRequired: Int?
 	/// How many of those are still outstanding.
 	public let approvalsLeft: Int?
+
+	/// The provider says nobody's sign-off is needed to merge, so there is no review
+	/// state worth drawing. Distinct from a missing count, which says nothing about
+	/// whether approvals matter.
+	public var requiresNoApprovals: Bool {
+		approvalsRequired == 0
+	}
 
 	/// How many required approvals are already covered.
 	///
@@ -139,8 +146,10 @@ public nonisolated struct ApprovalStatus: Equatable, Sendable {
 	/// satisfy several approval rules at once (sitting in more than one of the
 	/// groups a rule draws from), so counting distinct approvers understates
 	/// progress and leaves a fully approved MR reading as, say, "2 of 8".
+	///
+	/// Nil when no approvals are required at all, so nothing renders a "0 of 0".
 	public var approvalsSatisfied: Int? {
-		guard let approvalsRequired, let approvalsLeft else {
+		guard let approvalsRequired, let approvalsLeft, approvalsRequired > 0 else {
 			return nil
 		}
 		return max(0, approvalsRequired - approvalsLeft)
