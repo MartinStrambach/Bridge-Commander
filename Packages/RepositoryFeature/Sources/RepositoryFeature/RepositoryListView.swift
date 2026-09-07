@@ -128,12 +128,48 @@ struct RepositoryListView: View {
 		}
 	}
 
+	/// The row of the repository opened in the terminal panel, as a store so the panel's toolbar
+	/// tracks its refreshes. Only the *identity* of the containing group is read out of the
+	/// array here — which is all that TCA's `IdentifiedArray` observation reports, and all this
+	/// lookup needs; the row's own fields are observed through the returned scope.
+	private var activeRowStore: StoreOf<RepositoryRowReducer>? {
+		guard let path = store.terminalLayout?.activeRepositoryPath else {
+			return nil
+		}
+
+		for group in store.repositoryGroups {
+			let isHeader = group.header.path == path
+			guard isHeader || group.worktrees[id: path] != nil else {
+				continue
+			}
+
+			guard
+				let groupStore = store.scope(
+					state: \.repositoryGroups[id: group.id],
+					action: \.repositoryGroups[id: group.id]
+				)
+			else {
+				return nil
+			}
+
+			if isHeader {
+				return groupStore.scope(\.header, action: \.header)
+			}
+			return groupStore.scope(state: \.worktrees[id: path], action: \.worktrees[id: path])
+		}
+		// No row behind the path: the home-directory session is the one such case.
+		return nil
+	}
+
 	@ViewBuilder
 	private var terminalOverlayView: some View {
 		if let terminalLayoutStore = store.scope(\.terminalLayout, action: \.terminalLayout) {
 			TerminalLayoutView(
 				store: terminalLayoutStore,
-				repositoryGroups: store.repositoryGroups,
+				// Eagerly materialised: the sidebar puts these in a LazyVStack, and a scoped
+				// store collection must not be indexed from a lazy view's own render pass.
+				repositoryGroups: Array(store.scope(\.repositoryGroups, action: \.repositoryGroups)),
+				activeRowStore: activeRowStore,
 				sessions: store.terminalSessions,
 				terminalViewStore: terminalViewStore,
 				onStatusChange: { sessionId, status in

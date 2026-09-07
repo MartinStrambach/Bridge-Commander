@@ -6,41 +6,18 @@ import TerminalFeature
 struct TerminalLayoutView: View {
 	@Bindable var store: StoreOf<TerminalLayoutReducer>
 
-	let repositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State>
+	/// Group stores rather than group values so every sidebar row observes its own state. Handing
+	/// the rows down as values froze their counts: TCA's `IdentifiedArray` observation compares
+	/// element ids, so a row's changed badge never invalidated this view. Materialised into an
+	/// array by the parent, as a scoped store collection requires inside a lazy container.
+	let repositoryGroups: [StoreOf<RepoGroupReducer>]
+	/// The row opened in the panel, resolved by the parent — see `RepositoryListView.activeRowStore`.
+	let activeRowStore: StoreOf<RepositoryRowReducer>?
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let terminalViewStore: TerminalViewStore
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
 	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
-
-	// MARK: - Helpers
-
-	private func filteredSidebarGroups(
-		statusByPath: [String: TerminalSessionStatus]
-	) -> [(group: RepoGroupReducer.State, showHeader: Bool, worktrees: [RepositoryRowReducer.State])] {
-		repositoryGroups.compactMap { group in
-			let showHeader = statusByPath[group.header.path] != nil
-			let filteredWorktrees = group.worktrees.filter { statusByPath[$0.path] != nil }
-			guard showHeader || !filteredWorktrees.isEmpty else { return nil }
-			return (group, showHeader, Array(filteredWorktrees))
-		}
-	}
-
-	private var activeRowState: RepositoryRowReducer.State? {
-		guard let path = store.activeRepositoryPath else {
-			return nil
-		}
-
-		for group in repositoryGroups {
-			if group.header.path == path {
-				return group.header
-			}
-			if let wt = group.worktrees[id: path] {
-				return wt
-			}
-		}
-		return nil
-	}
 
 	var body: some View {
 		// Build a path → status map once so each sidebar row, the home row and the terminal
@@ -58,7 +35,7 @@ struct TerminalLayoutView: View {
 
 			TerminalPanelView(
 				store: store,
-				activeRowState: activeRowState,
+				activeRowStore: activeRowStore,
 				terminalViewStore: terminalViewStore,
 				sessions: sessions,
 				activeSessionId: store.activeSessionId,
@@ -113,24 +90,11 @@ struct TerminalLayoutView: View {
 					if let status = statusByPath[NSHomeDirectory()] {
 						homeSessionRow(status: status)
 					}
-					if showOnlyWithTerminals {
-						ForEach(filteredSidebarGroups(statusByPath: statusByPath), id: \.group.id) { item in
-							sidebarGroupLabel(for: item.group)
-							if item.showHeader {
-								sidebarRow(for: item.group.header, statusByPath: statusByPath)
-							}
-							ForEach(item.worktrees, id: \.id) { rowState in
-								sidebarRow(for: rowState, statusByPath: statusByPath)
-							}
-						}
-					} else {
-						ForEach(repositoryGroups) { group in
-							sidebarGroupLabel(for: group)
-							sidebarRow(for: group.header, statusByPath: statusByPath)
-							ForEach(group.worktrees) { rowState in
-								sidebarRow(for: rowState, statusByPath: statusByPath)
-							}
-						}
+					// Every group is walked and resolves the terminal filter against its own rows,
+					// rather than the sidebar pre-building a filtered copy of the groups: that
+					// copy was plain values, which is what went stale. Same shape as RepoGroupView.
+					ForEach(repositoryGroups) { groupStore in
+						sidebarGroup(groupStore, statusByPath: statusByPath)
 					}
 				}
 				.padding(.vertical, 4)
@@ -156,8 +120,9 @@ struct TerminalLayoutView: View {
 				.hidden()
 			// ⌘R here refreshes only the repo opened in the terminal; the full-list
 			// refresh in RepositoryListView hands the shortcut off while we're open.
-			// The staging sheet claims ⌘R for its own refresh, so yield it there.
-			if store.stagingDetail == nil {
+			// The staging sheet and the commit graph claim ⌘R for their own refresh, so yield
+			// it there — a shortcut registered twice dispatches to either owner at random.
+			if store.stagingDetail == nil, store.gitGraph == nil {
 				Button("") { store.send(.refreshActiveRepoRequested) }
 					.keyboardShortcut("r", modifiers: .command)
 					.hidden()
@@ -165,8 +130,33 @@ struct TerminalLayoutView: View {
 		}
 	}
 
-	private func sidebarGroupLabel(for group: RepoGroupReducer.State) -> some View {
-		Text(URL(fileURLWithPath: group.id).lastPathComponent.uppercased())
+	/// One group's label, header row and worktree rows, or nothing at all when the terminal
+	/// filter is on and none of its rows has a session.
+	@ViewBuilder
+	private func sidebarGroup(
+		_ groupStore: StoreOf<RepoGroupReducer>,
+		statusByPath: [String: TerminalSessionStatus]
+	) -> some View {
+		let showsHeader = !showOnlyWithTerminals || statusByPath[groupStore.header.path] != nil
+		// Row ids are repository paths, so whether a worktree has a session is answerable from
+		// the group's ids alone — no need to read any row's state to lay the group out.
+		let hasVisibleWorktrees = groupStore.worktrees.ids.contains { statusByPath[$0] != nil }
+
+		if showsHeader || hasVisibleWorktrees {
+			sidebarGroupLabel(rootPath: groupStore.id)
+			if showsHeader {
+				sidebarRow(for: groupStore.scope(\.header, action: \.header), statusByPath: statusByPath)
+			}
+			ForEach(Array(groupStore.scope(\.worktrees, action: \.worktrees))) { rowStore in
+				if !showOnlyWithTerminals || statusByPath[rowStore.id] != nil {
+					sidebarRow(for: rowStore, statusByPath: statusByPath)
+				}
+			}
+		}
+	}
+
+	private func sidebarGroupLabel(rootPath: String) -> some View {
+		Text(URL(fileURLWithPath: rootPath).lastPathComponent.uppercased())
 			.font(.caption2)
 			.fontWeight(.semibold)
 			.foregroundColor(.secondary)
@@ -213,19 +203,20 @@ struct TerminalLayoutView: View {
 	}
 
 	private func sidebarRow(
-		for rowState: RepositoryRowReducer.State,
+		for rowStore: StoreOf<RepositoryRowReducer>,
 		statusByPath: [String: TerminalSessionStatus]
 	) -> some View {
-		SidebarRepositoryRowView(
-			rowState: rowState,
-			isActive: store.activeRepositoryPath == rowState.path,
-			sessionStatus: statusByPath[rowState.path],
+		let path = rowStore.path
+		return SidebarRepositoryRowView(
+			store: rowStore,
+			isActive: store.activeRepositoryPath == path,
+			sessionStatus: statusByPath[path],
 			onTap: {
-				store.send(.selectRepo(repositoryPath: rowState.path))
+				store.send(.selectRepo(repositoryPath: path))
 			},
 			onKill: {
-				terminalViewStore.killAllSessions(for: rowState.path)
-				store.send(.killRepo(repositoryPath: rowState.path))
+				terminalViewStore.killAllSessions(for: path)
+				store.send(.killRepo(repositoryPath: path))
 			}
 		)
 		.padding(.horizontal, 4)

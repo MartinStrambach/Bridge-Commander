@@ -17,7 +17,9 @@ struct TerminalPanelView: View {
 	@Shared(.terminalColorTheme)
 	private var terminalColorTheme = TerminalColorTheme.basicDark
 
-	let activeRowState: RepositoryRowReducer.State?
+	/// The opened repository's row. A store rather than a plain value so the counts and badges
+	/// in the toolbar track the row's refreshes — see `SidebarRepositoryRowView.store`.
+	let activeRowStore: StoreOf<RepositoryRowReducer>?
 	let terminalViewStore: TerminalViewStore
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let activeSessionId: UUID?
@@ -31,11 +33,10 @@ struct TerminalPanelView: View {
 		VStack(spacing: 0) {
 			toolbar
 			Divider()
-			// Read the merge flag from the store's own synced menu copy, not from
-			// `activeRowState`: the row state arrives here as a plain value captured when an
-			// ancestor view last rebuilt, and clearing the flag on the row doesn't rebuild
-			// those ancestors — so a banner keyed on it never disappears. The store read is
-			// live and re-synced on every merge-status report from the opened row.
+			// The flag comes from the panel's own menu copy, which is the state the menu view
+			// beside this banner acts on, and which is re-synced on every merge-status report
+			// from the opened row. `activeRowStore?.gitActionsMenu` would be equivalent now
+			// that the row is a store — this keeps banner and menu on one source.
 			if store.gitActionsMenu?.isMergeInProgress == true {
 				mergeStatusBanner
 			}
@@ -77,8 +78,8 @@ struct TerminalPanelView: View {
 
 	private var toolbar: some View {
 		HStack(spacing: 8) {
-			if let rowState = activeRowState {
-				if let ticketId = rowState.ticketId {
+			if let rowStore = activeRowStore {
+				if let ticketId = rowStore.ticketId {
 					Text(ticketId)
 						.font(.caption)
 						.fontWeight(.medium)
@@ -89,7 +90,7 @@ struct TerminalPanelView: View {
 						.layoutPriority(1)
 				}
 
-				Text(rowState.formattedBranchName)
+				Text(rowStore.formattedBranchName)
 					.font(.subheadline)
 					.fontWeight(.semibold)
 					.lineLimit(1)
@@ -97,7 +98,7 @@ struct TerminalPanelView: View {
 				Text("·")
 					.foregroundColor(.secondary)
 
-				Text(rowState.name)
+				Text(rowStore.name)
 					.font(.subheadline)
 					.foregroundColor(.secondary)
 					.lineLimit(1)
@@ -113,7 +114,7 @@ struct TerminalPanelView: View {
 				TuistButtonView(store: tuistStore)
 			}
 
-			if let rowState = activeRowState, rowState.unpushedCommitCount > 0 || store.isPushing {
+			if let rowStore = activeRowStore, rowStore.unpushedCommitCount > 0 || store.isPushing {
 				Button {
 					if let path = store.activeRepositoryPath {
 						store.send(.pushButtonTapped(repositoryPath: path))
@@ -127,7 +128,7 @@ struct TerminalPanelView: View {
 						}
 					}
 					else {
-						Text("Push (\(rowState.unpushedCommitCount))")
+						Text("Push (\(rowStore.unpushedCommitCount))")
 					}
 				}
 				.buttonStyle(.bordered)
@@ -136,19 +137,19 @@ struct TerminalPanelView: View {
 				.disabled(store.isPushing)
 			}
 
-			if let prUrl = activeRowState?.prUrl, let url = URL(string: prUrl) {
+			if let prUrl = activeRowStore?.prUrl, let url = URL(string: prUrl) {
 				VStack(alignment: .center, spacing: 2) {
 					PullRequestButton(
 						url: url,
-						provider: activeRowState?.prProvider,
-						state: activeRowState?.prState
+						provider: activeRowStore?.prProvider,
+						state: activeRowStore?.prState
 					)
 
-					if let count = activeRowState?.prUnresolvedDiscussions, count > 0 {
+					if let count = activeRowStore?.prUnresolvedDiscussions, count > 0 {
 						UnresolvedDiscussionsBadge(
 							count: count,
 							url: url,
-							provider: activeRowState?.prProvider
+							provider: activeRowStore?.prProvider
 						)
 					}
 				}
@@ -157,9 +158,9 @@ struct TerminalPanelView: View {
 				.fixedSize(horizontal: true, vertical: false)
 			}
 
-			if let pipelineUrl = activeRowState?.pipelineUrl,
+			if let pipelineUrl = activeRowStore?.pipelineUrl,
 			   let url = URL(string: pipelineUrl),
-			   let pipelineState = activeRowState?.pipelineState {
+			   let pipelineState = activeRowStore?.pipelineState {
 				PipelineStatusButton(url: url, state: pipelineState)
 			}
 
@@ -179,7 +180,7 @@ struct TerminalPanelView: View {
 				WebButtonView(store: webStore, style: .compact)
 			}
 
-//			if let rowState = activeRowState, rowState.stagedChangesCount > 0 {
+//			if let rowStore = activeRowStore, rowStore.stagedChangesCount > 0 {
 //				Button("Commit") {
 //					if let path = store.activeRepositoryPath {
 //						store.send(.stagingButtonTapped(repositoryPath: path))
@@ -193,7 +194,7 @@ struct TerminalPanelView: View {
 				if let path = store.activeRepositoryPath {
 					store.send(.gitGraphButtonTapped(
 						repositoryPath: path,
-						repositoryName: activeRowState?.name ?? ""
+						repositoryName: activeRowStore?.name ?? ""
 					))
 				}
 			}
@@ -205,7 +206,7 @@ struct TerminalPanelView: View {
 				if let path = store.activeRepositoryPath {
 					store.send(.stagingButtonTapped(
 						repositoryPath: path,
-						iosSubfolderPath: activeRowState?.iosSubfolderPath ?? ""
+						iosSubfolderPath: activeRowStore?.iosSubfolderPath ?? ""
 					))
 				}
 			}
