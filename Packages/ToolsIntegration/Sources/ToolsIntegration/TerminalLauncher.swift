@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import Foundation
 import ProcessExecution
 
@@ -45,57 +46,59 @@ public nonisolated enum TerminalLauncher {
 		}
 	}
 
-	/// Terminal opens a window at the user's home directory as soon as it launches. A plain
-	/// `do script` (no target) always makes *another* window, so launching Terminal cold used to
-	/// leave two windows behind: the startup one at home plus the requested one. Both behaviors
-	/// therefore reuse the startup window when Terminal was not already running, and only ask for
-	/// a fresh tab/window when there was a session to add to.
+	/// Opens `path` in Terminal.app, adding a tab to the session that is already open when
+	/// `newTab` is set.
+	///
+	/// Adding a tab is the one case that cannot be done in AppleScript alone, so it runs in three
+	/// steps: ask Terminal for the front tab, post ⌘T from this process, then run the command in
+	/// whatever session that produced.
 	private static func openSystemTerminal(at path: String, command: String?, newTab: Bool) async throws {
 		let commandLiteral = appleScriptLiteral(shellCommand(at: path, command: command))
 
-		// Terminal's scripting dictionary cannot make a tab, so a new tab means driving ⌘T through
-		// System Events. That is asynchronous, so wait for the front window's selected tab to
-		// actually change rather than guessing a delay — otherwise the command lands in the tab
-		// that was already there. Depending on Terminal's profile and tabbing settings ⌘T may open
-		// a window instead of a tab; either way the front window's selected tab is the fresh one.
-		//
-		// The keystroke must stay inside a `try`: without Accessibility permission System Events
-		// *errors* ("osascript is not allowed to send keystrokes") rather than doing nothing, which
-		// aborted the whole script and opened no terminal at all. Degrade to a plain `do script` —
-		// the user gets a window instead of a tab, and the list's Accessibility banner explains
-		// why. That is also better than typing into a tab that may have something running in it.
-		let alreadyRunningBranch =
-			newTab
-			? """
-					set previousTTY to tty of selected tab of front window
-					repeat 20 times
-						if frontmost then exit repeat
-						delay 0.05
-					end repeat
-					set hasFreshTab to false
-					try
-						tell application "System Events"
-							tell process "Terminal"
-								keystroke "t" using command down
-							end tell
-						end tell
-						repeat 40 times
-							if (count of windows) > 0 and tty of selected tab of front window is not previousTTY then
-								set hasFreshTab to true
-								exit repeat
-							end if
-							delay 0.05
-						end repeat
-					end try
-					if hasFreshTab then
-						do script \(commandLiteral) in front window
-					else
-						do script \(commandLiteral)
-					end if
-			"""
-			: """
-					do script \(commandLiteral)
-			"""
+		let sessionTTY = try await prepareSystemTerminal(commandLiteral: commandLiteral, newTab: newTab)
+
+		// Non-empty only when a tab still has to be made; every other case is already finished.
+		guard !sessionTTY.isEmpty else {
+			return
+		}
+
+		try await runInNewSystemTerminalTab(
+			commandLiteral: commandLiteral,
+			replacing: requestNewTerminalTab() ? sessionTTY : nil
+		)
+	}
+
+	/// Brings Terminal up and handles every case that AppleScript can finish on its own, returning
+	/// `""` once the command has been run. A non-empty result is the `tty` of the front window's
+	/// selected tab, meaning a tab still has to be made.
+	///
+	/// Terminal opens a window at the user's home directory as soon as it launches, and a plain
+	/// `do script` (no target) always makes *another* window — so launching it cold used to leave
+	/// two windows behind, the startup one at home plus the requested one. Reuse that startup
+	/// window instead, and only ask for a fresh tab or window when there was a session to add to.
+	private static func prepareSystemTerminal(commandLiteral: String, newTab: Bool) async throws -> String {
+		try await runAppleScript(prepareScript(commandLiteral: commandLiteral, newTab: newTab))
+			.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
+
+	internal static func prepareScript(commandLiteral: String, newTab: Bool) -> String {
+		// Terminal's own ⌘T needs a key window to attach a tab to, so wait for it to actually come
+		// forward before the caller posts the keystroke.
+		let newTabBranch = """
+			repeat 20 times
+				if frontmost then exit repeat
+				delay 0.05
+			end repeat
+			set frontTTY to ""
+			try
+				set frontTTY to (tty of selected tab of front window) as text
+			end try
+			if frontTTY is "" then
+				do script \(commandLiteral)
+				return ""
+			end if
+			return frontTTY
+		"""
 
 		let script = """
 		set wasRunning to application "Terminal" is running
@@ -109,14 +112,95 @@ public nonisolated enum TerminalLauncher {
 			end if
 			if (count of windows) = 0 then
 				do script \(commandLiteral)
-			else if not wasRunning then
+				return ""
+			end if
+			if not wasRunning then
+				do script \(commandLiteral) in front window
+				return ""
+			end if
+		\(newTab ? newTabBranch : "\tdo script \(commandLiteral)\n\treturn \"\"")
+		end tell
+		"""
+
+		return script
+	}
+
+	/// Runs the command in the session ⌘T just created, identified as the front window's selected
+	/// tab no longer being `previousTTY`. Terminal reports the new tab asynchronously, so poll for
+	/// it rather than guessing a delay — otherwise the command lands in the tab that was already
+	/// there. Depending on Terminal's settings ⌘T may produce a window instead of a tab; either
+	/// way the front window's selected tab is the fresh one.
+	///
+	/// `previousTTY` is `nil` when the keystroke could not be posted at all. Then, and if the tab
+	/// never shows up, fall back to a plain `do script`: the user gets a window instead of a tab,
+	/// which beats both opening nothing and typing into a tab that may have something running in
+	/// it. `RepositoryListView`'s Accessibility banner explains why.
+	private static func runInNewSystemTerminalTab(commandLiteral: String, replacing previousTTY: String?) async throws {
+		try await runAppleScript(newTabScript(commandLiteral: commandLiteral, replacing: previousTTY))
+	}
+
+	internal static func newTabScript(commandLiteral: String, replacing previousTTY: String?) -> String {
+		guard let previousTTY else {
+			return "tell application \"Terminal\" to do script \(commandLiteral)"
+		}
+
+		let script = """
+		tell application "Terminal"
+			set hasFreshTab to false
+			try
+				repeat 40 times
+					if (count of windows) > 0 then
+						if (tty of selected tab of front window) as text is not \(appleScriptLiteral(previousTTY)) then
+							set hasFreshTab to true
+							exit repeat
+						end if
+					end if
+					delay 0.05
+				end repeat
+			end try
+			if hasFreshTab then
 				do script \(commandLiteral) in front window
 			else
-		\(alreadyRunningBranch)
+				do script \(commandLiteral)
 			end if
 		end tell
 		"""
 
+		return script
+	}
+
+	/// Asks Terminal for a new tab by posting ⌘T, returning whether the keystroke went out.
+	///
+	/// This has to be posted from *this* process. Terminal's scripting dictionary cannot make a tab
+	/// (`make new tab` fails with -10000), so a keystroke is the only route, and macOS checks the
+	/// Accessibility grant of whoever posts the event. Handing the job to an `osascript` child gets
+	/// it checked against `osascript`, which has no grant of its own — it fails with "osascript is
+	/// not allowed to send keystrokes" no matter what the user granted this app.
+	private static func requestNewTerminalTab() -> Bool {
+		guard PermissionChecker.isAccessibilityPermitted() else {
+			return false
+		}
+
+		let tKeyCode: CGKeyCode = 0x11 // kVK_ANSI_T
+
+		guard
+			let source = CGEventSource(stateID: .combinedSessionState),
+			let keyDown = CGEvent(keyboardEventSource: source, virtualKey: tKeyCode, keyDown: true),
+			let keyUp = CGEvent(keyboardEventSource: source, virtualKey: tKeyCode, keyDown: false)
+		else {
+			return false
+		}
+
+		keyDown.flags = .maskCommand
+		keyUp.flags = .maskCommand
+		keyDown.post(tap: .cghidEventTap)
+		keyUp.post(tap: .cghidEventTap)
+
+		return true
+	}
+
+	@discardableResult
+	private static func runAppleScript(_ script: String) async throws -> String {
 		let result = await ProcessRunner.run(
 			executableURL: URL(filePath: "/usr/bin/osascript"),
 			arguments: ["-e", script]
@@ -125,6 +209,8 @@ public nonisolated enum TerminalLauncher {
 		if !result.success {
 			throw TerminalLauncherError.failed(result.errorString)
 		}
+
+		return result.outputString
 	}
 
 	/// A `cd` into `path`, optionally chained with `command`, safe to hand to a shell.
