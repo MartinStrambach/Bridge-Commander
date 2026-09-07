@@ -64,7 +64,7 @@ public nonisolated enum GitCommitDiffHelper {
 
 		return FileDiff(
 			fileChange: file,
-			hunks: GitDiffHunkParser.parse(diffOutput, fileStatus: file.status),
+			hunks: GitDiffHunkParser.parse(diffOutput),
 			isBinary: false
 		)
 	}

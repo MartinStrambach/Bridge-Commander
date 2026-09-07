@@ -10,24 +10,24 @@ nonisolated enum GitDiffHunkParser {
 
 	// MARK: - Parse
 
-	/// Parses `git diff` / `git show` output into hunks.
-	///
-	/// `fileStatus` only matters for the diff of a whole added or deleted file that git printed
-	/// without `@@` headers; every other input is parsed from its headers alone.
-	static func parse(_ diffOutput: String, fileStatus: FileChangeStatus) -> [DiffHunk] {
+	/// Parses `git diff` / `git show` output into hunks. Output that describes no line changes — an
+	/// empty file being added or deleted, a mode-only change — carries no `@@` header and yields no
+	/// hunks.
+	static func parse(_ diffOutput: String) -> [DiffHunk] {
 		var hunks: [DiffHunk] = []
-		let lines = diffOutput.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		var lines = diffOutput.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
-		// For new/deleted files, git doesn't use @@ headers
-		// Check if this is a file without traditional hunks
-		let hasHunkHeaders = lines.contains { $0.hasPrefix("@@") }
-
-		if !hasHunkHeaders, fileStatus == .added || fileStatus == .deleted {
-			return [wholeFileHunk(lines: lines, isAdded: fileStatus == .added)].compactMap { $0 }
+		// `git diff` terminates its output with a newline, so the final split component is the empty
+		// remainder after that newline rather than a line of the diff. Every content line git emits
+		// carries a " ", "+" or "-" prefix, so an empty component can only be that terminator —
+		// keeping it would append a phantom blank context line to the last hunk (a 119-line added
+		// file would parse as 120 lines, contradicting its own "@@ -0,0 +1,119 @@" header).
+		if lines.last?.isEmpty == true {
+			lines.removeLast()
 		}
 
-		// Standard hunk parsing for modified files
 		var currentHunkLines: [String] = []
+		var linesWithoutTrailingNewline: Set<Int> = []
 		var currentHunkHeader: String?
 		var hunkHeaderParts: (oldStart: Int, oldCount: Int, newStart: Int, newCount: Int)?
 
@@ -40,7 +40,8 @@ nonisolated enum GitDiffHunkParser {
 				currentHunkLines,
 				hunkHeader: header,
 				oldStart: parts.oldStart,
-				newStart: parts.newStart
+				newStart: parts.newStart,
+				linesWithoutTrailingNewline: linesWithoutTrailingNewline
 			)
 			hunks.append(
 				DiffHunk(
@@ -60,10 +61,20 @@ nonisolated enum GitDiffHunkParser {
 				currentHunkHeader = line
 				hunkHeaderParts = parseHunkHeader(line)
 				currentHunkLines = []
+				linesWithoutTrailingNewline = []
 			}
 			else if currentHunkHeader != nil {
+				// Content lines are checked first: a line whose own text starts with a backslash
+				// still arrives prefixed by "+", "-" or " ", so only a bare backslash is a marker.
 				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
 					currentHunkLines.append(line)
+				}
+				else if line.hasPrefix("\\") {
+					// A hunk can carry two markers — one for the old side's last line and one for the
+					// new side's — so this records against the preceding line rather than the hunk.
+					if let lastIndex = currentHunkLines.indices.last {
+						linesWithoutTrailingNewline.insert(lastIndex)
+					}
 				}
 				else if line.isEmpty {
 					currentHunkLines.append(" ")
@@ -83,7 +94,8 @@ nonisolated enum GitDiffHunkParser {
 		_ rawLines: [String],
 		hunkHeader: String,
 		oldStart: Int,
-		newStart: Int
+		newStart: Int,
+		linesWithoutTrailingNewline: Set<Int> = []
 	) -> [DiffLine] {
 		var oldLine = oldStart
 		var newLine = newStart
@@ -115,7 +127,8 @@ nonisolated enum GitDiffHunkParser {
 				rawLine: rawLine,
 				id: "\(hunkHeader):\(index)",
 				oldLineNumber: oldNum,
-				newLineNumber: newNum
+				newLineNumber: newNum,
+				hasNoNewlineAtEndOfFile: linesWithoutTrailingNewline.contains(index)
 			))
 		}
 
@@ -123,39 +136,6 @@ nonisolated enum GitDiffHunkParser {
 	}
 
 	// MARK: - Private Helpers
-
-	/// A single hunk covering an added or deleted file that git printed without `@@` headers.
-	private static func wholeFileHunk(lines: [String], isAdded: Bool) -> DiffHunk? {
-		let diffLines = lines.compactMap { line -> String? in
-			if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
-				return line
-			}
-			else if line.isEmpty {
-				return " "
-			}
-			return nil
-		}
-
-		guard !diffLines.isEmpty else {
-			return nil
-		}
-
-		let lineCount = diffLines.count
-		let hunkHeader = isAdded ? "@@ -0,0 +1,\(lineCount) @@" : "@@ -1,\(lineCount) +0,0 @@"
-		let oldStart = isAdded ? 0 : 1
-		let newStart = isAdded ? 1 : 0
-
-		return DiffHunk(
-			header: hunkHeader,
-			oldStart: oldStart,
-			oldCount: isAdded ? 0 : lineCount,
-			newStart: newStart,
-			newCount: isAdded ? lineCount : 0,
-			lines: InlineDiffHighlighter.apply(
-				to: numberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: oldStart, newStart: newStart)
-			)
-		)
-	}
 
 	private static func parseHunkHeader(_ header: String) -> (
 		oldStart: Int, oldCount: Int, newStart: Int, newCount: Int

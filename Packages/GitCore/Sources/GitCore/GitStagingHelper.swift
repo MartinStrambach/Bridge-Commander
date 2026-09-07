@@ -115,7 +115,7 @@ public nonisolated enum GitStagingHelper {
 			return await binaryFileDiff(at: repositoryPath, file: file, isStaged: isStaged)
 		}
 
-		let hunks = GitDiffHunkParser.parse(diffOutput, fileStatus: file.status)
+		let hunks = GitDiffHunkParser.parse(diffOutput)
 		return FileDiff(fileChange: file, hunks: hunks, isBinary: false)
 	}
 
@@ -285,13 +285,31 @@ public nonisolated enum GitStagingHelper {
 		let diffLines = lines.map { "+" + $0 }
 		let lineCount = diffLines.count
 		let hunkHeader = "@@ -0,0 +1,\(lineCount) @@"
+
+		// git records an unterminated final line with a marker, and so must this synthetic diff:
+		// without it the generated patch stages the file with a newline the working tree copy does
+		// not have, leaving it modified the moment it is staged.
+		let linesWithoutTrailingNewline: Set<Int> =
+			if lineCount > 0, !content.hasSuffix("\n") {
+				[lineCount - 1]
+			}
+			else {
+				[]
+			}
+
 		let hunk = DiffHunk(
 			header: hunkHeader,
 			oldStart: 0,
 			oldCount: 0,
 			newStart: 1,
 			newCount: lineCount,
-			lines: GitDiffHunkParser.numberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: 0, newStart: 1)
+			lines: GitDiffHunkParser.numberedDiffLines(
+				diffLines,
+				hunkHeader: hunkHeader,
+				oldStart: 0,
+				newStart: 1,
+				linesWithoutTrailingNewline: linesWithoutTrailingNewline
+			)
 		)
 
 		return FileDiff(fileChange: file, hunks: [hunk], isBinary: false)
@@ -319,7 +337,7 @@ public nonisolated enum GitStagingHelper {
 		arguments: [String],
 		errorMessage: String
 	) async throws {
-		let patch = createPatchForHunk(file: file, hunk: hunk)
+		let patch = createPatchForHunk(at: repositoryPath, file: file, hunk: hunk)
 		let tempDir = FileManager.default.temporaryDirectory
 		let patchFile = tempDir.appendingPathComponent("patch_\(UUID().uuidString).patch")
 
@@ -335,13 +353,17 @@ public nonisolated enum GitStagingHelper {
 		}
 	}
 
-	private static func createPatchForHunk(file: FileChange, hunk: DiffHunk) -> String {
+	static func createPatchForHunk(at repositoryPath: String, file: FileChange, hunk: DiffHunk) -> String {
 		var patch = "diff --git a/\(file.path) b/\(file.path)\n"
 
 		// Add file headers based on status
 		switch file.status {
 		case .added,
 		     .untracked:
+			// `git apply` refuses a patch that creates a file without this line ("dev/null does not
+			// exist in index"), so staging a hunk of a new file fails without it. A deletion needs no
+			// matching "deleted file mode" line.
+			patch += "new file mode \(newFileMode(at: repositoryPath, file: file))\n"
 			patch += "--- /dev/null\n+++ b/\(file.path)\n"
 		case .deleted:
 			patch += "--- a/\(file.path)\n+++ /dev/null\n"
@@ -355,9 +377,22 @@ public nonisolated enum GitStagingHelper {
 		for line in hunk.lines {
 			let rawLine = (line.rawLine.isEmpty && line.type == .context) ? " " : line.rawLine
 			patch += rawLine + "\n"
+			if line.hasNoNewlineAtEndOfFile {
+				patch += "\\ No newline at end of file\n"
+			}
 		}
 
 		return patch
+	}
+
+	/// The mode `git apply` should give a file it is being asked to create. It takes the value
+	/// literally, so claiming 100644 for an executable file stages it without its executable bit.
+	///
+	/// The working tree is the only source available: an untracked file is not in the index, and a
+	/// staged addition only has a hunk to act on when `createUntrackedFileDiff` found it on disk.
+	private static func newFileMode(at repositoryPath: String, file: FileChange) -> String {
+		let fullPath = (repositoryPath as NSString).appendingPathComponent(file.path)
+		return FileManager.default.isExecutableFile(atPath: fullPath) ? "100755" : "100644"
 	}
 
 }
