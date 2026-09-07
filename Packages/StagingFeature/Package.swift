@@ -21,6 +21,7 @@ let package = Package(
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "GitCore", package: "GitCore"),
                 .product(name: "AppUI", package: "AppUI"),
+                .product(name: "DiffModelMapping", package: "AppUI"),
                 .product(name: "Settings", package: "Settings"),
                 .product(name: "ToolsIntegration", package: "ToolsIntegration"),
             ]

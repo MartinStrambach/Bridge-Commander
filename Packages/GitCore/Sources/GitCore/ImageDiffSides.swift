@@ -2,12 +2,17 @@ import Foundation
 
 /// Where one side of an image comparison is read from.
 public nonisolated enum ImageDiffSource: Equatable, Sendable {
-	/// The committed blob at `HEAD:<path>`.
-	case head(path: String)
+	/// The blob committed at `<revision>:<path>` — a commit hash, a commit's parent, `HEAD`, …
+	case revision(revision: String, path: String)
 	/// The staged blob at `:<path>`.
 	case index(path: String)
 	/// The file as it currently sits on disk.
 	case workingTree(path: String)
+
+	/// The blob committed at the current branch tip.
+	public static func head(path: String) -> Self {
+		.revision(revision: "HEAD", path: path)
+	}
 }
 
 /// Resolves which two versions of an image a staged or unstaged change compares.
@@ -58,6 +63,45 @@ public nonisolated struct ImageDiffSides: Equatable, Sendable {
 			return isStaged
 				? ImageDiffSides(old: .head(path: oldPath), new: .index(path: file.path))
 				: ImageDiffSides(old: .index(path: oldPath), new: .workingTree(path: file.path))
+		}
+	}
+
+	/// Resolves the two versions of an image a commit changed.
+	///
+	/// The old side comes from the commit's first parent (`<hash>^`), matching the diff
+	/// `git show` prints. A root commit has no parent, but every file it contains is an
+	/// addition, so the parent is never read for one.
+	///
+	/// Returns nil when the file is not an image.
+	public static func resolve(for file: FileChange, commitHash: String) -> ImageDiffSides? {
+		guard ImageFileDetector.isImage(path: file.path) else {
+			return nil
+		}
+
+		// Renames record the pre-change path separately; every other status has one path.
+		let oldPath = file.oldPath ?? file.path
+		let parent = "\(commitHash)^"
+
+		switch file.status {
+		case .conflicted,
+		     .untracked:
+			// Neither status can occur in a commit.
+			return nil
+
+		case .added:
+			return ImageDiffSides(old: nil, new: .revision(revision: commitHash, path: file.path))
+
+		case .deleted:
+			return ImageDiffSides(old: .revision(revision: parent, path: oldPath), new: nil)
+
+		case .modified,
+		     .renamed,
+		     .copied,
+		     .typeChanged:
+			return ImageDiffSides(
+				old: .revision(revision: parent, path: oldPath),
+				new: .revision(revision: commitHash, path: file.path)
+			)
 		}
 	}
 }

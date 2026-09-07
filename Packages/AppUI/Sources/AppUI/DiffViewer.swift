@@ -2,15 +2,23 @@ import AppKit
 import SwiftUI
 
 public struct DiffViewer: View {
+	/// The per-hunk staging actions offered in a hunk's header.
+	public struct HunkActions {
+		let isStaged: Bool
+		let onStage: (DiffHunk) -> Void
+		let onUnstage: (DiffHunk) -> Void
+		let onDiscard: (DiffHunk) -> Void
+	}
+
 	@State private var selectedLineIDs: Set<DiffLine.ID> = []
 	@State private var anchorLineID: DiffLine.ID? = nil
 	@FocusState private var isFocused: Bool
 
 	public let diff: FileDiff
-	public let isStaged: Bool
-	public let onStageHunk: (DiffHunk) -> Void
-	public let onUnstageHunk: (DiffHunk) -> Void
-	public let onDiscardHunk: (DiffHunk) -> Void
+
+	/// Absent for a diff that cannot be staged — a commit's diff is already history, so its
+	/// headers carry no actions.
+	private let hunkActions: HunkActions?
 
 	private var allLines: [DiffLine] {
 		diff.hunks.flatMap(\.lines)
@@ -18,10 +26,19 @@ public struct DiffViewer: View {
 
 	public init(diff: FileDiff, isStaged: Bool, onStageHunk: @escaping (DiffHunk) -> Void, onUnstageHunk: @escaping (DiffHunk) -> Void, onDiscardHunk: @escaping (DiffHunk) -> Void) {
 		self.diff = diff
-		self.isStaged = isStaged
-		self.onStageHunk = onStageHunk
-		self.onUnstageHunk = onUnstageHunk
-		self.onDiscardHunk = onDiscardHunk
+		self.hunkActions = HunkActions(
+			isStaged: isStaged,
+			onStage: onStageHunk,
+			onUnstage: onUnstageHunk,
+			onDiscard: onDiscardHunk
+		)
+	}
+
+	/// A read-only diff: line selection and copying still work, but no hunk can be staged,
+	/// unstaged or discarded.
+	public init(diff: FileDiff) {
+		self.diff = diff
+		self.hunkActions = nil
 	}
 
 	public var body: some View {
@@ -70,13 +87,7 @@ public struct DiffViewer: View {
 								.hunkCardRow()
 							}
 						} header: {
-							HunkHeaderView(
-								hunk: hunk,
-								isStaged: isStaged,
-								onStage: { onStageHunk(hunk) },
-								onUnstage: { onUnstageHunk(hunk) },
-								onDiscard: { onDiscardHunk(hunk) }
-							)
+							HunkHeaderView(hunk: hunk, actions: hunkActions)
 						} footer: {
 							HunkFooterView()
 						}

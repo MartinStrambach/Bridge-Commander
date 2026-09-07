@@ -25,12 +25,10 @@ enum HunkCard {
 // MARK: - Header
 
 /// Hunk header bar with the stage / unstage / discard actions. Closes the card at the top.
+/// A nil `actions` leaves the bar with just the hunk range, for a read-only diff.
 struct HunkHeaderView: View {
 	let hunk: DiffHunk
-	let isStaged: Bool
-	let onStage: () -> Void
-	let onUnstage: () -> Void
-	let onDiscard: () -> Void
+	let actions: DiffViewer.HunkActions?
 
 	var body: some View {
 		HStack {
@@ -40,13 +38,15 @@ struct HunkHeaderView: View {
 
 			Spacer()
 
-			HStack(spacing: 6) {
-				if isStaged {
-					HunkActionButton(title: "Unstage", action: onUnstage)
-				}
-				else {
-					HunkActionButton(title: "Stage", action: onStage)
-					HunkActionButton(title: "Discard", action: onDiscard)
+			if let actions {
+				HStack(spacing: 6) {
+					if actions.isStaged {
+						HunkActionButton(title: "Unstage") { actions.onUnstage(hunk) }
+					}
+					else {
+						HunkActionButton(title: "Stage") { actions.onStage(hunk) }
+						HunkActionButton(title: "Discard") { actions.onDiscard(hunk) }
+					}
 				}
 			}
 		}

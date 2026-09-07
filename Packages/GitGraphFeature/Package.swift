@@ -11,6 +11,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.9.1"),
         .package(path: "../GitCore"),
+        .package(path: "../AppUI"),
     ],
     targets: [
         .target(
@@ -19,11 +20,19 @@ let package = Package(
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "Sharing", package: "swift-sharing"),
                 .product(name: "GitCore", package: "GitCore"),
+                .product(name: "AppUI", package: "AppUI"),
+                .product(name: "DiffModelMapping", package: "AppUI"),
             ]
         ),
         .testTarget(
             name: "GitGraphFeatureTests",
-            dependencies: ["GitGraphFeature"]
+            dependencies: [
+                "GitGraphFeature",
+                .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+                .product(name: "GitCore", package: "GitCore"),
+                .product(name: "AppUI", package: "AppUI"),
+                .product(name: "DiffModelMapping", package: "AppUI"),
+            ]
         ),
     ]
 )

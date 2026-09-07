@@ -3,7 +3,9 @@ import SwiftUI
 public struct FileChangeRow: View {
 	public let file: FileChange
 	public let isStaged: Bool
-	public let onToggle: () -> Void
+
+	/// Absent when the row is read-only (a committed change), which also drops the checkbox.
+	public let onToggle: (() -> Void)?
 
 	private var statusColor: Color {
 		switch file.status {
@@ -27,12 +29,14 @@ public struct FileChangeRow: View {
 	public var body: some View {
 		HStack(spacing: 8) {
 			// Checkbox
-			Button(action: onToggle) {
-				Image(systemName: isStaged ? "checkmark.square.fill" : "square")
-					.foregroundStyle(isStaged ? .blue : .secondary)
+			if let onToggle {
+				Button(action: onToggle) {
+					Image(systemName: isStaged ? "checkmark.square.fill" : "square")
+						.foregroundStyle(isStaged ? .blue : .secondary)
+				}
+				.contentShape(Rectangle())
+				.buttonStyle(.plain)
 			}
-			.contentShape(Rectangle())
-			.buttonStyle(.plain)
 
 			// Status Icon
 			Image(systemName: file.status.iconName)
@@ -70,5 +74,12 @@ public struct FileChangeRow: View {
 		self.file = file
 		self.isStaged = isStaged
 		self.onToggle = onToggle
+	}
+
+	/// A read-only row: status, path and line stats, without the staging checkbox.
+	public init(file: FileChange) {
+		self.file = file
+		self.isStaged = false
+		self.onToggle = nil
 	}
 }

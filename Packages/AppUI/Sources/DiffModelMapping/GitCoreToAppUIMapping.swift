@@ -2,7 +2,7 @@ import AppUI
 import GitCore
 
 extension GitCore.FileChangeStatus {
-	func toAppUI() -> AppUI.FileChangeStatus {
+	public func toAppUI() -> AppUI.FileChangeStatus {
 		switch self {
 		case .added: .added
 		case .modified: .modified
@@ -17,13 +17,13 @@ extension GitCore.FileChangeStatus {
 }
 
 extension GitCore.FileChange {
-	func toAppUI() -> AppUI.FileChange {
+	public func toAppUI() -> AppUI.FileChange {
 		AppUI.FileChange(id: id, path: path, status: status.toAppUI(), addedLines: addedLines, removedLines: removedLines)
 	}
 }
 
 extension GitCore.DiffLine {
-	func toAppUI() -> AppUI.DiffLine {
+	public func toAppUI() -> AppUI.DiffLine {
 		let lineType: AppUI.DiffLine.LineType = switch type {
 		case .context: .context
 		case .addition: .addition
@@ -42,19 +42,19 @@ extension GitCore.DiffLine {
 }
 
 extension GitCore.DiffHunk {
-	func toAppUI() -> AppUI.DiffHunk {
+	public func toAppUI() -> AppUI.DiffHunk {
 		AppUI.DiffHunk(id: id, header: header, lines: lines.map { $0.toAppUI() })
 	}
 }
 
 extension GitCore.ImageDiff {
-	func toAppUI() -> AppUI.ImageDiff {
+	public func toAppUI() -> AppUI.ImageDiff {
 		AppUI.ImageDiff(oldImageData: oldImageData, newImageData: newImageData)
 	}
 }
 
 extension GitCore.FileDiff {
-	func toAppUI() -> AppUI.FileDiff {
+	public func toAppUI() -> AppUI.FileDiff {
 		AppUI.FileDiff(
 			fileChange: fileChange.toAppUI(),
 			hunks: hunks.map { $0.toAppUI() },

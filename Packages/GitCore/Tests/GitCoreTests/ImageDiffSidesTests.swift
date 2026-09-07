@@ -60,6 +60,48 @@ struct ImageDiffSidesTests {
 		#expect(sides == ImageDiffSides(old: .head(path: "Assets/old-logo.png"), new: .index(path: "Assets/new-logo.png")))
 	}
 
+	// MARK: - Commit: first parent → commit
+
+	@Test
+	func commitModifiedComparesFirstParentToTheCommit() {
+		let sides = ImageDiffSides.resolve(for: FileChange(path: path, status: .modified), commitHash: "abc123")
+
+		#expect(sides == ImageDiffSides(
+			old: .revision(revision: "abc123^", path: path),
+			new: .revision(revision: "abc123", path: path)
+		))
+	}
+
+	@Test
+	func commitAdditionHasOnlyACommitSide() {
+		let sides = ImageDiffSides.resolve(for: FileChange(path: path, status: .added), commitHash: "abc123")
+
+		#expect(sides == ImageDiffSides(old: nil, new: .revision(revision: "abc123", path: path)))
+	}
+
+	@Test
+	func commitDeletionHasOnlyAParentSide() {
+		let sides = ImageDiffSides.resolve(for: FileChange(path: path, status: .deleted), commitHash: "abc123")
+
+		#expect(sides == ImageDiffSides(old: .revision(revision: "abc123^", path: path), new: nil))
+	}
+
+	@Test
+	func commitRenameReadsTheOldSideFromThePreviousPath() {
+		let file = FileChange(path: "Assets/new-logo.png", status: .renamed, oldPath: "Assets/old-logo.png")
+		let sides = ImageDiffSides.resolve(for: file, commitHash: "abc123")
+
+		#expect(sides == ImageDiffSides(
+			old: .revision(revision: "abc123^", path: "Assets/old-logo.png"),
+			new: .revision(revision: "abc123", path: "Assets/new-logo.png")
+		))
+	}
+
+	@Test
+	func nonImageFilesInACommitResolveToNothing() {
+		#expect(ImageDiffSides.resolve(for: FileChange(path: "Sources/App.swift", status: .modified), commitHash: "abc123") == nil)
+	}
+
 	// MARK: - Not applicable
 
 	@Test

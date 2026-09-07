@@ -1,5 +1,6 @@
 import AppUI
 import ComposableArchitecture
+import DiffModelMapping
 import Foundation
 import GitCore
 
