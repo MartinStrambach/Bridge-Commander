@@ -22,12 +22,7 @@ public nonisolated enum TerminalLauncher {
 	) async throws {
 		switch app {
 		case .systemTerminal:
-			if behavior == .newTab {
-				try await openSystemTerminalInNewTab(at: path, command: command)
-			}
-			else {
-				try await openSystemTerminalInNewWindow(at: path, command: command)
-			}
+			try await openSystemTerminal(at: path, command: command, newTab: behavior == .newTab)
 
 		case .iTerm2:
 			if behavior == .newTab {
@@ -50,29 +45,71 @@ public nonisolated enum TerminalLauncher {
 		}
 	}
 
-	private static func openSystemTerminalInNewTab(at path: String, command: String?) async throws {
-		let escapedPath = path
-			.replacingOccurrences(of: "\\", with: "\\\\")
-			.replacingOccurrences(of: "\"", with: "\\\"")
+	/// Terminal opens a window at the user's home directory as soon as it launches. A plain
+	/// `do script` (no target) always makes *another* window, so launching Terminal cold used to
+	/// leave two windows behind: the startup one at home plus the requested one. Both behaviors
+	/// therefore reuse the startup window when Terminal was not already running, and only ask for
+	/// a fresh tab/window when there was a session to add to.
+	private static func openSystemTerminal(at path: String, command: String?, newTab: Bool) async throws {
+		let commandLiteral = appleScriptLiteral(shellCommand(at: path, command: command))
+
+		// Terminal's scripting dictionary cannot make a tab, so a new tab means driving ⌘T through
+		// System Events. That is asynchronous, so wait for the front window's selected tab to
+		// actually change rather than guessing a delay — otherwise the command lands in the tab
+		// that was already there. Depending on Terminal's profile and tabbing settings ⌘T may open
+		// a window instead of a tab; either way the front window's selected tab is the fresh one.
+		// If it never arrives (no Accessibility permission, keystroke swallowed by another app),
+		// fall back to a plain `do script`, which makes a window of its own — better than typing
+		// into a tab that may have something running in it.
+		let alreadyRunningBranch =
+			newTab
+			? """
+					set previousTTY to tty of selected tab of front window
+					repeat 20 times
+						if frontmost then exit repeat
+						delay 0.05
+					end repeat
+					tell application "System Events"
+						tell process "Terminal"
+							keystroke "t" using command down
+						end tell
+					end tell
+					set hasFreshTab to false
+					repeat 40 times
+						if (count of windows) > 0 and tty of selected tab of front window is not previousTTY then
+							set hasFreshTab to true
+							exit repeat
+						end if
+						delay 0.05
+					end repeat
+					if hasFreshTab then
+						do script \(commandLiteral) in front window
+					else
+						do script \(commandLiteral)
+					end if
+			"""
+			: """
+					do script \(commandLiteral)
+			"""
 
 		let script = """
-		if application "Terminal" is not running then
-			tell application "Terminal"
-				do script "cd \\"\(escapedPath)\\" && '\(command ?? ":")'"
-				activate
-			end tell
-		else
-			tell application "Terminal"
-				activate
-				tell application "System Events"
-					tell process "Terminal"
-						keystroke "t" using command down
-					end tell
-				end tell
-				delay 0.2
-				do script "cd \\"\(escapedPath)\\" && '\(command ?? ":")'" in front window
-			end tell
-		end if
+		set wasRunning to application "Terminal" is running
+		tell application "Terminal"
+			activate
+			if not wasRunning then
+				repeat 50 times
+					if (count of windows) > 0 then exit repeat
+					delay 0.1
+				end repeat
+			end if
+			if (count of windows) = 0 then
+				do script \(commandLiteral)
+			else if not wasRunning then
+				do script \(commandLiteral) in front window
+			else
+		\(alreadyRunningBranch)
+			end if
+		end tell
 		"""
 
 		let result = await ProcessRunner.run(
@@ -83,6 +120,26 @@ public nonisolated enum TerminalLauncher {
 		if !result.success {
 			throw TerminalLauncherError.failed(result.errorString)
 		}
+	}
+
+	/// A `cd` into `path`, optionally chained with `command`, safe to hand to a shell.
+	internal static func shellCommand(at path: String, command: String?) -> String {
+		let quotedPath = "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+
+		guard let command, !command.isEmpty else {
+			return "cd \(quotedPath)"
+		}
+
+		return "cd \(quotedPath) && \(command)"
+	}
+
+	/// Wraps `text` in a quoted AppleScript string literal.
+	internal static func appleScriptLiteral(_ text: String) -> String {
+		let escaped = text
+			.replacingOccurrences(of: "\\", with: "\\\\")
+			.replacingOccurrences(of: "\"", with: "\\\"")
+
+		return "\"\(escaped)\""
 	}
 
 	private static func openITerm2InNewTab(at path: String, command: String?) async throws {
@@ -174,33 +231,6 @@ public nonisolated enum TerminalLauncher {
 		let result = await ProcessRunner.run(
 			executableURL: URL(filePath: "/usr/bin/open"),
 			arguments: [url.absoluteString]
-		)
-
-		if !result.success {
-			throw TerminalLauncherError.failed(result.errorString)
-		}
-	}
-
-	private static func openSystemTerminalInNewWindow(at path: String, command: String?) async throws {
-		guard let command else {
-			try await openAppInNewWindow(appName: "Terminal", at: path)
-			return
-		}
-
-		let escapedPath = path
-			.replacingOccurrences(of: "\\", with: "\\\\")
-			.replacingOccurrences(of: "'", with: "\\'")
-
-		let script = """
-		tell application "Terminal"
-			activate
-			do script "cd '\(escapedPath)' && \(command)"
-		end tell
-		"""
-
-		let result = await ProcessRunner.run(
-			executableURL: URL(filePath: "/usr/bin/osascript"),
-			arguments: ["-e", script]
 		)
 
 		if !result.success {

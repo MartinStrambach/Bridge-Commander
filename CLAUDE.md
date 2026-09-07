@@ -64,6 +64,7 @@ Packages/
 - `TerminalLauncher`, `ClaudeCodeLauncher`, `AndroidStudioLauncher`
 - `XcodeProjectDetector`, `XcodeProjectGenerator`, `XcodeDerivedDataHelper`
 - `TuistCommandHelper`, `BranchNameFormatter`, `FileOpener`, `PermissionChecker`
+- Terminal.app opens a window at the user's home directory the moment it launches, and a plain `do script` (no target) always makes *another* window — so launching it cold left two windows behind, one at home. `TerminalLauncher.openSystemTerminal` therefore reuses that startup window (`do script … in front window`) when Terminal was not already running, for both the new-window and new-tab behaviors. Terminal's dictionary cannot make a tab, so a new tab still means ⌘T via System Events; poll the front window's `tty of selected tab` until it changes rather than guessing a delay, and if it never does (no Accessibility permission), fall back to a plain `do script` instead of typing into a tab that may be busy
 
 **YouTrackMenu** — YouTrack ticket menu
 - `YouTrackButtonReducer` / `YouTrackButtonView` — moves a ticket to a different state
