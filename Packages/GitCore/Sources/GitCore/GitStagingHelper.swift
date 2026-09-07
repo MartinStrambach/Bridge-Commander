@@ -119,7 +119,7 @@ public nonisolated enum GitStagingHelper {
 			return await binaryFileDiff(at: repositoryPath, file: file, isStaged: isStaged)
 		}
 
-		let hunks = parseDiffIntoHunks(diffOutput, fileStatus: file.status)
+		let hunks = parseDiffIntoHunks(diffOutput)
 		return FileDiff(fileChange: file, hunks: hunks, isBinary: false)
 	}
 
@@ -289,13 +289,31 @@ public nonisolated enum GitStagingHelper {
 		let diffLines = lines.map { "+" + $0 }
 		let lineCount = diffLines.count
 		let hunkHeader = "@@ -0,0 +1,\(lineCount) @@"
+
+		// git records an unterminated final line with a marker, and so must this synthetic diff:
+		// without it the generated patch stages the file with a newline the working tree copy does
+		// not have, leaving it modified the moment it is staged.
+		let linesWithoutTrailingNewline: Set<Int> =
+			if lineCount > 0, !content.hasSuffix("\n") {
+				[lineCount - 1]
+			}
+			else {
+				[]
+			}
+
 		let hunk = DiffHunk(
 			header: hunkHeader,
 			oldStart: 0,
 			oldCount: 0,
 			newStart: 1,
 			newCount: lineCount,
-			lines: makeNumberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: 0, newStart: 1)
+			lines: makeNumberedDiffLines(
+				diffLines,
+				hunkHeader: hunkHeader,
+				oldStart: 0,
+				newStart: 1,
+				linesWithoutTrailingNewline: linesWithoutTrailingNewline
+			)
 		)
 
 		return FileDiff(fileChange: file, hunks: [hunk], isBinary: false)
@@ -323,7 +341,7 @@ public nonisolated enum GitStagingHelper {
 		arguments: [String],
 		errorMessage: String
 	) async throws {
-		let patch = createPatchForHunk(file: file, hunk: hunk)
+		let patch = createPatchForHunk(at: repositoryPath, file: file, hunk: hunk)
 		let tempDir = FileManager.default.temporaryDirectory
 		let patchFile = tempDir.appendingPathComponent("patch_\(UUID().uuidString).patch")
 
@@ -339,51 +357,23 @@ public nonisolated enum GitStagingHelper {
 		}
 	}
 
-	private static func parseDiffIntoHunks(
-		_ diffOutput: String,
-		fileStatus: FileChangeStatus
-	) -> [DiffHunk] {
+	/// Parses `git diff` output into hunks. Output that describes no line changes — an empty file
+	/// being added or deleted, a mode-only change — carries no `@@` header and yields no hunks.
+	static func parseDiffIntoHunks(_ diffOutput: String) -> [DiffHunk] {
 		var hunks: [DiffHunk] = []
-		let lines = diffOutput.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+		var lines = diffOutput.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
-		// For new/deleted files, git doesn't use @@ headers
-		// Check if this is a file without traditional hunks
-		let hasHunkHeaders = lines.contains { $0.hasPrefix("@@") }
-
-		if !hasHunkHeaders, fileStatus == .added || fileStatus == .deleted {
-			let diffLines = lines.compactMap { line -> String? in
-				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
-					return line
-				}
-				else if line.isEmpty {
-					return " "
-				}
-				return nil
-			}
-
-			guard !diffLines.isEmpty else {
-				return []
-			}
-
-			let lineCount = diffLines.count
-			let isAdded = fileStatus == .added
-			let hunkHeader = isAdded ? "@@ -0,0 +1,\(lineCount) @@" : "@@ -1,\(lineCount) +0,0 @@"
-			let oldStart = isAdded ? 0 : 1
-			let newStart = isAdded ? 1 : 0
-			let hunk = DiffHunk(
-				header: hunkHeader,
-				oldStart: oldStart,
-				oldCount: isAdded ? 0 : lineCount,
-				newStart: newStart,
-				newCount: isAdded ? lineCount : 0,
-				lines: InlineDiffHighlighter.apply(to: makeNumberedDiffLines(diffLines, hunkHeader: hunkHeader, oldStart: oldStart, newStart: newStart))
-			)
-
-			return [hunk]
+		// `git diff` terminates its output with a newline, so the final split component is the empty
+		// remainder after that newline rather than a line of the diff. Every content line git emits
+		// carries a " ", "+" or "-" prefix, so an empty component can only be that terminator —
+		// keeping it would append a phantom blank context line to the last hunk (a 119-line added
+		// file would parse as 120 lines, contradicting its own "@@ -0,0 +1,119 @@" header).
+		if lines.last?.isEmpty == true {
+			lines.removeLast()
 		}
 
-		// Standard hunk parsing for modified files
 		var currentHunkLines: [String] = []
+		var linesWithoutTrailingNewline: Set<Int> = []
 		var currentHunkHeader: String?
 		var hunkHeaderParts: (oldStart: Int, oldCount: Int, newStart: Int, newCount: Int)?
 
@@ -396,7 +386,8 @@ public nonisolated enum GitStagingHelper {
 				currentHunkLines,
 				hunkHeader: header,
 				oldStart: parts.oldStart,
-				newStart: parts.newStart
+				newStart: parts.newStart,
+				linesWithoutTrailingNewline: linesWithoutTrailingNewline
 			)
 			hunks.append(
 				DiffHunk(
@@ -416,10 +407,20 @@ public nonisolated enum GitStagingHelper {
 				currentHunkHeader = line
 				hunkHeaderParts = parseHunkHeader(line)
 				currentHunkLines = []
+				linesWithoutTrailingNewline = []
 			}
 			else if currentHunkHeader != nil {
+				// Content lines are checked first: a line whose own text starts with a backslash
+				// still arrives prefixed by "+", "-" or " ", so only a bare backslash is a marker.
 				if line.hasPrefix("+") || line.hasPrefix("-") || line.hasPrefix(" ") {
 					currentHunkLines.append(line)
+				}
+				else if line.hasPrefix("\\") {
+					// A hunk can carry two markers — one for the old side's last line and one for the
+					// new side's — so this records against the preceding line rather than the hunk.
+					if let lastIndex = currentHunkLines.indices.last {
+						linesWithoutTrailingNewline.insert(lastIndex)
+					}
 				}
 				else if line.isEmpty {
 					currentHunkLines.append(" ")
@@ -435,7 +436,8 @@ public nonisolated enum GitStagingHelper {
 		_ rawLines: [String],
 		hunkHeader: String,
 		oldStart: Int,
-		newStart: Int
+		newStart: Int,
+		linesWithoutTrailingNewline: Set<Int> = []
 	) -> [DiffLine] {
 		var oldLine = oldStart
 		var newLine = newStart
@@ -467,7 +469,8 @@ public nonisolated enum GitStagingHelper {
 				rawLine: rawLine,
 				id: "\(hunkHeader):\(index)",
 				oldLineNumber: oldNum,
-				newLineNumber: newNum
+				newLineNumber: newNum,
+				hasNoNewlineAtEndOfFile: linesWithoutTrailingNewline.contains(index)
 			))
 		}
 
@@ -506,13 +509,17 @@ public nonisolated enum GitStagingHelper {
 		return Int(string[range]) ?? 0
 	}
 
-	private static func createPatchForHunk(file: FileChange, hunk: DiffHunk) -> String {
+	static func createPatchForHunk(at repositoryPath: String, file: FileChange, hunk: DiffHunk) -> String {
 		var patch = "diff --git a/\(file.path) b/\(file.path)\n"
 
 		// Add file headers based on status
 		switch file.status {
 		case .added,
 		     .untracked:
+			// `git apply` refuses a patch that creates a file without this line ("dev/null does not
+			// exist in index"), so staging a hunk of a new file fails without it. A deletion needs no
+			// matching "deleted file mode" line.
+			patch += "new file mode \(newFileMode(at: repositoryPath, file: file))\n"
 			patch += "--- /dev/null\n+++ b/\(file.path)\n"
 		case .deleted:
 			patch += "--- a/\(file.path)\n+++ /dev/null\n"
@@ -526,9 +533,22 @@ public nonisolated enum GitStagingHelper {
 		for line in hunk.lines {
 			let rawLine = (line.rawLine.isEmpty && line.type == .context) ? " " : line.rawLine
 			patch += rawLine + "\n"
+			if line.hasNoNewlineAtEndOfFile {
+				patch += "\\ No newline at end of file\n"
+			}
 		}
 
 		return patch
+	}
+
+	/// The mode `git apply` should give a file it is being asked to create. It takes the value
+	/// literally, so claiming 100644 for an executable file stages it without its executable bit.
+	///
+	/// The working tree is the only source available: an untracked file is not in the index, and a
+	/// staged addition only has a hunk to act on when `createUntrackedFileDiff` found it on disk.
+	private static func newFileMode(at repositoryPath: String, file: FileChange) -> String {
+		let fullPath = (repositoryPath as NSString).appendingPathComponent(file.path)
+		return FileManager.default.isExecutableFile(atPath: fullPath) ? "100755" : "100644"
 	}
 
 }

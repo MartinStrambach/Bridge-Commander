@@ -125,13 +125,26 @@ public nonisolated struct DiffLine: Identifiable, Equatable, Sendable {
 	public let oldLineNumber: Int?
 	public let newLineNumber: Int?
 	public let inlineChanges: [Range<String.Index>]
+	/// Set when git followed this line with `\ No newline at end of file`. That marker describes the
+	/// line above it rather than being a line of its own, so it is carried here; patch generation has
+	/// to write it back out or `git apply` will reject the patch (modified files) or silently
+	/// re-terminate the file (new files).
+	public let hasNoNewlineAtEndOfFile: Bool
 
-	public init(rawLine: String, id: String, oldLineNumber: Int?, newLineNumber: Int?, inlineChanges: [Range<String.Index>] = []) {
+	public init(
+		rawLine: String,
+		id: String,
+		oldLineNumber: Int?,
+		newLineNumber: Int?,
+		inlineChanges: [Range<String.Index>] = [],
+		hasNoNewlineAtEndOfFile: Bool = false
+	) {
 		self.id = id
 		self.rawLine = rawLine
 		self.oldLineNumber = oldLineNumber
 		self.newLineNumber = newLineNumber
 		self.inlineChanges = inlineChanges
+		self.hasNoNewlineAtEndOfFile = hasNoNewlineAtEndOfFile
 
 		if rawLine.hasPrefix("+") {
 			self.type = .addition
@@ -148,7 +161,14 @@ public nonisolated struct DiffLine: Identifiable, Equatable, Sendable {
 	}
 
 	public func withInlineChanges(_ changes: [Range<String.Index>]) -> DiffLine {
-		DiffLine(rawLine: rawLine, id: id, oldLineNumber: oldLineNumber, newLineNumber: newLineNumber, inlineChanges: changes)
+		DiffLine(
+			rawLine: rawLine,
+			id: id,
+			oldLineNumber: oldLineNumber,
+			newLineNumber: newLineNumber,
+			inlineChanges: changes,
+			hasNoNewlineAtEndOfFile: hasNoNewlineAtEndOfFile
+		)
 	}
 }
 
