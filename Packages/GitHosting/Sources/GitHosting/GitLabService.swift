@@ -32,6 +32,23 @@ public nonisolated enum GitLabService {
 						draft
 						resolvableDiscussionsCount
 						resolvedDiscussionsCount
+						approved
+						approvalsRequired
+						approvalsLeft
+						groupedApprovalsRequired
+						groupedApprovalsLeft
+						detailedMergeStatus
+						approvedBy {
+							nodes { username name avatarUrl }
+						}
+						reviewers {
+							nodes {
+								username
+								name
+								avatarUrl
+								mergeRequestInteraction { reviewState }
+							}
+						}
 						headPipeline {
 							status
 							path
@@ -81,7 +98,8 @@ public nonisolated enum GitLabService {
 			state: mergeRequest.mappedState,
 			provider: .gitlab,
 			pipeline: mergeRequest.pipelineStatus,
-			unresolvedDiscussionsCount: mergeRequest.unresolvedCount
+			unresolvedDiscussionsCount: mergeRequest.unresolvedCount,
+			approvals: mergeRequest.approvalStatus
 		)
 	}
 
@@ -114,6 +132,19 @@ public nonisolated enum GitLabService {
 			throw GitHostingError.unauthenticated
 		}
 		return username
+	}
+}
+
+/// GitLab reports user avatars either as a full URL (Gravatar) or as an
+/// instance-relative path (`/uploads/-/system/user/avatar/...`). Mirrors how
+/// `headPipeline.path` is turned into a link.
+/// Internal (not private) so it is unit-testable.
+nonisolated enum GitLabAvatarURL {
+	static func absolute(_ raw: String?) -> String? {
+		guard let raw, !raw.isEmpty else {
+			return nil
+		}
+		return raw.hasPrefix("/") ? "https://gitlab.com" + raw : raw
 	}
 }
 
@@ -164,6 +195,14 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 		let draft: Bool?
 		let resolvableDiscussionsCount: Int?
 		let resolvedDiscussionsCount: Int?
+		let approved: Bool?
+		let approvalsRequired: Int?
+		let approvalsLeft: Int?
+		let groupedApprovalsRequired: Int?
+		let groupedApprovalsLeft: Int?
+		let detailedMergeStatus: String?
+		let approvedBy: UserConnection?
+		let reviewers: ReviewerConnection?
 		let headPipeline: HeadPipeline?
 
 		var mappedState: PullRequestState {
@@ -203,6 +242,102 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 			}
 			return PipelineStatus(state: state, url: "https://gitlab.com" + path)
 		}
+
+		/// Reviewers who explicitly asked for changes.
+		///
+		/// Only the ones still listed as reviewers can be named — GitLab keeps the
+		/// blocking review after someone is removed from `reviewers`, so this can come
+		/// back empty on an MR that is genuinely blocked. `isBlockedByRequestedChanges`
+		/// is what decides the verdict; this only supplies faces for it.
+		var changesRequestedReviewers: [Reviewer] {
+			(reviewers?.nodes ?? [])
+				.filter { $0.mergeRequestInteraction?.reviewState?.uppercased() == "REQUESTED_CHANGES" }
+				.map(\.reviewer)
+		}
+
+		/// Whether a requested change is holding the MR up.
+		///
+		/// `detailedMergeStatus` is the authoritative signal and survives the reviewer
+		/// being unassigned, but it reports a single reason with a precedence order, so
+		/// a higher-priority blocker (a conflict, say) can mask it. Checking the
+		/// reviewers as well covers that.
+		var isBlockedByRequestedChanges: Bool {
+			detailedMergeStatus?.uppercased() == "REQUESTED_CHANGES" || !changesRequestedReviewers.isEmpty
+		}
+
+		var approvalStatus: ApprovalStatus {
+			let changesRequestedBy = changesRequestedReviewers
+			let approvedBy = (self.approvedBy?.nodes ?? []).map(\.reviewer)
+
+			let decision: ApprovalDecision =
+				if isBlockedByRequestedChanges {
+					.changesRequested
+				}
+				else if approved == true {
+					.approved
+				}
+				else {
+					.reviewRequired
+				}
+
+			// Prefer the grouped counts: they collapse rules that share a section and
+			// approvers, so a reviewer who covers several categories at once counts
+			// once rather than leaving the MR reading as "2 of 8" when it is fully
+			// approved. The ungrouped pair is the fallback for responses that omit them.
+			let required = groupedApprovalsRequired ?? approvalsRequired
+			let left = groupedApprovalsLeft ?? approvalsLeft
+
+			return ApprovalStatus(
+				decision: decision,
+				approvedBy: approvedBy,
+				changesRequestedBy: changesRequestedBy,
+				// Approval *rules* are a paid GitLab feature; tiers without them report
+				// 0, which means "no rule configured", not "zero approvals needed".
+				approvalsRequired: (required ?? 0) > 0 ? required : nil,
+				approvalsLeft: (required ?? 0) > 0 ? left : nil
+			)
+		}
+	}
+
+	struct UserConnection: Decodable {
+		let nodes: [User]?
+	}
+
+	struct ReviewerConnection: Decodable {
+		let nodes: [ReviewerNode]?
+	}
+
+	struct User: Decodable {
+		let username: String
+		let name: String?
+		let avatarUrl: String?
+
+		var reviewer: Reviewer {
+			Reviewer(
+				username: username,
+				displayName: name ?? username,
+				avatarURL: GitLabAvatarURL.absolute(avatarUrl)
+			)
+		}
+	}
+
+	struct ReviewerNode: Decodable {
+		let username: String
+		let name: String?
+		let avatarUrl: String?
+		let mergeRequestInteraction: MergeRequestInteraction?
+
+		var reviewer: Reviewer {
+			Reviewer(
+				username: username,
+				displayName: name ?? username,
+				avatarURL: GitLabAvatarURL.absolute(avatarUrl)
+			)
+		}
+	}
+
+	struct MergeRequestInteraction: Decodable {
+		let reviewState: String?
 	}
 
 	struct HeadPipeline: Decodable {

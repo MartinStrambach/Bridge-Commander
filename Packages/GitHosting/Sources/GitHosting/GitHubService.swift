@@ -33,6 +33,17 @@ public nonisolated enum GitHubService {
 						url
 						state
 						isDraft
+						reviewDecision
+						latestOpinionatedReviews(first: 20) {
+							nodes {
+								state
+								author {
+									login
+									avatarUrl
+									... on User { name }
+								}
+							}
+						}
 						reviewThreads(first: 100) {
 							nodes { isResolved }
 						}
@@ -80,7 +91,8 @@ public nonisolated enum GitHubService {
 			url: pullRequest.url,
 			state: pullRequest.mappedState,
 			provider: .github,
-			unresolvedDiscussionsCount: pullRequest.unresolvedCount
+			unresolvedDiscussionsCount: pullRequest.unresolvedCount,
+			approvals: pullRequest.approvalStatus
 		)
 	}
 
@@ -162,6 +174,8 @@ nonisolated struct GitHubPullRequestResponse: Decodable {
 		let url: String
 		let state: String
 		let isDraft: Bool?
+		let reviewDecision: String?
+		let latestOpinionatedReviews: OpinionatedReviews?
 		let reviewThreads: ReviewThreads?
 
 		var mappedState: PullRequestState {
@@ -186,6 +200,70 @@ nonisolated struct GitHubPullRequestResponse: Decodable {
 			}
 			return nodes.count { !$0.isResolved }
 		}
+
+		var approvalStatus: ApprovalStatus {
+			let reviews = latestOpinionatedReviews?.nodes ?? []
+			let approvedBy = reviews.filter { $0.state.uppercased() == "APPROVED" }.map(\.reviewer)
+			let changesRequestedBy = reviews
+				.filter { $0.state.uppercased() == "CHANGES_REQUESTED" }
+				.map(\.reviewer)
+
+			return ApprovalStatus(
+				decision: decision(changesRequestedBy: changesRequestedBy, approvedBy: approvedBy),
+				approvedBy: approvedBy,
+				changesRequestedBy: changesRequestedBy,
+				// GitHub does not expose the branch-protection required-review count
+				// on the pull request, so there is never a denominator to show.
+				approvalsRequired: nil
+			)
+		}
+
+		/// `reviewDecision` is authoritative when present, but GitHub returns null for it
+		/// whenever the repository has no required-reviews branch protection rule — which
+		/// is most repositories. Fall back to the reviews themselves in that case.
+		private func decision(
+			changesRequestedBy: [Reviewer],
+			approvedBy: [Reviewer]
+		) -> ApprovalDecision {
+			switch reviewDecision?.uppercased() {
+			case "APPROVED":
+				return .approved
+			case "CHANGES_REQUESTED":
+				return .changesRequested
+			case "REVIEW_REQUIRED":
+				return .reviewRequired
+			default:
+				if !changesRequestedBy.isEmpty {
+					return .changesRequested
+				}
+				return approvedBy.isEmpty ? .reviewRequired : .approved
+			}
+		}
+	}
+
+	struct OpinionatedReviews: Decodable {
+		let nodes: [OpinionatedReview]?
+	}
+
+	struct OpinionatedReview: Decodable {
+		let state: String
+		let author: Author?
+
+		var reviewer: Reviewer {
+			Reviewer(
+				username: author?.login ?? "",
+				displayName: author?.name ?? author?.login ?? "",
+				avatarURL: author?.avatarUrl
+			)
+		}
+	}
+
+	/// `author` is the `Actor` interface — `login`/`avatarUrl` are on the interface,
+	/// `name` only exists on `User` and arrives via an inline fragment.
+	struct Author: Decodable {
+		let login: String
+		let avatarUrl: String?
+		let name: String?
 	}
 
 	struct ReviewThreads: Decodable {

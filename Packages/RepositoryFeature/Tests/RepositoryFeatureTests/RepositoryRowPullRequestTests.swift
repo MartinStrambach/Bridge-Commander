@@ -90,6 +90,7 @@ struct RepositoryRowPullRequestTests {
 		row.pipelineState = .running
 		row.pipelineUrl = "https://gitlab.com/g/app/-/pipelines/42"
 		row.prUnresolvedDiscussions = 3
+		row.prApprovals = ApprovalStatus(decision: .approved, approvedBy: [Self.astrid])
 		let store = makeStore(state: row)
 
 		await store.send(.didFetchPullRequest(nil))
@@ -100,6 +101,8 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.pipelineState == nil)
 		#expect(store.state.pipelineUrl == nil)
 		#expect(store.state.prUnresolvedDiscussions == nil)
+		#expect(store.state.prApprovals == nil)
+		#expect(store.state.approvalSlot == nil)
 	}
 
 	private func makePopulatedRow() -> RepositoryRowReducer.State {
@@ -110,6 +113,7 @@ struct RepositoryRowPullRequestTests {
 		row.pipelineState = .running
 		row.pipelineUrl = "https://gitlab.com/g/app/-/pipelines/42"
 		row.prUnresolvedDiscussions = 3
+		row.prApprovals = ApprovalStatus(decision: .approved, approvedBy: [Self.astrid])
 		return row
 	}
 
@@ -144,6 +148,7 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.pipelineState == .running)
 		#expect(store.state.pipelineUrl == "https://gitlab.com/g/app/-/pipelines/42")
 		#expect(store.state.prUnresolvedDiscussions == 3)
+		#expect(store.state.prApprovals?.decision == .approved)
 	}
 
 	@Test("a branch switch clears PR state even when the provider fetch fails")
@@ -160,6 +165,7 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.pipelineState == nil)
 		#expect(store.state.pipelineUrl == nil)
 		#expect(store.state.prUnresolvedDiscussions == nil)
+		#expect(store.state.prApprovals == nil)
 	}
 
 	// MARK: - Fetch error surfacing
@@ -240,5 +246,113 @@ struct RepositoryRowPullRequestTests {
 		await store.skipReceivedActions(strict: false)
 
 		#expect(store.state.prFetchError == nil)
+	}
+
+	// MARK: - Approvals
+
+	private static let astrid = Reviewer(
+		username: "aberg",
+		displayName: "Astrid Berg",
+		avatarURL: "https://gitlab.com/uploads/a.png"
+	)
+	private static let rohan = Reviewer(username: "rmehta", displayName: "Rohan Mehta")
+
+	@MainActor
+	private func sendPullRequest(
+		state: PullRequestState,
+		approvals: ApprovalStatus?,
+		to store: TestStoreOf<RepositoryRowReducer>
+	) async {
+		await store.send(.didFetchPullRequest(PullRequestDetails(
+			url: "https://gitlab.com/g/app/-/merge_requests/7",
+			state: state,
+			provider: .gitlab,
+			approvals: approvals
+		)))
+	}
+
+	@Test("an open PR keeps its approval status and shows it in the slot")
+	@MainActor
+	func openPullRequestKeepsApprovals() async {
+		let store = makeStore(state: makeRow())
+		let approvals = ApprovalStatus(
+			decision: .approved,
+			approvedBy: [Self.astrid],
+			approvalsRequired: 2
+		)
+
+		await sendPullRequest(state: .ready, approvals: approvals, to: store)
+
+		#expect(store.state.prApprovals == approvals)
+		#expect(store.state.approvalSlot == .review(approvals))
+	}
+
+	@Test("a blocked PR carries its blockers through to the slot")
+	@MainActor
+	func changesRequestedCarriesBlockers() async {
+		let store = makeStore(state: makeRow())
+		let approvals = ApprovalStatus(
+			decision: .changesRequested,
+			approvedBy: [Self.astrid],
+			changesRequestedBy: [Self.rohan]
+		)
+
+		await sendPullRequest(state: .ready, approvals: approvals, to: store)
+
+		#expect(store.state.approvalSlot == .review(approvals))
+		#expect(store.state.prApprovals?.changesRequestedBy == [Self.rohan])
+	}
+
+	@Test("a draft PR shows draft status instead of its review state")
+	@MainActor
+	func draftPullRequestShowsDraftSlot() async {
+		let store = makeStore(state: makeRow())
+		// Deliberately approved: draft still wins, because nobody is expected to be
+		// reviewing a draft and a review verdict there would misread.
+		let approvals = ApprovalStatus(decision: .approved, approvedBy: [Self.astrid])
+
+		await sendPullRequest(state: .draft, approvals: approvals, to: store)
+
+		#expect(store.state.prApprovals == approvals)
+		#expect(store.state.approvalSlot == .draft)
+	}
+
+	@Test("merged and closed PRs drop approvals and show no slot")
+	@MainActor
+	func mergedAndClosedHideApprovals() async {
+		for state in [PullRequestState.merged, .closed] {
+			var row = makeRow()
+			row.prApprovals = ApprovalStatus(decision: .approved, approvedBy: [Self.astrid])
+			let store = makeStore(state: row)
+
+			await sendPullRequest(
+				state: state,
+				approvals: ApprovalStatus(decision: .approved, approvedBy: [Self.astrid]),
+				to: store
+			)
+
+			#expect(store.state.prApprovals == nil)
+			#expect(store.state.approvalSlot == nil)
+		}
+	}
+
+	@Test("an open PR whose provider reported no approvals shows no slot")
+	@MainActor
+	func missingApprovalsShowNoSlot() async {
+		let store = makeStore(state: makeRow())
+
+		await sendPullRequest(state: .ready, approvals: nil, to: store)
+
+		// Nil means "not answered", not "nobody approved" — the provider always
+		// reports a decision for a visible PR, so drawing a gray icon here would be
+		// inventing a verdict the fetch never gave.
+		#expect(store.state.prApprovals == nil)
+		#expect(store.state.approvalSlot == nil)
+	}
+
+	@Test("no slot before any PR fetch has answered")
+	@MainActor
+	func noSlotBeforeFetch() {
+		#expect(makeRow().approvalSlot == nil)
 	}
 }
