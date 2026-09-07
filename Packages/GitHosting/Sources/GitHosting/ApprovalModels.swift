@@ -15,9 +15,9 @@ public nonisolated enum ApprovalDecision: String, Sendable, Equatable {
 	/// unit-testable — same rationale as `PipelineState.systemImageName`.
 	public var systemImageName: String {
 		switch self {
-		case .approved: "checkmark.seal.fill"
-		case .changesRequested: "xmark.seal.fill"
-		case .reviewRequired: "person.crop.circle.badge.clock"
+		case .approved: "person.fill.checkmark"
+		case .changesRequested: "person.fill.xmark"
+		case .reviewRequired: "person.fill.questionmark"
 		}
 	}
 }
