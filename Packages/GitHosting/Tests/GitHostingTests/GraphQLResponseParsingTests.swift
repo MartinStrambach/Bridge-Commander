@@ -359,13 +359,70 @@ struct GitHubPullRequestResponseTests {
 		#expect(approvals.approvedBy.map(\.username) == ["aberg"])
 	}
 
-	@Test("a PR with no reviews and no decision awaits review")
+	@Test("a PR with no rule, no reviews and no requests requires no approvals")
 	func noReviewsAtAll() throws {
-		#expect(try decode(node(#""state": "OPEN""#)).pullRequest?.approvalStatus.decision == .reviewRequired)
-		#expect(
-			try decode(node(#""state": "OPEN", "latestOpinionatedReviews": {"nodes": []}"#))
-				.pullRequest?.approvalStatus.decision == .reviewRequired
+		// A null reviewDecision means no rule on the base branch asks for a review, so
+		// with nobody having reviewed and nobody asked to, nothing requires a sign-off
+		// and the row drops its approval slot. Reporting the count as unknown here left
+		// an orange "Awaiting review" on every PR in an unprotected repository.
+		let bare = try #require(decode(node(#""state": "OPEN""#)).pullRequest?.approvalStatus)
+		#expect(bare.requiresNoApprovals)
+		#expect(bare.approvalsRequired == 0)
+
+		let empty = try #require(
+			decode(node("""
+			"state": "OPEN",
+			"reviewDecision": null,
+			"reviewRequests": {"totalCount": 0},
+			"latestOpinionatedReviews": {"nodes": []}
+			""")).pullRequest?.approvalStatus
 		)
+		#expect(empty.requiresNoApprovals)
+	}
+
+	@Test("a rule that requires a review keeps the count unknown rather than zero")
+	func requiredReviewKeepsCountUnknown() throws {
+		// GitHub reports a decision only when a rule requires a review, but never says
+		// how many approvals it takes — so the count is unknown, not none.
+		for decision in ["REVIEW_REQUIRED", "APPROVED", "CHANGES_REQUESTED"] {
+			let approvals = try #require(
+				decode(node(#""state": "OPEN", "reviewDecision": "\#(decision)""#))
+					.pullRequest?.approvalStatus
+			)
+			#expect(approvals.approvalsRequired == nil)
+			#expect(!approvals.requiresNoApprovals)
+		}
+	}
+
+	@Test("a review left without any rule keeps the slot")
+	func reviewWithoutRuleKeepsCountUnknown() throws {
+		// Branch protection does not care, but a person actually weighed in, so this is
+		// a real verdict worth showing — the count stays unknown rather than zero.
+		let json = node("""
+		"state": "OPEN",
+		"reviewDecision": null,
+		"latestOpinionatedReviews": {"nodes": [
+			{"state": "APPROVED", "author": {"login": "aberg", "name": "Astrid Berg", "avatarUrl": null}}
+		]}
+		""")
+		let approvals = try #require(decode(json).pullRequest?.approvalStatus)
+		#expect(approvals.decision == .approved)
+		#expect(!approvals.requiresNoApprovals)
+	}
+
+	@Test("a pending review request keeps the slot without any rule")
+	func pendingRequestKeepsCountUnknown() throws {
+		// Somebody has been asked to look and has not answered, so the PR is genuinely
+		// awaiting review even though no rule requires one.
+		let json = node("""
+		"state": "OPEN",
+		"reviewDecision": null,
+		"reviewRequests": {"totalCount": 2},
+		"latestOpinionatedReviews": {"nodes": []}
+		""")
+		let approvals = try #require(decode(json).pullRequest?.approvalStatus)
+		#expect(approvals.decision == .reviewRequired)
+		#expect(!approvals.requiresNoApprovals)
 	}
 
 	@Test("an author without a name falls back to the login")
