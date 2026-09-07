@@ -100,6 +100,7 @@ Packages/
 - `RepoGroupReducer` / `RepoGroupView` — grouped repo display
 - Per-button Reducer+View pairs: `CreateWorktreeButton`, `DeleteWorktreeButton`, `TerminalButton`, `ClaudeCodeButton`, `XcodeProjectButton`, `TuistButton`, `TicketButton`, `ShareButton`, `WebButton`
 - `TerminalLayoutReducer` / `TerminalLayoutView` / `TerminalPanelView`
+- The terminal overlay takes **scoped stores**, never row values: `TerminalLayoutView.repositoryGroups` is `[StoreOf<RepoGroupReducer>]` and `activeRowStore` is resolved in `RepositoryListView`. TCA's `IdentifiedArray` observation compares element ids only, so a row handed over as a value freezes its counts at whenever the overlay last rebuilt — that was the stale push status in terminal view (2026-09-07). Store collections are wrapped in `Array(...)` because the sidebar is a `LazyVStack`
 
 ## Architecture
 

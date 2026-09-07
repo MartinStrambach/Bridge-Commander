@@ -6,7 +6,10 @@ import TerminalFeature
 struct SidebarRepositoryRowView: View {
 	@State private var showKillConfirmation = false
 
-	let rowState: RepositoryRowReducer.State
+	/// A store rather than a plain value: the badges below are refreshed counts, and a value
+	/// read out of the parent's `IdentifiedArray` would be frozen at whenever that parent last
+	/// rebuilt (TCA compares element ids only). Same wiring as the list's `RepositoryRowView`.
+	let store: StoreOf<RepositoryRowReducer>
 	let isActive: Bool
 	let sessionStatus: TerminalSessionStatus?
 	let onTap: () -> Void
@@ -24,7 +27,7 @@ struct SidebarRepositoryRowView: View {
 
 				VStack(alignment: .leading, spacing: 2) {
 					HStack(spacing: 4) {
-						if let ticketId = rowState.ticketId {
+						if let ticketId = store.ticketId {
 							Text(ticketId)
 								.font(.caption2)
 								.fontWeight(.medium)
@@ -34,14 +37,14 @@ struct SidebarRepositoryRowView: View {
 								.padding(.vertical, 1)
 								.background(.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
 						}
-						Text(rowState.formattedBranchName)
+						Text(store.formattedBranchName)
 							.font(.caption)
 							.fontWeight(isActive ? .semibold : .regular)
 							.lineLimit(1)
 							.foregroundColor(isActive ? .primary : .secondary)
 					}
 
-					Text(rowState.name)
+					Text(store.name)
 						.font(.caption2)
 						.foregroundColor(.secondary)
 						.lineLimit(1)
@@ -51,18 +54,18 @@ struct SidebarRepositoryRowView: View {
 
 				// Change count badges
 				HStack(spacing: 4) {
-					if rowState.stagedChangesCount > 0 {
-						Text("\(rowState.stagedChangesCount)")
+					if store.stagedChangesCount > 0 {
+						Text("\(store.stagedChangesCount)")
 							.font(.caption2)
 							.foregroundColor(.green)
 					}
-					if rowState.unstagedChangesCount > 0 {
-						Text("\(rowState.unstagedChangesCount)")
+					if store.unstagedChangesCount > 0 {
+						Text("\(store.unstagedChangesCount)")
 							.font(.caption2)
 							.foregroundColor(.orange)
 					}
-					if rowState.unpushedCommitCount > 0 {
-						Text("\(rowState.unpushedCommitCount)")
+					if store.unpushedCommitCount > 0 {
+						Text("\(store.unpushedCommitCount)")
 							.font(.caption2)
 							.foregroundColor(.red)
 					}
@@ -88,7 +91,7 @@ struct SidebarRepositoryRowView: View {
 			}
 			Button("Cancel", role: .cancel) {}
 		} message: {
-			Text("This will terminate the terminal session for \"\(rowState.name)\".")
+			Text("This will terminate the terminal session for \"\(store.name)\".")
 		}
 	}
 }

@@ -190,6 +190,34 @@ struct RepositoryListRefreshTests {
 		await store.finish()
 	}
 
+	@Test("terminal ⌘R lands the opened repo's new push status on its row")
+	func terminalRefreshPropagatesPushStatus() async {
+		// The row is what the terminal toolbar's Push button and the sidebar badge render, via
+		// the store scoped to it in RepositoryListView — so the count landing here is the whole
+		// propagation path. Nothing else re-reads it.
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+		store.dependencies[GitClient.self].getCurrentBranch = { _ in
+			GitPorcelainStatus(parsing: """
+			# branch.head master
+			# branch.upstream origin/master
+			# branch.ab +2 -0
+			""")
+		}
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.header.unpushedCommitCount == 0)
+
+		await store.send(.terminalLayout(.refreshActiveRepoRequested))
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.receive { isHeaderStatusFetch($0, groupId: "/repos/alpha") }
+
+		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.header.unpushedCommitCount == 2)
+		await store.finish()
+	}
+
 	@Test("terminal ⌘R re-detects the Xcode project shown in the terminal toolbar")
 	func terminalRefreshRedetectsToolbarXcodeProject() async {
 		// The toolbar's Xcode button is a copy of the row's state taken when the terminal
@@ -381,6 +409,16 @@ struct RepositoryListRefreshTests {
 		groupId: String
 	) -> Bool {
 		guard case let .repositoryGroups(.element(id: id, action: .header(.refresh))) = action else {
+			return false
+		}
+		return id == groupId
+	}
+
+	private func isHeaderStatusFetch(
+		_ action: RepositoryListReducer.Action,
+		groupId: String
+	) -> Bool {
+		guard case let .repositoryGroups(.element(id: id, action: .header(.didFetchStatus))) = action else {
 			return false
 		}
 		return id == groupId
