@@ -42,59 +42,64 @@ public struct DiffViewer: View {
 	}
 
 	public var body: some View {
-		ScrollView {
-			LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
-				// Header
-				fileHeader
+		if let imageDiff = diff.imageDiff {
+			staticContent { ImageDiffView(imageDiff: imageDiff) }
+		}
+		else if diff.isBinary {
+			staticContent { binaryFileView }
+		}
+		else if diff.hunks.isEmpty {
+			staticContent { noChangesView }
+		}
+		else {
+			hunkList
+		}
+	}
 
-				if let imageDiff = diff.imageDiff {
-					ImageDiffView(imageDiff: imageDiff)
-				}
-				else if diff.isBinary {
-					binaryFileView
-				}
-				else if diff.hunks.isEmpty {
-					VStack(spacing: 8) {
-						Image(systemName: "doc.plaintext")
-							.font(.system(size: 48))
-							.foregroundStyle(.secondary)
+	// MARK: - Hunks
 
-						Text("No Changes to Display")
-							.font(.headline)
+	/// Diff lines are rendered by a `List` rather than a `ScrollView` + `LazyVStack`.
+	///
+	/// A lazy stack reports its content's height as its own ideal height, so a large diff hands
+	/// the enclosing sheet an ideal size of ~10^6 points that keeps changing as rows are measured.
+	/// The sheet re-measures on every change, the stack re-estimates, and the two never converge —
+	/// the main thread spins in `LazyLayoutViewCache.updateItemPhases` / `LazyStack.measureEstimates`
+	/// for minutes (hang reports 2026-09-06 and 2026-09-07). `List` is backed by `NSTableView`: it
+	/// recycles rows, its size is independent of its row count, and it never feeds a content-derived
+	/// ideal size upwards.
+	///
+	/// Sections are deliberately not used. A plain-style `List` pins section headers, which would
+	/// make hunk headers sticky; emitting the header, lines and footer as sibling rows keeps the
+	/// card reading as one scrolling unit.
+	private var hunkList: some View {
+		List {
+			fileHeader
+				.diffListRow()
 
-						Text("The file has no viewable differences")
-							.font(.caption)
-							.foregroundStyle(.secondary)
-					}
-					.frame(maxWidth: .infinity, maxHeight: .infinity)
-					.padding(.vertical, 60)
+			ForEach(diff.hunks) { hunk in
+				HunkHeaderView(hunk: hunk, actions: hunkActions)
+					.diffListRow()
+
+				ForEach(hunk.lines) { line in
+					DiffLineView(
+						line: line,
+						oldLineNumber: line.oldLineNumber,
+						newLineNumber: line.newLineNumber,
+						isSelected: selectedLineIDs.contains(line.id),
+						onTap: { modifiers in handleLineTap(line, modifiers: modifiers) }
+					)
+					.hunkCardRow()
+					.diffListRow()
 				}
-				else {
-					// Every hunk header, line and footer is a direct item of this one lazy stack.
-					// Do not wrap a hunk's lines in a stack of their own: a nested lazy stack has to
-					// measure all of its rows whenever the outer stack sizes the hunk, and on a
-					// whole-file hunk that hangs the main thread for minutes (see HunkCard).
-					ForEach(diff.hunks) { hunk in
-						Section {
-							ForEach(hunk.lines) { line in
-								DiffLineView(
-									line: line,
-									oldLineNumber: line.oldLineNumber,
-									newLineNumber: line.newLineNumber,
-									isSelected: selectedLineIDs.contains(line.id),
-									onTap: { modifiers in handleLineTap(line, modifiers: modifiers) }
-								)
-								.hunkCardRow()
-							}
-						} header: {
-							HunkHeaderView(hunk: hunk, actions: hunkActions)
-						} footer: {
-							HunkFooterView()
-						}
-					}
-				}
+
+				HunkFooterView()
+					.diffListRow()
 			}
 		}
+		.listStyle(.plain)
+		// Rows are sized by their content; the default minimum would pad every line and open
+		// gaps in the card's side borders.
+		.environment(\.defaultMinListRowHeight, 1)
 		.focusable()
 		.focusEffectDisabled()
 		.focused($isFocused)
@@ -106,6 +111,18 @@ public struct DiffViewer: View {
 
 			copySelectedLines()
 			return .handled
+		}
+	}
+
+	// MARK: - Non-Hunk Content
+
+	/// The file header plus a single block of content, for the diffs that have no lines to list.
+	private func staticContent(@ViewBuilder _ content: () -> some View) -> some View {
+		ScrollView {
+			VStack(alignment: .leading, spacing: 0) {
+				fileHeader
+				content()
+			}
 		}
 	}
 
@@ -148,6 +165,25 @@ public struct DiffViewer: View {
 		.padding(.vertical, 60)
 	}
 
+	private var noChangesView: some View {
+		VStack(spacing: 8) {
+			Image(systemName: "doc.plaintext")
+				.font(.system(size: 48))
+				.foregroundStyle(.secondary)
+
+			Text("No Changes to Display")
+				.font(.headline)
+
+			Text("The file has no viewable differences")
+				.font(.caption)
+				.foregroundStyle(.secondary)
+		}
+		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.padding(.vertical, 60)
+	}
+
+	// MARK: - Selection
+
 	private func handleLineTap(_ line: DiffLine, modifiers: EventModifiers) {
 		isFocused = true
 		if modifiers.contains(.shift), let anchor = anchorLineID {
@@ -187,4 +223,15 @@ public struct DiffViewer: View {
 		NSPasteboard.general.setString(text, forType: .string)
 	}
 
+}
+
+// MARK: - Row Styling
+
+extension View {
+	/// Strips the list's own chrome so a diff row occupies its full width with no separator,
+	/// leaving the hunk card free to draw the only visible framing.
+	fileprivate func diffListRow() -> some View {
+		listRowInsets(EdgeInsets())
+			.listRowSeparator(.hidden)
+	}
 }
