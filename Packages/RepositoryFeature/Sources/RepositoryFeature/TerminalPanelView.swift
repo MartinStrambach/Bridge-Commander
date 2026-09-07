@@ -62,14 +62,17 @@ struct TerminalPanelView: View {
 			item: $store.scope(\.$gitGraph, action: \.gitGraph)
 		) { graphStore in
 			GitGraphView(store: graphStore)
+				// Roomier than the graph alone needs: the selected commit's diff opens in a
+				// bottom pane, and both panes have to stay usable at the ideal size.
 				.frame(
 					minWidth: 1000,
-					idealWidth: 1200,
+					idealWidth: 1400,
 					maxWidth: .infinity,
 					minHeight: 600,
-					idealHeight: 800,
+					idealHeight: 900,
 					maxHeight: .infinity
 				)
+				.windowResizable()
 		}
 	}
 

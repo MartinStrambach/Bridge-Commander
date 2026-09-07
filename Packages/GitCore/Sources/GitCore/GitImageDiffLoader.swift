@@ -14,6 +14,21 @@ public nonisolated enum GitImageDiffLoader {
 			return nil
 		}
 
+		return await load(sides, at: repositoryPath)
+	}
+
+	/// Loads both versions of an image a commit changed, comparing against its first parent.
+	public static func load(at repositoryPath: String, file: FileChange, commitHash: String) async -> ImageDiff? {
+		guard let sides = ImageDiffSides.resolve(for: file, commitHash: commitHash) else {
+			return nil
+		}
+
+		return await load(sides, at: repositoryPath)
+	}
+
+	// MARK: - Private Helpers
+
+	private static func load(_ sides: ImageDiffSides, at repositoryPath: String) async -> ImageDiff? {
 		async let oldTask = read(sides.old, at: repositoryPath)
 		async let newTask = read(sides.new, at: repositoryPath)
 		let (old, new) = await (oldTask, newTask)
@@ -30,14 +45,12 @@ public nonisolated enum GitImageDiffLoader {
 		return ImageDiff(oldImageData: old, newImageData: new)
 	}
 
-	// MARK: - Private Helpers
-
 	private static func read(_ source: ImageDiffSource?, at repositoryPath: String) async -> Data? {
 		switch source {
 		case nil:
 			nil
-		case let .head(path):
-			await readBlob("HEAD:\(path)", at: repositoryPath)
+		case let .revision(revision, path):
+			await readBlob("\(revision):\(path)", at: repositoryPath)
 		case let .index(path):
 			await readBlob(":\(path)", at: repositoryPath)
 		case let .workingTree(path):

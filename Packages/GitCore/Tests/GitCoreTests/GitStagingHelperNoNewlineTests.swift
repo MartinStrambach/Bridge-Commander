@@ -23,7 +23,7 @@ struct GitStagingHelperNoNewlineTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		// The marker is not a line of its own, so it must not show up in the hunk's lines.
@@ -46,7 +46,7 @@ struct GitStagingHelperNoNewlineTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.map(\.rawLine) == [" a", "-b", "+bb"])
@@ -69,7 +69,7 @@ struct GitStagingHelperNoNewlineTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.map(\.rawLine) == [" x", "-y", "+yy", " z"])
@@ -96,7 +96,7 @@ struct GitStagingHelperNoNewlineTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 		let rebuilt = hunks[0].lines.filter { !$0.inlineChanges.isEmpty }
 
 		#expect(!rebuilt.isEmpty, "expected the highlighter to have annotated the changed pair")
@@ -116,7 +116,7 @@ struct GitStagingHelperNoNewlineTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.map(\.rawLine) == [" \\section{a}", "-\\newcommand{b}", "+\\newcommand{c}"])
@@ -140,7 +140,7 @@ struct GitStagingHelperNoNewlineTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 		let patch = GitStagingHelper.createPatchForHunk(
 			at: "/tmp",
 			file: FileChange(path: "two.txt", status: .modified),
@@ -174,7 +174,7 @@ struct GitStagingHelperNoNewlineTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 		let patch = GitStagingHelper.createPatchForHunk(
 			at: "/tmp",
 			file: FileChange(path: "plain.txt", status: .modified),

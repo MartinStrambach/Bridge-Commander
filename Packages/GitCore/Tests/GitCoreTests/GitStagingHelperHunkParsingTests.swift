@@ -22,7 +22,7 @@ struct GitStagingHelperHunkParsingTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.map(\.rawLine) == [" 3", " 4", " 5", "+6"])
@@ -40,7 +40,7 @@ struct GitStagingHelperHunkParsingTests {
 			"@@ -0,0 +1,119 @@",
 		] + addedLines).joined(separator: "\n") + "\n"
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.count == 119)
@@ -71,7 +71,7 @@ struct GitStagingHelperHunkParsingTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.count == 8)
@@ -94,7 +94,7 @@ struct GitStagingHelperHunkParsingTests {
 			+ "+\n"
 			+ " b\n"
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.map(\.rawLine) == [" a", " ", "+", " b"])
@@ -114,7 +114,7 @@ struct GitStagingHelperHunkParsingTests {
 
 		"""
 
-		#expect(GitStagingHelper.parseDiffIntoHunks(diff).isEmpty)
+		#expect(GitDiffHunkParser.parse(diff).isEmpty)
 	}
 
 	@Test("deleting an empty file yields no hunks")
@@ -126,7 +126,7 @@ struct GitStagingHelperHunkParsingTests {
 
 		"""
 
-		#expect(GitStagingHelper.parseDiffIntoHunks(diff).isEmpty)
+		#expect(GitDiffHunkParser.parse(diff).isEmpty)
 	}
 
 	@Test("a mode-only change yields no hunks")
@@ -138,7 +138,7 @@ struct GitStagingHelperHunkParsingTests {
 
 		"""
 
-		#expect(GitStagingHelper.parseDiffIntoHunks(diff).isEmpty)
+		#expect(GitDiffHunkParser.parse(diff).isEmpty)
 	}
 
 	@Test("file header lines are never mistaken for content")
@@ -156,7 +156,7 @@ struct GitStagingHelperHunkParsingTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 1)
 		#expect(hunks[0].lines.map(\.rawLine) == ["-a", "+b"])
@@ -182,7 +182,7 @@ struct GitStagingHelperHunkParsingTests {
 
 		"""
 
-		let hunks = GitStagingHelper.parseDiffIntoHunks(diff)
+		let hunks = GitDiffHunkParser.parse(diff)
 
 		#expect(hunks.count == 2)
 		#expect(hunks[0].lines.map(\.rawLine) == ["-a", "+aX", " b", " c"])

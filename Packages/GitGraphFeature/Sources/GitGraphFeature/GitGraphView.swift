@@ -15,6 +15,14 @@ public struct GitGraphView: View {
 	@State
 	private var columnDrag: ColumnDrag?
 
+	/// The list is centred on HEAD once per open, never again — see the scroll site below.
+	@State
+	private var hasScrolledToHead = false
+
+	/// Focused on open so ↑/↓ walk the commits without having to click a row first.
+	@FocusState
+	private var isListFocused: Bool
+
 	private struct ColumnDrag: Equatable {
 		let column: GitGraphColumnWidths.Column
 		let baseWidth: Double
@@ -79,8 +87,23 @@ public struct GitGraphView: View {
 
 	// MARK: - Content
 
-	@ViewBuilder
 	private var content: some View {
+		VSplitView {
+			graphPane
+				.frame(minHeight: 160)
+
+			if let detailStore = store.scope(\.commitDetail, action: \.commitDetail) {
+				CommitDetailView(
+					store: detailStore,
+					onClose: { store.send(.closeDetailButtonTapped) }
+				)
+				.frame(minHeight: 200, idealHeight: 340)
+			}
+		}
+	}
+
+	@ViewBuilder
+	private var graphPane: some View {
 		if let errorMessage = store.errorMessage {
 			errorView(message: errorMessage)
 		}
@@ -99,45 +122,109 @@ public struct GitGraphView: View {
 			.frame(maxWidth: .infinity)
 		}
 		else {
-			// The column header lives inside the ScrollView as a pinned section
-			// header: a layout-taking vertical scroller insets only the scroll
-			// content, so a header outside would be wider than the rows and the
-			// column boundaries would no longer line up.
+			// A List rather than a ScrollView + LazyVStack, so selection is native: the list
+			// takes focus on open, ↑/↓ walk the commits, and each move writes back through
+			// `selection` — which is what loads the diff below.
+			//
+			// The column header stays a section header *inside* the list: a layout-taking
+			// vertical scroller insets only the list's own content, so a header placed above
+			// the list would be wider than the rows and the column boundaries would no longer
+			// line up.
 			ScrollViewReader { proxy in
-				ScrollView {
-					LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-						Section {
-							ForEach(store.rows) { row in
-								GitGraphRowView(row: row, widths: effectiveWidths, columnGap: Self.columnGap)
-							}
-
-							if store.canLoadMore {
-								Button("Load More") {
-									store.send(.loadMoreButtonTapped)
-								}
-								.buttonStyle(.bordered)
-								.controlSize(.small)
-								.disabled(store.isLoading)
-								.padding(.vertical, 12)
-							}
-						} header: {
-							VStack(spacing: 0) {
-								columnHeader
-								Divider()
-							}
+				List(selection: selection) {
+					Section {
+						ForEach(store.rows) { row in
+							GitGraphRowView(row: row, widths: effectiveWidths, columnGap: Self.columnGap)
+								.tag(row.id)
+								.listRowInsets(EdgeInsets())
+								.listRowSeparator(.hidden)
 						}
+
+						if store.canLoadMore {
+							Button("Load More") {
+								store.send(.loadMoreButtonTapped)
+							}
+							.buttonStyle(.bordered)
+							.controlSize(.small)
+							.disabled(store.isLoading)
+							.padding(.vertical, 12)
+							.frame(maxWidth: .infinity)
+							.listRowSeparator(.hidden)
+							// Not a commit, so arrow keys must skip past it.
+							.selectionDisabled()
+						}
+					} header: {
+						VStack(spacing: 0) {
+							columnHeader
+							Divider()
+						}
+						.listRowInsets(EdgeInsets())
 					}
 				}
-				.background(Color(nsColor: .textBackgroundColor))
+				.listStyle(.plain)
+				.focused($isListFocused)
+				// Rows draw their lane lines edge to edge, so the list must not pad them to a
+				// taller default row — a gap would break the vertical lines between commits.
+				.environment(\.defaultMinListRowHeight, GitGraphRowView.rowHeight)
+				// One list-level menu driven by the selection. Per-row `.contextMenu` is
+				// deliberately avoided: ⌘A is dispatched through `NSMenu
+				// performKeyEquivalent:`, which makes AppKit build every row's menu, turning
+				// select-all into O(rows^2) work (see FileChangeListView).
+				.contextMenu(forSelectionType: GitGraphRow.ID.self) { ids in
+					contextMenu(forSelection: ids)
+				}
 				.onAppear {
-					// This branch only renders once rows are loaded, so onAppear
-					// fires exactly once per open — refresh and Load More replace
-					// the rows without recreating the ScrollView.
+					// Refresh and Load More replace the rows without recreating the list, so
+					// this normally fires once per open anyway. The flag pins that down:
+					// selecting a commit adds a sibling pane to the enclosing VSplitView, and
+					// a re-run would yank the list back to HEAD while the user is reading a
+					// much older commit.
+					guard !hasScrolledToHead else {
+						return
+					}
+
+					hasScrolledToHead = true
+					isListFocused = true
 					guard let headRowID = store.rows.first(where: \.commit.isHead)?.id else {
 						return
 					}
 					proxy.scrollTo(headRowID, anchor: .center)
 				}
+			}
+		}
+	}
+
+	// MARK: - Selection
+
+	private var selection: Binding<GitGraphRow.ID?> {
+		Binding(
+			get: { store.selectedCommitHash },
+			set: { newValue in
+				// A nil write is ignored on purpose. The list reports one when it cannot carry
+				// the selection over a wholesale row replacement (a refresh, a Load More), and
+				// closing the diff pane on a background reload would be baffling. The pane is
+				// closed deliberately, with its own button.
+				guard let newValue else {
+					return
+				}
+
+				store.send(.commitTapped(newValue))
+			}
+		)
+	}
+
+	// Built lazily by AppKit only when a menu is actually requested (right-click), so the
+	// lookup here runs once per interaction — never per row.
+	@ViewBuilder
+	private func contextMenu(forSelection ids: Set<GitGraphRow.ID>) -> some View {
+		if let id = ids.first, let commit = store.rows.first(where: { $0.id == id })?.commit {
+			Button("Copy Commit Hash") {
+				NSPasteboard.general.clearContents()
+				NSPasteboard.general.setString(commit.hash, forType: .string)
+			}
+			Button("Copy Commit Message") {
+				NSPasteboard.general.clearContents()
+				NSPasteboard.general.setString(commit.subject, forType: .string)
 			}
 		}
 	}
@@ -255,7 +342,9 @@ private struct GitGraphRowView: View {
 	let widths: GitGraphColumnWidths
 	let columnGap: CGFloat
 
-	private static let rowHeight: CGFloat = 26
+	/// Read by the list to keep rows flush, so the lane lines join up between commits.
+	static let rowHeight: CGFloat = 26
+
 	private static let laneWidth: CGFloat = 14
 
 	private static let laneColors: [Color] = [
@@ -310,21 +399,15 @@ private struct GitGraphRowView: View {
 		}
 		.padding(.trailing, 12)
 		.frame(height: Self.rowHeight)
+		// The selected row's fill is the list's own. This tint only marks HEAD, and stays
+		// translucent so it reads as a tint over that fill rather than hiding it.
 		.background {
 			if row.commit.isHead {
 				Color.accentColor.opacity(0.12)
 			}
 		}
-		.contextMenu {
-			Button("Copy Commit Hash") {
-				NSPasteboard.general.clearContents()
-				NSPasteboard.general.setString(row.commit.hash, forType: .string)
-			}
-			Button("Copy Commit Message") {
-				NSPasteboard.general.clearContents()
-				NSPasteboard.general.setString(row.commit.subject, forType: .string)
-			}
-		}
+		// The whole row is the hit target, including the gaps between columns.
+		.contentShape(Rectangle())
 	}
 
 	private var columnSpacer: some View {

@@ -19,14 +19,14 @@ Packages/
   ProcessExecution/       # Shelling out to external processes (ProcessRunner)
   GitCore/                # Git operations and models
   GitHosting/             # GitHub/GitLab pull request + pipeline services
-  AppUI/                  # Shared UI components and diff viewer
+  AppUI/                  # Shared UI components and diff viewer (+ DiffModelMapping target)
   Settings/               # Settings state, view, and app-wide keys
   ToolsIntegration/       # Xcode, YouTrack, Android Studio, Terminal, Claude Code
   TerminalFeature/        # Embedded terminal (session, view, store)
   ActionButtons/          # Android Studio button Reducer+View pair
   GitActionsMenu/         # Git actions menu (push/pull/fetch/stash/merge/checkout default/discard/abort)
   YouTrackMenu/           # YouTrack ticket menu (move to a reachable state)
-  GitGraphFeature/        # Commit graph view
+  GitGraphFeature/        # Commit graph view + selected commit's diff
   StagingFeature/         # File staging panel (detail view, diff, commit)
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature)
 ```
@@ -38,16 +38,20 @@ Packages/
 - `GitService` — main git client (DI-injected as `GitClient`)
 - `GitStatusDetector` — `getBranchAndChanges` returns all status in one git call
 - `GitStagingClient` / `GitStagingHelper` — staging operations
+- `GitCommitDiffClient` / `GitCommitDiffHelper` — read-only: what a single commit changed (`git show`). Merges are diffed against the first parent (`--first-parent`), because git prints no diff for a merge otherwise; a root commit shows every file as an addition. Nothing here writes, so browsing commits never moves HEAD, the index or the working tree
+- `GitDiffHunkParser` — shared unified-diff → `DiffHunk` parsing (line numbering + `InlineDiffHighlighter`), used by both the staging and commit diff paths
 - `ProcessRunner` — shells out to git via `runGit()`
 - Helpers: `GitWorktreeScanner`, `GitWorktreeCreator`, `GitBranchNameSanitizer` (whitespace → underscores for typed branch names), `GitWorktreeRemover`, `GitMergeDetector`, `GitBranchDetector`, `GitDefaultBranchDetector`, `GitBranchListHelper`, `GitPullHelper`, `GitPushHelper`, `GitFetchHelper`, `GitMergeHelper`, `GitCheckoutHelper`, `GitAbortMergeHelper`, `GitStashHelper`
-- `GitImageDiffLoader` / `ImageDiffSides` / `ImageFileDetector` — load both versions of a changed image (`git cat-file blob`) so the staging view can render them instead of a binary placeholder
+- `GitImageDiffLoader` / `ImageDiffSides` / `ImageFileDetector` — load both versions of a changed image (`git cat-file blob`) so a diff view can render them instead of a binary placeholder. `ImageDiffSource.revision(revision:path:)` is the general side (`<rev>:<path>`); `.head(path:)` is sugar for `HEAD`. `resolve(for:isStaged:)` covers the staging comparisons, `resolve(for:commitHash:)` a commit against its first parent
 
 **AppUI** — shared UI components
 - `ActionButton`, `ToolButton`, `HeaderButton`, `HunkActionButton`
 - `DiffViewer`, `DiffLineView`, `HunkCard` (`HunkHeaderView`, `HunkFooterView`, `hunkCardRow()`), `ImageDiffView` — diff display (images render side by side as Before/After)
 - `DiffViewer` is one `LazyVStack`; each hunk is a `Section` whose header, lines and footer are direct lazy items. Never wrap a hunk's lines in their own stack: a nested `LazyVStack` re-measured every line of a whole-file hunk on each lazy phase change and hung the main thread for minutes (v0.6.6 hang report, 2026-09-06)
+- `DiffViewer` has two inits: the staging one takes the hunk stage/unstage/discard closures, `init(diff:)` is read-only and renders hunk headers without action buttons. `FileChangeRow` likewise has `init(file:)` for a row with no staging checkbox
 - `GitOperationProgressView`, `BannerView`, `EmptyStateView`, `ScrollableErrorAlertView`
 - `FileChangeRow`, `SectionHeader`, `RepositoryIcon`
+- The **`DiffModelMapping`** target (same package, separate product) holds the `GitCore.*.toAppUI()` conversions. It is where AppUI and GitCore meet, so the `AppUI` target itself stays free of any git dependency and the mapping is not duplicated per feature. Import it alongside `AppUI` wherever a GitCore diff is rendered
 
 **Settings**
 - `SettingsReducer` + `SettingsView`
@@ -75,7 +79,17 @@ Packages/
 - `FileDiffViewerReducer` / `FileDiffViewerView` — diff pane with hunk stage/unstage/discard
 - `CommitReducer` / `CommitView` — commit sheet
 - `MergeStatusReducer` / `MergeStatusBannerView` — merge-in-progress banner
-- `GitCoreToAppUIMapping` — converts GitCore diff models to AppUI display models
+- Display models come from the `DiffModelMapping` target in the AppUI package (`import DiffModelMapping`)
+
+**GitGraphFeature** — commit graph
+- `GitGraphReducer` / `GitGraphView` — the commit table (`GitGraphLayout` assigns lanes, `GitGraphColumnWidths` persists column widths)
+- `CommitDetailReducer` / `CommitDetailView` — the bottom pane: the selected commit's changed files on the left, the selected file's diff on the right, in a read-only `DiffViewer`
+- The commit table is a `List(selection:)` (not a `ScrollView` + `LazyVStack`), so selection and ↑/↓ keyboard navigation are native; the list takes focus on open. Rows need `.listRowInsets(EdgeInsets())`, `.listRowSeparator(.hidden)` and `defaultMinListRowHeight = GitGraphRowView.rowHeight` to stay flush — any inter-row gap breaks the vertical lane lines. The "Load More" row is `.selectionDisabled()` so arrow keys skip it, and the column header stays a `Section` header *inside* the list so it keeps the rows' insets
+- Use one list-level `.contextMenu(forSelectionType:)`, never per-row `.contextMenu` — ⌘A would make AppKit build every row's menu (the same O(rows²) freeze documented in `FileChangeListView`)
+- The selection binding ignores nil writes: the list emits one when it cannot carry selection across a wholesale row replacement, and a background refresh must not close the diff pane
+- `selectedCommitHash` is kept on the parent state alongside `commitDetail` on purpose, so a row observes only that one property instead of re-rendering whenever the child loads a file list or diff
+- `commitTapped` builds the child state and sends `.commitDetail(.task)` itself rather than relying on the view's `.task`, so re-selecting always reloads even when SwiftUI reuses the pane
+- Selection is read-only: it shells out to `git show` only, and never checks anything out
 
 **RepositoryFeature** — top-level feature UI and reducers
 - `RepositoryListReducer` / `RepositoryListView` — main list state
