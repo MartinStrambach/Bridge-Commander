@@ -34,6 +34,9 @@ public nonisolated enum GitHubService {
 						state
 						isDraft
 						reviewDecision
+						reviewRequests(first: 1) {
+							totalCount
+						}
 						latestOpinionatedReviews(first: 20) {
 							nodes {
 								state
@@ -175,6 +178,7 @@ nonisolated struct GitHubPullRequestResponse: Decodable {
 		let state: String
 		let isDraft: Bool?
 		let reviewDecision: String?
+		let reviewRequests: ReviewRequests?
 		let latestOpinionatedReviews: OpinionatedReviews?
 		let reviewThreads: ReviewThreads?
 
@@ -201,6 +205,20 @@ nonisolated struct GitHubPullRequestResponse: Decodable {
 			return nodes.count { !$0.isResolved }
 		}
 
+		/// The base branch's review requirement, uppercased, or `nil` when GitHub reports
+		/// none — which it does whenever no branch protection rule requires a review.
+		private var requiredReviewDecision: String? {
+			guard let decision = reviewDecision?.uppercased(), !decision.isEmpty else {
+				return nil
+			}
+			return decision
+		}
+
+		/// Whether anyone has been asked to review and has not answered yet.
+		private var hasPendingReviewRequest: Bool {
+			(reviewRequests?.totalCount ?? 0) > 0
+		}
+
 		var approvalStatus: ApprovalStatus {
 			let reviews = latestOpinionatedReviews?.nodes ?? []
 			let approvedBy = reviews.filter { $0.state.uppercased() == "APPROVED" }.map(\.reviewer)
@@ -212,10 +230,27 @@ nonisolated struct GitHubPullRequestResponse: Decodable {
 				decision: decision(changesRequestedBy: changesRequestedBy, approvedBy: approvedBy),
 				approvedBy: approvedBy,
 				changesRequestedBy: changesRequestedBy,
-				// GitHub does not expose the branch-protection required-review count
-				// on the pull request, so there is never a denominator to show.
-				approvalsRequired: nil
+				approvalsRequired: requiredApprovalCount(hasReviews: !reviews.isEmpty)
 			)
+		}
+
+		/// What the PR can say about how many approvals it needs.
+		///
+		/// GitHub never exposes the branch-protection required-review count itself, so
+		/// the only two answers available are "a review is needed, count unknown" (nil)
+		/// and "nobody's sign-off is needed" (0) — the latter being what
+		/// `ApprovalStatus.requiresNoApprovals` reads to drop the row's approval slot.
+		///
+		/// A null `reviewDecision` is what says nothing is required: GitHub returns it
+		/// whenever no rule on the base branch asks for a review. Reviews that exist
+		/// anyway keep the count unknown rather than reporting 0 — somebody has
+		/// actually weighed in, or been asked to, and that is worth a slot however
+		/// little branch protection cares.
+		private func requiredApprovalCount(hasReviews: Bool) -> Int? {
+			guard requiredReviewDecision == nil else {
+				return nil
+			}
+			return hasReviews || hasPendingReviewRequest ? nil : 0
 		}
 
 		/// `reviewDecision` is authoritative when present, but GitHub returns null for it
@@ -225,7 +260,7 @@ nonisolated struct GitHubPullRequestResponse: Decodable {
 			changesRequestedBy: [Reviewer],
 			approvedBy: [Reviewer]
 		) -> ApprovalDecision {
-			switch reviewDecision?.uppercased() {
+			switch requiredReviewDecision {
 			case "APPROVED":
 				return .approved
 			case "CHANGES_REQUESTED":
@@ -239,6 +274,12 @@ nonisolated struct GitHubPullRequestResponse: Decodable {
 				return approvedBy.isEmpty ? .reviewRequired : .approved
 			}
 		}
+	}
+
+	/// Only the count is needed: a requested reviewer has not weighed in yet, so there
+	/// is nothing of theirs to draw — it only says the PR is still waiting on someone.
+	struct ReviewRequests: Decodable {
+		let totalCount: Int?
 	}
 
 	struct OpinionatedReviews: Decodable {
