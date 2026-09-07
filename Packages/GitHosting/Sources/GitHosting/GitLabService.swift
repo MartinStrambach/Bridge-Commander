@@ -291,10 +291,11 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 				decision: decision,
 				approvedBy: approvedBy,
 				changesRequestedBy: changesRequestedBy,
-				// Approval *rules* are a paid GitLab feature; tiers without them report
-				// 0, which means "no rule configured", not "zero approvals needed".
-				approvalsRequired: (required ?? 0) > 0 ? required : nil,
-				approvalsLeft: (required ?? 0) > 0 ? left : nil
+				// Passed through as reported, 0 included: a project with no approval rule
+				// requires no sign-off, and the row hides its approval slot on that. Only
+				// an absent field stays nil, which means "count unknown".
+				approvalsRequired: required,
+				approvalsLeft: left
 			)
 		}
 	}

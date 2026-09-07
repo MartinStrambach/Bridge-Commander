@@ -350,6 +350,64 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.approvalSlot == nil)
 	}
 
+	@Test("a project requiring zero approvals shows no slot")
+	@MainActor
+	func zeroRequiredApprovalsShowsNoSlot() async {
+		let store = makeStore(state: makeRow())
+		// A project with no approval rule reports every MR as approved by default, so
+		// the slot would sit green on every row without ever meaning anything.
+		let approvals = ApprovalStatus(decision: .approved, approvalsRequired: 0, approvalsLeft: 0)
+
+		await sendPullRequest(state: .ready, approvals: approvals, to: store)
+
+		// The status itself is kept — only the slot is suppressed.
+		#expect(store.state.prApprovals == approvals)
+		#expect(store.state.approvalSlot == nil)
+	}
+
+	@Test("requested changes show even when the project requires zero approvals")
+	@MainActor
+	func zeroRequiredApprovalsStillShowsRequestedChanges() async {
+		let store = makeStore(state: makeRow())
+		// A blocking review does not come from an approval rule, so it is real however
+		// many approvals are required — and it is the only sign the row gives that
+		// someone is holding the change up.
+		let approvals = ApprovalStatus(
+			decision: .changesRequested,
+			changesRequestedBy: [Self.rohan],
+			approvalsRequired: 0,
+			approvalsLeft: 0
+		)
+
+		await sendPullRequest(state: .ready, approvals: approvals, to: store)
+
+		#expect(store.state.approvalSlot == .review(approvals))
+	}
+
+	@Test("an unknown required count still shows the slot")
+	@MainActor
+	func unknownRequiredCountKeepsSlot() async {
+		let store = makeStore(state: makeRow())
+		// GitHub never reports a count; that is not the same as requiring none.
+		let approvals = ApprovalStatus(decision: .reviewRequired, approvalsRequired: nil)
+
+		await sendPullRequest(state: .ready, approvals: approvals, to: store)
+
+		#expect(store.state.approvalSlot == .review(approvals))
+	}
+
+	@Test("a draft in a project requiring zero approvals still shows draft")
+	@MainActor
+	func zeroRequiredApprovalsKeepsDraftSlot() async {
+		let store = makeStore(state: makeRow())
+		let approvals = ApprovalStatus(decision: .approved, approvalsRequired: 0, approvalsLeft: 0)
+
+		await sendPullRequest(state: .draft, approvals: approvals, to: store)
+
+		// Draft is about readiness, not sign-off, so the approval rules do not affect it.
+		#expect(store.state.approvalSlot == .draft)
+	}
+
 	@Test("no slot before any PR fetch has answered")
 	@MainActor
 	func noSlotBeforeFetch() {

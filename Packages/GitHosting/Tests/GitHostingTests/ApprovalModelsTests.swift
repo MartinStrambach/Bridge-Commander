@@ -158,6 +158,17 @@ struct ApprovalProgressTests {
 		#expect(ApprovalStatus(decision: .approved, approvalsRequired: 3).approvalsSatisfied == nil)
 		#expect(ApprovalStatus(decision: .approved, approvalsLeft: 1).approvalsSatisfied == nil)
 	}
+
+	@Test("Requiring zero approvals is not a fraction and not an unknown count")
+	func zeroRequired() {
+		let none = ApprovalStatus(decision: .approved, approvalsRequired: 0, approvalsLeft: 0)
+		#expect(none.requiresNoApprovals)
+		// Nothing should be able to render "0 of 0".
+		#expect(none.approvalsSatisfied == nil)
+
+		#expect(!ApprovalStatus(decision: .approved).requiresNoApprovals)
+		#expect(!ApprovalStatus(decision: .approved, approvalsRequired: 1).requiresNoApprovals)
+	}
 }
 
 @Suite("GitLab avatar URL")

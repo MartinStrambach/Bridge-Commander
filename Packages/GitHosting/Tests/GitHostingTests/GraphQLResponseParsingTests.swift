@@ -188,14 +188,24 @@ struct GitLabMergeRequestResponseTests {
 		#expect(approvals.changesRequestedBy.isEmpty)
 	}
 
-	@Test("tiers without approval rules report no required count")
+	@Test("a project with no approval rule reports zero required, not an unknown count")
 	func noApprovalRules() throws {
-		// Approval rules are a paid feature; other tiers send 0 or omit the field,
-		// neither of which means "zero approvals needed".
-		#expect(try decode(node(#""state": "opened", "approvalsRequired": 0"#))
-			.mergeRequest?.approvalStatus.approvalsRequired == nil)
-		#expect(try decode(node(#""state": "opened""#))
-			.mergeRequest?.approvalStatus.approvalsRequired == nil)
+		// The zero has to survive parsing: it is what tells the row there is no
+		// sign-off to wait for, so it can hide the approval slot entirely.
+		let status = try #require(
+			decode(node(#""state": "opened", "approvalsRequired": 0, "approvalsLeft": 0"#)).mergeRequest?.approvalStatus
+		)
+		#expect(status.approvalsRequired == 0)
+		#expect(status.requiresNoApprovals)
+		// No denominator to draw from a 0 of 0.
+		#expect(status.approvalsSatisfied == nil)
+	}
+
+	@Test("an omitted required count stays unknown")
+	func missingApprovalCount() throws {
+		let status = try #require(decode(node(#""state": "opened""#)).mergeRequest?.approvalStatus)
+		#expect(status.approvalsRequired == nil)
+		#expect(!status.requiresNoApprovals)
 	}
 
 	@Test("prefers the grouped counts, so one reviewer covering several rules counts once")
