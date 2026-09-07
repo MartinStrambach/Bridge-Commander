@@ -58,9 +58,12 @@ public nonisolated enum TerminalLauncher {
 		// actually change rather than guessing a delay — otherwise the command lands in the tab
 		// that was already there. Depending on Terminal's profile and tabbing settings ⌘T may open
 		// a window instead of a tab; either way the front window's selected tab is the fresh one.
-		// If it never arrives (no Accessibility permission, keystroke swallowed by another app),
-		// fall back to a plain `do script`, which makes a window of its own — better than typing
-		// into a tab that may have something running in it.
+		//
+		// The keystroke must stay inside a `try`: without Accessibility permission System Events
+		// *errors* ("osascript is not allowed to send keystrokes") rather than doing nothing, which
+		// aborted the whole script and opened no terminal at all. Degrade to a plain `do script` —
+		// the user gets a window instead of a tab, and the list's Accessibility banner explains
+		// why. That is also better than typing into a tab that may have something running in it.
 		let alreadyRunningBranch =
 			newTab
 			? """
@@ -69,19 +72,21 @@ public nonisolated enum TerminalLauncher {
 						if frontmost then exit repeat
 						delay 0.05
 					end repeat
-					tell application "System Events"
-						tell process "Terminal"
-							keystroke "t" using command down
-						end tell
-					end tell
 					set hasFreshTab to false
-					repeat 40 times
-						if (count of windows) > 0 and tty of selected tab of front window is not previousTTY then
-							set hasFreshTab to true
-							exit repeat
-						end if
-						delay 0.05
-					end repeat
+					try
+						tell application "System Events"
+							tell process "Terminal"
+								keystroke "t" using command down
+							end tell
+						end tell
+						repeat 40 times
+							if (count of windows) > 0 and tty of selected tab of front window is not previousTTY then
+								set hasFreshTab to true
+								exit repeat
+							end if
+							delay 0.05
+						end repeat
+					end try
 					if hasFreshTab then
 						do script \(commandLiteral) in front window
 					else
