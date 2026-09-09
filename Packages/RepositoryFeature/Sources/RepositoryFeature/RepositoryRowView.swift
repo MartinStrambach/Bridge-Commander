@@ -2,6 +2,7 @@ import ActionButtons
 import AppUI
 import ComposableArchitecture
 import GitActionsMenu
+import GitGraphFeature
 import GitHosting
 import Settings
 import StagingFeature
@@ -66,18 +67,18 @@ struct RepositoryRowView: View {
 						.hidden()
 				}
 			}
+			TerminalStatusDotView(status: terminalSessionStatus, size: 18)
+				.padding(.vertical, 12)
+			// Outside the double-tap region below, like every other button in the row: a
+			// `TapGesture(count: 2)` above a button forces every click on that button to
+			// wait out the double-click interval before the gesture system can resolve
+			// which one wins, which makes the button feel sluggish.
+			graphButton
+				.padding(.vertical, 12)
 			// The double-tap target deliberately covers only the informational part of
-			// the row, never `repositoryActions` or the disclosure chevron. A
-			// `TapGesture(count: 2)` above a button forces every click on that button
-			// to wait out the double-click interval before the gesture system can
-			// resolve which one wins, which makes the buttons feel sluggish;
-			// `simultaneousGesture` avoids the wait only by firing both.
+			// the row, never `repositoryActions`, the icon or the disclosure chevron;
+			// `simultaneousGesture` avoids the wait described above only by firing both.
 			HStack(alignment: .center, spacing: 16) {
-				TerminalStatusDotView(status: terminalSessionStatus, size: 18)
-				RepositoryIcon(
-					isWorktree: store.isWorktree,
-					isMergeInProgress: store.gitActionsMenu.isMergeInProgress
-				)
 				repositoryInfo
 				Spacer(minLength: 0)
 			}
@@ -114,6 +115,37 @@ struct RepositoryRowView: View {
 					maxHeight: .infinity
 				)
 		}
+		.sheet(item: $store.scope(\.$gitGraph, action: \.gitGraph)) { graphStore in
+			GitGraphView(store: graphStore)
+				// Roomier than the graph alone needs: the selected commit's diff opens in a
+				// bottom pane, and both panes have to stay usable at the ideal size.
+				.frame(
+					minWidth: 1000,
+					idealWidth: 1400,
+					maxWidth: .infinity,
+					minHeight: 600,
+					idealHeight: 900,
+					maxHeight: .infinity
+				)
+				.windowResizable()
+		}
+	}
+
+	// MARK: - Graph Button
+
+	/// The repository type icon doubles as the commit graph's entry point.
+	private var graphButton: some View {
+		Button {
+			store.send(.repositoryIconTapped)
+		} label: {
+			RepositoryIcon(
+				isWorktree: store.isWorktree,
+				isMergeInProgress: store.gitActionsMenu.isMergeInProgress
+			)
+			.contentShape(Rectangle())
+		}
+		.buttonStyle(.plain)
+		.help("Show commit graph")
 	}
 
 	// MARK: - Repository Info

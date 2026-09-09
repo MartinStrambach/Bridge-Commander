@@ -3,6 +3,7 @@ import ComposableArchitecture
 import Foundation
 import GitActionsMenu
 import GitCore
+import GitGraphFeature
 import GitHosting
 import Settings
 import StagingFeature
@@ -79,6 +80,9 @@ struct RepositoryRowReducer {
 
 		@Presents
 		var repositoryDetail: RepositoryDetail.State?
+
+		@Presents
+		var gitGraph: GitGraphReducer.State?
 
 		var formattedBranchName: String {
 			@Shared(.branchNameRegex)
@@ -211,7 +215,9 @@ struct RepositoryRowReducer {
 		case didFetchPullRequestFailed(String)
 		case openRepositoryDetail
 		case openTerminalForRepo
+		case repositoryIconTapped
 		case repositoryDetail(PresentationAction<RepositoryDetail.Action>)
+		case gitGraph(PresentationAction<GitGraphReducer.Action>)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
 		case terminalButton(TerminalButtonReducer.Action)
@@ -283,6 +289,15 @@ struct RepositoryRowReducer {
 				state.repositoryDetail = RepositoryDetail.State(
 					repositoryPath: state.path,
 					iosSubfolderPath: state.iosSubfolderPath
+				)
+				return .none
+
+			case .repositoryIconTapped:
+				// Read-only: the graph only shells out to `git log`/`git show`, so opening it
+				// from the row cannot touch the working tree it is describing.
+				state.gitGraph = GitGraphReducer.State(
+					repositoryPath: state.path,
+					repositoryName: state.name
 				)
 				return .none
 
@@ -473,6 +488,9 @@ struct RepositoryRowReducer {
 		}
 		.ifLet(\.$repositoryDetail, action: \.repositoryDetail) {
 			RepositoryDetail()
+		}
+		.ifLet(\.$gitGraph, action: \.gitGraph) {
+			GitGraphReducer()
 		}
 	}
 
