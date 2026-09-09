@@ -45,6 +45,7 @@ let package = Package(
 				"RepositoryFeature",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "GitCore", package: "GitCore"),
+				.product(name: "GitGraphFeature", package: "GitGraphFeature"),
 				.product(name: "GitActionsMenu", package: "GitActionsMenu"),
 				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
 				.product(name: "AppUI", package: "AppUI"),
