@@ -196,6 +196,41 @@ struct RepositoryRowView: View {
 		.help(count == 1 ? "1 worktree" : "\(count) worktrees")
 	}
 
+	// MARK: - Ticket Badge
+
+	/// The ticket ID, clickable whenever the row managed to resolve a YouTrack URL for it.
+	///
+	/// Goes through the scoped ticket store rather than opening `ticketURL` here, so the badge and
+	/// the ticket button in the action bar share one code path. Without a configured YouTrack base
+	/// URL there is no store and the badge stays plain text — the action bar's orange warning
+	/// button is what explains why in that case.
+	@ViewBuilder
+	private func ticketBadge(_ ticketId: String) -> some View {
+		if let ticketStore = store.scope(\.ticketButton, action: \.ticketButton) {
+			Button {
+				ticketStore.send(.openTicketButtonTapped)
+			} label: {
+				ticketBadgeLabel(ticketId)
+			}
+			.buttonStyle(.plain)
+			.pointerStyle(.link)
+			.help("Open YouTrack ticket \(ticketId)")
+		}
+		else {
+			ticketBadgeLabel(ticketId)
+		}
+	}
+
+	private func ticketBadgeLabel(_ ticketId: String) -> some View {
+		Text(ticketId)
+			.font(.caption)
+			.padding(6)
+			.background(Color.blue.opacity(0.2))
+			.cornerRadius(4)
+			.lineLimit(1)
+			.contentShape(Rectangle())
+	}
+
 	// MARK: - Changes Indicator
 
 	private var changesIndicator: some View {
@@ -251,12 +286,7 @@ struct RepositoryRowView: View {
 	private var codeReviewSection: some View {
 		HStack(spacing: 8) {
 			if let ticketId = store.ticketId {
-				Text(ticketId)
-					.font(.caption)
-					.padding(6)
-					.background(Color.blue.opacity(0.2))
-					.cornerRadius(4)
-					.lineLimit(1)
+				ticketBadge(ticketId)
 			}
 
 			if let androidCR = store.androidCR {
