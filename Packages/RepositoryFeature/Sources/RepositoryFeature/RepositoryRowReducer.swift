@@ -463,6 +463,7 @@ struct RepositoryRowReducer {
 				     .pullButton(.pullCompleted),
 				     .pushButton(.pushCompleted),
 				     .stashButton(.stashApplyCompleted),
+				     .stashButton(.stashClearCompleted),
 				     .stashButton(.stashCompleted),
 				     .stashButton(.stashPopCompleted):
 					return .send(.refresh)

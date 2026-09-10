@@ -18,8 +18,9 @@ struct StashButtonView: View {
 		}
 
 		if store.hasStash {
-			// Two ways out of a stash, because restoring and discarding the entry are
-			// separate decisions: apply keeps the stash as a fallback, pop clears it.
+			// Restoring the work and keeping the entry are separate decisions, so each
+			// combination gets its own item: apply restores and keeps, pop restores and
+			// drops, clear only drops. Clear confirms first — see StashButtonReducer.
 			Button {
 				store.send(.stashApplyTapped)
 			} label: {
@@ -30,7 +31,14 @@ struct StashButtonView: View {
 			Button {
 				store.send(.stashPopTapped)
 			} label: {
-				Label("Apply Stash & Clear", systemImage: "tray.and.arrow.up.fill")
+				Label("Pop Stash", systemImage: "tray.and.arrow.up.fill")
+			}
+			.disabled(store.isProcessing)
+
+			Button(role: .destructive) {
+				store.send(.stashClearTapped)
+			} label: {
+				Label("Clear Stash", systemImage: "trash")
 			}
 			.disabled(store.isProcessing)
 		}

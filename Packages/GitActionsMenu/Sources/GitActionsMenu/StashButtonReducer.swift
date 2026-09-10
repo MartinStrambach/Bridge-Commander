@@ -11,12 +11,14 @@ public struct StashButtonReducer {
 		case stashing
 		case applying
 		case popping
+		case clearing
 
 		var progressText: String {
 			switch self {
 			case .stashing: "Stashing..."
-			case .applying,
-			     .popping: "Applying stash..."
+			case .applying: "Applying stash..."
+			case .popping: "Popping stash..."
+			case .clearing: "Clearing stash..."
 			}
 		}
 
@@ -25,6 +27,7 @@ public struct StashButtonReducer {
 			case .stashing: "Stashing changes..."
 			case .applying: "Restoring stashed changes..."
 			case .popping: "Restoring stashed changes and dropping the stash..."
+			case .clearing: "Dropping the stash without restoring it..."
 			}
 		}
 	}
@@ -40,6 +43,8 @@ public struct StashButtonReducer {
 		/// The newest stash on `currentBranch`, as of the last check.
 		var stash: GitStashEntry?
 		var operation: Operation?
+		@Presents
+		var confirmationDialog: ConfirmationDialogState<Action.ConfirmAction>?
 
 		public var hasChanges = false
 
@@ -68,11 +73,18 @@ public struct StashButtonReducer {
 		case stashTapped
 		case stashApplyTapped
 		case stashPopTapped
+		case stashClearTapped
+		case confirmationDialog(PresentationAction<ConfirmAction>)
 		case stashCompleted(success: Bool, error: String?)
 		case stashApplyCompleted(success: Bool, error: String?)
 		case stashPopCompleted(success: Bool, error: String?)
+		case stashClearCompleted(success: Bool, error: String?)
 		case checkStashStatus
 		case didFindStash(GitStashEntry?)
+
+		public enum ConfirmAction: Equatable {
+			case confirmClear
+		}
 	}
 
 	public var body: some Reducer<State, Action> {
@@ -122,7 +134,37 @@ public struct StashButtonReducer {
 					}
 				}
 
+			case .stashClearTapped:
+				// Clearing throws the stashed work away without ever putting it back in
+				// the working tree, so unlike apply and pop it asks first.
+				guard let stash = state.stash else {
+					return .none
+				}
+
+				state.confirmationDialog = Self.clearConfirmation(for: stash)
+				return .none
+
+			case .confirmationDialog(.presented(.confirmClear)):
+				guard let reference = state.stash?.reference else {
+					return .none
+				}
+
+				state.operation = .clearing
+				return .run { [path = state.repositoryPath] send in
+					do {
+						try await GitStashHelper.stashDrop(at: path, reference: reference)
+						await send(.stashClearCompleted(success: true, error: nil))
+					}
+					catch {
+						await send(.stashClearCompleted(success: false, error: error.localizedDescription))
+					}
+				}
+
+			case .confirmationDialog:
+				return .none
+
 			case .stashApplyCompleted,
+			     .stashClearCompleted,
 			     .stashCompleted,
 			     .stashPopCompleted:
 				state.operation = nil
@@ -137,6 +179,26 @@ public struct StashButtonReducer {
 				state.stash = stash
 				return .none
 			}
+		}
+		.ifLet(\.$confirmationDialog, action: \.confirmationDialog)
+	}
+
+	// MARK: - Confirmation dialog
+
+	static func clearConfirmation(for stash: GitStashEntry) -> ConfirmationDialogState<Action.ConfirmAction> {
+		ConfirmationDialogState {
+			TextState("Clear stash?")
+		} actions: {
+			ButtonState(role: .destructive, action: .confirmClear) {
+				TextState("Clear Stash")
+			}
+			ButtonState(role: .cancel) {
+				TextState("Cancel")
+			}
+		} message: {
+			// Name the entry: the list is shared by every worktree, so it pays to show
+			// exactly which stash is about to go.
+			TextState("This permanently deletes \(stash.reference) — “\(stash.message)” — without restoring it.")
 		}
 	}
 }

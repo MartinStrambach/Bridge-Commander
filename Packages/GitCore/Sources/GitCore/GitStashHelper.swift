@@ -55,6 +55,27 @@ public nonisolated enum GitStashHelper {
 		}
 	}
 
+	/// Drops a stash without restoring it.
+	///
+	/// Deliberately `git stash drop <ref>` rather than `git stash clear`: the stash list
+	/// lives in the common git directory and is shared by every worktree of a repository,
+	/// so clearing it would throw away work belonging to branches the user isn't looking at.
+	/// - Parameters:
+	///   - path: The path to the Git repository
+	///   - reference: The `stash@{n}` reference to drop
+	/// - Throws: GitError if the operation fails
+	public static func stashDrop(at path: String, reference: String) async throws {
+		let result = await ProcessRunner.runGit(
+			arguments: ["stash", "drop", reference],
+			at: path
+		)
+
+		guard result.success else {
+			let errorMessage = result.trimmedError
+			throw GitError.stashDropFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
+		}
+	}
+
 	/// The stash store lives in the common git directory, shared by all worktrees of a
 	/// repository — so during a refresh burst the per-row checks coalesce into a single
 	/// `git stash list` process per repository instead of one per worktree.

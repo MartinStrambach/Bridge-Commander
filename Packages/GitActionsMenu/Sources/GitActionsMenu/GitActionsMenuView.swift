@@ -114,6 +114,11 @@ public struct GitActionsMenuView: View {
 		.confirmationDialog(
 			$store.scope(\.discardButton.$confirmationDialog, action: \.discardButton.confirmationDialog)
 		)
+		// Presented here rather than on the menu item, for the same reason as the discard
+		// dialog above: dialogs attached inside a macOS `Menu` do not present reliably.
+		.confirmationDialog(
+			$store.scope(\.stashButton.$confirmationDialog, action: \.stashButton.confirmationDialog)
+		)
 	}
 
 	public init(store: StoreOf<GitActionsMenuReducer>) {

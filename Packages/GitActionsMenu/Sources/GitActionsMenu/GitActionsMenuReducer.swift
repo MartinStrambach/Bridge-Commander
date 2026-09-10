@@ -278,15 +278,32 @@ public struct GitActionsMenuReducer {
 			case let .stashButton(.stashPopCompleted(success, error)):
 				if let error {
 					state.alert = ScrollableAlertReducer.State(
-						title: "Apply Stash & Clear Failed",
+						title: "Pop Stash Failed",
 						message: error,
 						isError: true
 					)
 				}
 				else if success {
 					state.alert = ScrollableAlertReducer.State(
-						title: "Stash Applied & Cleared",
+						title: "Stash Popped",
 						message: "Stashed changes have been restored and the stash was removed.",
+						isError: false
+					)
+				}
+				return .send(.stashButton(.checkStashStatus))
+
+			case let .stashButton(.stashClearCompleted(success, error)):
+				if let error {
+					state.alert = ScrollableAlertReducer.State(
+						title: "Clear Stash Failed",
+						message: error,
+						isError: true
+					)
+				}
+				else if success {
+					state.alert = ScrollableAlertReducer.State(
+						title: "Stash Cleared",
+						message: "The stash has been deleted without being restored.",
 						isError: false
 					)
 				}

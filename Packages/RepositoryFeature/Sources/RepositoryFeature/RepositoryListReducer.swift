@@ -681,6 +681,7 @@ struct RepositoryListReducer {
 				     .pullButton(.pullCompleted),
 				     .pushButton(.pushCompleted),
 				     .stashButton(.stashApplyCompleted),
+				     .stashButton(.stashClearCompleted),
 				     .stashButton(.stashCompleted),
 				     .stashButton(.stashPopCompleted):
 					guard let path = state.terminalLayout?.activeRepositoryPath else {
