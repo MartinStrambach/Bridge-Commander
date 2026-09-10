@@ -53,11 +53,11 @@ public struct GitActionsMenuView: View {
 					helpText: "Aborting merge..."
 				)
 			}
-			else if store.stashButton.isProcessing {
+			else if let operation = store.stashButton.operation {
 				GitOperationProgressView(
-					text: store.stashButton.hasStash ? "Popping stash..." : "Stashing...",
+					text: operation.progressText,
 					color: .purple,
-					helpText: store.stashButton.hasStash ? "Restoring stashed changes..." : "Stashing changes..."
+					helpText: operation.progressHelpText
 				)
 			}
 			else if store.discardButton.isProcessing {

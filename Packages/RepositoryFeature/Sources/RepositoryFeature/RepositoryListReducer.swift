@@ -680,6 +680,7 @@ struct RepositoryListReducer {
 				     .mergeMasterButton(.mergeMasterCompleted),
 				     .pullButton(.pullCompleted),
 				     .pushButton(.pushCompleted),
+				     .stashButton(.stashApplyCompleted),
 				     .stashButton(.stashCompleted),
 				     .stashButton(.stashPopCompleted):
 					guard let path = state.terminalLayout?.activeRepositoryPath else {
@@ -1033,7 +1034,7 @@ private func syncTerminalGitMenu(
 	}
 
 	let rowMenu = rowState.gitActionsMenu
-	state.terminalLayout?.gitActionsMenu?.currentBranch = rowMenu.currentBranch
+	state.terminalLayout?.gitActionsMenu?.setCurrentBranch(rowMenu.currentBranch)
 	state.terminalLayout?.gitActionsMenu?.isMergeInProgress = rowMenu.isMergeInProgress
 	state.terminalLayout?.gitActionsMenu?.hasRemoteBranch = rowMenu.hasRemoteBranch
 	state.terminalLayout?.gitActionsMenu?.unpushedCommitsCount = rowMenu.unpushedCommitsCount

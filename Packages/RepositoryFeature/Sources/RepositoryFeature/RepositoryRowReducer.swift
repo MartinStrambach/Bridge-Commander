@@ -202,7 +202,13 @@ struct RepositoryRowReducer {
 			)
 			self.deleteWorktreeButton = .init(name: branchName ?? name, path: path, defaultBranch: defaultBranch)
 			self.createWorktreeButton = .init(repositoryPath: path)
-			self.gitActionsMenu = .init(repositoryPath: path, currentBranch: name, defaultBranch: defaultBranch)
+			// `branchName ?? name`, not `name`: the menu's stash lookup keys off the branch,
+			// and the repository name is only a stand-in until the status fetch lands.
+			self.gitActionsMenu = .init(
+				repositoryPath: path,
+				currentBranch: branchName ?? name,
+				defaultBranch: defaultBranch
+			)
 		}
 	}
 
@@ -369,7 +375,7 @@ struct RepositoryRowReducer {
 				state.shareButton.updateTicketURL(state.ticketButton?.ticketURL ?? "")
 				state.unstagedChangesCount = unstaged
 				state.stagedChangesCount = staged
-				state.gitActionsMenu.currentBranch = branch
+				state.gitActionsMenu.setCurrentBranch(branch)
 				state.commitsBehindCount = status.behindCount
 				state.hasRemoteBranch = status.hasRemoteBranch
 				state.unpushedCommitCount = status.unpushedCount
@@ -456,6 +462,7 @@ struct RepositoryRowReducer {
 				     .mergeMasterButton(.mergeMasterCompleted),
 				     .pullButton(.pullCompleted),
 				     .pushButton(.pushCompleted),
+				     .stashButton(.stashApplyCompleted),
 				     .stashButton(.stashCompleted),
 				     .stashButton(.stashPopCompleted):
 					return .send(.refresh)
