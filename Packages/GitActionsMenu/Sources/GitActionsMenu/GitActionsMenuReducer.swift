@@ -10,7 +10,9 @@ public struct GitActionsMenuReducer {
 	@ObservableState
 	public struct State: Equatable {
 		public var isMergeInProgress = false
-		public var currentBranch: String
+		/// Write through `setCurrentBranch` — the stash button keeps its own copy to look
+		/// stashes up by branch, and it has to move with this one.
+		public private(set) var currentBranch: String
 		/// Per-group configured default branch. Empty = historical master/main.
 		public var defaultBranch: String
 		public var hasRemoteBranch = false
@@ -48,6 +50,17 @@ public struct GitActionsMenuReducer {
 			self.abortMergeButton = AbortMergeButtonReducer.State(repositoryPath: repositoryPath)
 			self.stashButton = StashButtonReducer.State(repositoryPath: repositoryPath, currentBranch: currentBranch)
 			self.discardButton = DiscardButtonReducer.State(repositoryPath: repositoryPath)
+		}
+
+		/// Updates the checked-out branch and keeps the stash button in sync.
+		///
+		/// The row builds this state before it knows the branch (it seeds the repository name),
+		/// and the real branch only arrives with the status fetch. The stash button looks its
+		/// entry up by branch name, so leaving its copy behind made every lookup miss and the
+		/// apply/clear items never appeared.
+		public mutating func setCurrentBranch(_ branch: String) {
+			currentBranch = branch
+			stashButton.currentBranch = branch
 		}
 
 		/// Updates the configured default branch and keeps the merge and checkout buttons in sync.
@@ -245,14 +258,52 @@ public struct GitActionsMenuReducer {
 				}
 				return .send(.stashButton(.checkStashStatus))
 
-			case let .stashButton(.stashPopCompleted(success, error)):
+			case let .stashButton(.stashApplyCompleted(success, error)):
 				if let error {
-					state.alert = ScrollableAlertReducer.State(title: "Stash Pop Failed", message: error, isError: true)
+					state.alert = ScrollableAlertReducer.State(
+						title: "Apply Stash Failed",
+						message: error,
+						isError: true
+					)
 				}
 				else if success {
 					state.alert = ScrollableAlertReducer.State(
-						title: "Stash Pop Successful",
-						message: "Stashed changes have been restored successfully.",
+						title: "Stash Applied",
+						message: "Stashed changes have been restored. The stash is still available.",
+						isError: false
+					)
+				}
+				return .send(.stashButton(.checkStashStatus))
+
+			case let .stashButton(.stashPopCompleted(success, error)):
+				if let error {
+					state.alert = ScrollableAlertReducer.State(
+						title: "Pop Stash Failed",
+						message: error,
+						isError: true
+					)
+				}
+				else if success {
+					state.alert = ScrollableAlertReducer.State(
+						title: "Stash Popped",
+						message: "Stashed changes have been restored and the stash was removed.",
+						isError: false
+					)
+				}
+				return .send(.stashButton(.checkStashStatus))
+
+			case let .stashButton(.stashClearCompleted(success, error)):
+				if let error {
+					state.alert = ScrollableAlertReducer.State(
+						title: "Clear Stash Failed",
+						message: error,
+						isError: true
+					)
+				}
+				else if success {
+					state.alert = ScrollableAlertReducer.State(
+						title: "Stash Cleared",
+						message: "The stash has been deleted without being restored.",
 						isError: false
 					)
 				}

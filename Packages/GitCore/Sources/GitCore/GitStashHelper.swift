@@ -17,12 +17,35 @@ public nonisolated enum GitStashHelper {
 		}
 	}
 
-	/// Pops the most recent stash
-	/// - Parameter path: The path to the Git repository
+	/// Restores a stash and leaves it in the stash list.
+	/// - Parameters:
+	///   - path: The path to the Git repository
+	///   - reference: The `stash@{n}` reference to apply. Passed explicitly rather than
+	///     letting git default to `stash@{0}`: the stash list is shared by every worktree
+	///     of a repository, so the newest entry often belongs to a different branch than
+	///     the one whose menu the user opened.
 	/// - Throws: GitError if the operation fails
-	public static func stashPop(at path: String) async throws {
+	public static func stashApply(at path: String, reference: String) async throws {
 		let result = await ProcessRunner.runGit(
-			arguments: ["stash", "pop"],
+			arguments: ["stash", "apply", reference],
+			at: path
+		)
+
+		guard result.success else {
+			let errorMessage = result.trimmedError
+			throw GitError.stashApplyFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
+		}
+	}
+
+	/// Restores a stash and drops it from the stash list.
+	/// - Parameters:
+	///   - path: The path to the Git repository
+	///   - reference: The `stash@{n}` reference to pop — see `stashApply(at:reference:)`
+	///     for why it is never left implicit.
+	/// - Throws: GitError if the operation fails
+	public static func stashPop(at path: String, reference: String) async throws {
+		let result = await ProcessRunner.runGit(
+			arguments: ["stash", "pop", reference],
 			at: path
 		)
 
@@ -32,27 +55,44 @@ public nonisolated enum GitStashHelper {
 		}
 	}
 
+	/// Drops a stash without restoring it.
+	///
+	/// Deliberately `git stash drop <ref>` rather than `git stash clear`: the stash list
+	/// lives in the common git directory and is shared by every worktree of a repository,
+	/// so clearing it would throw away work belonging to branches the user isn't looking at.
+	/// - Parameters:
+	///   - path: The path to the Git repository
+	///   - reference: The `stash@{n}` reference to drop
+	/// - Throws: GitError if the operation fails
+	public static func stashDrop(at path: String, reference: String) async throws {
+		let result = await ProcessRunner.runGit(
+			arguments: ["stash", "drop", reference],
+			at: path
+		)
+
+		guard result.success else {
+			let errorMessage = result.trimmedError
+			throw GitError.stashDropFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
+		}
+	}
+
 	/// The stash store lives in the common git directory, shared by all worktrees of a
 	/// repository — so during a refresh burst the per-row checks coalesce into a single
 	/// `git stash list` process per repository instead of one per worktree.
 	private static let stashList = StashListRunner()
 
-	/// Checks if there is a stash on the specified branch
+	/// Finds the newest stash taken on the given branch.
 	/// - Parameters:
 	///   - path: The path to the Git repository
-	///   - branch: The branch name to check for stashes
-	/// - Returns: true if a stash exists on the branch, false otherwise
-	public static func checkHasStashOnBranch(at path: String, branch: String) async -> Bool {
+	///   - branch: The branch name to look for
+	/// - Returns: The matching entry, or nil when the branch has no stash (or the list
+	///   could not be read)
+	public static func findStash(at path: String, branch: String) async -> GitStashEntry? {
 		guard let output = await stashList.run(at: path) else {
-			return false
+			return nil
 		}
 
-		// Check if any stash entry contains the current branch
-		// Format: "stash@{0}: WIP on branch-name: commit-hash commit-message"
-		// or "stash@{0}: On branch-name: commit-hash commit-message"
-		return output.split(separator: "\n").contains { line in
-			line.contains("WIP on \(branch):") || line.contains("On \(branch):")
-		}
+		return GitStashListParser.newestEntry(on: branch, in: GitStashListParser.parse(output))
 	}
 }
 

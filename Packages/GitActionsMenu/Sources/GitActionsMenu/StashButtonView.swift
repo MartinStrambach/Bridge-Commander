@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import GitCore
 import SwiftUI
 
 // MARK: - Stash Button View
@@ -17,10 +18,27 @@ struct StashButtonView: View {
 		}
 
 		if store.hasStash {
+			// Restoring the work and keeping the entry are separate decisions, so each
+			// combination gets its own item: apply restores and keeps, pop restores and
+			// drops, clear only drops. Clear confirms first — see StashButtonReducer.
+			Button {
+				store.send(.stashApplyTapped)
+			} label: {
+				Label("Apply Stash", systemImage: "tray.and.arrow.up")
+			}
+			.disabled(store.isProcessing)
+
 			Button {
 				store.send(.stashPopTapped)
 			} label: {
-				Label("Stash Pop", systemImage: "tray.and.arrow.up")
+				Label("Pop Stash", systemImage: "tray.and.arrow.up.fill")
+			}
+			.disabled(store.isProcessing)
+
+			Button(role: .destructive) {
+				store.send(.stashClearTapped)
+			} label: {
+				Label("Clear Stash", systemImage: "trash")
 			}
 			.disabled(store.isProcessing)
 		}
@@ -33,8 +51,7 @@ struct StashButtonView: View {
 			store: Store(
 				initialState: StashButtonReducer.State(
 					repositoryPath: "/Users/test/projects/my-project",
-					currentBranch: "branch",
-					hasStash: false
+					currentBranch: "branch"
 				),
 				reducer: {
 					StashButtonReducer()
@@ -47,7 +64,11 @@ struct StashButtonView: View {
 				initialState: StashButtonReducer.State(
 					repositoryPath: "/Users/test/projects/my-project",
 					currentBranch: "branch",
-					hasStash: true
+					stash: GitStashEntry(
+						reference: "stash@{0}",
+						branch: "branch",
+						message: "abc1234 Some work in progress"
+					)
 				),
 				reducer: {
 					StashButtonReducer()

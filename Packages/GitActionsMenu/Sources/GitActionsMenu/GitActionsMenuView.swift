@@ -53,11 +53,11 @@ public struct GitActionsMenuView: View {
 					helpText: "Aborting merge..."
 				)
 			}
-			else if store.stashButton.isProcessing {
+			else if let operation = store.stashButton.operation {
 				GitOperationProgressView(
-					text: store.stashButton.hasStash ? "Popping stash..." : "Stashing...",
+					text: operation.progressText,
 					color: .purple,
-					helpText: store.stashButton.hasStash ? "Restoring stashed changes..." : "Stashing changes..."
+					helpText: operation.progressHelpText
 				)
 			}
 			else if store.discardButton.isProcessing {
@@ -113,6 +113,11 @@ public struct GitActionsMenuView: View {
 		}
 		.confirmationDialog(
 			$store.scope(\.discardButton.$confirmationDialog, action: \.discardButton.confirmationDialog)
+		)
+		// Presented here rather than on the menu item, for the same reason as the discard
+		// dialog above: dialogs attached inside a macOS `Menu` do not present reliably.
+		.confirmationDialog(
+			$store.scope(\.stashButton.$confirmationDialog, action: \.stashButton.confirmationDialog)
 		)
 	}
 
