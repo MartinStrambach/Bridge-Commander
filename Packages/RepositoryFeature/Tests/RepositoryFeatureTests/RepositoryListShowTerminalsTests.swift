@@ -32,6 +32,7 @@ struct RepositoryListShowTerminalsTests {
 				activeRepositoryPath: "/repos/alpha",
 				activeSessionId: session.id
 			)
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = session.id
 		}
 		#expect(store.state.terminalSessions == [session])
 	}
@@ -52,6 +53,7 @@ struct RepositoryListShowTerminalsTests {
 				activeRepositoryPath: "/repos/beta",
 				activeSessionId: live.id
 			)
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/beta"] = live.id
 		}
 	}
 
@@ -70,6 +72,7 @@ struct RepositoryListShowTerminalsTests {
 				activeRepositoryPath: "/repos/alpha",
 				activeSessionId: failed.id
 			)
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = failed.id
 		}
 	}
 
