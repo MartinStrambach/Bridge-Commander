@@ -360,10 +360,10 @@ struct RepositoryListReducer {
 				for sessionId in toRemove {
 					state.terminalSessions.remove(id: sessionId)
 				}
+				state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
 				if state.terminalLayout?.activeRepositoryPath == worktreePath {
 					if let next = state.terminalSessions.first {
-						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
-						state.terminalLayout?.activeSessionId = next.id
+						state.terminalLayout?.activate(next)
 					}
 					else {
 						state.terminalLayout = nil
@@ -521,12 +521,8 @@ struct RepositoryListReducer {
 			// MARK: - Terminal Layout
 
 			case let .terminalLayout(.selectRepo(repositoryPath)):
-				if
-					let existing = state.terminalSessions.first(where: {
-						$0.repositoryPath == repositoryPath
-					})
-				{
-					state.terminalLayout?.activeSessionId = existing.id
+				if let existing = lastActiveSession(for: repositoryPath, in: state) {
+					state.terminalLayout?.activate(existing)
 				}
 				else {
 					let repoSettings = groupSettings(for: repositoryPath, in: state)
@@ -543,7 +539,7 @@ struct RepositoryListReducer {
 						startingDirectory: startingDirectory
 					)
 					state.terminalSessions.append(session)
-					state.terminalLayout?.activeSessionId = session.id
+					state.terminalLayout?.activate(session)
 				}
 				syncTerminalButtons(for: repositoryPath, in: &state)
 				return .none
@@ -563,13 +559,12 @@ struct RepositoryListReducer {
 					.max() ?? 0
 				let session = TerminalSession(repositoryPath: path, tabIndex: maxIndex + 1)
 				state.terminalSessions.append(session)
-				state.terminalLayout?.activeSessionId = session.id
+				state.terminalLayout?.activate(session)
 				return .none
 
 			case let .terminalLayout(.selectTab(sessionId)):
 				if let session = state.terminalSessions[id: sessionId] {
-					state.terminalLayout?.activeRepositoryPath = session.repositoryPath
-					state.terminalLayout?.activeSessionId = sessionId
+					state.terminalLayout?.activate(session)
 				}
 				return .none
 
@@ -580,13 +575,13 @@ struct RepositoryListReducer {
 
 				let repoPath = session.repositoryPath
 				state.terminalSessions.remove(id: sessionId)
+				state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: repoPath)
 				if state.terminalLayout?.activeSessionId == sessionId {
 					if let next = state.terminalSessions.first(where: { $0.repositoryPath == repoPath }) {
-						state.terminalLayout?.activeSessionId = next.id
+						state.terminalLayout?.activate(next)
 					}
 					else if let next = state.terminalSessions.first {
-						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
-						state.terminalLayout?.activeSessionId = next.id
+						state.terminalLayout?.activate(next)
 					}
 					else {
 						state.terminalLayout = nil
@@ -601,10 +596,10 @@ struct RepositoryListReducer {
 				for id in toRemove {
 					state.terminalSessions.remove(id: id)
 				}
+				state.terminalLayout?.lastActiveSessionByRepo[repositoryPath] = nil
 				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
 					if let next = state.terminalSessions.first {
-						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
-						state.terminalLayout?.activeSessionId = next.id
+						state.terminalLayout?.activate(next)
 					}
 					else {
 						state.terminalLayout = nil
@@ -622,7 +617,7 @@ struct RepositoryListReducer {
 				state.terminalSessions.remove(id: sessionId)
 				let newSession = TerminalSession(repositoryPath: repoPath, tabIndex: tabIndex)
 				state.terminalSessions.append(newSession)
-				state.terminalLayout?.activeSessionId = newSession.id
+				state.terminalLayout?.activate(newSession)
 				return .none
 
 			case let .terminalLayout(.finishMergeCompleted(repositoryPath, error)):
@@ -783,14 +778,29 @@ private func normalizePath(_ path: String) -> String {
 	URL(fileURLWithPath: path).standardizedFileURL.path
 }
 
+/// The tab to show when a repository becomes active again: the one the user last
+/// looked at, falling back to its first tab (and to nothing when it has none).
+private func lastActiveSession(
+	for repositoryPath: String,
+	in state: RepositoryListReducer.State
+) -> TerminalSession? {
+	if
+		let rememberedId = state.terminalLayout?.lastActiveSessionByRepo[repositoryPath],
+		let remembered = state.terminalSessions[id: rememberedId],
+		remembered.repositoryPath == repositoryPath
+	{
+		return remembered
+	}
+	return state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
+}
+
 @discardableResult
 private func openTerminal(
 	for repositoryPath: String,
 	in state: inout RepositoryListReducer.State
 ) -> EffectOf<RepositoryListReducer> {
-	let existingSession = state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
 	let session: TerminalSession
-	if let existing = existingSession {
+	if let existing = lastActiveSession(for: repositoryPath, in: state) {
 		session = existing
 	}
 	else {
@@ -807,15 +817,9 @@ private func openTerminal(
 		state.terminalSessions.append(session)
 	}
 	if state.terminalLayout == nil {
-		state.terminalLayout = TerminalLayoutReducer.State(
-			activeRepositoryPath: repositoryPath,
-			activeSessionId: session.id
-		)
+		state.terminalLayout = TerminalLayoutReducer.State()
 	}
-	else {
-		state.terminalLayout?.activeRepositoryPath = repositoryPath
-		state.terminalLayout?.activeSessionId = session.id
-	}
+	state.terminalLayout?.activate(session)
 	syncTerminalButtons(for: repositoryPath, in: &state)
 	return .none
 }
