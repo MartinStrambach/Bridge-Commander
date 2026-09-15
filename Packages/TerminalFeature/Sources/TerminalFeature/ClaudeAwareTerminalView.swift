@@ -85,10 +85,12 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// than an init parameter.
 	public var copiesSelectionAutomatically = false
 
-	/// The text copy-on-select last put on the pasteboard, so a gesture that leaves the selection
-	/// untouched (a shift-click that lands on the same spot, a release after the selection was
-	/// already copied) doesn't clear and rewrite the pasteboard for nothing.
-	private var lastAutoCopiedSelection: String?
+	/// Where copy-on-select writes. The general pasteboard in the app; tests hand it a private one
+	/// so they don't clobber the clipboard of whoever is running them.
+	var selectionPasteboard: NSPasteboard = .general
+
+	/// Holds the rules for what a finished gesture is worth copying.
+	private var copyDecider = SelectionCopyDecider()
 
 	/// Copies whatever the mouse just highlighted, the way X11 and most terminal emulators do.
 	///
@@ -106,29 +108,20 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		copySelectionToPasteboard()
 	}
 
-	/// Puts the current selection on the general pasteboard, if there is one worth copying.
-	///
-	/// A selection of nothing but whitespace is ignored: dragging across blank screen is how an
-	/// accidental gesture ends, and it would otherwise wipe whatever the user meant to paste.
-	private func copySelectionToPasteboard() {
-		guard let selection, selection.active else {
-			lastAutoCopiedSelection = nil
-			return
-		}
-
-		let text = selection.getSelectedText()
-
+	/// Puts the current selection on the pasteboard, if `SelectionCopyDecider` judges there is one
+	/// worth copying. Internal so a test can drive it without synthesizing a mouse event.
+	func copySelectionToPasteboard() {
 		guard
-			!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-			text != lastAutoCopiedSelection
+			let text = copyDecider.textToCopy(
+				selectionIsActive: selection?.active == true,
+				selectedText: selection?.getSelectedText() ?? ""
+			)
 		else {
 			return
 		}
 
-		let pasteboard = NSPasteboard.general
-		pasteboard.clearContents()
-		pasteboard.setString(text, forType: .string)
-		lastAutoCopiedSelection = text
+		selectionPasteboard.clearContents()
+		selectionPasteboard.setString(text, forType: .string)
 	}
 
 	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
