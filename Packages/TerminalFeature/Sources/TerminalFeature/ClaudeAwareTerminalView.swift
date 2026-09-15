@@ -77,6 +77,60 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		kill(process.shellPid, SIGHUP)
 	}
 
+	/// Whether highlighting text with the mouse copies it to the pasteboard without a ⌘C.
+	///
+	/// Off unless the user turns it on in Settings: every highlight replaces whatever they copied
+	/// elsewhere, which is a surprise for anyone who selects text just to read it. The pane is
+	/// reused across changes to the setting, so this is a var the view layer keeps in sync rather
+	/// than an init parameter.
+	public var copiesSelectionAutomatically = false
+
+	/// The text copy-on-select last put on the pasteboard, so a gesture that leaves the selection
+	/// untouched (a shift-click that lands on the same spot, a release after the selection was
+	/// already copied) doesn't clear and rewrite the pasteboard for nothing.
+	private var lastAutoCopiedSelection: String?
+
+	/// Copies whatever the mouse just highlighted, the way X11 and most terminal emulators do.
+	///
+	/// This runs after `super`, since SwiftTerm finishes the gesture there: the drag's last extension
+	/// lands in `mouseDragged`, and word/line selection for a double or triple click in `mouseDown`.
+	/// The overridden method has early returns (an opened link, a mouse-reporting app swallowing the
+	/// release), but none of them leave a new selection behind, so reading it here is enough.
+	override public func mouseUp(with event: NSEvent) {
+		super.mouseUp(with: event)
+
+		guard copiesSelectionAutomatically else {
+			return
+		}
+
+		copySelectionToPasteboard()
+	}
+
+	/// Puts the current selection on the general pasteboard, if there is one worth copying.
+	///
+	/// A selection of nothing but whitespace is ignored: dragging across blank screen is how an
+	/// accidental gesture ends, and it would otherwise wipe whatever the user meant to paste.
+	private func copySelectionToPasteboard() {
+		guard let selection, selection.active else {
+			lastAutoCopiedSelection = nil
+			return
+		}
+
+		let text = selection.getSelectedText()
+
+		guard
+			!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+			text != lastAutoCopiedSelection
+		else {
+			return
+		}
+
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setString(text, forType: .string)
+		lastAutoCopiedSelection = text
+	}
+
 	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
 	override public func dataReceived(slice: ArraySlice<UInt8>) {
 		super.dataReceived(slice: slice)
