@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 import GitCore
+import GitHosting
 import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
@@ -215,6 +216,46 @@ struct RepositoryListRefreshTests {
 		await store.receive { isHeaderStatusFetch($0, groupId: "/repos/alpha") }
 
 		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.header.unpushedCommitCount == 2)
+		await store.finish()
+	}
+
+	@Test("terminal ⌘R re-fetches the opened repo's PR status onto its row")
+	func terminalRefreshPropagatesPullRequestStatus() async {
+		// The PR/MR badge in the terminal toolbar renders the row's `prUrl`/`prState` through the
+		// same scoped store as the push count above — and the row only re-reads them as part of
+		// its status fetch's fan-out, so the whole path is: ⌘R → row refresh → status → PR fetch.
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha-one")
+		store.dependencies[GitClient.self].getCurrentBranch = { _ in
+			GitPorcelainStatus(parsing: """
+			# branch.head feature-one
+			# branch.upstream origin/feature-one
+			# branch.ab +0 -0
+			""")
+		}
+		store.dependencies[GitClient.self].getOriginRemote = { _ in
+			GitRemote(host: "github.com", owner: "o", repo: "r")
+		}
+		store.dependencies[PullRequestClient.self].fetchDetails = { _, _ in
+			PullRequestDetails(
+				url: "https://github.com/o/r/pull/1",
+				state: .ready,
+				provider: .github
+			)
+		}
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
+		]))
+		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.worktrees[id: "/repos/alpha-one"]?.prUrl == nil)
+
+		await store.send(.terminalLayout(.refreshActiveRepoRequested))
+		await store.receive { isWorktreePullRequestFetch($0, groupId: "/repos/alpha", worktreeId: "/repos/alpha-one") }
+
+		let row = store.state.repositoryGroups[id: "/repos/alpha"]?.worktrees[id: "/repos/alpha-one"]
+		#expect(row?.prUrl == "https://github.com/o/r/pull/1")
+		#expect(row?.prState == .ready)
 		await store.finish()
 	}
 
@@ -433,6 +474,22 @@ struct RepositoryListRefreshTests {
 			case let .repositoryGroups(.element(
 				id: id,
 				action: .worktrees(.element(id: rowId, action: .refresh))
+			)) = action
+		else {
+			return false
+		}
+		return id == groupId && rowId == worktreeId
+	}
+
+	private func isWorktreePullRequestFetch(
+		_ action: RepositoryListReducer.Action,
+		groupId: String,
+		worktreeId: String
+	) -> Bool {
+		guard
+			case let .repositoryGroups(.element(
+				id: id,
+				action: .worktrees(.element(id: rowId, action: .didFetchPullRequest))
 			)) = action
 		else {
 			return false
