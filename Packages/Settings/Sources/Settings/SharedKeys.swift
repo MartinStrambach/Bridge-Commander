@@ -38,6 +38,16 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var terminalCopyOnSelect: Self {
 		appStorage("terminalCopyOnSelect")
 	}
+
+	/// Whether the built-in terminal forwards mouse events (clicks, wheel) to the running program
+	/// when that program asks for them. On by default, matching Terminal.app: without it a TUI
+	/// such as lazygit or vim never learns where the pointer is, so on the alternate screen the
+	/// wheel degrades into bare arrow keys that always move the focused pane rather than the one
+	/// under the cursor. Turn it off to keep plain click-drag text selection in those programs
+	/// (⇧-drag selects regardless).
+	static var terminalMouseReporting: Self {
+		appStorage("terminalMouseReporting")
+	}
 }
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalThemeSelection> {

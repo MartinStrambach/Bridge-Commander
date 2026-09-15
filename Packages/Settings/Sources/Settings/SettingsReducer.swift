@@ -75,6 +75,9 @@ public struct SettingsReducer {
 		@Shared(.terminalCopyOnSelect)
 		public var terminalCopyOnSelect = false
 
+		@Shared(.terminalMouseReporting)
+		public var terminalMouseReporting = true
+
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
 
@@ -120,6 +123,7 @@ public struct SettingsReducer {
 		case setTuistRunMode(TuistRunMode)
 		case setTerminalColorTheme(TerminalThemeSelection)
 		case setTerminalCopyOnSelect(Bool)
+		case setTerminalMouseReporting(Bool)
 		case importFromTerminalAppButtonTapped
 		case profileFilesSelected([URL])
 		case profilesImported([TerminalProfile])
@@ -382,6 +386,10 @@ public struct SettingsReducer {
 
 			case let .setTerminalCopyOnSelect(value):
 				state.$terminalCopyOnSelect.withLock { $0 = value }
+				return .none
+
+			case let .setTerminalMouseReporting(value):
+				state.$terminalMouseReporting.withLock { $0 = value }
 				return .none
 
 			case .importFromTerminalAppButtonTapped:

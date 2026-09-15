@@ -46,6 +46,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("mouse reporting is on until the user turns it off")
+	func terminalMouseReportingDefaultsToOn() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalMouseReporting == true)
+
+		await store.send(.setTerminalMouseReporting(false)) {
+			$0.terminalMouseReporting = false
+		}
+		await store.send(.setTerminalMouseReporting(true)) {
+			$0.terminalMouseReporting = true
+		}
+	}
+
 	// MARK: - Group YouTrack base URL trimming
 
 	@Test("setGroupYouTrackBaseURL trims surrounding whitespace and newlines")
