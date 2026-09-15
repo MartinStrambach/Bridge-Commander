@@ -31,6 +31,10 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let backgroundColor: NSColor
 	/// The 16 ANSI colors of an imported profile, or `nil` for SwiftTerm's default palette.
 	public let ansiPalette: [NSColor]?
+	/// An imported profile's caret color, or `nil` for SwiftTerm's default.
+	public let cursorColor: NSColor?
+	/// An imported profile's selection background, or `nil` for SwiftTerm's default.
+	public let selectionColor: NSColor?
 	public let copyOnSelect: Bool
 	public let mouseReporting: Bool
 	/// The font every pane renders with. Resolved by the caller — the family and its point size are
@@ -45,6 +49,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		foregroundColor: NSColor,
 		backgroundColor: NSColor,
 		ansiPalette: [NSColor]? = nil,
+		cursorColor: NSColor? = nil,
+		selectionColor: NSColor? = nil,
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
 		font: NSFont,
@@ -56,6 +62,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.foregroundColor = foregroundColor
 		self.backgroundColor = backgroundColor
 		self.ansiPalette = ansiPalette
+		self.cursorColor = cursorColor
+		self.selectionColor = selectionColor
 		self.copyOnSelect = copyOnSelect
 		self.mouseReporting = mouseReporting
 		self.font = font
@@ -98,6 +106,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					foregroundColor: foregroundColor,
 					backgroundColor: backgroundColor,
 					ansiPalette: ansiPalette,
+					cursorColor: cursorColor,
+					selectionColor: selectionColor,
 					processDelegate: delegate,
 					onStatusChange: onStatusChange
 				)

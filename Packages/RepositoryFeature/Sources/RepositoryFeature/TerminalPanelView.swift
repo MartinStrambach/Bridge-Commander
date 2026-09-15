@@ -337,6 +337,8 @@ struct TerminalPanelView: View {
 				foregroundColor: resolvedTheme.foreground,
 				backgroundColor: resolvedTheme.background,
 				ansiPalette: resolvedTheme.ansiPalette,
+				cursorColor: resolvedTheme.cursor,
+				selectionColor: resolvedTheme.selection,
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
 				font: terminalFont,

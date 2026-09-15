@@ -217,6 +217,10 @@ public struct SettingsView: View {
 					.help("This profile defines no ANSI colors, so the default 16-color palette is used.")
 			}
 
+			if let font = profile.font {
+				profileFontBadge(font)
+			}
+
 			Spacer()
 
 			Button {
@@ -227,6 +231,21 @@ public struct SettingsView: View {
 			.buttonStyle(.borderless)
 			.help("Remove profile")
 		}
+	}
+
+	/// The profile's typeface, struck through when it is not installed — Terminal's own profiles
+	/// name faces bundled inside Terminal.app, so this is a common state and not an error.
+	private func profileFontBadge(_ font: TerminalProfileFont) -> some View {
+		let available = font.isAvailable
+		return Text("\(font.name) \(Int(font.size))pt")
+			.font(.caption2)
+			.foregroundColor(.secondary)
+			.strikethrough(!available)
+			.help(
+				available
+					? "Selecting this profile also switches the terminal to this font."
+					: "This font is not installed, so selecting this profile applies the size but keeps your current typeface."
+			)
 	}
 
 	/// Background, foreground and — when the profile has one — its ANSI palette, so the list is

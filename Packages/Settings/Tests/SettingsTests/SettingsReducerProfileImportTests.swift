@@ -186,6 +186,86 @@ struct SettingsReducerProfileImportTests {
 		}
 	}
 
+	// MARK: - Fonts
+
+	@Test("selecting a profile switches the terminal to the font it was saved with")
+	func selectingProfileAdoptsFont() async {
+		var ocean = Self.profile("Ocean")
+		ocean.font = TerminalProfileFont(name: "Menlo-Regular", size: 15)
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.profilesImported([ocean])) {
+			$0.terminalProfiles = [ocean]
+			$0.alert = AlertState {
+				TextState("Profiles Imported")
+			} actions: {
+				ButtonState(role: .cancel) { TextState("OK") }
+			} message: {
+				TextState(SettingsReducer.importSuccessMessage([ocean]))
+			}
+		}
+
+		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
+			$0.terminalColorTheme = .imported(name: "Ocean")
+			$0.terminalFontName = "Menlo-Regular"
+			$0.terminalFontSize = 15
+		}
+	}
+
+	@Test("a font that is not installed leaves the typeface alone, but still applies the size")
+	func unavailableFontAppliesSizeOnly() async {
+		var ocean = Self.profile("Ocean")
+		// Bundled inside Terminal.app: storing this name would drop the terminal onto the
+		// system face, and the picker lists only installed families, so it would show nothing.
+		ocean.font = TerminalProfileFont(name: "SFMonoTerminal-Regular", size: 12)
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.profilesImported([ocean])) {
+			$0.terminalProfiles = [ocean]
+			$0.alert = AlertState {
+				TextState("Profiles Imported")
+			} actions: {
+				ButtonState(role: .cancel) { TextState("OK") }
+			} message: {
+				TextState(SettingsReducer.importSuccessMessage([ocean]))
+			}
+		}
+
+		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
+			$0.terminalColorTheme = .imported(name: "Ocean")
+			$0.terminalFontSize = 12
+		}
+		#expect(store.state.terminalFontName == TerminalFontFamily.systemDefault)
+	}
+
+	@Test("a profile without a font, and a built-in theme, leave the font settings untouched")
+	func selectionWithoutFontKeepsSettings() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setTerminalFontName("Menlo-Regular")) { $0.terminalFontName = "Menlo-Regular" }
+		await store.send(.setTerminalFontSize(20)) { $0.terminalFontSize = 20 }
+		await store.send(.profilesImported([Self.profile("Ocean")])) {
+			$0.terminalProfiles = [Self.profile("Ocean")]
+			$0.alert = AlertState {
+				TextState("Profiles Imported")
+			} actions: {
+				ButtonState(role: .cancel) { TextState("OK") }
+			} message: {
+				TextState(SettingsReducer.importSuccessMessage([Self.profile("Ocean")]))
+			}
+		}
+
+		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
+			$0.terminalColorTheme = .imported(name: "Ocean")
+		}
+		await store.send(.setTerminalColorTheme(.builtIn(.dracula))) {
+			$0.terminalColorTheme = .builtIn(.dracula)
+		}
+	}
+
 	// MARK: - Messaging
 
 	@Test("the success message calls out profiles that carry no ANSI palette")
@@ -203,5 +283,26 @@ struct SettingsReducerProfileImportTests {
 		#expect(mixed.hasPrefix("Imported 2 profiles."))
 		#expect(mixed.contains("“Basic”"))
 		#expect(!mixed.contains("“Ocean” defines"))
+	}
+
+	@Test("the success message names a font that cannot be loaded, rather than dropping it quietly")
+	func successMessageMentionsUnavailableFonts() {
+		var missing = Self.profile("Clear Dark", ansi: TerminalProfile.fixtureAnsi())
+		missing.font = TerminalProfileFont(name: "SFMonoTerminal-Regular", size: 12)
+		var installed = Self.profile("Ocean", ansi: TerminalProfile.fixtureAnsi())
+		installed.font = TerminalProfileFont(name: "Menlo-Regular", size: 12)
+
+		#expect(
+			SettingsReducer.importSuccessMessage([missing])
+				== "Imported “Clear Dark”. “Clear Dark” uses SFMonoTerminal-Regular, "
+				+ "which is not installed, so selecting it keeps your current typeface."
+		)
+		#expect(SettingsReducer.importSuccessMessage([installed]) == "Imported “Ocean”.")
+
+		var other = Self.profile("Clear Light", ansi: TerminalProfile.fixtureAnsi())
+		other.font = TerminalProfileFont(name: "SFMonoTerminal-Bold", size: 12)
+		let both = SettingsReducer.importSuccessMessage([missing, other, installed])
+		#expect(both.contains("“Clear Dark” and “Clear Light” use fonts that are not installed"))
+		#expect(!both.contains("Ocean"))
 	}
 }

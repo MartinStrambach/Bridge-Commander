@@ -172,6 +172,28 @@ public struct SettingsReducer {
 		return merged.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
 	}
 
+	/// Adopts an imported profile's font when that profile is picked as the terminal's theme.
+	///
+	/// A font is part of a profile in Terminal.app, so selecting one here brings its typeface
+	/// along with its colors — which does mean a theme switch overwrites a font chosen by hand in
+	/// this pane, the same way it overwrites the colors.
+	///
+	/// The size applies whenever the profile carries one, because any point size is renderable.
+	/// The family only applies when it still resolves: several of Terminal's profiles name faces
+	/// bundled inside Terminal.app that `NSFont(name:size:)` cannot find, and storing one would
+	/// silently drop the terminal onto the system face — worse than leaving the current typeface
+	/// alone, and invisible in the font picker, which only lists installed families.
+	static func adoptProfileFont(for selection: TerminalThemeSelection, in state: inout State) {
+		guard
+			case let .imported(name) = selection,
+			let font = state.terminalProfiles.first(where: { $0.name == name })?.font
+		else { return }
+
+		state.$terminalFontSize.withLock { $0 = TerminalFontSize.clamped(font.size) }
+		guard font.isAvailable else { return }
+		state.$terminalFontName.withLock { $0 = font.name }
+	}
+
 	/// Runs a verification call and condenses its result into displayable state.
 	private static func tokenTestOutcome(
 		provider: PullRequestProvider,
@@ -191,18 +213,42 @@ public struct SettingsReducer {
 	}
 
 	static func importSuccessMessage(_ profiles: [TerminalProfile]) -> String {
-		let withoutPalette = profiles.filter { $0.ansi == nil }.map(\.name)
 		let summary = profiles.count == 1
 			? "Imported “\(profiles[0].name)”."
 			: "Imported \(profiles.count) profiles."
 
-		guard !withoutPalette.isEmpty else { return summary }
-		// Worth saying out loud: several of Apple's bundled profiles set only a text and
-		// background color, so picking one changes less than the user might expect.
-		let names = withoutPalette.map { "“\($0)”" }.formatted(.list(type: .and))
-		let verb = withoutPalette.count == 1 ? "defines" : "define"
-		return summary
-			+ " \(names) \(verb) no ANSI colors, so the default palette is used for those."
+		return ([summary] + [missingPaletteNote(profiles), unavailableFontNote(profiles)].compactMap(\.self))
+			.joined(separator: " ")
+	}
+
+	/// Worth saying out loud: several of Apple's bundled profiles set only a text and background
+	/// color, so picking one changes less than the user might expect.
+	private static func missingPaletteNote(_ profiles: [TerminalProfile]) -> String? {
+		let names = profiles.filter { $0.ansi == nil }.map(\.name)
+		guard !names.isEmpty else { return nil }
+
+		let quoted = names.map { "“\($0)”" }.formatted(.list(type: .and))
+		let verb = names.count == 1 ? "defines" : "define"
+		return "\(quoted) \(verb) no ANSI colors, so the default palette is used for those."
+	}
+
+	/// Reported here rather than left to be noticed at selection: Terminal's profiles routinely
+	/// name faces bundled inside Terminal.app, which this app cannot load, and silently keeping
+	/// the current typeface would otherwise look like the font simply was not imported.
+	private static func unavailableFontNote(_ profiles: [TerminalProfile]) -> String? {
+		let affected = profiles.compactMap { profile -> (profile: String, font: String)? in
+			guard let font = profile.font, !font.isAvailable else { return nil }
+			return (profile.name, font.name)
+		}
+		guard let first = affected.first else { return nil }
+
+		guard affected.count == 1 else {
+			let quoted = affected.map { "“\($0.profile)”" }.formatted(.list(type: .and))
+			return "\(quoted) use fonts that are not installed, "
+				+ "so selecting them keeps your current typeface."
+		}
+		return "“\(first.profile)” uses \(first.font), which is not installed, "
+			+ "so selecting it keeps your current typeface."
 	}
 
 	private static func tokenTestFailureMessage(for error: Error, provider: PullRequestProvider) -> String {
@@ -390,6 +436,7 @@ public struct SettingsReducer {
 
 			case let .setTerminalColorTheme(theme):
 				state.$terminalColorTheme.withLock { $0 = theme }
+				Self.adoptProfileFont(for: theme, in: &state)
 				return .none
 
 			case let .setTerminalCopyOnSelect(value):
