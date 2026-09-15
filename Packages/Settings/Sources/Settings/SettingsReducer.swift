@@ -78,6 +78,9 @@ public struct SettingsReducer {
 		@Shared(.terminalMouseReporting)
 		public var terminalMouseReporting = true
 
+		@Shared(.terminalFontSize)
+		public var terminalFontSize = TerminalFontSize.default
+
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
 
@@ -124,6 +127,7 @@ public struct SettingsReducer {
 		case setTerminalColorTheme(TerminalThemeSelection)
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
+		case setTerminalFontSize(Double)
 		case importFromTerminalAppButtonTapped
 		case profileFilesSelected([URL])
 		case profilesImported([TerminalProfile])
@@ -390,6 +394,10 @@ public struct SettingsReducer {
 
 			case let .setTerminalMouseReporting(value):
 				state.$terminalMouseReporting.withLock { $0 = value }
+				return .none
+
+			case let .setTerminalFontSize(size):
+				state.$terminalFontSize.withLock { $0 = TerminalFontSize.clamped(size) }
 				return .none
 
 			case .importFromTerminalAppButtonTapped:

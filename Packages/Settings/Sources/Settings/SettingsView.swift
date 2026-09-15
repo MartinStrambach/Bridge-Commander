@@ -263,6 +263,29 @@ public struct SettingsView: View {
 			Text("Built-in Terminal")
 				.font(.headline)
 
+			HStack(spacing: 8) {
+				Stepper(
+					value: $store.terminalFontSize.sending(\.setTerminalFontSize),
+					in: TerminalFontSize.minimum ... TerminalFontSize.maximum,
+					step: TerminalFontSize.step
+				) {
+					Text("Font size: \(Int(store.terminalFontSize)) pt")
+				}
+
+				// A sample rather than a live preview of a pane: the size is what changes, and
+				// seeing it at the monospaced face is enough to pick one without applying it.
+				Text("Aa")
+					.font(.system(size: store.terminalFontSize, design: .monospaced))
+					.foregroundColor(.secondary)
+					.frame(minWidth: 40, alignment: .leading)
+			}
+
+			Text(
+				"Applies to open terminals right away. Also available as ⌘+ and ⌘− while a terminal is focused, with ⌘0 back to \(Int(TerminalFontSize.default)) pt."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
 			Toggle(
 				"Copy selected text automatically",
 				isOn: $store.terminalCopyOnSelect.sending(\.setTerminalCopyOnSelect)

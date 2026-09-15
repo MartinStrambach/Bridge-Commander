@@ -17,6 +17,14 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 	}
 }
 
+public extension SharedReaderKey where Self == AppStorageKey<Double> {
+	/// Point size of the built-in terminal's font. See `TerminalFontSize` for the range and the
+	/// default, which is the size SwiftTerm used before the setting existed.
+	static var terminalFontSize: Self {
+		appStorage("terminalFontSize")
+	}
+}
+
 public extension SharedReaderKey where Self == AppStorageKey<PeriodicRefreshInterval> {
 	static var periodicRefreshInterval: Self {
 		appStorage("periodicRefreshInterval")

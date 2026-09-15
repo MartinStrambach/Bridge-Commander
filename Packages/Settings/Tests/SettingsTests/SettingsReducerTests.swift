@@ -61,6 +61,24 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("font size starts at the size the terminal already used and is clamped when set")
+	func terminalFontSizeDefaultsAndClamps() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalFontSize == TerminalFontSize.default)
+
+		await store.send(.setTerminalFontSize(16)) {
+			$0.terminalFontSize = 16
+		}
+		await store.send(.setTerminalFontSize(999)) {
+			$0.terminalFontSize = TerminalFontSize.maximum
+		}
+		await store.send(.setTerminalFontSize(0)) {
+			$0.terminalFontSize = TerminalFontSize.minimum
+		}
+	}
+
 	// MARK: - Group YouTrack base URL trimming
 
 	@Test("setGroupYouTrackBaseURL trims surrounding whitespace and newlines")
