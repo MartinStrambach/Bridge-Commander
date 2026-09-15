@@ -579,10 +579,27 @@ struct RepositoryListReducer {
 				}
 
 				let repoPath = session.repositoryPath
+				// Where the closed tab sat among the repo's tabs, in the order the tab bar lays
+				// them out — `terminalSessions` is in insertion order and the bar filters it.
+				let closedIndex = state.terminalSessions
+					.filter { $0.repositoryPath == repoPath }
+					.firstIndex { $0.id == sessionId }
 				state.terminalSessions.remove(id: sessionId)
 				if state.terminalLayout?.activeSessionId == sessionId {
-					if let next = state.terminalSessions.first(where: { $0.repositoryPath == repoPath }) {
-						state.terminalLayout?.activeSessionId = next.id
+					// Move to the tab that took the closed one's place — the one to its right —
+					// or to the new last tab when the closed one was rightmost. Activating the
+					// repo's first tab instead threw the user back to tab 1 on every close.
+					let remaining = Array(state.terminalSessions.filter { $0.repositoryPath == repoPath })
+					let neighbour: TerminalSession? = if remaining.isEmpty {
+						nil
+					} else if let closedIndex {
+						remaining[min(closedIndex, remaining.count - 1)]
+					} else {
+						remaining.first
+					}
+
+					if let neighbour {
+						state.terminalLayout?.activeSessionId = neighbour.id
 					}
 					else if let next = state.terminalSessions.first {
 						state.terminalLayout?.activeRepositoryPath = next.repositoryPath
@@ -593,6 +610,22 @@ struct RepositoryListReducer {
 					}
 				}
 				return .none
+
+			// ⌘W names no session: it closes whichever tab is active at the moment it fires.
+			// The shortcut used to hand `killTab` the id captured when its hidden button was
+			// laid out, and SwiftUI kept firing that first closure — so the second press asked
+			// to kill a session that had already left the state, hit the guard above and did
+			// nothing, for good. Resolving the target here cannot go stale.
+			// Only fires while the repo has a second tab to fall back to; closing the last one
+			// stays the window's job, as the shortcut is not registered for it.
+			case .terminalLayout(.closeActiveTabRequested):
+				guard let sessionId = state.terminalLayout?.activeSessionId,
+					  let session = state.terminalSessions[id: sessionId],
+					  state.terminalSessions.count(where: { $0.repositoryPath == session.repositoryPath }) > 1
+				else {
+					return .none
+				}
+				return .send(.terminalLayout(.killTab(sessionId: sessionId)))
 
 			case let .terminalLayout(.killRepo(repositoryPath)):
 				let toRemove = state.terminalSessions

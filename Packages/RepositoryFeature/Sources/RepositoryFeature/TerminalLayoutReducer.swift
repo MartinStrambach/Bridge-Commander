@@ -42,6 +42,7 @@ struct TerminalLayoutReducer {
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
 		case killTab(sessionId: UUID)
+		case closeActiveTabRequested
 		case killRepo(repositoryPath: String)
 		case newTabRequested
 		case selectTab(sessionId: UUID)
@@ -155,6 +156,10 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .killTab:
+				// Forwarded up to RepositoryListReducer
+				return .none
+
+			case .closeActiveTabRequested:
 				// Forwarded up to RepositoryListReducer
 				return .none
 
