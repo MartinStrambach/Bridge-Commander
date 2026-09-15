@@ -29,6 +29,23 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Built-in terminal
+
+	@Test("copy-on-select is off until the user turns it on")
+	func terminalCopyOnSelectDefaultsToOff() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalCopyOnSelect == false)
+
+		await store.send(.setTerminalCopyOnSelect(true)) {
+			$0.terminalCopyOnSelect = true
+		}
+		await store.send(.setTerminalCopyOnSelect(false)) {
+			$0.terminalCopyOnSelect = false
+		}
+	}
+
 	// MARK: - Group YouTrack base URL trimming
 
 	@Test("setGroupYouTrackBaseURL trims surrounding whitespace and newlines")

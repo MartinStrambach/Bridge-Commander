@@ -35,6 +35,7 @@ public struct SettingsView: View {
 					claudeCodeBehaviorSection
 				}
 				terminalColorThemeSection
+				builtInTerminalSection
 				androidStudioPathSection
 				worktreeOptionsSection
 				repositoryGroupsSection
@@ -124,6 +125,28 @@ public struct SettingsView: View {
 			}
 			.pickerStyle(.segmented)
 		}
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
+	private var builtInTerminalSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Built-in Terminal")
+				.font(.headline)
+
+			Toggle(
+				"Copy selected text automatically",
+				isOn: $store.terminalCopyOnSelect.sending(\.setTerminalCopyOnSelect)
+			)
+
+			Text(
+				"Highlighting text with the mouse puts it on the clipboard right away, which replaces whatever you copied elsewhere. With this off, use ⌘C to copy the selection."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+		}
+		.frame(maxWidth: .infinity, alignment: .leading)
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
 		.cornerRadius(8)

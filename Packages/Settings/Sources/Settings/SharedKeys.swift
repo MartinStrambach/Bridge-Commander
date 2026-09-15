@@ -31,6 +31,13 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var deleteDerivedDataOnWorktreeDelete: Self {
 		appStorage("deleteDerivedDataOnWorktreeDelete")
 	}
+
+	/// Whether highlighting text in the built-in terminal copies it to the pasteboard right away.
+	/// Off by default: every highlight would otherwise overwrite whatever the user had copied
+	/// elsewhere and meant to paste into the terminal.
+	static var terminalCopyOnSelect: Self {
+		appStorage("terminalCopyOnSelect")
+	}
 }
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalColorTheme> {

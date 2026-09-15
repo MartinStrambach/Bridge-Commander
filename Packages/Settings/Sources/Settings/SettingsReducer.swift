@@ -69,6 +69,9 @@ public struct SettingsReducer {
 		@Shared(.terminalColorTheme)
 		public var terminalColorTheme = TerminalColorTheme.basicDark
 
+		@Shared(.terminalCopyOnSelect)
+		public var terminalCopyOnSelect = false
+
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
 
@@ -113,6 +116,7 @@ public struct SettingsReducer {
 		case setMisePath(String)
 		case setTuistRunMode(TuistRunMode)
 		case setTerminalColorTheme(TerminalColorTheme)
+		case setTerminalCopyOnSelect(Bool)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -325,6 +329,10 @@ public struct SettingsReducer {
 
 			case let .setTerminalColorTheme(theme):
 				state.$terminalColorTheme.withLock { $0 = theme }
+				return .none
+
+			case let .setTerminalCopyOnSelect(value):
+				state.$terminalCopyOnSelect.withLock { $0 = value }
 				return .none
 
 			case .clearTokenButtonTapped:
