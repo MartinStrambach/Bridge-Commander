@@ -394,7 +394,7 @@
 			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture.git";
 			requirement = {
 				kind = exactVersion;
-				version = 1.26.1;
+				version = 1.26.2;
 			};
 			traits = (
 				ComposableArchitecture2DeprecationOverloads,

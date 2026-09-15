@@ -1,5 +1,5 @@
 {
-  "originHash" : "43cc79e04b138d91eccf0c85a04ea9da19cd811ce860eb35cc9f1c2ac923c99a",
+  "originHash" : "cc850cc2ed4ddbad23e4a0434f99a1502179f8987e25e50f6627349350507554",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-case-paths",
       "state" : {
-        "revision" : "794f4b0a9cf32042592388d014f6a1ea987d323a",
-        "version" : "1.9.1"
+        "revision" : "cb4cba6a8a46a86db0d37dbe09935ead6b24c91a",
+        "version" : "1.10.0"
       }
     },
     {
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-composable-architecture.git",
       "state" : {
-        "revision" : "ead11e04e5011c437722c1990d22f80d87056978",
-        "version" : "1.26.1"
+        "revision" : "377da4061db10d26337a71bb279c506bb951f50f",
+        "version" : "1.26.2"
       }
     },
     {
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-custom-dump",
       "state" : {
-        "revision" : "e9c34fd54ece006b491a0e6d23fe9a6024b9a828",
-        "version" : "1.7.0"
+        "revision" : "4fb9e7cbb4b8f5a7354005db39447f570d6b3e19",
+        "version" : "1.7.3"
       }
     },
     {
@@ -78,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "9381ab822de01c4e9f3a7eb8eabb6ae808febed3",
-        "version" : "1.15.0"
+        "revision" : "5e0815746534ccaa9e20588ea35d3bb2cb27bab8",
+        "version" : "1.17.0"
       }
     },
     {
@@ -89,6 +89,15 @@
       "state" : {
         "revision" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-issue-reporting",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
+      "state" : {
+        "revision" : "71c7c9a761d1ca6ed4ccb6ced040fe1c1a39e8e7",
+        "version" : "2.1.0"
       }
     },
     {
@@ -141,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "8f6abcf4c8950e2679d5b2fee4ca284fd7c34886",
-        "version" : "1.11.0"
+        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
+        "version" : "1.13.1"
       }
     }
   ],
