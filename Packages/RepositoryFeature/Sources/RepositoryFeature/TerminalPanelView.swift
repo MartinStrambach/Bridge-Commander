@@ -364,7 +364,9 @@ struct TerminalPanelView: View {
 		}
 	}
 
-	/// ⌘W closes the active tab, but only while the repo has more than one. On the last tab the
+	/// ⌘W closes the active tab. On the repo's last tab it is registered only while *another*
+	/// repository still has terminals running — there the reducer asks whether to close just this
+	/// tab or quit the app, since either reading is plausible. With nothing else running the
 	/// shortcut is deliberately left unregistered so it falls back to the standard File ▸ Close
 	/// and shuts the window — a view-level `keyboardShortcut` wins over the menu item (same as
 	/// ⌘A in `RepositoryListView`), so registering it unconditionally would strand the window.
@@ -376,7 +378,8 @@ struct TerminalPanelView: View {
 	/// active tab instead, and hangs the shell up via `killSessions(notIn:)` in `RepositoryListView`.
 	@ViewBuilder
 	private func closeTabShortcut(repoSessions: some Collection<TerminalSession>) -> some View {
-		if repoSessions.count > 1,
+		let hasOtherRepoSessions = sessions.contains { $0.repositoryPath != store.activeRepositoryPath }
+		if repoSessions.count > 1 || hasOtherRepoSessions,
 		   let activeSessionId,
 		   repoSessions.contains(where: { $0.id == activeSessionId }),
 		   store.stagingDetail == nil,

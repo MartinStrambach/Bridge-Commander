@@ -136,30 +136,86 @@ struct TerminalCloseActiveTabTests {
 		}
 	}
 
-	@Test("leaves the last tab of the repo alone, so ⌘W closes the window instead")
-	func ignoresTheLastTab() async {
-		let only = TerminalSession(repositoryPath: "/repos/alpha")
-		let store = TestStore(
-			initialState: makeState(
-				sessions: [only],
-				activeRepositoryPath: "/repos/alpha",
-				activeSessionId: only.id
-			)
-		) {
-			RepositoryListReducer()
-		}
-
-		await store.send(.terminalLayout(.closeActiveTabRequested))
-	}
-
-	@Test("counts only the opened repo's tabs, not another repo's")
-	func ignoresTabsOfAnotherRepository() async {
+	// The last tab of a repo while another repo still has terminals: closing it could mean
+	// "leave this repo" or "I'm done, quit" — the two readings are far enough apart to ask.
+	@Test("asks on the repo's last tab while another repo still has terminals")
+	func asksBeforeClosingTheLastTab() async {
 		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
 		let beta = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
 		let betaSecond = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 2)
 		let store = TestStore(
 			initialState: makeState(
 				sessions: [alpha, beta, betaSecond],
+				activeRepositoryPath: "/repos/alpha",
+				activeSessionId: alpha.id
+			)
+		) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.terminalLayout(.closeActiveTabRequested)) {
+			// Two sessions, but one other repository — the question counts repositories.
+			$0.alert = RepositoryListReducer.lastTabAlert(sessionId: alpha.id, otherRepoCount: 1)
+		}
+	}
+
+	@Test("counts the other repositories, not their tabs")
+	func countsOtherRepositories() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		let gamma = TerminalSession(repositoryPath: "/repos/gamma")
+		let store = TestStore(
+			initialState: makeState(
+				sessions: [alpha, beta, gamma],
+				activeRepositoryPath: "/repos/alpha",
+				activeSessionId: alpha.id
+			)
+		) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.terminalLayout(.closeActiveTabRequested)) {
+			$0.alert = RepositoryListReducer.lastTabAlert(sessionId: alpha.id, otherRepoCount: 2)
+		}
+	}
+
+	@Test("\"Close Tab Only\" closes the last tab and moves to the other repo's session")
+	func closeTabOnlyClosesTheLastTab() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		let store = TestStore(
+			initialState: makeState(
+				sessions: [alpha, beta],
+				activeRepositoryPath: "/repos/alpha",
+				activeSessionId: alpha.id
+			)
+		) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.terminalLayout(.closeActiveTabRequested)) {
+			$0.alert = RepositoryListReducer.lastTabAlert(sessionId: alpha.id, otherRepoCount: 1)
+		}
+		await store.send(.alert(.presented(.closeLastTabConfirmed(sessionId: alpha.id)))) {
+			$0.alert = nil
+		}
+		await store.receive(\.terminalLayout.killTab) {
+			$0.terminalSessions.remove(id: alpha.id)
+			$0.terminalLayout?.activeRepositoryPath = "/repos/beta"
+			$0.terminalLayout?.activeSessionId = beta.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = nil
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/beta"] = beta.id
+		}
+	}
+
+	// Nothing else is running, so ⌘W is not registered for this case at all and the question would
+	// never be asked — the standard File ▸ Close closes the window instead.
+	@Test("leaves the last tab of the only repo alone, so ⌘W closes the window instead")
+	func ignoresTheLastTabOfTheOnlyRepository() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let store = TestStore(
+			initialState: makeState(
+				sessions: [alpha],
 				activeRepositoryPath: "/repos/alpha",
 				activeSessionId: alpha.id
 			)

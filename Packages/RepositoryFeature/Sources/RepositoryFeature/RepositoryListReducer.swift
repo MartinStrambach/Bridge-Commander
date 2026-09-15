@@ -1,3 +1,4 @@
+import AppKit
 import ComposableArchitecture
 import Foundation
 import GitCore
@@ -108,6 +109,34 @@ struct RepositoryListReducer {
 
 		enum Alert: Equatable {
 			case dismiss
+			case closeLastTabConfirmed(sessionId: UUID)
+			case quitAppConfirmed
+		}
+	}
+
+	/// The ⌘W-on-the-last-tab question. Built here rather than inline so the test that pins it
+	/// asserts against the same value the reducer stores.
+	static func lastTabAlert(sessionId: UUID, otherRepoCount: Int) -> AlertState<Action.Alert> {
+		AlertState {
+			TextState("Close Bridge Commander?")
+		} actions: {
+			ButtonState(role: .destructive, action: .quitAppConfirmed) {
+				TextState("Quit Bridge Commander")
+			}
+			ButtonState(action: .closeLastTabConfirmed(sessionId: sessionId)) {
+				TextState("Close Tab Only")
+			}
+			ButtonState(role: .cancel, action: .dismiss) {
+				TextState("Cancel")
+			}
+		} message: {
+			TextState(
+				"""
+				This is the last terminal tab for this repository, but \
+				\(otherRepoCount) other \
+				\(otherRepoCount == 1 ? "repository has" : "repositories have") terminals running.
+				"""
+			)
 		}
 	}
 
@@ -635,16 +664,33 @@ struct RepositoryListReducer {
 			// laid out, and SwiftUI kept firing that first closure — so the second press asked
 			// to kill a session that had already left the state, hit the guard above and did
 			// nothing, for good. Resolving the target here cannot go stale.
-			// Only fires while the repo has a second tab to fall back to; closing the last one
-			// stays the window's job, as the shortcut is not registered for it.
+			// While the repo has a second tab to fall back to this just closes the active one.
+			// On the repo's *last* tab it asks first, because the two things the user could mean
+			// are far apart: leave this repo (other repos still have terminals running, and the
+			// panel would switch to one of them) or quit the app outright, which is what ⌘W does
+			// on the last tab when nothing else is running — the shortcut is left unregistered
+			// there so it falls through to File ▸ Close.
 			case .terminalLayout(.closeActiveTabRequested):
 				guard let sessionId = state.terminalLayout?.activeSessionId,
-					  let session = state.terminalSessions[id: sessionId],
-					  state.terminalSessions.count(where: { $0.repositoryPath == session.repositoryPath }) > 1
+					  let session = state.terminalSessions[id: sessionId]
 				else {
 					return .none
 				}
-				return .send(.terminalLayout(.killTab(sessionId: sessionId)))
+				let repoPath = session.repositoryPath
+				if state.terminalSessions.count(where: { $0.repositoryPath == repoPath }) > 1 {
+					return .send(.terminalLayout(.killTab(sessionId: sessionId)))
+				}
+				let otherRepoCount = Set(
+					state.terminalSessions
+						.map(\.repositoryPath)
+						.filter { $0 != repoPath }
+				).count
+				guard otherRepoCount > 0 else {
+					// No other terminals to keep the app open for — leave it to File ▸ Close.
+					return .none
+				}
+				state.alert = Self.lastTabAlert(sessionId: sessionId, otherRepoCount: otherRepoCount)
+				return .none
 
 			case let .terminalLayout(.killRepo(repositoryPath)):
 				let toRemove = state.terminalSessions
@@ -790,6 +836,18 @@ struct RepositoryListReducer {
 				return .none
 
 			// MARK: - Alert
+
+			case let .alert(.presented(.closeLastTabConfirmed(sessionId))):
+				return .send(.terminalLayout(.killTab(sessionId: sessionId)))
+
+			case .alert(.presented(.quitAppConfirmed)):
+				// The sessions are hung up by `killSessions(notIn:)` on the way out; terminate
+				// runs on the main actor because it drives AppKit's own shutdown sequence.
+				return .run { _ in
+					await MainActor.run {
+						NSApplication.shared.terminate(nil)
+					}
+				}
 
 			case .alert:
 				return .none
