@@ -23,6 +23,9 @@ struct TerminalPanelView: View {
 	@Shared(.terminalCopyOnSelect)
 	private var terminalCopyOnSelect = false
 
+	@Shared(.terminalMouseReporting)
+	private var terminalMouseReporting = true
+
 	/// The selected theme looked up against the imported profiles.
 	private var resolvedTheme: ResolvedTerminalTheme {
 		terminalColorTheme.resolve(profiles: terminalProfiles)
@@ -319,6 +322,7 @@ struct TerminalPanelView: View {
 				backgroundColor: resolvedTheme.background,
 				ansiPalette: resolvedTheme.ansiPalette,
 				copyOnSelect: terminalCopyOnSelect,
+				mouseReporting: terminalMouseReporting,
 				onStatusChange: onStatusChange
 			)
 

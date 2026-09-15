@@ -32,6 +32,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	/// The 16 ANSI colors of an imported profile, or `nil` for SwiftTerm's default palette.
 	public let ansiPalette: [NSColor]?
 	public let copyOnSelect: Bool
+	public let mouseReporting: Bool
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
 	public init(
@@ -42,6 +43,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		backgroundColor: NSColor,
 		ansiPalette: [NSColor]? = nil,
 		copyOnSelect: Bool,
+		mouseReporting: Bool,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
@@ -51,6 +53,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.backgroundColor = backgroundColor
 		self.ansiPalette = ansiPalette
 		self.copyOnSelect = copyOnSelect
+		self.mouseReporting = mouseReporting
 		self.onStatusChange = onStatusChange
 	}
 
@@ -97,6 +100,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 				// setting, and the colors only look like they don't because a new theme is
 				// documented as applying to newly opened terminals.
 				termView.copiesSelectionAutomatically = copyOnSelect
+				termView.allowMouseReporting = mouseReporting
 
 				if termView.superview !== nsView {
 					termView.translatesAutoresizingMaskIntoConstraints = false

@@ -273,6 +273,17 @@ public struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+
+			Toggle(
+				"Send mouse events to terminal apps",
+				isOn: $store.terminalMouseReporting.sending(\.setTerminalMouseReporting)
+			)
+
+			Text(
+				"Programs like lazygit and vim can then see clicks and the scroll wheel, so scrolling affects the pane under the pointer instead of the focused one. With this off they never get the pointer position. Hold ⇧ while dragging to select text either way."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
 		}
 		.frame(maxWidth: .infinity, alignment: .leading)
 		.padding()

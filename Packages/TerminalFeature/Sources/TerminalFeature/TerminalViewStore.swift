@@ -54,7 +54,6 @@ public final class TerminalViewStore {
 		if let ansiPalette, let colors = TerminalPaletteMapping.swiftTermColors(from: ansiPalette) {
 			terminalView.installColors(colors)
 		}
-		terminalView.allowMouseReporting = false
 		terminalView.terminal.changeHistorySize(3000)
 
 		terminalView.processDelegate = processDelegate
