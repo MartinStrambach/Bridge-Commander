@@ -29,6 +29,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let activeSessionId: UUID?
 	public let foregroundColor: NSColor
 	public let backgroundColor: NSColor
+	/// The 16 ANSI colors of an imported profile, or `nil` for SwiftTerm's default palette.
+	public let ansiPalette: [NSColor]?
 	public let copyOnSelect: Bool
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
@@ -38,6 +40,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		activeSessionId: UUID?,
 		foregroundColor: NSColor,
 		backgroundColor: NSColor,
+		ansiPalette: [NSColor]? = nil,
 		copyOnSelect: Bool,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) {
@@ -46,6 +49,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.activeSessionId = activeSessionId
 		self.foregroundColor = foregroundColor
 		self.backgroundColor = backgroundColor
+		self.ansiPalette = ansiPalette
 		self.copyOnSelect = copyOnSelect
 		self.onStatusChange = onStatusChange
 	}
@@ -85,6 +89,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					for: session,
 					foregroundColor: foregroundColor,
 					backgroundColor: backgroundColor,
+					ansiPalette: ansiPalette,
 					processDelegate: delegate,
 					onStatusChange: onStatusChange
 				)

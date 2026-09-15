@@ -15,10 +15,18 @@ struct TerminalPanelView: View {
 	var store: StoreOf<TerminalLayoutReducer>
 
 	@Shared(.terminalColorTheme)
-	private var terminalColorTheme = TerminalColorTheme.basicDark
+	private var terminalColorTheme = TerminalThemeSelection.builtIn(.basicDark)
+
+	@Shared(.terminalProfiles)
+	private var terminalProfiles: [TerminalProfile] = []
 
 	@Shared(.terminalCopyOnSelect)
 	private var terminalCopyOnSelect = false
+
+	/// The selected theme looked up against the imported profiles.
+	private var resolvedTheme: ResolvedTerminalTheme {
+		terminalColorTheme.resolve(profiles: terminalProfiles)
+	}
 
 	/// The opened repository's row. A store rather than a plain value so the counts and badges
 	/// in the toolbar track the row's refreshes — see `SidebarRepositoryRowView.store`.
@@ -307,8 +315,9 @@ struct TerminalPanelView: View {
 				terminalViewStore: terminalViewStore,
 				sessions: sessions,
 				activeSessionId: activeSessionId,
-				foregroundColor: terminalColorTheme.foregroundColor,
-				backgroundColor: terminalColorTheme.backgroundColor,
+				foregroundColor: resolvedTheme.foreground,
+				backgroundColor: resolvedTheme.background,
+				ansiPalette: resolvedTheme.ansiPalette,
 				copyOnSelect: terminalCopyOnSelect,
 				onStatusChange: onStatusChange
 			)

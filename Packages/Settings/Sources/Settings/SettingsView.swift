@@ -2,10 +2,14 @@ import ComposableArchitecture
 import GitHosting
 import SwiftUI
 import ToolsIntegration
+import UniformTypeIdentifiers
 
 public struct SettingsView: View {
 	@Bindable
 	public var store: StoreOf<SettingsReducer>
+
+	@State
+	private var isImportingProfileFiles = false
 
 	public init(store: StoreOf<SettingsReducer>) {
 		self.store = store
@@ -119,15 +123,139 @@ public struct SettingsView: View {
 				"Color Theme",
 				selection: $store.terminalColorTheme.sending(\.setTerminalColorTheme)
 			) {
-				ForEach(TerminalColorTheme.allCases, id: \.self) { theme in
-					Text(theme.displayName).tag(theme)
+				Section("Built-in") {
+					ForEach(TerminalColorTheme.allCases, id: \.self) { theme in
+						Text(theme.displayName).tag(TerminalThemeSelection.builtIn(theme))
+					}
+				}
+				if !store.terminalProfiles.isEmpty {
+					Section("Imported") {
+						ForEach(store.terminalProfiles) { profile in
+							Text(profile.name).tag(TerminalThemeSelection.imported(name: profile.name))
+						}
+					}
 				}
 			}
-			.pickerStyle(.segmented)
+			.pickerStyle(.menu)
+
+			Divider()
+				.padding(.vertical, 2)
+
+			Text("Import Terminal.app Profiles")
+				.font(.subheadline)
+				.fontWeight(.semibold)
+
+			Text(
+				"Bring in the color schemes from Terminal.app, or from a .terminal file exported via Terminal → Settings → Profiles → Export. A profile that defines no ANSI colors keeps the default palette."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
+			HStack(spacing: 8) {
+				Button {
+					store.send(.importFromTerminalAppButtonTapped)
+				} label: {
+					Label("Import from Terminal.app", systemImage: "square.and.arrow.down.on.square")
+				}
+				.buttonStyle(.bordered)
+
+				Button {
+					isImportingProfileFiles = true
+				} label: {
+					Label("Import File…", systemImage: "folder")
+				}
+				.buttonStyle(.bordered)
+			}
+
+			if !store.terminalProfiles.isEmpty {
+				VStack(alignment: .leading, spacing: 6) {
+					ForEach(store.terminalProfiles) { profile in
+						importedProfileRow(profile)
+					}
+				}
+				.padding(.top, 4)
+			}
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
 		.cornerRadius(8)
+		.fileImporter(
+			isPresented: $isImportingProfileFiles,
+			allowedContentTypes: Self.terminalProfileContentTypes,
+			allowsMultipleSelection: true
+		) { result in
+			switch result {
+			case let .success(urls):
+				store.send(.profileFilesSelected(urls))
+
+			case let .failure(error):
+				store.send(.profileImportFailed(message: error.localizedDescription))
+			}
+		}
+	}
+
+	/// `.terminal` has no registered system type, so it is built from the extension; the
+	/// property-list type is allowed alongside it because that is what the files actually are.
+	private static let terminalProfileContentTypes: [UTType] = [
+		UTType(filenameExtension: "terminal"),
+		.propertyList,
+	]
+	.compactMap(\.self)
+
+	private func importedProfileRow(_ profile: TerminalProfile) -> some View {
+		HStack(spacing: 8) {
+			profileSwatch(profile)
+
+			Text(profile.name)
+				.font(.caption)
+
+			if profile.ansi == nil {
+				Text("default palette")
+					.font(.caption2)
+					.foregroundColor(.secondary)
+					.help("This profile defines no ANSI colors, so the default 16-color palette is used.")
+			}
+
+			Spacer()
+
+			Button {
+				store.send(.deleteProfileButtonTapped(name: profile.name))
+			} label: {
+				Image(systemName: "minus.circle")
+			}
+			.buttonStyle(.borderless)
+			.help("Remove profile")
+		}
+	}
+
+	/// Background, foreground and — when the profile has one — its ANSI palette, so the list is
+	/// scannable without applying each theme in turn.
+	private func profileSwatch(_ profile: TerminalProfile) -> some View {
+		HStack(spacing: 1) {
+			if let ansi = profile.ansi {
+				ForEach(Array(ansi.enumerated()), id: \.offset) { _, color in
+					Rectangle()
+						.fill(Color(color.nsColor))
+						.frame(width: 5, height: 14)
+				}
+			}
+			else {
+				// Without a palette there would be nothing but padding to look at, so show the
+				// text color against the background — which is all this profile actually sets.
+				Text("Aa")
+					.font(.system(size: 10, design: .monospaced))
+					.foregroundColor(Color(profile.foreground.nsColor))
+					.frame(width: 94, height: 14)
+			}
+		}
+		.padding(2)
+		.background(Color(profile.background.nsColor))
+		.overlay(
+			RoundedRectangle(cornerRadius: 3)
+				.stroke(Color(profile.foreground.nsColor).opacity(0.5), lineWidth: 1)
+		)
+		.clipShape(RoundedRectangle(cornerRadius: 3))
+		.frame(width: 100, alignment: .leading)
 	}
 
 	private var builtInTerminalSection: some View {

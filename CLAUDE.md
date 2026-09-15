@@ -58,6 +58,9 @@ Packages/
 - `SettingsReducer` + `SettingsView`
 - `AppSettings` keys via `SharedKeys`
 - `PeriodicRefreshInterval`, `TerminalColorTheme`, `TerminalOpeningBehavior`, `TuistCacheType`, `RepoGroupSettings`
+- `TerminalProfileImporter` / `TerminalProfile` / `TerminalProfileImportClient` — import Terminal.app color profiles, either from an exported `.terminal` file or from Terminal's own settings in one tap. Both sources are property lists holding the same profile dictionaries; the colors in them are **`NSKeyedArchiver`-encoded `NSColor` objects**, not hex strings, so each one is `NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self,…)` then `usingColorSpace(.sRGB)`. Converting first is not optional: Apple's bundled profiles store colors in Generic RGB *and* Generic Gray, and reading `redComponent` off a gray color raises. Alpha is dropped (the "Clear" profiles are 0.85–0.95 translucent; SwiftTerm's color type has no alpha). Reading Terminal's settings goes through `UserDefaults.persistentDomain(forName: "com.apple.Terminal")` — it sees unflushed values, and works only because the app is unsandboxed
+- Only 2 of Terminal's 12 bundled profiles define ANSI colors at all ("Basic", "Pro" and most others set just a text and background color), so `TerminalProfile.ansi` is optional rather than defaulted — `nil` means "keep SwiftTerm's default palette", which *is* Terminal's. A palette is all sixteen or none: SwiftTerm ignores any array that is not exactly 16 long, so a partial one would silently leave the previous theme's colors installed
+- `TerminalThemeSelection` — `.builtIn` or `.imported`. A built-in case's raw value is the bare `TerminalColorTheme` raw value, unprefixed, so the setting this type replaced migrates itself: an existing `"dracula"` in user defaults still reads back as `.builtIn(.dracula)`. `resolve(profiles:)` falls back to the default theme when a selection names a deleted profile
 
 **ToolsIntegration** — external tool services
 - `ServiceProtocols` — protocol definitions
@@ -74,6 +77,7 @@ Packages/
 
 **TerminalFeature** — embedded terminal panel
 - `TerminalSession`, `TerminalViewStore`, `TerminalViewRepresentable`, `TerminalStatusDotView`
+- `TerminalPaletteMapping` — `[NSColor]` → `[SwiftTerm.Color]` for `installColors`. The palette crosses the package boundary as `NSColor`, not as a Settings type, so TerminalFeature stays free of a Settings dependency (the same split the fg/bg colors already use); RepositoryFeature resolves the theme and passes the result down. SwiftTerm has no support for reading any theme file format — `Color.parse` handles X11 specs (`#rrggbb`, `rgb:r/g/b`) only, so the plist decoding lives in Settings. `installColors` derives all 256 colors from the 16 plus the terminal's background and foreground, so it must run *after* `nativeForegroundColor`/`nativeBackgroundColor` are set
 - Killing a session must go through `TerminalViewStore.killSession` / `killSessions(notIn:)`, which hang up the shell with SIGHUP. Dropping the pane alone does not close the PTY (SwiftTerm leaves a read pending), and SwiftTerm's `terminate()` sends SIGTERM, which interactive zsh ignores. `RepositoryListView` calls `killSessions(notIn:)` whenever the session ids in state change, so reducer-side removals (worktree deletion) hang up too.
 
 **StagingFeature** — file staging panel

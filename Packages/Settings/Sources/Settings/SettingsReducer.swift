@@ -67,7 +67,10 @@ public struct SettingsReducer {
 		public var worktreeBasePath = "../worktrees"
 
 		@Shared(.terminalColorTheme)
-		public var terminalColorTheme = TerminalColorTheme.basicDark
+		public var terminalColorTheme = TerminalThemeSelection.builtIn(.basicDark)
+
+		@Shared(.terminalProfiles)
+		public var terminalProfiles: [TerminalProfile] = []
 
 		@Shared(.terminalCopyOnSelect)
 		public var terminalCopyOnSelect = false
@@ -115,8 +118,13 @@ public struct SettingsReducer {
 		case setWorktreeBasePath(String)
 		case setMisePath(String)
 		case setTuistRunMode(TuistRunMode)
-		case setTerminalColorTheme(TerminalColorTheme)
+		case setTerminalColorTheme(TerminalThemeSelection)
 		case setTerminalCopyOnSelect(Bool)
+		case importFromTerminalAppButtonTapped
+		case profileFilesSelected([URL])
+		case profilesImported([TerminalProfile])
+		case profileImportFailed(message: String)
+		case deleteProfileButtonTapped(name: String)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -129,7 +137,28 @@ public struct SettingsReducer {
 	@Dependency(TokenVerificationClient.self)
 	private var tokenVerification
 
+	@Dependency(TerminalProfileImportClient.self)
+	private var profileImport
+
 	public init() {}
+
+	/// Adds imported profiles to the stored list, replacing any with the same name.
+	///
+	/// Replacing rather than uniquifying is what makes re-importing after an edit in Terminal.app
+	/// behave: the name is the profile's identity on both sides, so "Solarized Dark" imported
+	/// twice is one updated profile, not "Solarized Dark" and "Solarized Dark 2".
+	static func merge(_ imported: [TerminalProfile], into existing: [TerminalProfile]) -> [TerminalProfile] {
+		var merged = existing
+		for profile in imported {
+			if let index = merged.firstIndex(where: { $0.name == profile.name }) {
+				merged[index] = profile
+			}
+			else {
+				merged.append(profile)
+			}
+		}
+		return merged.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+	}
 
 	/// Runs a verification call and condenses its result into displayable state.
 	private static func tokenTestOutcome(
@@ -142,6 +171,26 @@ public struct SettingsReducer {
 		catch {
 			return .failure(message: tokenTestFailureMessage(for: error, provider: provider))
 		}
+	}
+
+	/// Import errors carry their own wording; anything else falls back to the system message.
+	static func importFailureMessage(_ error: Error) -> String {
+		(error as? TerminalProfileImportError)?.errorDescription ?? error.localizedDescription
+	}
+
+	static func importSuccessMessage(_ profiles: [TerminalProfile]) -> String {
+		let withoutPalette = profiles.filter { $0.ansi == nil }.map(\.name)
+		let summary = profiles.count == 1
+			? "Imported “\(profiles[0].name)”."
+			: "Imported \(profiles.count) profiles."
+
+		guard !withoutPalette.isEmpty else { return summary }
+		// Worth saying out loud: several of Apple's bundled profiles set only a text and
+		// background color, so picking one changes less than the user might expect.
+		let names = withoutPalette.map { "“\($0)”" }.formatted(.list(type: .and))
+		let verb = withoutPalette.count == 1 ? "defines" : "define"
+		return summary
+			+ " \(names) \(verb) no ANSI colors, so the default palette is used for those."
 	}
 
 	private static func tokenTestFailureMessage(for error: Error, provider: PullRequestProvider) -> String {
@@ -333,6 +382,68 @@ public struct SettingsReducer {
 
 			case let .setTerminalCopyOnSelect(value):
 				state.$terminalCopyOnSelect.withLock { $0 = value }
+				return .none
+
+			case .importFromTerminalAppButtonTapped:
+				return .run { [profileImport] send in
+					do {
+						await send(.profilesImported(try profileImport.importFromTerminalApp()))
+					}
+					catch {
+						await send(.profileImportFailed(message: Self.importFailureMessage(error)))
+					}
+				}
+
+			case let .profileFilesSelected(urls):
+				return .run { [profileImport] send in
+					var imported: [TerminalProfile] = []
+					// One bad file does not abandon the rest of a multi-file selection; the
+					// first failure is reported once everything importable is in.
+					var failure: String?
+					for url in urls {
+						do {
+							imported.append(contentsOf: try profileImport.importFromFile(url))
+						}
+						catch {
+							failure = failure ?? Self.importFailureMessage(error)
+						}
+					}
+					if !imported.isEmpty {
+						await send(.profilesImported(imported))
+					}
+					if let failure {
+						await send(.profileImportFailed(message: failure))
+					}
+				}
+
+			case let .profilesImported(profiles):
+				state.$terminalProfiles.withLock { $0 = Self.merge(profiles, into: $0) }
+				state.alert = AlertState {
+					TextState("Profiles Imported")
+				} actions: {
+					ButtonState(role: .cancel) { TextState("OK") }
+				} message: {
+					TextState(Self.importSuccessMessage(profiles))
+				}
+				return .none
+
+			case let .profileImportFailed(message):
+				state.alert = AlertState {
+					TextState("Import Failed")
+				} actions: {
+					ButtonState(role: .cancel) { TextState("OK") }
+				} message: {
+					TextState(message)
+				}
+				return .none
+
+			case let .deleteProfileButtonTapped(name):
+				state.$terminalProfiles.withLock { $0.removeAll { $0.name == name } }
+				// Leaving the selection pointing at a deleted profile would still render (it
+				// falls back), but the picker would show nothing selected.
+				if state.terminalColorTheme == .imported(name: name) {
+					state.$terminalColorTheme.withLock { $0 = .builtIn(.basicDark) }
+				}
 				return .none
 
 			case .clearTokenButtonTapped:

@@ -22,10 +22,14 @@ public final class TerminalViewStore {
 	/// Returns the existing terminal view for a session, or creates and starts a new one.
 	/// The caller is responsible for creating `processDelegate` and keeping a strong reference
 	/// to it (e.g. in an NSViewRepresentable Coordinator).
+	/// - Parameter ansiPalette: The 16 ANSI colors to install, or `nil` to keep SwiftTerm's
+	///   default palette — which is Terminal.app's own, so an imported profile that defines no
+	///   ANSI colors renders the same way Terminal renders it.
 	public func view(
 		for session: TerminalSession,
 		foregroundColor: NSColor,
 		backgroundColor: NSColor,
+		ansiPalette: [NSColor]? = nil,
 		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) -> ClaudeAwareTerminalView {
@@ -45,6 +49,11 @@ public final class TerminalViewStore {
 
 		terminalView.nativeForegroundColor = foregroundColor
 		terminalView.nativeBackgroundColor = backgroundColor
+		// Installed after the fg/bg assignment: SwiftTerm derives the extended 256-color
+		// palette from the 16 ANSI colors plus the terminal's own background and foreground.
+		if let ansiPalette, let colors = TerminalPaletteMapping.swiftTermColors(from: ansiPalette) {
+			terminalView.installColors(colors)
+		}
 		terminalView.allowMouseReporting = false
 		terminalView.terminal.changeHistorySize(3000)
 

@@ -40,9 +40,19 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	}
 }
 
-public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalColorTheme> {
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalThemeSelection> {
+	/// Keeps the key the built-in-only setting used: a `TerminalThemeSelection` raw value for a
+	/// built-in theme is the bare theme name, so a previously stored theme migrates by itself.
 	static var terminalColorTheme: Self {
 		appStorage("terminalColorTheme")
+	}
+}
+
+public nonisolated extension SharedReaderKey where Self == FileStorageKey<[TerminalProfile]> {
+	/// Color profiles imported from Terminal.app. On disk rather than in user defaults: a
+	/// profile carries 20 colors, and defaults are the wrong place for payloads that size.
+	static var terminalProfiles: Self {
+		.fileStorage(applicationSupportURL(name: "terminalProfiles.json"))
 	}
 }
 
