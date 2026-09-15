@@ -19,10 +19,18 @@ struct TerminalCloseActiveTabTests {
 	) -> RepositoryListReducer.State {
 		var state = RepositoryListReducer.State()
 		state.terminalSessions = IdentifiedArray(uniqueElements: sessions)
-		state.terminalLayout = TerminalLayoutReducer.State(
-			activeRepositoryPath: activeRepositoryPath,
-			activeSessionId: activeSessionId
-		)
+		var layout = TerminalLayoutReducer.State()
+		// Through `activate` where possible, so the per-repository tab memory holds what it
+		// would in the app — closing a tab has to leave that memory pointing at the tab that
+		// took over, not at the closed one.
+		if let activeSessionId, let session = state.terminalSessions[id: activeSessionId] {
+			layout.activate(session)
+		}
+		else {
+			layout.activeRepositoryPath = activeRepositoryPath
+			layout.activeSessionId = activeSessionId
+		}
+		state.terminalLayout = layout
 		return state
 	}
 
@@ -45,6 +53,7 @@ struct TerminalCloseActiveTabTests {
 		await store.receive(\.terminalLayout.killTab) {
 			$0.terminalSessions.remove(id: first.id)
 			$0.terminalLayout?.activeSessionId = second.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = second.id
 		}
 
 		// The regression: a second press has to reach the tab that is active *now*.
@@ -52,6 +61,7 @@ struct TerminalCloseActiveTabTests {
 		await store.receive(\.terminalLayout.killTab) {
 			$0.terminalSessions.remove(id: second.id)
 			$0.terminalLayout?.activeSessionId = third.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = third.id
 		}
 	}
 
@@ -74,6 +84,7 @@ struct TerminalCloseActiveTabTests {
 		await store.receive(\.terminalLayout.killTab) {
 			$0.terminalSessions.remove(id: second.id)
 			$0.terminalLayout?.activeSessionId = third.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = third.id
 		}
 	}
 
@@ -96,6 +107,7 @@ struct TerminalCloseActiveTabTests {
 		await store.receive(\.terminalLayout.killTab) {
 			$0.terminalSessions.remove(id: third.id)
 			$0.terminalLayout?.activeSessionId = second.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = second.id
 		}
 	}
 
@@ -120,6 +132,7 @@ struct TerminalCloseActiveTabTests {
 		await store.receive(\.terminalLayout.killTab) {
 			$0.terminalSessions.remove(id: first.id)
 			$0.terminalLayout?.activeSessionId = second.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = second.id
 		}
 	}
 

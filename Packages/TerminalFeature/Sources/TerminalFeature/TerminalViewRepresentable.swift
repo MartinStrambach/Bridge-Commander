@@ -29,6 +29,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let activeSessionId: UUID?
 	public let foregroundColor: NSColor
 	public let backgroundColor: NSColor
+	public let copyOnSelect: Bool
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
 	public init(
@@ -37,6 +38,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		activeSessionId: UUID?,
 		foregroundColor: NSColor,
 		backgroundColor: NSColor,
+		copyOnSelect: Bool,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
@@ -44,6 +46,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.activeSessionId = activeSessionId
 		self.foregroundColor = foregroundColor
 		self.backgroundColor = backgroundColor
+		self.copyOnSelect = copyOnSelect
 		self.onStatusChange = onStatusChange
 	}
 
@@ -85,6 +88,11 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					processDelegate: delegate,
 					onStatusChange: onStatusChange
 				)
+				// Assigned on every update, not at creation: panes outlive a change to the
+				// setting, and the colors only look like they don't because a new theme is
+				// documented as applying to newly opened terminals.
+				termView.copiesSelectionAutomatically = copyOnSelect
+
 				if termView.superview !== nsView {
 					termView.translatesAutoresizingMaskIntoConstraints = false
 					nsView.addSubview(termView)

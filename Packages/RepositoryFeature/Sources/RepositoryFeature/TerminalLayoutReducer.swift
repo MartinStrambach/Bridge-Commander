@@ -16,6 +16,24 @@ struct TerminalLayoutReducer {
 		var isPushing = false
 		var isFinishingMerge = false
 
+		/// The tab that was last shown for each repository, so switching away from a
+		/// repository and back reopens the tab the user left, not its first tab.
+		var lastActiveSessionByRepo: [String: UUID] = [:]
+
+		/// Show `session` and remember it as the repository's current tab.
+		mutating func activate(_ session: TerminalSession) {
+			activeRepositoryPath = session.repositoryPath
+			activeSessionId = session.id
+			lastActiveSessionByRepo[session.repositoryPath] = session.id
+		}
+
+		/// Drop a closed tab from the per-repository memory so it is never restored.
+		mutating func forget(sessionId: UUID, repositoryPath: String) {
+			if lastActiveSessionByRepo[repositoryPath] == sessionId {
+				lastActiveSessionByRepo[repositoryPath] = nil
+			}
+		}
+
 		var xcodeButton: XcodeProjectButtonReducer.State?
 		var androidStudioButton: AndroidStudioButtonReducer.State?
 		var webButton: WebButtonReducer.State?

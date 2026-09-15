@@ -17,6 +17,9 @@ struct TerminalPanelView: View {
 	@Shared(.terminalColorTheme)
 	private var terminalColorTheme = TerminalColorTheme.basicDark
 
+	@Shared(.terminalCopyOnSelect)
+	private var terminalCopyOnSelect = false
+
 	/// The opened repository's row. A store rather than a plain value so the counts and badges
 	/// in the toolbar track the row's refreshes — see `SidebarRepositoryRowView.store`.
 	let activeRowStore: StoreOf<RepositoryRowReducer>?
@@ -306,6 +309,7 @@ struct TerminalPanelView: View {
 				activeSessionId: activeSessionId,
 				foregroundColor: terminalColorTheme.foregroundColor,
 				backgroundColor: terminalColorTheme.backgroundColor,
+				copyOnSelect: terminalCopyOnSelect,
 				onStatusChange: onStatusChange
 			)
 

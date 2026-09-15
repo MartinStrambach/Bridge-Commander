@@ -77,6 +77,53 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		kill(process.shellPid, SIGHUP)
 	}
 
+	/// Whether highlighting text with the mouse copies it to the pasteboard without a ⌘C.
+	///
+	/// Off unless the user turns it on in Settings: every highlight replaces whatever they copied
+	/// elsewhere, which is a surprise for anyone who selects text just to read it. The pane is
+	/// reused across changes to the setting, so this is a var the view layer keeps in sync rather
+	/// than an init parameter.
+	public var copiesSelectionAutomatically = false
+
+	/// Where copy-on-select writes. The general pasteboard in the app; tests hand it a private one
+	/// so they don't clobber the clipboard of whoever is running them.
+	var selectionPasteboard: NSPasteboard = .general
+
+	/// Holds the rules for what a finished gesture is worth copying.
+	private var copyDecider = SelectionCopyDecider()
+
+	/// Copies whatever the mouse just highlighted, the way X11 and most terminal emulators do.
+	///
+	/// This runs after `super`, since SwiftTerm finishes the gesture there: the drag's last extension
+	/// lands in `mouseDragged`, and word/line selection for a double or triple click in `mouseDown`.
+	/// The overridden method has early returns (an opened link, a mouse-reporting app swallowing the
+	/// release), but none of them leave a new selection behind, so reading it here is enough.
+	override public func mouseUp(with event: NSEvent) {
+		super.mouseUp(with: event)
+
+		guard copiesSelectionAutomatically else {
+			return
+		}
+
+		copySelectionToPasteboard()
+	}
+
+	/// Puts the current selection on the pasteboard, if `SelectionCopyDecider` judges there is one
+	/// worth copying. Internal so a test can drive it without synthesizing a mouse event.
+	func copySelectionToPasteboard() {
+		guard
+			let text = copyDecider.textToCopy(
+				selectionIsActive: selection?.active == true,
+				selectedText: selection?.getSelectedText() ?? ""
+			)
+		else {
+			return
+		}
+
+		selectionPasteboard.clearContents()
+		selectionPasteboard.setString(text, forType: .string)
+	}
+
 	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
 	override public func dataReceived(slice: ArraySlice<UInt8>) {
 		super.dataReceived(slice: slice)
