@@ -28,8 +28,8 @@ public enum TerminalProfileImportError: Error, Equatable, LocalizedError {
 /// out of Terminal's own preferences.
 ///
 /// Both sources are property lists holding the same profile dictionaries, and in both the
-/// colors are `NSKeyedArchiver`-encoded `NSColor` objects rather than strings — SwiftTerm has
-/// no support for any of this, so the decoding lives here.
+/// colors are `NSKeyedArchiver`-encoded `NSColor` objects rather than strings (and the font an
+/// encoded `NSFont`) — SwiftTerm has no support for any of this, so the decoding lives here.
 public nonisolated enum TerminalProfileImporter {
 	static let terminalBundleIdentifier = "com.apple.Terminal"
 
@@ -154,7 +154,8 @@ public nonisolated enum TerminalProfileImporter {
 			// All sixteen or none: a half-decoded palette would leave the remaining slots on
 			// the previous theme's colors, which reads as a rendering bug rather than a
 			// half-imported profile.
-			ansi: ansi.count == TerminalProfile.ansiColorCount ? ansi : nil
+			ansi: ansi.count == TerminalProfile.ansiColorCount ? ansi : nil,
+			font: font(from: dict["Font"])
 		)
 	}
 
@@ -166,5 +167,58 @@ public nonisolated enum TerminalProfileImporter {
 			return nil
 		}
 		return TerminalRGB(unarchived)
+	}
+
+	/// Decodes a profile's `NSKeyedArchiver`-encoded `NSFont` value.
+	///
+	/// Deliberately *not* `unarchivedObject(ofClass: NSFont.self,…)`, the way the colors next door
+	/// are decoded: when the archived face is not installed, AppKit substitutes one and the
+	/// original name is gone. Terminal's own profiles name `SFMonoTerminal-Regular`, which ships
+	/// inside Terminal.app and is not registered system-wide, so unarchiving it yields
+	/// `.AppleSystemUIFont` — a *proportional* face — and the import would quietly record the
+	/// wrong font instead of an unavailable one. Substituting a stand-in class for `NSFont` reads
+	/// the archived `NSName` and `NSSize` exactly as Terminal wrote them, leaving the question of
+	/// whether that face exists to whoever applies it.
+	static func font(from value: Any?) -> TerminalProfileFont? {
+		guard let data = value as? Data,
+		      let unarchiver = try? NSKeyedUnarchiver(forReadingFrom: data)
+		else {
+			return nil
+		}
+		unarchiver.requiresSecureCoding = false
+		// Anything but an archived font under this key — a color, a string, a truncated blob —
+		// has to come back as nil rather than raise: the data is whatever was in the plist.
+		unarchiver.decodingFailurePolicy = .setErrorAndReturn
+		unarchiver.setClass(ArchivedFont.self, forClassName: "NSFont")
+
+		guard let archived = unarchiver.decodeObject(
+			of: ArchivedFont.self,
+			forKey: NSKeyedArchiveRootObjectKey
+		),
+			let name = archived.name,
+			!name.isEmpty,
+			archived.size > 0
+		else {
+			return nil
+		}
+		return TerminalProfileFont(name: name, size: archived.size)
+	}
+}
+
+/// Stands in for `NSFont` while reading a profile's archived font, so that the face's name
+/// survives decoding even when nothing on this machine can render it.
+///
+/// See ``TerminalProfileImporter/font(from:)`` for why the real `NSFont` cannot be used.
+final class ArchivedFont: NSObject, NSCoding {
+	let name: String?
+	let size: Double
+
+	init?(coder: NSCoder) {
+		name = coder.decodeObject(of: NSString.self, forKey: "NSName") as String?
+		size = coder.decodeDouble(forKey: "NSSize")
+	}
+
+	func encode(with coder: NSCoder) {
+		// Decode-only: this type exists to read Terminal's archives, never to write one.
 	}
 }

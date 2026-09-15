@@ -3,6 +3,28 @@ import Foundation
 import Testing
 @testable import Settings
 
+/// Encodes what Terminal.app writes under a profile's `Font` key, so a test can name a face that
+/// is not installed — archiving a real `NSFont` cannot, since one cannot be constructed.
+/// Registered under the `NSFont` class name, so the archive is shaped exactly like Terminal's.
+@objc(BCTestFontStub)
+private final class FontStub: NSObject, NSCoding {
+	let name: String
+	let size: Double
+
+	init(name: String, size: Double) {
+		self.name = name
+		self.size = size
+	}
+
+	init?(coder: NSCoder) { return nil }
+
+	func encode(with coder: NSCoder) {
+		coder.encode(name as NSString, forKey: "NSName")
+		coder.encode(size, forKey: "NSSize")
+		coder.encode(16, forKey: "NSfFlags")
+	}
+}
+
 @Suite("TerminalProfileImporter")
 struct TerminalProfileImporterTests {
 
@@ -11,6 +33,17 @@ struct TerminalProfileImporterTests {
 	/// Encodes a color the way Terminal.app stores one: an `NSKeyedArchiver` blob, not a string.
 	static func archived(_ color: NSColor) -> Data {
 		try! NSKeyedArchiver.archivedData(withRootObject: color, requiringSecureCoding: true)
+	}
+
+	/// Encodes a font the way Terminal.app stores one, for any face name — including one that is
+	/// not installed, which is the case the importer exists to survive and which real
+	/// `NSKeyedArchiver.archivedData(withRootObject: NSFont…)` cannot produce.
+	static func archivedFont(name: String, size: Double) -> Data {
+		let archiver = NSKeyedArchiver(requiringSecureCoding: false)
+		archiver.setClassName("NSFont", for: FontStub.self)
+		archiver.encode(FontStub(name: name, size: size), forKey: NSKeyedArchiveRootObjectKey)
+		archiver.finishEncoding()
+		return archiver.encodedData
 	}
 
 	static func profileDictionary(
@@ -148,6 +181,71 @@ struct TerminalProfileImporterTests {
 		#expect(profile.background == TerminalRGB(red: 1, green: 1, blue: 1))
 	}
 
+	// MARK: - Font decoding
+
+	@Test("a profile's font is imported with its name and size")
+	func decodesFont() {
+		var dict = Self.profileDictionary()
+		dict["Font"] = Self.archivedFont(name: "Menlo-Regular", size: 14)
+
+		let profile = try! #require(TerminalProfileImporter.profiles(fromPropertyList: dict).first)
+		#expect(profile.font == TerminalProfileFont(name: "Menlo-Regular", size: 14))
+	}
+
+	@Test("an archive written by AppKit itself decodes the same way")
+	func decodesRealAppKitArchive() throws {
+		// The stub encoder above has to match what Terminal writes; a genuine NSFont archive is
+		// the check that it does.
+		let font = try #require(NSFont(name: "Menlo-Regular", size: 15))
+		var dict = Self.profileDictionary()
+		dict["Font"] = try NSKeyedArchiver.archivedData(
+			withRootObject: font,
+			requiringSecureCoding: true
+		)
+
+		let profile = try #require(TerminalProfileImporter.profiles(fromPropertyList: dict).first)
+		#expect(profile.font == TerminalProfileFont(name: "Menlo-Regular", size: 15))
+	}
+
+	@Test("a font that is not installed keeps its own name instead of AppKit's substitute")
+	func keepsUnavailableFontName() {
+		// Terminal's own profiles name SFMonoTerminal-Regular, which ships inside Terminal.app
+		// and is not registered system-wide. Decoding the archive as an NSFont would substitute
+		// .AppleSystemUIFont — a proportional face — and record that instead.
+		var dict = Self.profileDictionary()
+		dict["Font"] = Self.archivedFont(name: "SFMonoTerminal-Regular", size: 12)
+
+		let font = try! #require(TerminalProfileImporter.profiles(fromPropertyList: dict).first?.font)
+		#expect(font.name == "SFMonoTerminal-Regular")
+		#expect(font.size == 12)
+	}
+
+	@Test("a profile that defines no font imports without one")
+	func noFont() {
+		let profile = try! #require(TerminalProfileImporter.profiles(fromPropertyList: Self.profileDictionary()).first)
+		#expect(profile.font == nil)
+	}
+
+	@Test("a Font value that is not an archived font is ignored")
+	func ignoresNonFontValues() {
+		var dict = Self.profileDictionary()
+		dict["Font"] = "Menlo 12"
+
+		#expect(TerminalProfileImporter.profiles(fromPropertyList: dict).first?.font == nil)
+
+		dict["Font"] = Self.archived(NSColor.red)
+		#expect(TerminalProfileImporter.profiles(fromPropertyList: dict).first?.font == nil)
+	}
+
+	@Test("a font size outside the supported range is clamped, not stored raw")
+	func clampsFontSize() {
+		var dict = Self.profileDictionary()
+		dict["Font"] = Self.archivedFont(name: "Menlo-Regular", size: 96)
+
+		let font = try! #require(TerminalProfileImporter.profiles(fromPropertyList: dict).first?.font)
+		#expect(font.size == TerminalFontSize.maximum)
+	}
+
 	// MARK: - Preferences shape
 
 	@Test("Terminal's preferences domain yields every profile, sorted by name")
@@ -273,10 +371,38 @@ struct TerminalProfileTests {
 
 	@Test("round-trips through JSON, which is how profiles are persisted")
 	func codableRoundTrip() throws {
-		let profile = TerminalProfile.fixture(name: "Ocean", ansi: TerminalProfile.fixtureAnsi())
+		var profile = TerminalProfile.fixture(name: "Ocean", ansi: TerminalProfile.fixtureAnsi())
+		profile.font = TerminalProfileFont(name: "Menlo-Regular", size: 14)
 		let data = try JSONEncoder().encode(profile)
 
 		#expect(try JSONDecoder().decode(TerminalProfile.self, from: data) == profile)
+	}
+
+	@Test("a profile stored before fonts were imported still decodes")
+	func decodesWithoutFont() throws {
+		let json = """
+		{
+			"name": "Ocean",
+			"foreground": {"red": 1, "green": 1, "blue": 1},
+			"background": {"red": 0, "green": 0, "blue": 0}
+		}
+		"""
+
+		#expect(try JSONDecoder().decode(TerminalProfile.self, from: Data(json.utf8)).font == nil)
+	}
+
+	@Test("a font size is clamped to the range the setting supports")
+	func clampsFontSize() {
+		#expect(TerminalProfileFont(name: "Menlo", size: 96).size == TerminalFontSize.maximum)
+		#expect(TerminalProfileFont(name: "Menlo", size: 0).size == TerminalFontSize.minimum)
+	}
+
+	@Test("availability follows whether the face can actually be loaded")
+	func fontAvailability() {
+		#expect(TerminalProfileFont(name: "Menlo-Regular", size: 12).isAvailable)
+		// Ships inside Terminal.app, not registered system-wide.
+		#expect(!TerminalProfileFont(name: "SFMonoTerminal-Regular", size: 12).isAvailable)
+		#expect(!TerminalProfileFont(name: "", size: 12).isAvailable)
 	}
 
 	@Test("out-of-range components are clamped rather than producing an invalid color")

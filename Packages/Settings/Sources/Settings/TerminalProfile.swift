@@ -44,6 +44,33 @@ private extension Double {
 	}
 }
 
+/// The typeface a Terminal.app profile was saved with.
+///
+/// Name and size always arrive together: Terminal stores this as a single archived `NSFont`, so
+/// there is no profile that names a face without a size.
+public struct TerminalProfileFont: Codable, Equatable, Hashable, Sendable {
+	/// The PostScript name `NSFont(name:size:)` takes — what the archive's `NSName` holds, e.g.
+	/// `SFMonoTerminal-Regular`.
+	public var name: String
+	/// Clamped to the range the font-size setting supports, since selecting the profile writes
+	/// straight into it and Terminal allows sizes this app does not.
+	public var size: Double
+
+	public init(name: String, size: Double) {
+		self.name = name
+		self.size = TerminalFontSize.clamped(size)
+	}
+
+	/// Whether the named face is installed, and so can actually be applied.
+	///
+	/// Worth checking at every use rather than once at import: fonts come and go, and Terminal's
+	/// own profiles name faces that ship *inside* Terminal.app and are not registered
+	/// system-wide, so "not installed" is the common case rather than the exotic one.
+	public var isAvailable: Bool {
+		!name.isEmpty && NSFont(name: name, size: size) != nil
+	}
+}
+
 /// A terminal color scheme imported from a Terminal.app profile.
 ///
 /// `ansi` is optional on purpose rather than defaulted at import: several of Apple's bundled
@@ -62,6 +89,8 @@ public struct TerminalProfile: Codable, Equatable, Hashable, Sendable, Identifia
 	public var selection: TerminalRGB?
 	/// Exactly ``ansiColorCount`` colors, or `nil` when the profile defined none.
 	public private(set) var ansi: [TerminalRGB]?
+	/// The profile's typeface, or `nil` when it defined none.
+	public var font: TerminalProfileFont?
 
 	/// The profile name doubles as its identity: Terminal.app keys its own profiles by name,
 	/// so re-importing an edited profile should replace the old one rather than duplicate it.
@@ -73,13 +102,15 @@ public struct TerminalProfile: Codable, Equatable, Hashable, Sendable, Identifia
 		background: TerminalRGB,
 		cursor: TerminalRGB? = nil,
 		selection: TerminalRGB? = nil,
-		ansi: [TerminalRGB]? = nil
+		ansi: [TerminalRGB]? = nil,
+		font: TerminalProfileFont? = nil
 	) {
 		self.name = name
 		self.foreground = foreground
 		self.background = background
 		self.cursor = cursor
 		self.selection = selection
+		self.font = font
 		// A partial palette is worse than none: SwiftTerm ignores any array that is not
 		// exactly 16 long, so a short one would silently leave the previous colors installed.
 		self.ansi = ansi?.count == Self.ansiColorCount ? ansi : nil
@@ -93,7 +124,8 @@ public struct TerminalProfile: Codable, Equatable, Hashable, Sendable, Identifia
 			background: container.decode(TerminalRGB.self, forKey: .background),
 			cursor: container.decodeIfPresent(TerminalRGB.self, forKey: .cursor),
 			selection: container.decodeIfPresent(TerminalRGB.self, forKey: .selection),
-			ansi: container.decodeIfPresent([TerminalRGB].self, forKey: .ansi)
+			ansi: container.decodeIfPresent([TerminalRGB].self, forKey: .ansi),
+			font: container.decodeIfPresent(TerminalProfileFont.self, forKey: .font)
 		)
 	}
 }

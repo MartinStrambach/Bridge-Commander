@@ -46,11 +46,24 @@ public struct ResolvedTerminalTheme: Equatable {
 	public var background: NSColor
 	/// The 16 ANSI colors, or `nil` to leave SwiftTerm's default palette in place.
 	public var ansiPalette: [NSColor]?
+	/// The caret color, or `nil` for SwiftTerm's default. Most Terminal profiles set no
+	/// `CursorColor` at all, so `nil` is the common case rather than the exception.
+	public var cursor: NSColor?
+	/// The selection background, or `nil` for SwiftTerm's default teal.
+	public var selection: NSColor?
 
-	public init(foreground: NSColor, background: NSColor, ansiPalette: [NSColor]? = nil) {
+	public init(
+		foreground: NSColor,
+		background: NSColor,
+		ansiPalette: [NSColor]? = nil,
+		cursor: NSColor? = nil,
+		selection: NSColor? = nil
+	) {
 		self.foreground = foreground
 		self.background = background
 		self.ansiPalette = ansiPalette
+		self.cursor = cursor
+		self.selection = selection
 	}
 }
 
@@ -76,7 +89,9 @@ public extension TerminalThemeSelection {
 			return ResolvedTerminalTheme(
 				foreground: profile.foreground.nsColor,
 				background: profile.background.nsColor,
-				ansiPalette: profile.ansi?.map(\.nsColor)
+				ansiPalette: profile.ansi?.map(\.nsColor),
+				cursor: profile.cursor?.nsColor,
+				selection: profile.selection?.nsColor
 			)
 		}
 	}

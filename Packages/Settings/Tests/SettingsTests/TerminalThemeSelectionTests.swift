@@ -57,6 +57,37 @@ struct TerminalThemeSelectionTests {
 		#expect(TerminalRGB(resolved.background) == profile.background)
 	}
 
+	@Test("an imported profile's cursor and selection colors reach the resolved theme")
+	func resolvesImportedCursorAndSelection() {
+		var profile = TerminalProfile.fixture(name: "Clear Dark")
+		profile.cursor = TerminalRGB(red: 1, green: 0.5, blue: 0)
+		profile.selection = TerminalRGB(red: 0.154, green: 0.237, blue: 0.297)
+
+		let resolved = TerminalThemeSelection.imported(name: "Clear Dark").resolve(profiles: [profile])
+
+		#expect(resolved.cursor.flatMap(TerminalRGB.init) == profile.cursor)
+		#expect(resolved.selection.flatMap(TerminalRGB.init) == profile.selection)
+	}
+
+	@Test("a profile that sets no cursor or selection color keeps SwiftTerm's defaults")
+	func resolvesImportedWithoutCursorOrSelection() {
+		// The usual case: of Terminal's bundled profiles, most set a selection color and none
+		// set a cursor color. `nil` has to mean "leave it alone", not "use black".
+		let resolved = TerminalThemeSelection.imported(name: "Ocean")
+			.resolve(profiles: [TerminalProfile.fixture(name: "Ocean")])
+
+		#expect(resolved.cursor == nil)
+		#expect(resolved.selection == nil)
+	}
+
+	@Test("a built-in theme sets no cursor or selection color")
+	func builtInLeavesCursorAndSelectionAlone() {
+		let resolved = TerminalThemeSelection.builtIn(.nord).resolve(profiles: [])
+
+		#expect(resolved.cursor == nil)
+		#expect(resolved.selection == nil)
+	}
+
 	@Test("a selection naming a deleted profile falls back to the default theme")
 	func resolvesMissingProfile() {
 		let resolved = TerminalThemeSelection.imported(name: "Gone").resolve(profiles: [])

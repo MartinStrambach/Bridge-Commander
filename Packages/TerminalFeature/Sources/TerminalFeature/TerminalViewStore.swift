@@ -25,11 +25,16 @@ public final class TerminalViewStore {
 	/// - Parameter ansiPalette: The 16 ANSI colors to install, or `nil` to keep SwiftTerm's
 	///   default palette — which is Terminal.app's own, so an imported profile that defines no
 	///   ANSI colors renders the same way Terminal renders it.
+	/// - Parameter cursorColor: The caret color, or `nil` to keep SwiftTerm's default. Most
+	///   Terminal profiles set no cursor color, so `nil` is the usual case.
+	/// - Parameter selectionColor: The selection background, or `nil` to keep SwiftTerm's default.
 	public func view(
 		for session: TerminalSession,
 		foregroundColor: NSColor,
 		backgroundColor: NSColor,
 		ansiPalette: [NSColor]? = nil,
+		cursorColor: NSColor? = nil,
+		selectionColor: NSColor? = nil,
 		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) -> ClaudeAwareTerminalView {
@@ -53,6 +58,18 @@ public final class TerminalViewStore {
 		// palette from the 16 ANSI colors plus the terminal's own background and foreground.
 		if let ansiPalette, let colors = TerminalPaletteMapping.swiftTermColors(from: ansiPalette) {
 			terminalView.installColors(colors)
+		}
+		if let cursorColor {
+			terminalView.caretColor = cursorColor
+		}
+		if let selectionColor {
+			terminalView.selectedTextBackgroundColor = selectionColor
+			// Not optional to set alongside it: SwiftTerm *replaces* the foreground of every
+			// selected cell with `selectedTextForegroundColor`, which defaults to black — fine
+			// against its own teal default, unreadable against the dark selection colors most
+			// Terminal profiles ship. The theme's own text color is the right stand-in: the
+			// profile's author picked a selection color that works behind exactly that text.
+			terminalView.selectedTextForegroundColor = foregroundColor
 		}
 		terminalView.terminal.changeHistorySize(3000)
 
