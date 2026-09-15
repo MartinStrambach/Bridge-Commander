@@ -99,6 +99,7 @@ struct RepositoryListReducer {
 			case openHomeTerminalButtonTapped
 			case periodicRefreshIntervalChanged
 			case refreshButtonTapped
+			case repositoryGroupDropped(draggedPath: String, ontoPath: String)
 			case searchTextChanged(String)
 			case showTerminalsRequested
 			case sortModeButtonTapped
@@ -184,6 +185,27 @@ struct RepositoryListReducer {
 				withAnimation {
 					state.showsActiveTerminalsOnly = isOn
 				}
+				return .none
+
+			case let .view(.repositoryGroupDropped(draggedPath, ontoPath)):
+				// Only whole repositories move; worktrees inside a group stay under `sortMode`.
+				// The dragged repo takes the target's place, pushing the target out of the way —
+				// dropping on the row above moves up, on the row below moves down.
+				guard
+					draggedPath != ontoPath,
+					let from = state.repositoryGroups.index(id: draggedPath),
+					let to = state.repositoryGroups.index(id: ontoPath)
+				else {
+					return .none
+				}
+
+				var groups = Array(state.repositoryGroups)
+				let moved = groups.remove(at: from)
+				groups.insert(moved, at: to)
+				withAnimation {
+					state.repositoryGroups = IdentifiedArrayOf(uniqueElements: groups)
+				}
+				persistGroupOrder(in: &state)
 				return .none
 
 			case let .view(.searchTextChanged(text)):
@@ -293,7 +315,7 @@ struct RepositoryListReducer {
 					)
 				{
 					state.repositoryGroups.append(group)
-					sortGroupsByName(in: &state)
+					sortGroupsByTrackedOrder(in: &state)
 				}
 				return .none
 
@@ -396,7 +418,7 @@ struct RepositoryListReducer {
 						)
 					{
 						state.repositoryGroups.append(group)
-						sortGroupsByName(in: &state)
+						sortGroupsByTrackedOrder(in: &state)
 					}
 				}
 				return .none
@@ -790,11 +812,33 @@ struct RepositoryListReducer {
 
 // MARK: - Private Free Functions
 
-/// Sorts the top-level repository groups alphabetically by header name.
-/// Called once whenever a group is added so the list never re-sorts while rendering.
-private func sortGroupsByName(in state: inout RepositoryListReducer.State) {
-	state.repositoryGroups.sort {
-		$0.header.name.localizedCaseInsensitiveCompare($1.header.name) == .orderedAscending
+/// Puts the top-level repository groups in the user's manual order, which is `trackedRepoPaths`
+/// itself: a repo lands at the end when added and moves only when dragged. Called once whenever a
+/// group is added so the list never re-sorts while rendering — a parallel scan reports groups in
+/// completion order, which is otherwise arbitrary. A group whose path isn't tracked (it cannot
+/// normally happen) sorts last, alphabetically, rather than silently jumping to the front.
+private func sortGroupsByTrackedOrder(in state: inout RepositoryListReducer.State) {
+	let rank = Dictionary(
+		uniqueKeysWithValues: state.trackedRepoPaths.enumerated().map { ($0.element, $0.offset) }
+	)
+	state.repositoryGroups.sort { lhs, rhs in
+		let lhsRank = rank[lhs.id] ?? .max
+		let rhsRank = rank[rhs.id] ?? .max
+		if lhsRank != rhsRank {
+			return lhsRank < rhsRank
+		}
+		return lhs.header.name.localizedCaseInsensitiveCompare(rhs.header.name) == .orderedAscending
+	}
+}
+
+/// Writes the on-screen group order back to `trackedRepoPaths`, which is what a relaunch restores
+/// from. Tracked paths with no group — one that failed to scan this launch — keep their relative
+/// order at the end instead of being dropped from the file.
+private func persistGroupOrder(in state: inout RepositoryListReducer.State) {
+	let order = state.repositoryGroups.map(\.id)
+	let placed = Set(order)
+	state.$trackedRepoPaths.withLock { paths in
+		paths = order + paths.filter { !placed.contains($0) }
 	}
 }
 

@@ -424,7 +424,12 @@ struct RepositoryListView: View {
 						statusByPath: statusByPath,
 						searchText: store.searchText,
 						livePaths: livePaths,
-						sortMode: store.sortMode
+						sortMode: store.sortMode,
+						// Repositories only: the header row is the repo, so a drag moves the
+						// whole group with its worktrees. Worktrees stay under `sortMode`.
+						onRepositoryDropped: { draggedPath in
+							send(.repositoryGroupDropped(draggedPath: draggedPath, ontoPath: groupStore.id))
+						}
 					)
 				}
 			}
