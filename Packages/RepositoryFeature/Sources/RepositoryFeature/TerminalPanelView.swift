@@ -285,6 +285,8 @@ struct TerminalPanelView: View {
 						.keyboardShortcut(key, modifiers: .command)
 						.hidden()
 				}
+
+				closeTabShortcut(repoSessions: repoSessions)
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 4)
@@ -327,6 +329,29 @@ struct TerminalPanelView: View {
 					Spacer()
 				}
 			}
+		}
+	}
+
+	/// ⌘W closes the active tab, but only while the repo has more than one. On the last tab the
+	/// shortcut is deliberately left unregistered so it falls back to the standard File ▸ Close
+	/// and shuts the window — a view-level `keyboardShortcut` wins over the menu item (same as
+	/// ⌘A in `RepositoryListView`), so registering it unconditionally would strand the window.
+	/// Yielded while a sheet is up: the staging panel and the graph are their own windows to close.
+	///
+	/// The action deliberately carries no session id and does not go through `onKillTab`: SwiftUI
+	/// held on to the closure this button was first laid out with, so a captured id killed the
+	/// same, already-removed session on every press after the first. The reducer resolves the
+	/// active tab instead, and hangs the shell up via `killSessions(notIn:)` in `RepositoryListView`.
+	@ViewBuilder
+	private func closeTabShortcut(repoSessions: some Collection<TerminalSession>) -> some View {
+		if repoSessions.count > 1,
+		   let activeSessionId,
+		   repoSessions.contains(where: { $0.id == activeSessionId }),
+		   store.stagingDetail == nil,
+		   store.gitGraph == nil {
+			Button("") { store.send(.closeActiveTabRequested) }
+				.keyboardShortcut("w", modifiers: .command)
+				.hidden()
 		}
 	}
 
