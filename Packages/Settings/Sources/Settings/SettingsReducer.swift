@@ -81,6 +81,9 @@ public struct SettingsReducer {
 		@Shared(.terminalFontSize)
 		public var terminalFontSize = TerminalFontSize.default
 
+		@Shared(.terminalFontName)
+		public var terminalFontName = TerminalFontFamily.systemDefault
+
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
 
@@ -128,6 +131,7 @@ public struct SettingsReducer {
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
 		case setTerminalFontSize(Double)
+		case setTerminalFontName(String)
 		case importFromTerminalAppButtonTapped
 		case profileFilesSelected([URL])
 		case profilesImported([TerminalProfile])
@@ -398,6 +402,13 @@ public struct SettingsReducer {
 
 			case let .setTerminalFontSize(size):
 				state.$terminalFontSize.withLock { $0 = TerminalFontSize.clamped(size) }
+				return .none
+
+			case let .setTerminalFontName(name):
+				// Stored even if the font cannot be resolved right now; `TerminalFontFamily.resolve`
+				// falls back to the system face, so a name that stops resolving degrades rather
+				// than leaving the terminal with no font.
+				state.$terminalFontName.withLock { $0 = name }
 				return .none
 
 			case .importFromTerminalAppButtonTapped:

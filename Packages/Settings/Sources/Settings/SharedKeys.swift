@@ -15,6 +15,12 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 	static var worktreeBasePath: Self {
 		appStorage("worktreeBasePath")
 	}
+
+	/// Name of the built-in terminal's font, as `NSFont(name:size:)` takes it. Empty means the
+	/// system monospaced face — see `TerminalFontFamily`.
+	static var terminalFontName: Self {
+		appStorage("terminalFontName")
+	}
 }
 
 public extension SharedReaderKey where Self == AppStorageKey<Double> {

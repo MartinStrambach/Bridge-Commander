@@ -1,4 +1,5 @@
 import ActionButtons
+import AppKit
 import AppUI
 import ComposableArchitecture
 import GitActionsMenu
@@ -30,6 +31,15 @@ struct TerminalPanelView: View {
 	/// `TerminalLayoutReducer` so the zoom actions stay testable.
 	@Shared(.terminalFontSize)
 	private var terminalFontSize = TerminalFontSize.default
+
+	@Shared(.terminalFontName)
+	private var terminalFontName = TerminalFontFamily.systemDefault
+
+	/// The two font settings resolved into the one font the panes render with. Resolved here, like
+	/// the theme above, so TerminalFeature needs no Settings dependency.
+	private var terminalFont: NSFont {
+		TerminalFontFamily.resolve(name: terminalFontName, size: terminalFontSize)
+	}
 
 	/// The selected theme looked up against the imported profiles.
 	private var resolvedTheme: ResolvedTerminalTheme {
@@ -329,7 +339,7 @@ struct TerminalPanelView: View {
 				ansiPalette: resolvedTheme.ansiPalette,
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
-				fontSize: terminalFontSize,
+				font: terminalFont,
 				onStatusChange: onStatusChange
 			)
 

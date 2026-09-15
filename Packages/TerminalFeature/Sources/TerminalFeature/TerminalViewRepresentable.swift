@@ -33,8 +33,9 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let ansiPalette: [NSColor]?
 	public let copyOnSelect: Bool
 	public let mouseReporting: Bool
-	/// Point size of the monospaced font every pane renders with.
-	public let fontSize: CGFloat
+	/// The font every pane renders with. Resolved by the caller — the family and its point size are
+	/// both settings, and this package stays free of a Settings dependency.
+	public let font: NSFont
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 
 	public init(
@@ -46,7 +47,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		ansiPalette: [NSColor]? = nil,
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
-		fontSize: CGFloat,
+		font: NSFont,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
@@ -57,7 +58,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.ansiPalette = ansiPalette
 		self.copyOnSelect = copyOnSelect
 		self.mouseReporting = mouseReporting
-		self.fontSize = fontSize
+		self.font = font
 		self.onStatusChange = onStatusChange
 	}
 
@@ -109,10 +110,15 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 				// Guarded on a real change, unlike the two flags above: SwiftTerm's font setter
 				// rebuilds the bold/italic faces, drops the selection and re-derives the column and
 				// row count from the new cell size, which resizes the PTY and sends the shell a
-				// SIGWINCH. That is the right thing to do when the user picks a size, and the wrong
-				// thing to do on every unrelated update pass.
-				if termView.font.pointSize != fontSize {
-					termView.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+				// SIGWINCH. That is the right thing to do when the user picks a font, and the wrong
+				// thing to do on every unrelated update pass. Compared by name and size rather than
+				// with `!=`: NSFont equality also weighs matrix and descriptor attributes that the
+				// view may have derived, which would make the guard fire every pass.
+				if
+					termView.font.fontName != font.fontName
+					|| termView.font.pointSize != font.pointSize
+				{
+					termView.font = font
 				}
 
 				if termView.superview !== nsView {
