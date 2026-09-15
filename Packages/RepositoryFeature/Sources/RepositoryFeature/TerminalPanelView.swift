@@ -169,6 +169,20 @@ struct TerminalPanelView: View {
 				.disabled(store.isPushing)
 			}
 
+			// PR/MR fetch failure (conditional) — same indicator, in the same position, as
+			// `RepositoryRowView`. A failed provider fetch keeps the last-known PR state
+			// rather than clearing it (see `RepositoryRowReducer.fetchPullRequest`), so
+			// without this the badge here is indistinguishable from one ⌘R never refreshed.
+			if let prFetchError = activeRowStore?.prFetchError {
+				Image(systemName: "exclamationmark.triangle.fill")
+					.resizable()
+					.scaledToFit()
+					.padding(4)
+					.frame(width: 22, height: 22)
+					.foregroundColor(.orange)
+					.help(prFetchError)
+			}
+
 			if let prUrl = activeRowStore?.prUrl, let url = URL(string: prUrl) {
 				VStack(alignment: .center, spacing: 2) {
 					PullRequestButton(
