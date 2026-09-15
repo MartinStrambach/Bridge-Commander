@@ -5,6 +5,7 @@ import TerminalFeature
 import GitActionsMenu
 import GitCore
 import GitGraphFeature
+import Settings
 import StagingFeature
 
 @Reducer
@@ -15,6 +16,11 @@ struct TerminalLayoutReducer {
 		var activeSessionId: UUID?
 		var isPushing = false
 		var isFinishingMerge = false
+
+		/// Written by the ⌘+/⌘−/⌘0 zoom actions. The panel view reads the same setting through its
+		/// own `@Shared`, alongside the other terminal settings it resolves for the pane.
+		@Shared(.terminalFontSize)
+		var terminalFontSize = TerminalFontSize.default
 
 		/// The tab that was last shown for each repository, so switching away from a
 		/// repository and back reopens the tab the user left, not its first tab.
@@ -66,6 +72,9 @@ struct TerminalLayoutReducer {
 		case selectTab(sessionId: UUID)
 		case retryTab(sessionId: UUID)
 		case refreshActiveRepoRequested
+		case zoomInRequested
+		case zoomOutRequested
+		case resetZoomRequested
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case webButton(WebButtonReducer.Action)
@@ -206,6 +215,21 @@ struct TerminalLayoutReducer {
 					return .none
 				}
 				return .send(.xcodeButton(.refresh))
+
+			// Zoom is stored, not per-pane: every terminal in the app renders at one size, and the
+			// size the user zoomed to is still there after a restart — the same contract the
+			// stepper in Settings writes to.
+			case .zoomInRequested:
+				state.$terminalFontSize.withLock { $0 = TerminalFontSize.zoomedIn(from: $0) }
+				return .none
+
+			case .zoomOutRequested:
+				state.$terminalFontSize.withLock { $0 = TerminalFontSize.zoomedOut(from: $0) }
+				return .none
+
+			case .resetZoomRequested:
+				state.$terminalFontSize.withLock { $0 = TerminalFontSize.default }
+				return .none
 
 			case .xcodeButton:
 				return .none

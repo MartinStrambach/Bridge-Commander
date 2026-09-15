@@ -1,3 +1,4 @@
+import AppKit
 import ComposableArchitecture
 import GitHosting
 import SwiftUI
@@ -258,10 +259,73 @@ public struct SettingsView: View {
 		.frame(width: 100, alignment: .leading)
 	}
 
+	/// Enumerating installed fonts touches the font server, so it happens once per process rather
+	/// than on every body evaluation. A stored name that no longer resolves is appended, so the
+	/// picker still shows what is configured instead of silently rewriting it to the default.
+	private static let installedMonospacedFamilies = TerminalFontFamily.availableMonospacedFamilies()
+
+	private var monospacedFontFamilies: [String] {
+		let installed = Self.installedMonospacedFamilies
+		let selected = store.terminalFontName
+		guard !selected.isEmpty, !installed.contains(selected) else { return installed }
+		return installed + [selected]
+	}
+
 	private var builtInTerminalSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Built-in Terminal")
 				.font(.headline)
+
+			Picker(
+				"Font:",
+				selection: $store.terminalFontName.sending(\.setTerminalFontName)
+			) {
+				Text(TerminalFontFamily.systemDefaultDisplayName)
+					.tag(TerminalFontFamily.systemDefault)
+				Divider()
+				ForEach(monospacedFontFamilies, id: \.self) { family in
+					Text(family)
+						.font(.custom(family, size: NSFont.systemFontSize))
+						.tag(family)
+				}
+			}
+			.frame(maxWidth: 320)
+
+			Text(
+				"Only monospaced fonts are listed — a proportional face would break the terminal's character grid."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
+			HStack(spacing: 8) {
+				Stepper(
+					value: $store.terminalFontSize.sending(\.setTerminalFontSize),
+					in: TerminalFontSize.minimum ... TerminalFontSize.maximum,
+					step: TerminalFontSize.step
+				) {
+					Text("Font size: \(Int(store.terminalFontSize)) pt")
+				}
+
+				// A sample rather than a live preview of a pane: the font and its size are what
+				// change, and seeing them is enough to pick without applying first.
+				Text("Aa")
+					.font(
+						Font(
+							TerminalFontFamily.resolve(
+								name: store.terminalFontName,
+								size: store.terminalFontSize
+							)
+						)
+					)
+					.foregroundColor(.secondary)
+					.frame(minWidth: 40, alignment: .leading)
+			}
+
+			Text(
+				"Applies to open terminals right away. Also available as ⌘+ and ⌘− while a terminal is focused, with ⌘0 back to \(Int(TerminalFontSize.default)) pt."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
 
 			Toggle(
 				"Copy selected text automatically",

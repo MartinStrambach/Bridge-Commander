@@ -1,4 +1,5 @@
 import ActionButtons
+import AppKit
 import AppUI
 import ComposableArchitecture
 import GitActionsMenu
@@ -25,6 +26,20 @@ struct TerminalPanelView: View {
 
 	@Shared(.terminalMouseReporting)
 	private var terminalMouseReporting = true
+
+	/// Read here like its sibling settings; the ⌘+/⌘−/⌘0 shortcuts write it through
+	/// `TerminalLayoutReducer` so the zoom actions stay testable.
+	@Shared(.terminalFontSize)
+	private var terminalFontSize = TerminalFontSize.default
+
+	@Shared(.terminalFontName)
+	private var terminalFontName = TerminalFontFamily.systemDefault
+
+	/// The two font settings resolved into the one font the panes render with. Resolved here, like
+	/// the theme above, so TerminalFeature needs no Settings dependency.
+	private var terminalFont: NSFont {
+		TerminalFontFamily.resolve(name: terminalFontName, size: terminalFontSize)
+	}
 
 	/// The selected theme looked up against the imported profiles.
 	private var resolvedTheme: ResolvedTerminalTheme {
@@ -298,6 +313,7 @@ struct TerminalPanelView: View {
 				}
 
 				closeTabShortcut(repoSessions: repoSessions)
+				zoomShortcuts
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 4)
@@ -323,6 +339,7 @@ struct TerminalPanelView: View {
 				ansiPalette: resolvedTheme.ansiPalette,
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
+				font: terminalFont,
 				onStatusChange: onStatusChange
 			)
 
@@ -365,6 +382,29 @@ struct TerminalPanelView: View {
 			Button("") { store.send(.closeActiveTabRequested) }
 				.keyboardShortcut("w", modifiers: .command)
 				.hidden()
+		}
+	}
+
+	/// ⌘+ / ⌘− / ⌘0 zoom the terminal font, the shortcuts every terminal emulator uses.
+	///
+	/// "+" is registered alongside "=" because on a US layout the plus key *is* ⇧=, and SwiftUI
+	/// matches the literal key equivalent — with only "+" registered the user has to hold shift.
+	/// Yielded while a sheet is up for the same reason ⌘W is: the staging panel and the graph are
+	/// separate windows with their own idea of what a keystroke means.
+	@ViewBuilder
+	private var zoomShortcuts: some View {
+		if store.stagingDetail == nil, store.gitGraph == nil {
+			Group {
+				Button("") { store.send(.zoomInRequested) }
+					.keyboardShortcut("+", modifiers: .command)
+				Button("") { store.send(.zoomInRequested) }
+					.keyboardShortcut("=", modifiers: .command)
+				Button("") { store.send(.zoomOutRequested) }
+					.keyboardShortcut("-", modifiers: .command)
+				Button("") { store.send(.resetZoomRequested) }
+					.keyboardShortcut("0", modifiers: .command)
+			}
+			.hidden()
 		}
 	}
 
