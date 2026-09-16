@@ -24,6 +24,11 @@ extension View {
 			onDrag {
 				draggedId.wrappedValue = id
 				return NSItemProvider(object: id.uuidString as NSString)
+			} preview: {
+				// The item itself follows the pointer, so the system's snapshot of it — the
+				// translucent copy that would float above the row — is one tab too many. The
+				// preview cannot be omitted, only made too small to see.
+				Color.clear.frame(width: 1, height: 1)
 			}
 			.onDrop(
 				of: [.text],
