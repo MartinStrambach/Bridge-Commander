@@ -58,6 +58,12 @@ struct TerminalPanelView: View {
 	let onSelectTab: (UUID) -> Void
 	let onKillTab: (UUID) -> Void
 
+	/// The tab being dragged, set when its drag starts and read by every other tab's drop
+	/// delegate to move it as the pointer passes over them. Local to the view: nothing outside
+	/// it reads a drag in flight.
+	@State
+	private var draggedTabId: UUID?
+
 	var body: some View {
 		VStack(spacing: 0) {
 			toolbar
@@ -452,6 +458,14 @@ struct TerminalPanelView: View {
 		.onTapGesture {
 			onSelectTab(session.id)
 		}
+		.liveReorderable(
+			id: session.id,
+			isEnabled: totalCount > 1,
+			draggedId: $draggedTabId,
+			onMove: { dragged, target in
+				store.send(.moveTab(sessionId: dragged, ontoSessionId: target))
+			}
+		)
 	}
 
 	// MARK: - Error View
