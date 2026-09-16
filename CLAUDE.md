@@ -110,6 +110,7 @@ Packages/
 - `RepoGroupReducer` / `RepoGroupView` — grouped repo display
 - Per-button Reducer+View pairs: `CreateWorktreeButton`, `DeleteWorktreeButton`, `TerminalButton`, `ClaudeCodeButton`, `XcodeProjectButton`, `TuistButton`, `TicketButton`, `ShareButton`, `WebButton`
 - `TerminalLayoutReducer` / `TerminalLayoutView` / `TerminalPanelView`
+- `View.reorderable(payload:isEnabled:isTargeted:insertionEdge:onDrop:)` (`ReorderableDrag.swift`) is the one drag-to-reorder helper, used by both the sidebar's repository group headers and the terminal tab pills. It is `onDrag`/`onDrop` with a `public.text` payload for reasons documented in the file (a `Section` header cannot be a `draggable` source, an undeclared UTType never matches a drop). Reducers treat the dropped string as untrusted: `repositoryGroupDropped` ignores a path that names no group, `terminalLayout(.moveTab)` ignores a session id that names no tab or a tab of another repository. Both apply the same rule, the dragged item takes the target's place
 - The terminal overlay takes **scoped stores**, never row values: `TerminalLayoutView.repositoryGroups` is `[StoreOf<RepoGroupReducer>]` and `activeRowStore` is resolved in `RepositoryListView`. TCA's `IdentifiedArray` observation compares element ids only, so a row handed over as a value freezes its counts at whenever the overlay last rebuilt — that was the stale push status in terminal view (2026-09-07). Store collections are wrapped in `Array(...)` because the sidebar is a `LazyVStack`
 
 ## Architecture

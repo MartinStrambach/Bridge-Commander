@@ -619,6 +619,31 @@ struct RepositoryListReducer {
 				}
 				return .none
 
+			// The dragged tab takes the target's place, pushing the target out of the way — the
+			// same rule as reordering repositories. Only a tab of the same repository can be a
+			// target: the bar shows one repository's tabs, and the payload is plain text that any
+			// app could have dropped, so anything that names no tab, or one of another repository,
+			// is ignored. `terminalSessions` interleaves every repository's tabs in insertion
+			// order and the bar filters it, so moving within the shared array reorders just this
+			// repository's tabs relative to each other. The tab keeps its number: "Terminal 2" is
+			// the shell the user started second, wherever it now sits.
+			case let .terminalLayout(.moveTab(sessionId, ontoSessionId)):
+				guard
+					sessionId != ontoSessionId,
+					let dragged = state.terminalSessions[id: sessionId],
+					let target = state.terminalSessions[id: ontoSessionId],
+					dragged.repositoryPath == target.repositoryPath,
+					let from = state.terminalSessions.index(id: sessionId),
+					let to = state.terminalSessions.index(id: ontoSessionId)
+				else {
+					return .none
+				}
+				var sessions = Array(state.terminalSessions)
+				let moved = sessions.remove(at: from)
+				sessions.insert(moved, at: to)
+				state.terminalSessions = IdentifiedArray(uniqueElements: sessions)
+				return .none
+
 			case let .terminalLayout(.killTab(sessionId)):
 				guard let session = state.terminalSessions[id: sessionId] else {
 					return .none

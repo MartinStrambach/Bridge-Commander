@@ -70,6 +70,8 @@ struct TerminalLayoutReducer {
 		case killRepo(repositoryPath: String)
 		case newTabRequested
 		case selectTab(sessionId: UUID)
+		/// A tab was dropped on another tab of the same repository and takes its place.
+		case moveTab(sessionId: UUID, ontoSessionId: UUID)
 		case retryTab(sessionId: UUID)
 		case refreshActiveRepoRequested
 		case zoomInRequested
@@ -199,6 +201,10 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .selectTab:
+				// Forwarded up to RepositoryListReducer
+				return .none
+
+			case .moveTab:
 				// Forwarded up to RepositoryListReducer
 				return .none
 
