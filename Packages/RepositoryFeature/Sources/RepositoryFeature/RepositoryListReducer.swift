@@ -641,7 +641,12 @@ struct RepositoryListReducer {
 				var sessions = Array(state.terminalSessions)
 				let moved = sessions.remove(at: from)
 				sessions.insert(moved, at: to)
-				state.terminalSessions = IdentifiedArray(uniqueElements: sessions)
+				// Inside an animation so the pills slide into their new places rather than jump;
+				// the `ForEach` in the tab bar is keyed by session id, which is what makes the
+				// move animatable at all.
+				withAnimation(.snappy) {
+					state.terminalSessions = IdentifiedArray(uniqueElements: sessions)
+				}
 				return .none
 
 			case let .terminalLayout(.killTab(sessionId)):

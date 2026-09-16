@@ -67,8 +67,10 @@ extension View {
 								width: insertionEdge == .leading ? 2 : nil,
 								height: insertionEdge == .top ? 2 : nil
 							)
+							.transition(.opacity)
 					}
 				}
+				.animation(.easeOut(duration: 0.12), value: isTargeted.wrappedValue)
 		}
 		else {
 			self
