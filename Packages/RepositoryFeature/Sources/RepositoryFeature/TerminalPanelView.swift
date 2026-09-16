@@ -58,10 +58,11 @@ struct TerminalPanelView: View {
 	let onSelectTab: (UUID) -> Void
 	let onKillTab: (UUID) -> Void
 
-	/// The tab a dragged tab is currently over, which draws the insertion line. Local to the
-	/// view: nothing outside it reads a hover.
+	/// The tab being dragged, set when its drag starts and read by every other tab's drop
+	/// delegate to move it as the pointer passes over them. Local to the view: nothing outside
+	/// it reads a drag in flight.
 	@State
-	private var dropTargetedTabId: UUID?
+	private var draggedTabId: UUID?
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -434,19 +435,6 @@ struct TerminalPanelView: View {
 
 	private func tabPill(session: TerminalSession, totalCount: Int) -> some View {
 		let isActive = session.id == activeSessionId
-		// Cleared only if this tab still holds the highlight: when the drag crosses straight from
-		// one tab to the next, the old tab's "left" may arrive after the new tab's "entered".
-		let isDropTargeted = Binding(
-			get: { dropTargetedTabId == session.id },
-			set: { isTargeted in
-				if isTargeted {
-					dropTargetedTabId = session.id
-				}
-				else if dropTargetedTabId == session.id {
-					dropTargetedTabId = nil
-				}
-			}
-		)
 		return HStack(spacing: 4) {
 			Text("Terminal \(session.tabIndex)")
 				.font(.caption)
@@ -470,18 +458,12 @@ struct TerminalPanelView: View {
 		.onTapGesture {
 			onSelectTab(session.id)
 		}
-		// The payload is the session id as text; the reducer resolves it back to a tab and
-		// ignores anything that is not one of this repository's.
-		.reorderable(
-			payload: session.id.uuidString,
+		.liveReorderable(
+			id: session.id,
 			isEnabled: totalCount > 1,
-			isTargeted: isDropTargeted,
-			insertionEdge: .leading,
-			onDrop: { dragged in
-				guard let draggedId = UUID(uuidString: dragged) else {
-					return
-				}
-				store.send(.moveTab(sessionId: draggedId, ontoSessionId: session.id))
+			draggedId: $draggedTabId,
+			onMove: { dragged, target in
+				store.send(.moveTab(sessionId: dragged, ontoSessionId: target))
 			}
 		)
 	}

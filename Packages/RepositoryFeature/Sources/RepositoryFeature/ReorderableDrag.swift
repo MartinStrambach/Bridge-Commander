@@ -10,17 +10,17 @@ enum ReorderInsertionEdge {
 
 extension View {
 	/// Makes a view both the handle for a reorder drag and the drop target that says where another
-	/// item should land. The payload is a plain string identifying the item — a repository path for
-	/// the sidebar's group headers, a session id for the terminal's tabs — and is handed back as
-	/// dropped on a target, which then decides what it means.
+	/// item should land. The payload is a plain string identifying the item — the repository path
+	/// for the sidebar's group headers — and is handed back as dropped on a target, which then
+	/// decides what it means. Nothing moves until the drop lands; the terminal tabs, which reorder
+	/// live under the pointer, use `liveReorderable` instead.
 	///
 	/// Three things here are load-bearing, each established by driving a real drag against a
 	/// probe app rather than by reading docs — all of them fail *silently*, with the drag simply
 	/// never landing:
 	///
 	/// - Drag and drop at all, rather than `ForEach.onMove`: a repository group is a `Section` of
-	///   the list, and a plain macOS `List` reorders rows, never sections. The tab bar is an
-	///   `HStack` in a `ScrollView`, which `onMove` does not support at all.
+	///   the list, and a plain macOS `List` reorders rows, never sections.
 	/// - `onDrag`/`onDrop` rather than `draggable`/`dropDestination`: a section header is not a
 	///   drag source for the newer API. It never even starts the drag.
 	/// - A declared type — `public.text` — rather than a private one of ours. An *undeclared*
