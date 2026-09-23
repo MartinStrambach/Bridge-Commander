@@ -144,14 +144,10 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 				let isActive = session.id == activeSessionId
 				termView.isHidden = !isActive
 				if isActive {
-					if termView.window != nil {
-						termView.window?.makeFirstResponder(termView)
-					}
-					else {
-						DispatchQueue.main.async {
-							termView.window?.makeFirstResponder(termView)
-						}
-					}
+					termView.requestFocus()
+				}
+				else {
+					termView.cancelPendingFocus()
 				}
 
 			case .failed:

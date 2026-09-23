@@ -78,6 +78,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	override public func viewDidMoveToWindow() {
 		super.viewDidMoveToWindow()
 		remeasureCellGridIfScaleChanged()
+		takePendingFocus()
 	}
 
 	/// Re-snaps the cell grid to the current screen when its scale differs from the one the grid
@@ -102,6 +103,52 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 		cellGridScale = scale
 		font = font
+	}
+
+	// MARK: - Focus
+
+	/// Set when the pane was asked to take keyboard focus before it had a window to take it in.
+	private var wantsFocusOnceInWindow = false
+
+	/// Makes this pane the window's first responder, now if it is in a window, otherwise as soon
+	/// as it lands in one.
+	///
+	/// Opening a terminal from the repository list mounts the whole terminal overlay cold, so the
+	/// representable's first update adds the pane to a container that SwiftUI has not put in the
+	/// window yet — and it is not there one run loop later either, which is all a single deferred
+	/// `makeFirstResponder` waited for. Nothing asked again afterwards, so the new terminal came up
+	/// without the caret until clicked. Waiting for `viewDidMoveToWindow` needs no guess at when.
+	public func requestFocus() {
+		if let window {
+			wantsFocusOnceInWindow = false
+			window.makeFirstResponder(self)
+		}
+		else {
+			wantsFocusOnceInWindow = true
+		}
+	}
+
+	/// Drops a focus request that has not been met yet, for a pane that stopped being the active
+	/// one before it reached a window.
+	public func cancelPendingFocus() {
+		wantsFocusOnceInWindow = false
+	}
+
+	/// Deferred one turn: SwiftUI is still inserting the hosting hierarchy when this fires, and a
+	/// first responder set in the middle of that can be reset by the insertion finishing.
+	private func takePendingFocus() {
+		guard wantsFocusOnceInWindow, window != nil else {
+			return
+		}
+
+		DispatchQueue.main.async { [weak self] in
+			guard let self, wantsFocusOnceInWindow, let window, !isHidden else {
+				return
+			}
+
+			wantsFocusOnceInWindow = false
+			window.makeFirstResponder(self)
+		}
 	}
 
 	/// Stops the pane reporting Claude's status. Called when its session is killed, before the
