@@ -62,6 +62,13 @@ public nonisolated enum PipelineState: String, Sendable, Equatable {
 		case .manual: "hand.tap"
 		}
 	}
+
+	/// Icon for the pipeline badge when the MR's merge state is taken into account:
+	/// a passing pipeline on a conflicting MR must not read as "good to go", so it
+	/// shows a warning instead of the checkmark. Other states already say "not done".
+	public func systemImageName(hasConflicts: Bool) -> String {
+		hasConflicts && self == .success ? "exclamationmark.triangle.fill" : systemImageName
+	}
 }
 
 public nonisolated struct PipelineStatus: Equatable, Sendable {
@@ -84,6 +91,8 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 	public let unresolvedDiscussionsCount: Int?
 	/// Review sign-off state. `nil` when the provider did not report it.
 	public let approvals: ApprovalStatus?
+	/// Whether the MR/PR conflicts with its base branch. `false` when not reported.
+	public let hasConflicts: Bool
 
 	public init(
 		url: String,
@@ -91,7 +100,8 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 		provider: PullRequestProvider,
 		pipeline: PipelineStatus? = nil,
 		unresolvedDiscussionsCount: Int? = nil,
-		approvals: ApprovalStatus? = nil
+		approvals: ApprovalStatus? = nil,
+		hasConflicts: Bool = false
 	) {
 		self.url = url
 		self.state = state
@@ -99,5 +109,6 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 		self.pipeline = pipeline
 		self.unresolvedDiscussionsCount = unresolvedDiscussionsCount
 		self.approvals = approvals
+		self.hasConflicts = hasConflicts
 	}
 }

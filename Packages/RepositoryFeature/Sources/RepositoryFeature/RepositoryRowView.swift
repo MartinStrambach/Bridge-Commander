@@ -448,7 +448,7 @@ struct RepositoryRowView: View {
 			if let pipelineUrl = store.pipelineUrl,
 			   let url = URL(string: pipelineUrl),
 			   let pipelineState = store.pipelineState {
-				PipelineStatusButton(url: url, state: pipelineState)
+				PipelineStatusButton(url: url, state: pipelineState, hasConflicts: store.prHasConflicts)
 			}
 
 			// Review sign-off, or a draft marker (conditional)

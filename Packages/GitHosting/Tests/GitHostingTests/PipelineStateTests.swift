@@ -47,4 +47,12 @@ struct PipelineStateTests {
 		#expect(PipelineState.skipped.systemImageName == "forward.end.circle")
 		#expect(PipelineState.manual.systemImageName == "hand.tap")
 	}
+
+	@Test("a conflict swaps only the success checkmark for a warning")
+	func conflictIcon() {
+		#expect(PipelineState.success.systemImageName(hasConflicts: true) == "exclamationmark.triangle.fill")
+		#expect(PipelineState.success.systemImageName(hasConflicts: false) == "checkmark.circle.fill")
+		#expect(PipelineState.failed.systemImageName(hasConflicts: true) == "xmark.octagon.fill")
+		#expect(PipelineState.running.systemImageName(hasConflicts: true) == "arrow.triangle.2.circlepath")
+	}
 }
