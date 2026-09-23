@@ -35,6 +35,7 @@ public struct FileChangeList: Sendable {
 		case toggleSelectedTapped
 		case toggleAllTapped
 		case spaceKeyPressed
+		case moveSelection(by: Int)
 		case openInIDE(FileChange)
 		case openInIDEFailed(String)
 		case alert(PresentationAction<Alert>)
@@ -72,6 +73,25 @@ public struct FileChangeList: Sendable {
 
 			case .toggleAllTapped:
 				return .send(.delegate(.toggleAll(state.files)))
+
+			case let .moveSelection(offset):
+				// Arrow keys step from the selection's edge in the direction of travel, so a
+				// multi-selection collapses onto the neighbouring file rather than jumping back.
+				let selectedIndices = state.files.indices.filter { state.selectedFileIds.contains(state.files[$0].id) }
+				let target: Int
+				if let edge = offset < 0 ? selectedIndices.first : selectedIndices.last {
+					target = min(max(edge + offset, 0), state.files.count - 1)
+				}
+				else if let first = state.files.indices.first {
+					target = first
+				}
+				else {
+					return .none
+				}
+
+				// Routed through `updateSelection` so the parent loads the diff exactly as it
+				// does for a click.
+				return .send(.updateSelection([state.files[target].id]))
 
 			case .spaceKeyPressed:
 				guard !state.selectedFileIds.isEmpty else {
