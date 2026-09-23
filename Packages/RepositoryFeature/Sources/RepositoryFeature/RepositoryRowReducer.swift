@@ -35,6 +35,8 @@ struct RepositoryRowReducer {
 		var prProvider: PullRequestProvider?
 		var pipelineState: PipelineState?
 		var pipelineUrl: String?
+		/// Whether the open MR conflicts with its target branch; tints the pipeline badge.
+		var prHasConflicts = false
 		var prUnresolvedDiscussions: Int?
 		var prApprovals: ApprovalStatus?
 		/// Why the last PR/MR fetch failed, as row-tooltip text. Nil while fetches
@@ -350,6 +352,7 @@ struct RepositoryRowReducer {
 					state.prProvider = nil
 					state.pipelineState = nil
 					state.pipelineUrl = nil
+					state.prHasConflicts = false
 					state.prUnresolvedDiscussions = nil
 					state.prApprovals = nil
 					state.prFetchError = nil
@@ -419,6 +422,7 @@ struct RepositoryRowReducer {
 				state.prProvider = details?.provider
 				state.pipelineState = details?.pipeline?.state
 				state.pipelineUrl = details?.pipeline?.url
+				state.prHasConflicts = details?.state.isOpen == true && details?.hasConflicts == true
 				// Merged/closed PRs hide the badge — their discussions are no longer actionable.
 				state.prUnresolvedDiscussions = details?.state.isOpen == true
 					? details?.unresolvedDiscussionsCount

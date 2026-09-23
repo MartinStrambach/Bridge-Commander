@@ -71,6 +71,19 @@ struct GitLabMergeRequestResponseTests {
 		)
 	}
 
+	@Test("detects conflicts from the flag or the detailed merge status")
+	func conflicts() throws {
+		#expect(try decode(node(#""state": "opened", "conflicts": true"#)).mergeRequest?.hasConflicts == true)
+		#expect(
+			try decode(node(#""state": "opened", "detailedMergeStatus": "CONFLICT""#)).mergeRequest?.hasConflicts == true
+		)
+		#expect(
+			try decode(node(#""state": "opened", "conflicts": false, "detailedMergeStatus": "MERGEABLE""#))
+				.mergeRequest?.hasConflicts == false
+		)
+		#expect(try decode(node(#""state": "opened""#)).mergeRequest?.hasConflicts == false)
+	}
+
 	@Test("missing MR or project reports none")
 	func missingMergeRequest() throws {
 		#expect(try decode(#"{"data": {"project": {"mergeRequests": {"nodes": []}}}}"#).mergeRequest == nil)

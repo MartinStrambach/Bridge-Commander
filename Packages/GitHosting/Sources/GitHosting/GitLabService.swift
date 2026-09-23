@@ -38,6 +38,7 @@ public nonisolated enum GitLabService {
 						groupedApprovalsRequired
 						groupedApprovalsLeft
 						detailedMergeStatus
+						conflicts
 						approvedBy {
 							nodes { username name avatarUrl }
 						}
@@ -99,7 +100,8 @@ public nonisolated enum GitLabService {
 			provider: .gitlab,
 			pipeline: mergeRequest.pipelineStatus,
 			unresolvedDiscussionsCount: mergeRequest.unresolvedCount,
-			approvals: mergeRequest.approvalStatus
+			approvals: mergeRequest.approvalStatus,
+			hasConflicts: mergeRequest.hasConflicts
 		)
 	}
 
@@ -201,6 +203,7 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 		let groupedApprovalsRequired: Int?
 		let groupedApprovalsLeft: Int?
 		let detailedMergeStatus: String?
+		let conflicts: Bool?
 		let approvedBy: UserConnection?
 		let reviewers: ReviewerConnection?
 		let headPipeline: HeadPipeline?
@@ -241,6 +244,15 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 				return nil
 			}
 			return PipelineStatus(state: state, url: "https://gitlab.com" + path)
+		}
+
+		/// Whether the MR cannot merge cleanly into its target branch.
+		///
+		/// `conflicts` is the direct flag; `detailedMergeStatus` is checked as well in case
+		/// a response omits it. The status alone is not enough — it reports a single
+		/// reason, so a higher-priority blocker can mask the conflict.
+		var hasConflicts: Bool {
+			conflicts == true || detailedMergeStatus?.uppercased() == "CONFLICT"
 		}
 
 		/// Reviewers who explicitly asked for changes.

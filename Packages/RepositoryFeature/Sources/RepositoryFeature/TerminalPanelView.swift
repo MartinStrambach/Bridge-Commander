@@ -213,7 +213,11 @@ struct TerminalPanelView: View {
 			if let pipelineUrl = activeRowStore?.pipelineUrl,
 			   let url = URL(string: pipelineUrl),
 			   let pipelineState = activeRowStore?.pipelineState {
-				PipelineStatusButton(url: url, state: pipelineState)
+				PipelineStatusButton(
+					url: url,
+					state: pipelineState,
+					hasConflicts: activeRowStore?.prHasConflicts == true
+				)
 			}
 
 			if let slot = activeRowStore?.approvalSlot,
