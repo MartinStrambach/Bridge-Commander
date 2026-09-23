@@ -118,15 +118,6 @@ struct TerminalLayoutView: View {
 			Button("") { store.send(.hideTerminalMode) }
 				.keyboardShortcut("§", modifiers: .command)
 				.hidden()
-			// ⌘R here refreshes only the repo opened in the terminal; the full-list
-			// refresh in RepositoryListView hands the shortcut off while we're open.
-			// The staging sheet and the commit graph claim ⌘R for their own refresh, so yield
-			// it there — a shortcut registered twice dispatches to either owner at random.
-			if store.stagingDetail == nil, store.gitGraph == nil {
-				Button("") { store.send(.refreshActiveRepoRequested) }
-					.keyboardShortcut("r", modifiers: .command)
-					.hidden()
-			}
 		}
 	}
 

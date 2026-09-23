@@ -337,6 +337,7 @@ struct TerminalPanelView: View {
 				}
 
 				closeTabShortcut(repoSessions: repoSessions)
+				refreshShortcut
 				zoomShortcuts
 			}
 			.padding(.horizontal, 8)
@@ -410,6 +411,23 @@ struct TerminalPanelView: View {
 		   store.gitGraph == nil {
 			Button("") { store.send(.closeActiveTabRequested) }
 				.keyboardShortcut("w", modifiers: .command)
+				.hidden()
+		}
+	}
+
+	/// ⌘R refreshes only the repo opened in the terminal; the full-list refresh in
+	/// `RepositoryListView` hands the shortcut off while the panel is open. The staging sheet and
+	/// the commit graph claim ⌘R for their own refresh, so yield it there — a shortcut registered
+	/// twice dispatches to either owner at random.
+	///
+	/// Registered here beside the other hidden shortcuts rather than in the sidebar's
+	/// `.background`: on macOS 27 a conditionally inserted shortcut button inside a `.background`
+	/// never fires (the unconditional ⌘§ beside it still does), so ⌘R silently did nothing.
+	@ViewBuilder
+	private var refreshShortcut: some View {
+		if store.stagingDetail == nil, store.gitGraph == nil {
+			Button("") { store.send(.refreshActiveRepoRequested) }
+				.keyboardShortcut("r", modifiers: .command)
 				.hidden()
 		}
 	}
