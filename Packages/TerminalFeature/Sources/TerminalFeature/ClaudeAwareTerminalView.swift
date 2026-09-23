@@ -49,6 +49,9 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// when the window closes.
 	isolated deinit {
 		hangUp()
+		if let wordMotionMonitor {
+			NSEvent.removeMonitor(wordMotionMonitor)
+		}
 	}
 
 	// MARK: - Backing scale
@@ -78,6 +81,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	override public func viewDidMoveToWindow() {
 		super.viewDidMoveToWindow()
 		remeasureCellGridIfScaleChanged()
+		updateWordMotionMonitor()
 	}
 
 	/// Re-snaps the cell grid to the current screen when its scale differs from the one the grid
@@ -102,6 +106,44 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 		cellGridScale = scale
 		font = font
+	}
+
+	// MARK: - Word motion
+
+	/// Watches for ⌥← / ⌥→ while the pane is in a window; see `OptionArrowWordMotion` for why.
+	///
+	/// A local event monitor rather than an override: SwiftTerm declares `keyDown` `public`, not
+	/// `open`, so a subclass outside its module cannot intercept the key there.
+	private var wordMotionMonitor: Any?
+
+	private func updateWordMotionMonitor() {
+		if let wordMotionMonitor {
+			NSEvent.removeMonitor(wordMotionMonitor)
+			self.wordMotionMonitor = nil
+		}
+		guard window != nil else {
+			return
+		}
+
+		wordMotionMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+			guard
+				let self,
+				let window,
+				event.window === window,
+				window.firstResponder === self,
+				let bytes = OptionArrowWordMotion.bytes(
+					modifiers: event.modifierFlags,
+					charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+					optionIsMeta: optionAsMetaKey,
+					kittyProtocolActive: !terminal.keyboardEnhancementFlags.isEmpty
+				)
+			else {
+				return event
+			}
+
+			send(bytes)
+			return nil
+		}
 	}
 
 	/// Stops the pane reporting Claude's status. Called when its session is killed, before the
