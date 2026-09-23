@@ -11,8 +11,9 @@ struct CreateWorktreeDialogView: View {
 
 	var body: some View {
 		VStack(spacing: 20) {
-			Text("Create New Worktree")
+			Text("Create New Worktree in \(store.repositoryName)")
 				.font(.headline)
+				.multilineTextAlignment(.center)
 
 			VStack(alignment: .leading, spacing: 12) {
 				Text("Base Branch")

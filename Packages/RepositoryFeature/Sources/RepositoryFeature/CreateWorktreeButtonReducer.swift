@@ -20,6 +20,10 @@ struct CreateWorktreeButtonReducer {
 		var branchSearchText: String = ""
 		var isLoadingBranches: Bool = false
 
+		var repositoryName: String {
+			URL(fileURLWithPath: repositoryPath).lastPathComponent
+		}
+
 		var filteredBranches: [BranchInfo] {
 			guard !branchSearchText.isEmpty else { return availableBranches }
 			return availableBranches.filter {
