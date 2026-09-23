@@ -69,36 +69,40 @@ public struct GitActionsMenuView: View {
 			}
 			else {
 				Menu {
-					if store.isMergeInProgress {
-						AbortMergeButtonView(store: store.scope(\.abortMergeButton, action: \.abortMergeButton))
-					}
+					Group {
+						if store.isMergeInProgress {
+							AbortMergeButtonView(store: store.scope(\.abortMergeButton, action: \.abortMergeButton))
+						}
 
-					if store.hasRemoteBranch {
-						FetchButtonView(store: store.scope(\.fetchButton, action: \.fetchButton))
-						PullButtonView(store: store.scope(\.pullButton, action: \.pullButton))
-					}
+						if store.hasRemoteBranch {
+							FetchButtonView(store: store.scope(\.fetchButton, action: \.fetchButton))
+							PullButtonView(store: store.scope(\.pullButton, action: \.pullButton))
+						}
 
-					if store.unpushedCommitsCount > 0 || !store.hasRemoteBranch {
-						PushButtonView(store: store.scope(\.pushButton, action: \.pushButton))
-					}
+						if store.unpushedCommitsCount > 0 || !store.hasRemoteBranch {
+							PushButtonView(store: store.scope(\.pushButton, action: \.pushButton))
+						}
 
-					if !store.isMergeInProgress {
-						StashButtonView(store: store.scope(\.stashButton, action: \.stashButton))
-						DiscardButtonView(store: store.scope(\.discardButton, action: \.discardButton))
-					}
+						if !store.isMergeInProgress {
+							StashButtonView(store: store.scope(\.stashButton, action: \.stashButton))
+							DiscardButtonView(store: store.scope(\.discardButton, action: \.discardButton))
+						}
 
-					if !DefaultBranchResolver.isDefaultBranch(store.currentBranch, configured: store.defaultBranch),
-					   !store.isMergeInProgress
-					{
-						MergeMasterButtonView(store: store.scope(
-							\.mergeMasterButton,
-							action: \.mergeMasterButton
-						))
-						CheckoutDefaultBranchButtonView(store: store.scope(
-							\.checkoutDefaultBranchButton,
-							action: \.checkoutDefaultBranchButton
-						))
+						if !DefaultBranchResolver.isDefaultBranch(store.currentBranch, configured: store.defaultBranch),
+						   !store.isMergeInProgress
+						{
+							MergeMasterButtonView(store: store.scope(
+								\.mergeMasterButton,
+								action: \.mergeMasterButton
+							))
+							CheckoutDefaultBranchButtonView(store: store.scope(
+								\.checkoutDefaultBranchButton,
+								action: \.checkoutDefaultBranchButton
+							))
+						}
 					}
+					// macOS 27 no longer draws a menu item's icon for a bare `Label`; ask for it explicitly.
+					.labelStyle(.titleAndIcon)
 				} label: {
 					Text("Git Actions")
 						.font(.system(size: 12))

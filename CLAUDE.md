@@ -212,3 +212,4 @@ Packages/
 - Large directory scans may be slow
 - Git operations use `ProcessRunner.runGit()` to shell out to git
 - Each package has its own `Package.swift` under `Packages/<Name>/`
+- macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `GitActionsMenuView`, `TuistButtonView`). A nested `Menu`'s content does not inherit it and needs its own
