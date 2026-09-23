@@ -19,9 +19,13 @@ public struct GitGraphView: View {
 	@State
 	private var hasScrolledToHead = false
 
-	/// Focused on open so ↑/↓ walk the commits without having to click a row first.
+	/// Which list ↑/↓ drive. The commit list is focused on open so ↑/↓ walk the commits
+	/// without having to click a row first; clicking a file (or →) hands focus to the file list.
+	///
+	/// Tracked explicitly rather than left to the click: with a plain Bool the commit list kept
+	/// focus after a file was clicked, so ↑/↓ went on moving the commit selection.
 	@FocusState
-	private var isListFocused: Bool
+	private var focusedPane: GitGraphPane?
 
 	private struct ColumnDrag: Equatable {
 		let column: GitGraphColumnWidths.Column
@@ -95,7 +99,11 @@ public struct GitGraphView: View {
 			if let detailStore = store.scope(\.commitDetail, action: \.commitDetail) {
 				CommitDetailView(
 					store: detailStore,
-					onClose: { store.send(.closeDetailButtonTapped) }
+					focusedPane: $focusedPane,
+					onClose: {
+						store.send(.closeDetailButtonTapped)
+						focusedPane = .commits
+					}
 				)
 				.frame(minHeight: 200, idealHeight: 340)
 			}
@@ -135,6 +143,10 @@ public struct GitGraphView: View {
 					Section {
 						ForEach(store.rows) { row in
 							GitGraphRowView(row: row, widths: effectiveWidths, columnGap: Self.columnGap)
+								.contentShape(Rectangle())
+								// Clicking the commit already selected changes no selection, so the
+								// selection binding cannot take focus back from the file list; the tap can.
+								.simultaneousGesture(TapGesture().onEnded { focusedPane = .commits })
 								.tag(row.id)
 								.listRowInsets(EdgeInsets())
 								.listRowSeparator(.hidden)
@@ -162,7 +174,15 @@ public struct GitGraphView: View {
 					}
 				}
 				.listStyle(.plain)
-				.focused($isListFocused)
+				.focused($focusedPane, equals: .commits)
+				.onKeyPress(.rightArrow) {
+					guard store.commitDetail != nil else {
+						return .ignored
+					}
+
+					focusedPane = .files
+					return .handled
+				}
 				// Rows draw their lane lines edge to edge, so the list must not pad them to a
 				// taller default row — a gap would break the vertical lines between commits.
 				.environment(\.defaultMinListRowHeight, GitGraphRowView.rowHeight)
@@ -184,7 +204,7 @@ public struct GitGraphView: View {
 					}
 
 					hasScrolledToHead = true
-					isListFocused = true
+					focusedPane = .commits
 					guard let headRowID = store.rows.first(where: \.commit.isHead)?.id else {
 						return
 					}
@@ -209,6 +229,10 @@ public struct GitGraphView: View {
 				}
 
 				store.send(.commitTapped(newValue))
+				// A click on a commit while the file list has focus must take focus back:
+				// the new commit reloads the file list, which is swapped for a spinner while
+				// loading, so the focused view vanishes and ↑/↓ would reach nothing.
+				focusedPane = .commits
 			}
 		)
 	}

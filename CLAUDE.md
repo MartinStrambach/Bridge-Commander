@@ -105,6 +105,7 @@ Packages/
 - `selectedCommitHash` is kept on the parent state alongside `commitDetail` on purpose, so a row observes only that one property instead of re-rendering whenever the child loads a file list or diff
 - `commitTapped` builds the child state and sends `.commitDetail(.task)` itself rather than relying on the view's `.task`, so re-selecting always reloads even when SwiftUI reuses the pane
 - Selection is read-only: it shells out to `git show` only, and never checks anything out
+- Keyboard focus between the commit list and the file list is an explicit `@FocusState` (`GitGraphPane`), not left to clicks: with a plain `Bool` the commit list kept focus after a file was clicked, so ↑/↓ kept walking the commits. Clicking a row moves focus to its list via a `.simultaneousGesture(TapGesture())` on the row, not via the file selection binding — the list also writes its selection back on reload (moving focus on those writes stole it from the commit list after every ↑/↓), and a click on the already-selected first file changes no selection at all; selecting a commit (click or key) moves it back to the commit list — the file list is swapped for a spinner while the new commit loads, so leaving focus there left ↑/↓ reaching nothing; → (commit list, with the pane open) and ← (file list) switch between them
 
 **RepositoryFeature** — top-level feature UI and reducers
 - `RepositoryListReducer` / `RepositoryListView` — main list state
