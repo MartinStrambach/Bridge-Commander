@@ -9,6 +9,9 @@ struct FileChangeListView: View {
 	@Bindable
 	var store: StoreOf<FileChangeList>
 
+	@FocusState
+	private var isListFocused: Bool
+
 	var body: some View {
 		VStack(spacing: 0) {
 			SectionHeader(
@@ -47,10 +50,13 @@ struct FileChangeListView: View {
 						)
 						.tag(file.id)
 						.background(
-							DoubleClickCatcher {
-								store.send(.updateSelection([file.id]))
-								store.send(.openInIDE(file))
-							}
+							ClickCatcher(
+								onClick: { isListFocused = true },
+								onDoubleClick: {
+									store.send(.updateSelection([file.id]))
+									store.send(.openInIDE(file))
+								}
+							)
 						)
 					}
 				}
@@ -62,6 +68,32 @@ struct FileChangeListView: View {
 					contextMenu(forSelection: ids)
 				}
 				.listStyle(.plain)
+				.focused($isListFocused)
+				// Clicking a row does not make the list first responder on macOS 27, so focus is
+				// claimed explicitly: on a click (see `ClickCatcher`), when the list opens with a
+				// file already auto-selected, and whenever the selection changes — which also
+				// carries focus across when staging a file moves the selection into the other list.
+				.onAppear {
+					if !store.selectedFileIds.isEmpty {
+						isListFocused = true
+					}
+				}
+				.onChange(of: store.selectedFileIds) { _, ids in
+					if !ids.isEmpty {
+						isListFocused = true
+					}
+				}
+				// ↑/↓ are handled here rather than left to the native table: on macOS 27 they
+				// neither moved the selection nor wrote it back through `selection`. ⇧ is left
+				// to the table so extending the selection keeps working.
+				.onKeyPress(keys: [.upArrow, .downArrow]) { press in
+					guard press.modifiers.isDisjoint(with: [.shift, .command, .option]) else {
+						return .ignored
+					}
+
+					store.send(.moveSelection(by: press.key == .upArrow ? -1 : 1))
+					return .handled
+				}
 				.onKeyPress(.space) {
 					store.send(.spaceKeyPressed)
 					return .handled
@@ -154,25 +186,29 @@ struct FileChangeListView: View {
 	}
 }
 
-private struct DoubleClickCatcher: NSViewRepresentable {
-	let action: () -> Void
+private struct ClickCatcher: NSViewRepresentable {
+	let onClick: () -> Void
+	let onDoubleClick: () -> Void
 
-	func makeNSView(context: Context) -> DoubleClickCatcherView {
-		DoubleClickCatcherView(action: action)
+	func makeNSView(context: Context) -> ClickCatcherView {
+		ClickCatcherView(onClick: onClick, onDoubleClick: onDoubleClick)
 	}
 
-	func updateNSView(_ nsView: DoubleClickCatcherView, context: Context) {
-		nsView.action = action
+	func updateNSView(_ nsView: ClickCatcherView, context: Context) {
+		nsView.onClick = onClick
+		nsView.onDoubleClick = onDoubleClick
 	}
 }
 
-private final class DoubleClickCatcherView: NSView {
-	var action: (() -> Void)?
+private final class ClickCatcherView: NSView {
+	var onClick: (() -> Void)?
+	var onDoubleClick: (() -> Void)?
 
 	private var monitor: Any?
 
-	init(action: @escaping () -> Void) {
-		self.action = action
+	init(onClick: @escaping () -> Void, onDoubleClick: @escaping () -> Void) {
+		self.onClick = onClick
+		self.onDoubleClick = onDoubleClick
 		super.init(frame: .zero)
 	}
 
@@ -194,15 +230,15 @@ private final class DoubleClickCatcherView: NSView {
 		monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
 			guard
 				let self,
-				event.clickCount == 2,
-				event.window === self.window
+				event.window === self.window,
+				bounds.contains(convert(event.locationInWindow, from: nil))
 			else {
 				return event
 			}
 
-			let point = convert(event.locationInWindow, from: nil)
-			if bounds.contains(point) {
-				action?()
+			onClick?()
+			if event.clickCount == 2 {
+				onDoubleClick?()
 			}
 			return event
 		}
