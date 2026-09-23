@@ -20,6 +20,8 @@ struct RepoGroupSettingsCodableTests {
 		#expect(settings.webIndexPath == "")
 		#expect(settings.defaultBranch == "")
 		#expect(settings.youtrackBaseURL == "")
+		#expect(settings.terminalStartupCommand == "")
+		#expect(settings.skipGlobalTerminalStartupCommand == false)
 	}
 
 	@Test("an empty JSON object decodes to all defaults")
@@ -42,7 +44,9 @@ struct RepoGroupSettingsCodableTests {
 			supportsWeb: true,
 			webIndexPath: "dist/index.html",
 			defaultBranch: "develop",
-			youtrackBaseURL: "https://youtrack.example.com"
+			youtrackBaseURL: "https://youtrack.example.com",
+			terminalStartupCommand: "mise install && claude",
+			skipGlobalTerminalStartupCommand: true
 		)
 		let data = try JSONEncoder().encode(original)
 		let decoded = try JSONDecoder().decode(RepoGroupSettings.self, from: data)
@@ -67,6 +71,8 @@ struct RepoGroupSettingsCodableTests {
 		#expect(decoded.webIndexPath == "")
 		#expect(decoded.defaultBranch == "")
 		#expect(decoded.youtrackBaseURL == "")
+		#expect(decoded.terminalStartupCommand == "")
+		#expect(decoded.skipGlobalTerminalStartupCommand == false)
 	}
 
 	@Test("an unknown xcodeFilePreference value does not wipe the rest of the settings")
