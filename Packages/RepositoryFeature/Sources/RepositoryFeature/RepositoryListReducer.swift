@@ -108,6 +108,7 @@ struct RepositoryListReducer {
 			case showTerminalsRequested
 			case sortModeButtonTapped
 			case terminalSessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
+			case worktreeCreatedExternally(rootPath: String)
 		}
 
 		enum Alert: Equatable {
@@ -396,6 +397,21 @@ struct RepositoryListReducer {
 				)
 
 			// MARK: - Per-group scan (worktree added/removed)
+
+			case let .view(.worktreeCreatedExternally(rootPath)):
+				// Created by an App Intent, which knows only the tracked root path. A path that
+				// names no group is ignored: the list may not have scanned it yet, and the next
+				// full scan finds the worktree anyway.
+				guard state.repositoryGroups[id: rootPath] != nil else {
+					return .none
+				}
+				state.isScanning = true
+				return .run { send in
+					let rows = await GitWorktreeScanner.listWorktrees(forRepo: rootPath)
+					await send(.didScanGroup(rootPath: rootPath, rows: rows))
+					await send(.scanCompleted)
+				}
+				.cancellable(id: CancellableId.scan)
 
 			case let .repositoryGroups(.element(id: groupId, action: .header(.worktreeCreated))),
 			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated)))):
