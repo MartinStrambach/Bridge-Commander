@@ -414,7 +414,7 @@ struct RepositoryListReducer {
 				state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
 				if state.terminalLayout?.activeRepositoryPath == worktreePath {
 					if let next = state.terminalSessions.first {
-						state.terminalLayout?.activate(next)
+						activateOtherRepository(next, in: &state)
 					}
 					else {
 						state.terminalLayout = nil
@@ -681,7 +681,7 @@ struct RepositoryListReducer {
 						state.terminalLayout?.activate(neighbour)
 					}
 					else if let next = state.terminalSessions.first {
-						state.terminalLayout?.activate(next)
+						activateOtherRepository(next, in: &state)
 					}
 					else {
 						state.terminalLayout = nil
@@ -732,7 +732,7 @@ struct RepositoryListReducer {
 				state.terminalLayout?.lastActiveSessionByRepo[repositoryPath] = nil
 				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
 					if let next = state.terminalSessions.first {
-						state.terminalLayout?.activate(next)
+						activateOtherRepository(next, in: &state)
 					}
 					else {
 						state.terminalLayout = nil
@@ -1169,6 +1169,18 @@ private func applySettings(
 	}
 	row.defaultBranch = settings.defaultBranch
 	row.gitActionsMenu.setDefaultBranch(settings.defaultBranch)
+}
+
+/// Switch the panel to a session of a different repository after the active repository's last
+/// tab went away. The toolbar buttons are copies of the row's state, so they have to be re-synced
+/// too — `activate` alone left them pointing at the closed repository (the Xcode button kept
+/// opening the old repository's project).
+private func activateOtherRepository(
+	_ session: TerminalSession,
+	in state: inout RepositoryListReducer.State
+) {
+	state.terminalLayout?.activate(session)
+	syncTerminalButtons(for: session.repositoryPath, in: &state)
 }
 
 private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {
