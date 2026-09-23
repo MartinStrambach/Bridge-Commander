@@ -5,10 +5,17 @@ import DiffModelMapping
 import GitCore
 import SwiftUI
 
+/// The list of the graph view that ↑/↓ currently drive.
+enum GitGraphPane: Hashable {
+	case commits
+	case files
+}
+
 /// The bottom pane of the commit graph: the selected commit's files on the left,
 /// the selected file's diff on the right.
 struct CommitDetailView: View {
 	let store: StoreOf<CommitDetailReducer>
+	var focusedPane: FocusState<GitGraphPane?>.Binding
 	let onClose: () -> Void
 
 	var body: some View {
@@ -97,7 +104,18 @@ struct CommitDetailView: View {
 				List(
 					selection: Binding(
 						get: { store.selectedFileId },
-						set: { store.send(.fileSelected($0)) }
+						set: { fileId in
+							// The list also writes back on its own when a reload replaces its rows
+							// (nil, or the file the reducer already picked). Only a real change of
+							// file is the user's doing — moving focus on the others would steal it
+							// from the commit list after every ↑/↓ there.
+							let isUserPick = fileId != nil && fileId != store.selectedFileId
+							store.send(.fileSelected(fileId))
+							if isUserPick {
+								// A click must move focus here, or ↑/↓ keep walking the commits.
+								focusedPane.wrappedValue = .files
+							}
+						}
 					)
 				) {
 					ForEach(store.files) { file in
@@ -106,6 +124,11 @@ struct CommitDetailView: View {
 					}
 				}
 				.listStyle(.plain)
+				.focused(focusedPane, equals: .files)
+				.onKeyPress(.leftArrow) {
+					focusedPane.wrappedValue = .commits
+					return .handled
+				}
 			}
 		}
 		.background(Color(nsColor: .textBackgroundColor))
