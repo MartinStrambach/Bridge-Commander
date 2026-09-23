@@ -20,73 +20,81 @@ struct TuistButtonView: View {
 			}
 			else {
 				Menu {
-					Button {
-						store.send(.generateTapped)
-					} label: {
-						Label("Generate", systemImage: "hammer")
-					}
-
-					Button {
-						store.send(.generateWithoutCacheTapped)
-					} label: {
-						Label("Generate (No Cache)", systemImage: "hammer.circle")
-					}
-
-					Button {
-						store.send(.installTapped)
-					} label: {
-						Label("Install", systemImage: "arrow.down.circle")
-					}
-
-					Button {
-						store.send(.installUpdateTapped)
-					} label: {
-						Label("Install (Update)", systemImage: "arrow.down.circle.dotted")
-					}
-
-					Button {
-						store.send(.cacheTapped)
-					} label: {
-						Label("Cache", systemImage: "tray")
-					}
-
-					Button {
-						store.send(.installCacheAndGenerateTapped)
-					} label: {
-						Label("Install, Cache & Generate", systemImage: "wand.and.stars")
-					}
-
-					Button {
-						store.send(.editTapped)
-					} label: {
-						Label("Edit", systemImage: "pencil")
-					}
-
-					Button {
-						store.send(.inspectDependenciesTapped)
-					} label: {
-						Label("Inspect", systemImage: "magnifyingglass")
-					}
-
-					Menu {
+					Group {
 						Button {
-							store.send(.cleanTapped(nil))
+							store.send(.generateTapped)
 						} label: {
-							Label("Everything", systemImage: "paintbrush")
+							Label("Generate", systemImage: "hammer")
 						}
 
-						Divider()
+						Button {
+							store.send(.generateWithoutCacheTapped)
+						} label: {
+							Label("Generate (No Cache)", systemImage: "hammer.circle")
+						}
 
-						ForEach(TuistCleanCategory.allCases, id: \.self) { category in
-							Button {
-								store.send(.cleanTapped(category))
-							} label: {
-								Label(category.displayName, systemImage: category.systemImage)
+						Button {
+							store.send(.installTapped)
+						} label: {
+							Label("Install", systemImage: "arrow.down.circle")
+						}
+
+						Button {
+							store.send(.installUpdateTapped)
+						} label: {
+							Label("Install (Update)", systemImage: "arrow.down.circle.dotted")
+						}
+
+						Button {
+							store.send(.cacheTapped)
+						} label: {
+							Label("Cache", systemImage: "tray")
+						}
+
+						Button {
+							store.send(.installCacheAndGenerateTapped)
+						} label: {
+							Label("Install, Cache & Generate", systemImage: "wand.and.stars")
+						}
+
+						Button {
+							store.send(.editTapped)
+						} label: {
+							Label("Edit", systemImage: "pencil")
+						}
+
+						Button {
+							store.send(.inspectDependenciesTapped)
+						} label: {
+							Label("Inspect", systemImage: "magnifyingglass")
+						}
+
+						Menu {
+							Group {
+								Button {
+									store.send(.cleanTapped(nil))
+								} label: {
+									Label("Everything", systemImage: "paintbrush")
+								}
+
+								Divider()
+
+								ForEach(TuistCleanCategory.allCases, id: \.self) { category in
+									Button {
+										store.send(.cleanTapped(category))
+									} label: {
+										Label(category.displayName, systemImage: category.systemImage)
+									}
+								}
 							}
+							// A submenu's content does not inherit the style applied around it.
+							.labelStyle(.titleAndIcon)
+						} label: {
+							Label("Clean", systemImage: "paintbrush")
 						}
-					} label: {
-						Label("Clean", systemImage: "paintbrush")
 					}
+					// macOS 27 no longer draws a menu item's icon for a bare `Label`; ask for it explicitly.
+					.labelStyle(.titleAndIcon)
 				} label: {
 					Text("Tuist")
 						.font(.system(size: 12))
