@@ -21,6 +21,12 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 	static var terminalFontName: Self {
 		appStorage("terminalFontName")
 	}
+
+	/// Typed into every new built-in terminal tab once its shell is up. A repository group's own
+	/// `RepoGroupSettings.terminalStartupCommand` overrides it; empty = the shell starts idle.
+	static var terminalStartupCommand: Self {
+		appStorage("terminalStartupCommand")
+	}
 }
 
 public extension SharedReaderKey where Self == AppStorageKey<Double> {

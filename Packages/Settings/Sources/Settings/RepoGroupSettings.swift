@@ -33,6 +33,14 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	/// a path for path-hosted instances. When empty, the YouTrack integration is disabled —
 	/// no ticket button, no issue fetch, no state menu. Ticket ID parsing stays available.
 	public var youtrackBaseURL: String = ""
+	/// Typed into every new built-in terminal tab of this group once its shell is up, as if the
+	/// user had entered it (e.g. "mise install" or "claude"). Overrides the global
+	/// `terminalStartupCommand` key; empty = fall back to that global command, unless
+	/// `skipGlobalTerminalStartupCommand` is set.
+	public var terminalStartupCommand: String = ""
+	/// When true and `terminalStartupCommand` is blank, this group's tabs start idle instead of
+	/// running the global startup command. Has no effect while the group has a command of its own.
+	public var skipGlobalTerminalStartupCommand: Bool = false
 
 	/// Memberwise initializer with default values
 	public init(
@@ -47,7 +55,9 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		supportsWeb: Bool = false,
 		webIndexPath: String = "",
 		defaultBranch: String = "",
-		youtrackBaseURL: String = ""
+		youtrackBaseURL: String = "",
+		terminalStartupCommand: String = "",
+		skipGlobalTerminalStartupCommand: Bool = false
 	) {
 		self.supportsIOS = supportsIOS
 		self.supportsAndroid = supportsAndroid
@@ -61,6 +71,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.webIndexPath = webIndexPath
 		self.defaultBranch = defaultBranch
 		self.youtrackBaseURL = youtrackBaseURL
+		self.terminalStartupCommand = terminalStartupCommand
+		self.skipGlobalTerminalStartupCommand = skipGlobalTerminalStartupCommand
 	}
 
 	// Custom decoder: uses decodeIfPresent so keys missing from older JSON
@@ -85,5 +97,10 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.webIndexPath = try c.decodeIfPresent(String.self, forKey: .webIndexPath) ?? ""
 		self.defaultBranch = try c.decodeIfPresent(String.self, forKey: .defaultBranch) ?? ""
 		self.youtrackBaseURL = try c.decodeIfPresent(String.self, forKey: .youtrackBaseURL) ?? ""
+		self.terminalStartupCommand = try c.decodeIfPresent(String.self, forKey: .terminalStartupCommand) ?? ""
+		self.skipGlobalTerminalStartupCommand = try c.decodeIfPresent(
+			Bool.self,
+			forKey: .skipGlobalTerminalStartupCommand
+		) ?? false
 	}
 }

@@ -74,6 +74,7 @@ public final class TerminalViewStore {
 		terminalView.terminal.changeHistorySize(3000)
 
 		terminalView.processDelegate = processDelegate
+		terminalView.pendingStartupCommand = session.startupCommand
 
 		terminalView.startProcess(
 			executable: shellExecutable,

@@ -43,6 +43,9 @@ struct RepositoryListReducer {
 		@Shared(.groupSettings)
 		fileprivate(set) var groupSettings: [String: RepoGroupSettings] = [:]
 
+		@Shared(.terminalStartupCommand)
+		fileprivate(set) var terminalStartupCommand = ""
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -587,7 +590,8 @@ struct RepositoryListReducer {
 					let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
 					let session = TerminalSession(
 						repositoryPath: repositoryPath,
-						startingDirectory: startingDirectory
+						startingDirectory: startingDirectory,
+						startupCommand: startupCommand(for: repoSettings, in: state)
 					)
 					state.terminalSessions.append(session)
 					state.terminalLayout?.activate(session)
@@ -608,7 +612,11 @@ struct RepositoryListReducer {
 					.filter { $0.repositoryPath == path }
 					.map(\.tabIndex)
 					.max() ?? 0
-				let session = TerminalSession(repositoryPath: path, tabIndex: maxIndex + 1)
+				let session = TerminalSession(
+					repositoryPath: path,
+					startupCommand: startupCommand(for: groupSettings(for: path, in: state), in: state),
+					tabIndex: maxIndex + 1
+				)
 				state.terminalSessions.append(session)
 				state.terminalLayout?.activate(session)
 				return .none
@@ -748,7 +756,11 @@ struct RepositoryListReducer {
 				let repoPath = old.repositoryPath
 				let tabIndex = old.tabIndex
 				state.terminalSessions.remove(id: sessionId)
-				let newSession = TerminalSession(repositoryPath: repoPath, tabIndex: tabIndex)
+				let newSession = TerminalSession(
+					repositoryPath: repoPath,
+					startupCommand: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
+					tabIndex: tabIndex
+				)
 				state.terminalSessions.append(newSession)
 				state.terminalLayout?.activate(newSession)
 				return .none
@@ -980,7 +992,11 @@ private func openTerminal(
 				""
 			}
 		let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
-		session = TerminalSession(repositoryPath: repositoryPath, startingDirectory: startingDirectory)
+		session = TerminalSession(
+			repositoryPath: repositoryPath,
+			startingDirectory: startingDirectory,
+			startupCommand: startupCommand(for: repoSettings, in: state)
+		)
 		state.terminalSessions.append(session)
 	}
 	if state.terminalLayout == nil {
@@ -1278,4 +1294,15 @@ private func groupSettings(
 		}
 	}
 	return RepoGroupSettings()
+}
+
+/// The group's own command when it has one, otherwise the global one — unless the group opted
+/// out of the global command, in which case its tabs start idle.
+private func startupCommand(
+	for repoSettings: RepoGroupSettings,
+	in state: RepositoryListReducer.State
+) -> String {
+	let own = repoSettings.terminalStartupCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+	if !own.isEmpty { return own }
+	return repoSettings.skipGlobalTerminalStartupCommand ? "" : state.terminalStartupCommand
 }

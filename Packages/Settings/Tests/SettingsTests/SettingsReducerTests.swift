@@ -29,6 +29,64 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Group terminal startup command
+
+	@Test("setGroupTerminalStartupCommand stores each keystroke as typed, spaces included")
+	func setGroupTerminalStartupCommandKeepsSpaces() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		// The TextField writes on every keystroke; trimming here would eat the space between words.
+		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "mise ")) {
+			$0.groupSettings["repo"] = RepoGroupSettings(terminalStartupCommand: "mise ")
+		}
+		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "mise install")) {
+			$0.groupSettings["repo"] = RepoGroupSettings(terminalStartupCommand: "mise install")
+		}
+	}
+
+	@Test("setGroupTerminalStartupCommand leaves the group's other settings alone")
+	func setGroupTerminalStartupCommandKeepsOtherSettings() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setGroupDefaultBranch(groupId: "repo", value: "develop")) {
+			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "develop")
+		}
+		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "claude")) {
+			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "develop", terminalStartupCommand: "claude")
+		}
+		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "")) {
+			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "develop")
+		}
+	}
+
+	@Test("setGroupSkipGlobalTerminalStartupCommand toggles the group's opt-out")
+	func setGroupSkipGlobalTerminalStartupCommand() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setGroupSkipGlobalTerminalStartupCommand(groupId: "repo", value: true)) {
+			$0.groupSettings["repo"] = RepoGroupSettings(skipGlobalTerminalStartupCommand: true)
+		}
+		await store.send(.setGroupSkipGlobalTerminalStartupCommand(groupId: "repo", value: false)) {
+			$0.groupSettings["repo"] = RepoGroupSettings()
+		}
+	}
+
+	@Test("setTerminalStartupCommand stores the global command as typed")
+	func setTerminalStartupCommandKeepsSpaces() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setTerminalStartupCommand("mise ")) {
+			$0.$terminalStartupCommand.withLock { $0 = "mise " }
+		}
+		await store.send(.setTerminalStartupCommand("mise install")) {
+			$0.$terminalStartupCommand.withLock { $0 = "mise install" }
+		}
+	}
+
 	// MARK: - Built-in terminal
 
 	@Test("copy-on-select is off until the user turns it on")

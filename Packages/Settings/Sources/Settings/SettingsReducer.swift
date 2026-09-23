@@ -78,6 +78,9 @@ public struct SettingsReducer {
 		@Shared(.terminalMouseReporting)
 		public var terminalMouseReporting = true
 
+		@Shared(.terminalStartupCommand)
+		public var terminalStartupCommand = ""
+
 		@Shared(.terminalFontSize)
 		public var terminalFontSize = TerminalFontSize.default
 
@@ -116,6 +119,8 @@ public struct SettingsReducer {
 		case setGroupWebIndexPath(groupId: String, path: String)
 		case setGroupDefaultBranch(groupId: String, value: String)
 		case setGroupYouTrackBaseURL(groupId: String, value: String)
+		case setGroupTerminalStartupCommand(groupId: String, value: String)
+		case setGroupSkipGlobalTerminalStartupCommand(groupId: String, value: Bool)
 		case setBranchNameRegex(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
@@ -130,6 +135,7 @@ public struct SettingsReducer {
 		case setTerminalColorTheme(TerminalThemeSelection)
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
+		case setTerminalStartupCommand(String)
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
 		case importFromTerminalAppButtonTapped
@@ -390,6 +396,18 @@ public struct SettingsReducer {
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].youtrackBaseURL = trimmedURL }
 				return .none
 
+			case let .setGroupTerminalStartupCommand(groupId, value):
+				// Stored untrimmed: the TextField binding writes on every keystroke, and trimming
+				// here would eat the space typed between words. Consumers trim.
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].terminalStartupCommand = value }
+				return .none
+
+			case let .setGroupSkipGlobalTerminalStartupCommand(groupId, value):
+				state.$groupSettings.withLock {
+					$0[groupId, default: RepoGroupSettings()].skipGlobalTerminalStartupCommand = value
+				}
+				return .none
+
 			case let .setBranchNameRegex(regex):
 				state.$branchNameRegex.withLock { $0 = regex }
 				return .none
@@ -445,6 +463,11 @@ public struct SettingsReducer {
 
 			case let .setTerminalMouseReporting(value):
 				state.$terminalMouseReporting.withLock { $0 = value }
+				return .none
+
+			case let .setTerminalStartupCommand(value):
+				// Stored untrimmed for the same reason as the group command: consumers trim.
+				state.$terminalStartupCommand.withLock { $0 = value }
 				return .none
 
 			case let .setTerminalFontSize(size):

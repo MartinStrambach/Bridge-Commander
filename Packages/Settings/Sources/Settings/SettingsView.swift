@@ -367,6 +367,22 @@ public struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+
+			HStack {
+				Text("Startup command:")
+				TextField("Run in each new built-in terminal (empty = none)", text: Binding(
+					get: { store.terminalStartupCommand },
+					set: { store.send(.setTerminalStartupCommand($0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
+			}
+
+			Text(
+				"Typed into every new built-in terminal tab once its shell is ready. A repository group's own Terminal Command replaces it for that group's tabs."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
 		}
 		.frame(maxWidth: .infinity, alignment: .leading)
 		.padding()
@@ -832,6 +848,31 @@ public struct SettingsView: View {
 				))
 				.textFieldStyle(.roundedBorder)
 				.font(.system(.body, design: .monospaced))
+			}
+
+			HStack {
+				Text("Terminal Command")
+					.font(.caption)
+					.foregroundColor(.secondary)
+					.frame(width: 140, alignment: .leading)
+				TextField("Overrides the global startup command (empty = use global)", text: Binding(
+					get: { settings.terminalStartupCommand },
+					set: { store.send(.setGroupTerminalStartupCommand(groupId: groupId, value: $0)) }
+				))
+				.textFieldStyle(.roundedBorder)
+				.font(.system(.body, design: .monospaced))
+			}
+
+			HStack {
+				Spacer()
+					.frame(width: 140)
+				Toggle("Don't run the global startup command", isOn: Binding(
+					get: { settings.skipGlobalTerminalStartupCommand },
+					set: { store.send(.setGroupSkipGlobalTerminalStartupCommand(groupId: groupId, value: $0)) }
+				))
+				.font(.caption)
+				// A command of the group's own always wins, so the toggle only matters while it is blank.
+				.disabled(!settings.terminalStartupCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 			}
 
 			HStack {

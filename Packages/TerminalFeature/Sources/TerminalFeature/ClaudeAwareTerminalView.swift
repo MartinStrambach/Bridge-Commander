@@ -267,10 +267,22 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		selectionPasteboard.setString(text, forType: .string)
 	}
 
+	/// A command to type into the shell, held until the shell first writes something.
+	///
+	/// Sent on first output rather than straight after launch: bytes written before the shell has
+	/// its line editor up are echoed by the tty as raw typeahead, and then echoed again by the
+	/// line editor at the prompt, so the command would show twice. The first output is usually
+	/// the prompt; a startup file that prints something first costs at most that stray echo.
+	var pendingStartupCommand: String?
+
 	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
 	override public func dataReceived(slice: ArraySlice<UInt8>) {
 		super.dataReceived(slice: slice)
 		detector.outputReceived(slice)
+		if let command = pendingStartupCommand {
+			pendingStartupCommand = nil
+			send(txt: command + "\r")
+		}
 	}
 
 	/// Called when bytes are sent to the child process, whether typed, pasted or dropped.
