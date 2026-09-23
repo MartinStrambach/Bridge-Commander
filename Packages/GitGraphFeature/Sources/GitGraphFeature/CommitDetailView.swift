@@ -104,22 +104,19 @@ struct CommitDetailView: View {
 				List(
 					selection: Binding(
 						get: { store.selectedFileId },
-						set: { fileId in
-							// The list also writes back on its own when a reload replaces its rows
-							// (nil, or the file the reducer already picked). Only a real change of
-							// file is the user's doing — moving focus on the others would steal it
-							// from the commit list after every ↑/↓ there.
-							let isUserPick = fileId != nil && fileId != store.selectedFileId
-							store.send(.fileSelected(fileId))
-							if isUserPick {
-								// A click must move focus here, or ↑/↓ keep walking the commits.
-								focusedPane.wrappedValue = .files
-							}
-						}
+						// Focus is moved by the row tap below, not here: the list also writes back on
+						// its own when a reload replaces its rows, and moving focus on those writes
+						// would steal it from the commit list after every ↑/↓ there.
+						set: { store.send(.fileSelected($0)) }
 					)
 				) {
 					ForEach(store.files) { file in
 						FileChangeRow(file: file.toAppUI())
+							.contentShape(Rectangle())
+							// A click must move focus here, or ↑/↓ keep walking the commits — including
+							// a click on the file already selected (the first one, picked on load), which
+							// changes no selection. Simultaneous, so the list still handles the selection.
+							.simultaneousGesture(TapGesture().onEnded { focusedPane.wrappedValue = .files })
 							.tag(file.id)
 					}
 				}

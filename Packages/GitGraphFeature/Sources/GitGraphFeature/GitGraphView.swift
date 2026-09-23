@@ -143,6 +143,10 @@ public struct GitGraphView: View {
 					Section {
 						ForEach(store.rows) { row in
 							GitGraphRowView(row: row, widths: effectiveWidths, columnGap: Self.columnGap)
+								.contentShape(Rectangle())
+								// Clicking the commit already selected changes no selection, so the
+								// selection binding cannot take focus back from the file list; the tap can.
+								.simultaneousGesture(TapGesture().onEnded { focusedPane = .commits })
 								.tag(row.id)
 								.listRowInsets(EdgeInsets())
 								.listRowSeparator(.hidden)
