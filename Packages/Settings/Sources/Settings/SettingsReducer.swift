@@ -81,6 +81,9 @@ public struct SettingsReducer {
 		@Shared(.terminalStartupCommand)
 		public var terminalStartupCommand = ""
 
+		@Shared(.terminalStartupCommandInNewTabs)
+		public var terminalStartupCommandInNewTabs = false
+
 		@Shared(.terminalFontSize)
 		public var terminalFontSize = TerminalFontSize.default
 
@@ -136,6 +139,7 @@ public struct SettingsReducer {
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
 		case setTerminalStartupCommand(String)
+		case setTerminalStartupCommandInNewTabs(Bool)
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
 		case importFromTerminalAppButtonTapped
@@ -468,6 +472,10 @@ public struct SettingsReducer {
 			case let .setTerminalStartupCommand(value):
 				// Stored untrimmed for the same reason as the group command: consumers trim.
 				state.$terminalStartupCommand.withLock { $0 = value }
+				return .none
+
+			case let .setTerminalStartupCommandInNewTabs(value):
+				state.$terminalStartupCommandInNewTabs.withLock { $0 = value }
 				return .none
 
 			case let .setTerminalFontSize(size):

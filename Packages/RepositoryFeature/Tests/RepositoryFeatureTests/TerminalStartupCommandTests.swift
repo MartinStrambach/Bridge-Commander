@@ -7,15 +7,15 @@ import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
 
-// Every built-in terminal a repository opens carries its group's startup command, whichever
-// way the tab came to exist: first open, a new tab, or a retry after the shell failed. Groups
-// without a command of their own fall back to the global one. The
+// A repository's first built-in terminal tab carries its group's startup command; tabs opened
+// with "+" do so only when `terminalStartupCommandInNewTabs` is on, and a retry keeps whatever
+// the failed tab had. Groups without a command of their own fall back to the global one. The
 // trimming and the typing itself are covered in TerminalFeature.
 @Suite("Terminal startup command")
 @MainActor
 struct TerminalStartupCommandTests {
-	@Test("first open, new tab and retry all carry the group's command")
-	func everyNewSessionCarriesCommand() async {
+	@Test("only the first tab carries the command by default; a retry keeps what the tab had")
+	func onlyFirstTabCarriesCommandByDefault() async {
 		let store = makeStore(commands: ["/repos/alpha": "claude"])
 		await scanGroups(store)
 
@@ -23,12 +23,119 @@ struct TerminalStartupCommandTests {
 		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude"])
 
 		await store.send(.terminalLayout(.newTabRequested))
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "claude"])
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil])
 
 		let first = store.state.terminalSessions[0].id
 		await store.send(.terminalLayout(.retryTab(sessionId: first)))
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "claude"])
 		#expect(store.state.terminalSessions[id: first] == nil)
+		let second = store.state.terminalSessions[0].id
+		await store.send(.terminalLayout(.retryTab(sessionId: second)))
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil])
+	}
+
+	@Test("with the new-tabs option on, new tabs carry the command too")
+	func newTabsCarryCommandWhenEnabled() async {
+		let store = makeStore(commands: ["/repos/alpha": "claude"], inNewTabs: true)
+		await scanGroups(store)
+
+		await openPanel(store, on: "/repos/alpha")
+		await store.send(.terminalLayout(.newTabRequested))
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "claude"])
+	}
+
+	@Test("a worktree's first tab carries the command, its new tabs do not")
+	func worktreeNewTabIsPlainByDefault() async {
+		let store = makeStore(commands: ["/repos/alpha": "claude"])
+		await scanGroups(store)
+		await openPanel(store, on: "/repos/alpha")
+
+		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha-fix")))
+		await store.send(.terminalLayout(.newTabRequested))
+		#expect(store.state.terminalSessions.map(\.repositoryPath) == [
+			"/repos/alpha", "/repos/alpha-fix", "/repos/alpha-fix",
+		])
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "claude", nil])
+	}
+
+	@Test("a global command also stays out of new tabs by default")
+	func globalCommandStaysOutOfNewTabs() async {
+		let store = makeStore(commands: [:], global: "mise install")
+		await scanGroups(store)
+		await openPanel(store, on: "/repos/gamma")
+		await store.send(.terminalLayout(.newTabRequested))
+
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["mise install", nil])
+	}
+
+	@Test("turning the new-tabs option on applies to the next tab, not to tabs already open")
+	func enablingNewTabsOptionAppliesToNextTab() async {
+		let store = makeStore(commands: ["/repos/alpha": "claude"])
+		await scanGroups(store)
+		await openPanel(store, on: "/repos/alpha")
+		await store.send(.terminalLayout(.newTabRequested))
+
+		@Shared(.terminalStartupCommandInNewTabs) var inNewTabs = false
+		$inNewTabs.withLock { $0 = true }
+		await store.send(.terminalLayout(.newTabRequested))
+
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil, "claude"])
+	}
+
+	@Test("a group that opts out of the global command keeps new tabs idle with the option on")
+	func optOutAppliesToNewTabs() async {
+		let store = makeStore(commands: [:], global: "mise install", inNewTabs: true)
+		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
+		$groupSettings.withLock {
+			$0["/repos/alpha"] = RepoGroupSettings(skipGlobalTerminalStartupCommand: true)
+		}
+		await scanGroups(store)
+		await openPanel(store, on: "/repos/alpha")
+		await store.send(.terminalLayout(.newTabRequested))
+
+		#expect(store.state.terminalSessions.map(\.startupCommand) == [nil, nil])
+	}
+
+	@Test("retrying the first tab picks up an edited command")
+	func retryResolvesEditedCommand() async {
+		let store = makeStore(commands: ["/repos/alpha": "claude"])
+		await scanGroups(store)
+		await openPanel(store, on: "/repos/alpha")
+
+		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
+		$groupSettings.withLock { $0["/repos/alpha"]?.terminalStartupCommand = "lazygit" }
+		let first = store.state.terminalSessions[0].id
+		await store.send(.terminalLayout(.retryTab(sessionId: first)))
+
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["lazygit"])
+	}
+
+	@Test("retrying a plain tab keeps it plain even once the new-tabs option is on")
+	func retryOfPlainTabStaysPlain() async {
+		let store = makeStore(commands: ["/repos/alpha": "claude"])
+		await scanGroups(store)
+		await openPanel(store, on: "/repos/alpha")
+		await store.send(.terminalLayout(.newTabRequested))
+
+		@Shared(.terminalStartupCommandInNewTabs) var inNewTabs = false
+		$inNewTabs.withLock { $0 = true }
+		let plain = store.state.terminalSessions[1].id
+		await store.send(.terminalLayout(.retryTab(sessionId: plain)))
+
+		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil])
+	}
+
+	@Test("after closing a repository's terminals, reopening it runs the command again")
+	func reopeningAfterKillRunsCommand() async {
+		let store = makeStore(commands: ["/repos/alpha": "claude"])
+		await scanGroups(store)
+		await openPanel(store, on: "/repos/alpha")
+		await store.send(.terminalLayout(.newTabRequested))
+		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
+		await store.send(.terminalLayout(.killRepo(repositoryPath: "/repos/alpha")))
+
+		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+		#expect(store.state.terminalSessions.map(\.repositoryPath) == ["/repos/beta", "/repos/alpha"])
+		#expect(store.state.terminalSessions.map(\.startupCommand) == [nil, "claude"])
 	}
 
 	@Test("a worktree's terminal carries its group's command")
@@ -44,7 +151,7 @@ struct TerminalStartupCommandTests {
 
 	@Test("a group's command does not leak into another group's terminals")
 	func commandStaysInItsGroup() async {
-		let store = makeStore(commands: ["/repos/alpha": "claude", "/repos/beta": "npm start"])
+		let store = makeStore(commands: ["/repos/alpha": "claude", "/repos/beta": "npm start"], inNewTabs: true)
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/beta")
 		await store.send(.terminalLayout(.newTabRequested))
@@ -70,7 +177,7 @@ struct TerminalStartupCommandTests {
 
 	@Test("an edited command applies to the next tab, not to tabs already open")
 	func editAppliesToNewTabsOnly() async {
-		let store = makeStore(commands: ["/repos/alpha": "claude"])
+		let store = makeStore(commands: ["/repos/alpha": "claude"], inNewTabs: true)
 		await scanGroups(store)
 
 		await openPanel(store, on: "/repos/alpha")
@@ -83,7 +190,7 @@ struct TerminalStartupCommandTests {
 
 	@Test("groups without their own command use the global one; a group's own command overrides it")
 	func globalCommandIsFallback() async {
-		let store = makeStore(commands: ["/repos/alpha": "claude", "/repos/beta": "  "], global: "mise install")
+		let store = makeStore(commands: ["/repos/alpha": "claude", "/repos/beta": "  "], global: "mise install", inNewTabs: true)
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
@@ -121,13 +228,19 @@ struct TerminalStartupCommandTests {
 
 	// MARK: - Helpers
 
-	private func makeStore(commands: [String: String], global: String = "") -> TestStoreOf<RepositoryListReducer> {
+	private func makeStore(
+		commands: [String: String],
+		global: String = "",
+		inNewTabs: Bool = false
+	) -> TestStoreOf<RepositoryListReducer> {
 		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
 		$groupSettings.withLock {
 			$0 = commands.mapValues { RepoGroupSettings(terminalStartupCommand: $0) }
 		}
 		@Shared(.terminalStartupCommand) var terminalStartupCommand = ""
 		$terminalStartupCommand.withLock { $0 = global }
+		@Shared(.terminalStartupCommandInNewTabs) var terminalStartupCommandInNewTabs = false
+		$terminalStartupCommandInNewTabs.withLock { $0 = inNewTabs }
 
 		let store = TestStore(initialState: RepositoryListReducer.State()) {
 			RepositoryListReducer()

@@ -46,6 +46,9 @@ struct RepositoryListReducer {
 		@Shared(.terminalStartupCommand)
 		fileprivate(set) var terminalStartupCommand = ""
 
+		@Shared(.terminalStartupCommandInNewTabs)
+		fileprivate(set) var terminalStartupCommandInNewTabs = false
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -612,9 +615,13 @@ struct RepositoryListReducer {
 					.filter { $0.repositoryPath == path }
 					.map(\.tabIndex)
 					.max() ?? 0
+				// Only the repository's first tab runs the startup command by default; extra tabs
+				// are usually wanted as a plain shell beside it.
 				let session = TerminalSession(
 					repositoryPath: path,
-					startupCommand: startupCommand(for: groupSettings(for: path, in: state), in: state),
+					startupCommand: state.terminalStartupCommandInNewTabs
+						? startupCommand(for: groupSettings(for: path, in: state), in: state)
+						: nil,
 					tabIndex: maxIndex + 1
 				)
 				state.terminalSessions.append(session)
@@ -756,9 +763,13 @@ struct RepositoryListReducer {
 				let repoPath = old.repositoryPath
 				let tabIndex = old.tabIndex
 				state.terminalSessions.remove(id: sessionId)
+				// A retried tab runs the command only if the tab it replaces did, so retrying a
+				// plain-shell tab does not suddenly start the command in it.
 				let newSession = TerminalSession(
 					repositoryPath: repoPath,
-					startupCommand: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
+					startupCommand: old.startupCommand == nil
+						? nil
+						: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
 					tabIndex: tabIndex
 				)
 				state.terminalSessions.append(newSession)
