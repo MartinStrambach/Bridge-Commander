@@ -379,7 +379,18 @@ public struct SettingsView: View {
 			}
 
 			Text(
-				"Typed into every new built-in terminal tab once its shell is ready. A repository group's own Terminal Command replaces it for that group's tabs."
+				"Typed into a repository's first built-in terminal tab once its shell is ready. A repository group's own Terminal Command replaces it for that group's tabs."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
+
+			Toggle(
+				"Also run the startup command in new tabs",
+				isOn: $store.terminalStartupCommandInNewTabs.sending(\.setTerminalStartupCommandInNewTabs)
+			)
+
+			Text(
+				"With this off, tabs opened with + or ⌘T start with a plain shell."
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)

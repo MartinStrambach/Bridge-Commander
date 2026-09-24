@@ -87,6 +87,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("the startup command stays out of new tabs until the user turns that on")
+	func terminalStartupCommandInNewTabsDefaultsToOff() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalStartupCommandInNewTabs == false)
+
+		await store.send(.setTerminalStartupCommandInNewTabs(true)) {
+			$0.$terminalStartupCommandInNewTabs.withLock { $0 = true }
+		}
+		await store.send(.setTerminalStartupCommandInNewTabs(false)) {
+			$0.$terminalStartupCommandInNewTabs.withLock { $0 = false }
+		}
+	}
+
 	// MARK: - Built-in terminal
 
 	@Test("copy-on-select is off until the user turns it on")

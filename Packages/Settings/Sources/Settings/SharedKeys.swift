@@ -22,8 +22,10 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 		appStorage("terminalFontName")
 	}
 
-	/// Typed into every new built-in terminal tab once its shell is up. A repository group's own
-	/// `RepoGroupSettings.terminalStartupCommand` overrides it; empty = the shell starts idle.
+	/// Typed into the first built-in terminal tab of a repository once its shell is up (and into
+	/// tabs opened with "+" too when `terminalStartupCommandInNewTabs` is on). A repository
+	/// group's own `RepoGroupSettings.terminalStartupCommand` overrides it; empty = the shell
+	/// starts idle.
 	static var terminalStartupCommand: Self {
 		appStorage("terminalStartupCommand")
 	}
@@ -67,6 +69,13 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	/// (⇧-drag selects regardless).
 	static var terminalMouseReporting: Self {
 		appStorage("terminalMouseReporting")
+	}
+
+	/// Whether tabs opened with "+" / ⌘T also run the startup command. Off by default: the
+	/// command (typically a long-running tool such as `claude`) belongs in the repository's first
+	/// tab, and extra tabs are usually opened for a plain shell next to it.
+	static var terminalStartupCommandInNewTabs: Self {
+		appStorage("terminalStartupCommandInNewTabs")
 	}
 }
 
