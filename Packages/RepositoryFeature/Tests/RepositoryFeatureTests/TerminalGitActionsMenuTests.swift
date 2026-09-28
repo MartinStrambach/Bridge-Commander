@@ -66,6 +66,26 @@ struct TerminalGitActionsMenuTests {
 		await store.finish()
 	}
 
+	@Test("checking out the default branch from the header refreshes the opened repo's row")
+	func checkoutCompletionRefreshesActiveRow() async {
+		let store = makeStore()
+		store.exhaustivity = .off
+
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+
+		await store.send(.terminalLayout(.gitActionsMenu(
+			.checkoutDefaultBranchButton(.checkoutCompleted(result: .success("master")))
+		)))
+
+		// The new branch only reaches the header copy through the row's status fetch; without
+		// it the Merge/Checkout items stayed in the menu after switching to the default branch.
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.finish()
+	}
+
 	@Test("non-completion menu actions in the header do not refresh the row")
 	func nonCompletionMenuActionDoesNotRefresh() async {
 		let store = makeStore()
