@@ -4,25 +4,67 @@ import SwiftUI
 /// Renders a changed image as "Before" and "After" panes side by side. An added or deleted image
 /// shows a single pane. Each pane draws the image at its native size (never upscaled) on a
 /// checkerboard so transparency is visible, with pixel dimensions and byte size underneath.
+///
+/// Pinching an image zooms toward the pointer and dragging a zoomed image pans it; both panes share
+/// one `ImageZoom`, so Before and After stay aligned. Double-click resets.
 public struct ImageDiffView: View {
 	public let imageDiff: ImageDiff
 
 	/// nil until the first decode has run, so panes can distinguish "still decoding" from
 	/// "bytes are not a decodable image".
 	@State private var decoded: DecodedImages?
+	@State private var zoom = ImageZoom.identity
 
 	public init(imageDiff: ImageDiff) {
 		self.imageDiff = imageDiff
 	}
 
 	public var body: some View {
+		VStack(alignment: .trailing, spacing: 8) {
+			panes
+
+			// Below the images, so showing the controls never shifts them.
+			if zoom.isZoomed {
+				zoomControls
+			}
+		}
+		.frame(maxWidth: .infinity)
+		.padding()
+		.task(id: imageDiff) {
+			zoom = .identity
+			// NSImage parses only the header here; pixel decoding happens lazily on first draw and
+			// is cached by the image rep, which is why the result lives in state rather than being
+			// rebuilt on every render.
+			decoded = DecodedImages(
+				old: imageDiff.oldImageData.flatMap(DecodedImage.init),
+				new: imageDiff.newImageData.flatMap(DecodedImage.init)
+			)
+		}
+	}
+
+	private var zoomControls: some View {
+		HStack(spacing: 8) {
+			Text("\(Int((zoom.scale * 100).rounded()))%")
+				.font(.caption)
+				.monospacedDigit()
+				.foregroundStyle(.secondary)
+
+			Button("Reset Zoom") {
+				withAnimation(.snappy) { zoom = .identity }
+			}
+			.controlSize(.small)
+		}
+	}
+
+	private var panes: some View {
 		HStack(alignment: .top, spacing: 16) {
 			if let data = imageDiff.oldImageData {
 				ImageDiffPane(
 					title: "Before",
 					role: .deletion,
 					byteCount: data.count,
-					content: paneContent(for: decoded?.old)
+					content: paneContent(for: decoded?.old),
+					zoom: $zoom
 				)
 			}
 
@@ -31,20 +73,10 @@ public struct ImageDiffView: View {
 					title: "After",
 					role: .addition,
 					byteCount: data.count,
-					content: paneContent(for: decoded?.new)
+					content: paneContent(for: decoded?.new),
+					zoom: $zoom
 				)
 			}
-		}
-		.frame(maxWidth: .infinity)
-		.padding()
-		.task(id: imageDiff) {
-			// NSImage parses only the header here; pixel decoding happens lazily on first draw and
-			// is cached by the image rep, which is why the result lives in state rather than being
-			// rebuilt on every render.
-			decoded = DecodedImages(
-				old: imageDiff.oldImageData.flatMap(DecodedImage.init),
-				new: imageDiff.newImageData.flatMap(DecodedImage.init)
-			)
 		}
 	}
 
@@ -70,16 +102,21 @@ private struct DecodedImages {
 
 private struct DecodedImage {
 	let image: NSImage
+	/// What the zoomable layer draws; for a vector image, a rasterization at its point size.
+	let cgImage: CGImage
 	/// Pixel dimensions from the bitmap rep; `NSImage.size` is in points and honours DPI metadata,
 	/// so a 2x asset would otherwise report half its real size.
 	let pixelSize: CGSize?
 
 	init?(data: Data) {
-		guard let image = NSImage(data: data) else {
+		guard let image = NSImage(data: data),
+			let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+		else {
 			return nil
 		}
 
 		self.image = image
+		self.cgImage = cgImage
 		if let rep = image.representations.first, rep.pixelsWide > 0, rep.pixelsHigh > 0 {
 			self.pixelSize = CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
 		}
@@ -114,6 +151,7 @@ private struct ImageDiffPane: View {
 	let role: Role
 	let byteCount: Int
 	let content: Content
+	@Binding var zoom: ImageZoom
 
 	/// Tall images are scaled down to this height; short ones keep their native height.
 	private static let maxImageHeight: CGFloat = 560
@@ -145,11 +183,15 @@ private struct ImageDiffPane: View {
 				}
 
 			case let .image(decoded):
-				Image(nsImage: decoded.image)
-					.resizable()
-					.aspectRatio(contentMode: .fit)
-					.background(CheckerboardBackground())
+				// Pinch, pan and double-click are handled inside the layer view, in AppKit; see
+				// `ZoomableImageLayerView` for why they are not SwiftUI gestures.
+				ZoomableImageLayerView(image: decoded.cgImage, zoom: $zoom)
+					.aspectRatio(decoded.image.size, contentMode: .fit)
 					.clipShape(RoundedRectangle(cornerRadius: 4))
+					.background(
+						CheckerboardBackground()
+							.clipShape(RoundedRectangle(cornerRadius: 4))
+					)
 					.overlay(
 						RoundedRectangle(cornerRadius: 4)
 							.stroke(Color(nsColor: .separatorColor), lineWidth: 1)

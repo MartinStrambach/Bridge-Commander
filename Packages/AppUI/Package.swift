@@ -28,5 +28,6 @@ let package = Package(
                 .product(name: "GitCore", package: "GitCore"),
             ]
         ),
+        .testTarget(name: "AppUITests", dependencies: ["AppUI"]),
     ]
 )
