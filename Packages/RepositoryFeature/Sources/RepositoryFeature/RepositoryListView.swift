@@ -91,6 +91,11 @@ struct RepositoryListView: View {
 		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
 			send(.didBecomeActive)
 		}
+		.onReceive(NotificationCenter.default.publisher(for: .worktreeCreatedExternally)) { notification in
+			if let rootPath = notification.userInfo?[ExternalWorktreeCreator.rootPathKey] as? String {
+				send(.worktreeCreatedExternally(rootPath: rootPath))
+			}
+		}
 		.onChange(of: store.periodicRefreshInterval) { _, _ in
 			send(.periodicRefreshIntervalChanged)
 		}
