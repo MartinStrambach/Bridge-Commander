@@ -63,7 +63,8 @@ struct TerminalStartupCommandTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, _ in }
+			onStatusChange: { _, _ in },
+			onNotification: { _, _ in }
 		)
 		return (store, session, view)
 	}

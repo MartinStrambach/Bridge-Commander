@@ -36,7 +36,8 @@ public final class TerminalViewStore {
 		cursorColor: NSColor? = nil,
 		selectionColor: NSColor? = nil,
 		processDelegate: TerminalProcessDelegate,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
+		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
 	) -> ClaudeAwareTerminalView {
 		if let existing = views[session.id] {
 			return existing
@@ -45,7 +46,8 @@ public final class TerminalViewStore {
 		let terminalView = ClaudeAwareTerminalView(
 			repositoryPath: session.repositoryPath,
 			sessionId: session.id,
-			onStatusChange: onStatusChange
+			onStatusChange: onStatusChange,
+			onNotification: onNotification
 		)
 
 		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.

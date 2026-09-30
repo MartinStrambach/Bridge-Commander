@@ -20,7 +20,8 @@ struct CopyOnSelectTests {
 		let view = ClaudeAwareTerminalView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, _ in }
+			onStatusChange: { _, _ in },
+			onNotification: { _, _ in }
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 		view.selectionPasteboard = pasteboard

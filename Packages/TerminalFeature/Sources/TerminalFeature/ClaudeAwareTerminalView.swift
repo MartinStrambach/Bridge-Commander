@@ -11,6 +11,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	public let sessionId: UUID
 
 	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	private let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 
 	/// Built on first use, since it takes this view as its screen and `self` isn't available until
 	/// `super.init` has run.
@@ -29,14 +30,17 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	public init(
 		repositoryPath: String,
 		sessionId: UUID,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
+		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId
 		self.onStatusChange = onStatusChange
+		self.onNotification = onNotification
 		super.init(frame: .zero)
 		cellGridScale = Self.currentBackingScale(of: nil)
 		registerForDraggedTypes([.fileURL])
+		registerNotificationHandlers()
 	}
 
 	/// Unsupported: a pane is only ever built in code, for the session it belongs to.
@@ -145,6 +149,45 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 			send(bytes)
 			return nil
 		}
+	}
+
+	// MARK: - Notifications
+
+	/// Handles OSC 9 and OSC 777 the way Ghostty does. SwiftTerm parses OSC 777 but hands it to a
+	/// delegate method its Mac view never implements, and treats OSC 9 as a progress report only,
+	/// so both are taken over here. A registered handler replaces SwiftTerm's own for that code,
+	/// which is why a `9;4` progress report is passed back to SwiftTerm's progress bar by hand.
+	private func registerNotificationHandlers() {
+		let terminal = getTerminal()
+		terminal.registerOscHandler(code: 9) { [weak self] data in
+			guard let self else {
+				return
+			}
+
+			switch OSC9Payload(data) {
+			case let .notification(notification):
+				notificationReceived(notification)
+			case let .progress(report):
+				progressReport(source: terminal, report: report)
+			case .ignored:
+				break
+			}
+		}
+		terminal.registerOscHandler(code: 777) { [weak self] data in
+			if let notification = TerminalNotification(osc777: data) {
+				self?.notificationReceived(notification)
+			}
+		}
+	}
+
+	/// A program asking for the user is the plainest sign the pane is waiting, so the detector is
+	/// told before the notification goes up: it holds the pane at waiting until the user types.
+	private func notificationReceived(_ notification: TerminalNotification) {
+		guard detector.attentionRequested() else {
+			return
+		}
+
+		onNotification(sessionId, notification)
 	}
 
 	// MARK: - Focus

@@ -20,7 +20,7 @@ struct RepositoryListTerminalStatusTests {
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
 		} withDependencies: {
-			$0[ClaudeNotificationClient.self].post = { _, _, _ in }
+			$0[TerminalNotificationClient.self].post = { _ in }
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {

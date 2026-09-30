@@ -84,8 +84,8 @@ public struct SettingsReducer {
 		@Shared(.terminalStartupCommandInNewTabs)
 		public var terminalStartupCommandInNewTabs = false
 
-		@Shared(.claudeWaitingNotifications)
-		public var claudeWaitingNotifications = true
+		@Shared(.terminalNotifications)
+		public var terminalNotifications = true
 
 		@Shared(.terminalFontSize)
 		public var terminalFontSize = TerminalFontSize.default
@@ -143,7 +143,7 @@ public struct SettingsReducer {
 		case setTerminalMouseReporting(Bool)
 		case setTerminalStartupCommand(String)
 		case setTerminalStartupCommandInNewTabs(Bool)
-		case setClaudeWaitingNotifications(Bool)
+		case setTerminalNotifications(Bool)
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
 		case importFromTerminalAppButtonTapped
@@ -482,8 +482,8 @@ public struct SettingsReducer {
 				state.$terminalStartupCommandInNewTabs.withLock { $0 = value }
 				return .none
 
-			case let .setClaudeWaitingNotifications(value):
-				state.$claudeWaitingNotifications.withLock { $0 = value }
+			case let .setTerminalNotifications(value):
+				state.$terminalNotifications.withLock { $0 = value }
 				return .none
 
 			case let .setTerminalFontSize(size):

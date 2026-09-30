@@ -44,6 +44,12 @@ final class ClaudeStatusDetector {
 	/// would report a status for a session that no longer exists.
 	private var isStopped = false
 
+	/// Set when the program in the pane asked for a notification, and cleared by the user's next
+	/// keystroke. While set, idle checks do not release the pane: the program said it wants the
+	/// user, and nothing on screen can say otherwise — a notification from a build or a test run
+	/// comes with no Claude prompt to find, and would read as `.active` at the next quiet interval.
+	private var isHeldForAttention = false
+
 	private var renderTracker = RenderTracker()
 
 	/// Holds a waiting pane until a second idle check agrees it has gone back to work.
@@ -85,6 +91,7 @@ final class ClaudeStatusDetector {
 			return
 		}
 
+		isHeldForAttention = false
 		if currentStatus == .waitingForInput {
 			reportStatus(.active, reason: "user input")
 		}
@@ -92,6 +99,25 @@ final class ClaudeStatusDetector {
 		// Input has to re-arm the check too. A key that Claude doesn't echo produces no output, and
 		// without this the pane would sit on a stale `.active` until it wrote something again.
 		scheduleIdleCheck()
+	}
+
+	/// Takes in a notification the program in the pane asked for (OSC 9 or OSC 777). The pane is
+	/// waiting from now until the user types. Its session learns that together with the
+	/// notification rather than through `onStatusChange`, so the two do not each post one.
+	///
+	/// - Returns: `false` once the detector is stopped, when the notification belongs to a
+	///   session that is going away and should not be shown.
+	@discardableResult
+	func attentionRequested() -> Bool {
+		guard !isStopped else {
+			return false
+		}
+
+		trace("\(currentStatus) → waitingForInput on a notification request")
+		isHeldForAttention = true
+		currentStatus = .waitingForInput
+		waitingStateGate.reset()
+		return true
 	}
 
 	/// Ends all reporting. Called when the pane's session is killed, before the shell is hung up:
@@ -127,6 +153,11 @@ final class ClaudeStatusDetector {
 		}
 
 		let verdict = idleVerdict(on: screen)
+		if isHeldForAttention, verdict.status == .active {
+			trace("held waiting for attention over \(verdict)")
+			return
+		}
+
 		switch waitingStateGate.decide(verdict: verdict.status, currentStatus: currentStatus) {
 		case let .report(status):
 			reportStatus(status, reason: "idle check, \(verdict)")

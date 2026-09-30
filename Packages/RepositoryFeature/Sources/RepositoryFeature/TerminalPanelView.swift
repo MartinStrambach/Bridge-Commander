@@ -53,6 +53,7 @@ struct TerminalPanelView: View {
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let activeSessionId: UUID?
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 	let onRetry: (UUID) -> Void
 	let onNewTab: () -> Void
 	let onSelectTab: (UUID) -> Void
@@ -367,7 +368,8 @@ struct TerminalPanelView: View {
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
 				font: terminalFont,
-				onStatusChange: onStatusChange
+				onStatusChange: onStatusChange,
+				onNotification: onNotification
 			)
 
 			if

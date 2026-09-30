@@ -16,6 +16,7 @@ struct TerminalLayoutView: View {
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let terminalViewStore: TerminalViewStore
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 
 	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
 
@@ -40,6 +41,7 @@ struct TerminalLayoutView: View {
 				sessions: sessions,
 				activeSessionId: store.activeSessionId,
 				onStatusChange: onStatusChange,
+				onNotification: onNotification,
 				onRetry: { sessionId in
 					terminalViewStore.killSession(sessionId: sessionId)
 					store.send(.retryTab(sessionId: sessionId))

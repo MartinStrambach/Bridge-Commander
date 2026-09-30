@@ -5,17 +5,33 @@ import Foundation
 import Synchronization
 import UserNotifications
 
-// MARK: - Claude Notification Client
+// MARK: - Terminal Notification Client
 
-/// Posts a system notification when Claude Code in a built-in terminal tab is waiting for the
-/// user, and reports which tab's notification was clicked.
+/// What a built-in terminal tab shows in Notification Center.
+public struct TerminalNotificationContent: Equatable, Sendable {
+	public var sessionId: UUID
+	public var title: String
+	public var subtitle: String?
+	public var body: String
+
+	public init(sessionId: UUID, title: String, subtitle: String? = nil, body: String) {
+		self.sessionId = sessionId
+		self.title = title
+		self.subtitle = subtitle
+		self.body = body
+	}
+}
+
+/// Posts a system notification for a built-in terminal tab — Claude Code waiting for the user, or
+/// any program asking for one with OSC 9 / OSC 777 — and reports which tab's notification was
+/// clicked.
 ///
 /// A notification's identifier is its terminal session's id, so a second post for the same tab
 /// replaces the first rather than stacking, and a click can name the tab to open.
 @DependencyClient
-public struct ClaudeNotificationClient: Sendable {
+public struct TerminalNotificationClient: Sendable {
 	/// Asks for permission on first use; posts nothing when it is refused.
-	public var post: @Sendable (_ sessionId: UUID, _ title: String, _ body: String) async -> Void
+	public var post: @Sendable (_ content: TerminalNotificationContent) async -> Void
 	/// Withdraws the tab's notification, delivered or not.
 	public var remove: @Sendable (_ sessionId: UUID) async -> Void
 	/// The session ids of clicked notifications. One subscriber at a time: a new call finishes
@@ -26,20 +42,27 @@ public struct ClaudeNotificationClient: Sendable {
 	public var activateApp: @Sendable () async -> Void
 }
 
-extension ClaudeNotificationClient: DependencyKey {
-	public static let liveValue = ClaudeNotificationClient(
-		post: { sessionId, title, body in
+extension TerminalNotificationClient: DependencyKey {
+	public static let liveValue = TerminalNotificationClient(
+		post: { notification in
 			let center = UNUserNotificationCenter.current()
-			ClaudeNotificationDelegate.shared.install()
+			TerminalNotificationDelegate.shared.install()
 			guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else {
 				return
 			}
 
 			let content = UNMutableNotificationContent()
-			content.title = title
-			content.body = body
+			content.title = notification.title
+			if let subtitle = notification.subtitle {
+				content.subtitle = subtitle
+			}
+			content.body = notification.body
 			content.sound = .default
-			let request = UNNotificationRequest(identifier: sessionId.uuidString, content: content, trigger: nil)
+			let request = UNNotificationRequest(
+				identifier: notification.sessionId.uuidString,
+				content: content,
+				trigger: nil
+			)
 			try? await center.add(request)
 		},
 		remove: { sessionId in
@@ -48,8 +71,8 @@ extension ClaudeNotificationClient: DependencyKey {
 			center.removePendingNotificationRequests(withIdentifiers: [sessionId.uuidString])
 		},
 		taps: {
-			ClaudeNotificationDelegate.shared.install()
-			return ClaudeNotificationDelegate.shared.taps()
+			TerminalNotificationDelegate.shared.install()
+			return TerminalNotificationDelegate.shared.taps()
 		},
 		isAppActive: {
 			await MainActor.run { NSApp.isActive }
@@ -65,16 +88,16 @@ extension ClaudeNotificationClient: DependencyKey {
 	)
 }
 
-extension ClaudeNotificationClient: TestDependencyKey {
-	public static let testValue = ClaudeNotificationClient()
+extension TerminalNotificationClient: TestDependencyKey {
+	public static let testValue = TerminalNotificationClient()
 }
 
 // MARK: - Delegate
 
 /// Receives the clicks. It has to be the notification center's delegate before a click
 /// arrives, so both posting and subscribing install it.
-private final nonisolated class ClaudeNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Sendable {
-	static let shared = ClaudeNotificationDelegate()
+private final nonisolated class TerminalNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Sendable {
+	static let shared = TerminalNotificationDelegate()
 
 	private let continuation = Mutex<AsyncStream<UUID>.Continuation?>(nil)
 	private let isInstalled = Mutex(false)

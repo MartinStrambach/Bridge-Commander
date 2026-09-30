@@ -78,10 +78,11 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("terminalStartupCommandInNewTabs")
 	}
 
-	/// Whether a built-in terminal tab posts a system notification when Claude Code in it starts
-	/// waiting for the user. On by default. Clicking the notification opens that tab.
-	static var claudeWaitingNotifications: Self {
-		appStorage("claudeWaitingNotifications")
+	/// Whether built-in terminal tabs post system notifications: when Claude Code in one starts
+	/// waiting for the user, and when a program asks for one with OSC 9 / OSC 777 (as Ghostty and
+	/// iTerm2 do). On by default. Clicking the notification opens that tab.
+	static var terminalNotifications: Self {
+		appStorage("terminalNotifications")
 	}
 }
 
