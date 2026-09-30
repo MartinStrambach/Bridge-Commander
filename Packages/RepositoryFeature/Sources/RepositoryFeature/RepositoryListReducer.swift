@@ -181,6 +181,13 @@ struct RepositoryListReducer {
 				}
 
 				state.terminalSessions[id: sessionId]?.status = status
+				// A new repository's tab usually starts Claude itself, and Claude reaching its prompt
+				// a few seconds later is the tab being ready, not waiting on an answer — by then the
+				// user has often moved on to open the next one.
+				if session.awaitsStartupPrompt, status == .waitingForInput {
+					state.terminalSessions[id: sessionId]?.awaitsStartupPrompt = false
+					return .none
+				}
 				return claudeNotificationEffect(for: session, changingTo: status, in: state)
 
 			case let .view(.terminalNotificationReceived(sessionId, notification)):
@@ -191,6 +198,7 @@ struct RepositoryListReducer {
 				}
 
 				state.terminalSessions[id: sessionId]?.status = .waitingForInput
+				state.terminalSessions[id: sessionId]?.awaitsStartupPrompt = false
 				let location = notificationLocation(for: session, in: state)
 				let title = notification.title ?? location
 				return postNotification(

@@ -85,8 +85,8 @@ final class ClaudeStatusDetector {
 			return
 		}
 
-		// A focus report is the terminal answering the repository switch, not the user typing.
-		if FocusReport.matches(data) {
+		// A reply is the terminal answering a focus change or a query, not the user typing.
+		if TerminalReply.matches(data) {
 			scheduleIdleCheck()
 			return
 		}
