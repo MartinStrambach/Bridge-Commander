@@ -98,7 +98,8 @@ struct TerminalViewStoreTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, _ in }
+			onStatusChange: { _, _ in },
+			onNotification: { _, _ in }
 		)
 		return (session, view.process.shellPid, view.process.childfd)
 	}
@@ -168,7 +169,8 @@ struct TerminalViewStoreTests {
 			processDelegate: processDelegate,
 			onStatusChange: { _, status in
 				MainActor.assumeIsolated { reported.statuses.append(status) }
-			}
+			},
+			onNotification: { _, _ in }
 		)
 		try #require(view.process.shellPid > 0)
 
@@ -205,7 +207,8 @@ struct TerminalViewStoreTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, _ in }
+			onStatusChange: { _, _ in },
+			onNotification: { _, _ in }
 		)
 		view.process.send(data: Array("sleep 300\n".utf8)[...])
 		let job = try #require(await firstChild(of: shellPid))

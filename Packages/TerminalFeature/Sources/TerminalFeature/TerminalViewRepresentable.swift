@@ -41,6 +41,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	/// both settings, and this package stays free of a Settings dependency.
 	public let font: NSFont
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	public let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 
 	public init(
 		terminalViewStore: TerminalViewStore,
@@ -54,7 +55,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
 		font: NSFont,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
+		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
 		self.sessions = sessions
@@ -68,6 +70,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.mouseReporting = mouseReporting
 		self.font = font
 		self.onStatusChange = onStatusChange
+		self.onNotification = onNotification
 	}
 
 	public func makeNSView(context: Context) -> NSView {
@@ -109,7 +112,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					cursorColor: cursorColor,
 					selectionColor: selectionColor,
 					processDelegate: delegate,
-					onStatusChange: onStatusChange
+					onStatusChange: onStatusChange,
+					onNotification: onNotification
 				)
 				// Assigned on every update, not at creation: panes outlive a change to the
 				// setting, and the colors only look like they don't because a new theme is

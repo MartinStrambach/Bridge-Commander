@@ -176,6 +176,11 @@ struct RepositoryListView: View {
 					MainActor.assumeIsolated {
 						_ = send(.terminalSessionStatusChanged(sessionId: sessionId, status: status))
 					}
+				},
+				onNotification: { sessionId, notification in
+					MainActor.assumeIsolated {
+						_ = send(.terminalNotificationReceived(sessionId: sessionId, notification: notification))
+					}
 				}
 			)
 			.transition(.opacity)

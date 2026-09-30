@@ -84,6 +84,9 @@ public struct SettingsReducer {
 		@Shared(.terminalStartupCommandInNewTabs)
 		public var terminalStartupCommandInNewTabs = false
 
+		@Shared(.terminalNotifications)
+		public var terminalNotifications = true
+
 		@Shared(.terminalFontSize)
 		public var terminalFontSize = TerminalFontSize.default
 
@@ -140,6 +143,7 @@ public struct SettingsReducer {
 		case setTerminalMouseReporting(Bool)
 		case setTerminalStartupCommand(String)
 		case setTerminalStartupCommandInNewTabs(Bool)
+		case setTerminalNotifications(Bool)
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
 		case importFromTerminalAppButtonTapped
@@ -476,6 +480,10 @@ public struct SettingsReducer {
 
 			case let .setTerminalStartupCommandInNewTabs(value):
 				state.$terminalStartupCommandInNewTabs.withLock { $0 = value }
+				return .none
+
+			case let .setTerminalNotifications(value):
+				state.$terminalNotifications.withLock { $0 = value }
 				return .none
 
 			case let .setTerminalFontSize(size):

@@ -134,6 +134,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("terminal notifications are on until the user turns them off")
+	func terminalNotificationsDefaultToOn() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalNotifications == true)
+
+		await store.send(.setTerminalNotifications(false)) {
+			$0.$terminalNotifications.withLock { $0 = false }
+		}
+		await store.send(.setTerminalNotifications(true)) {
+			$0.$terminalNotifications.withLock { $0 = true }
+		}
+	}
+
 	@Test("font size starts at the size the terminal already used and is clamped when set")
 	func terminalFontSizeDefaultsAndClamps() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {

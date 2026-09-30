@@ -49,6 +49,9 @@ struct RepositoryListReducer {
 		@Shared(.terminalStartupCommandInNewTabs)
 		fileprivate(set) var terminalStartupCommandInNewTabs = false
 
+		@Shared(.terminalNotifications)
+		fileprivate(set) var terminalNotifications = true
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -79,6 +82,8 @@ struct RepositoryListReducer {
 		case checkAccessibilityPermission
 		case checkPermissions
 		case checkSystemEventsPermission
+		/// A terminal tab's notification was clicked.
+		case terminalNotificationTapped(sessionId: UUID)
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
 		case refreshRepositories
@@ -111,6 +116,8 @@ struct RepositoryListReducer {
 			case showTerminalsRequested
 			case sortModeButtonTapped
 			case terminalSessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
+			/// The program in a pane asked for a notification (OSC 9 / OSC 777).
+			case terminalNotificationReceived(sessionId: UUID, notification: TerminalNotification)
 		}
 
 		enum Alert: Equatable {
@@ -147,6 +154,7 @@ struct RepositoryListReducer {
 	}
 
 	private nonisolated enum CancellableId: Hashable {
+		case terminalNotificationTaps
 		case periodicRefresh
 		case scan
 		case sortAfterFetch
@@ -154,6 +162,9 @@ struct RepositoryListReducer {
 
 	@Dependency(LastOpenedDirectoryClient.self)
 	private var lastOpenedDirectoryClient
+
+	@Dependency(TerminalNotificationClient.self)
+	private var terminalNotificationClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -165,11 +176,57 @@ struct RepositoryListReducer {
 				// terminal panel: the panel can be closed while a session keeps running, and the
 				// dots in the repository list still have to move. A late report from a session
 				// that has already been killed finds no entry and changes nothing.
+				guard let session = state.terminalSessions[id: sessionId] else {
+					return .none
+				}
+
 				state.terminalSessions[id: sessionId]?.status = status
-				return .none
+				return claudeNotificationEffect(for: session, changingTo: status, in: state)
+
+			case let .view(.terminalNotificationReceived(sessionId, notification)):
+				// The pane already holds itself at waiting until the user types; this is the
+				// session learning it, and the reason the status-change path posts nothing more.
+				guard let session = state.terminalSessions[id: sessionId] else {
+					return .none
+				}
+
+				state.terminalSessions[id: sessionId]?.status = .waitingForInput
+				let location = notificationLocation(for: session, in: state)
+				let title = notification.title ?? location
+				return postNotification(
+					TerminalNotificationContent(
+						sessionId: sessionId,
+						title: title,
+						subtitle: title == location ? nil : location,
+						body: notification.body
+					),
+					for: session,
+					in: state
+				)
 
 			case .view(.onAppear):
-				return .merge(.send(.startScan), .send(.startPeriodicRefresh), .send(.checkPermissions))
+				return .merge(
+					.send(.startScan),
+					.send(.startPeriodicRefresh),
+					.send(.checkPermissions),
+					.run { [terminalNotificationClient] send in
+						for await sessionId in terminalNotificationClient.taps() {
+							await send(.terminalNotificationTapped(sessionId: sessionId))
+						}
+					}
+					.cancellable(id: CancellableId.terminalNotificationTaps, cancelInFlight: true)
+				)
+
+			case let .terminalNotificationTapped(sessionId):
+				// The tab may have been closed since the notification went out; the app still
+				// comes forward, it just opens on nothing new.
+				if let session = state.terminalSessions[id: sessionId] {
+					openTerminal(for: session.repositoryPath, in: &state)
+					state.terminalLayout?.activate(session)
+				}
+				return .run { [terminalNotificationClient] _ in
+					await terminalNotificationClient.activateApp()
+				}
 
 			case .view(.didBecomeActive):
 				return .send(.checkPermissions)
@@ -919,6 +976,65 @@ struct RepositoryListReducer {
 		.ifLet(\.terminalLayout, action: \.terminalLayout) {
 			TerminalLayoutReducer()
 		}
+	}
+
+	/// Posts a notification when a session starts waiting at Claude's prompt, and withdraws it once
+	/// the session is back at work — by then the user has answered it.
+	private func claudeNotificationEffect(
+		for session: TerminalSession,
+		changingTo status: TerminalSessionStatus,
+		in state: State
+	) -> Effect<Action> {
+		let wasWaiting = session.status == .waitingForInput
+		let isWaiting = status == .waitingForInput
+		guard wasWaiting != isWaiting else {
+			return .none
+		}
+
+		let client = terminalNotificationClient
+		let sessionId = session.id
+		guard isWaiting else {
+			return .run { _ in await client.remove(sessionId) }
+		}
+
+		return postNotification(
+			TerminalNotificationContent(
+				sessionId: sessionId,
+				title: notificationLocation(for: session, in: state),
+				body: "Claude is waiting for your input."
+			),
+			for: session,
+			in: state
+		)
+	}
+
+	/// Nothing is posted for the tab on screen while the app is frontmost: the user is already
+	/// looking at it.
+	private func postNotification(
+		_ content: TerminalNotificationContent,
+		for session: TerminalSession,
+		in state: State
+	) -> Effect<Action> {
+		guard state.terminalNotifications else {
+			return .none
+		}
+
+		let client = terminalNotificationClient
+		let isOnScreen = state.terminalLayout?.activeSessionId == session.id
+		return .run { _ in
+			if isOnScreen, await client.isAppActive() {
+				return
+			}
+			await client.post(content)
+		}
+	}
+
+	/// Names the tab: the repository, and which tab when it has more than one.
+	private func notificationLocation(for session: TerminalSession, in state: State) -> String {
+		let name = findRowState(for: session.repositoryPath, in: state)?.name
+			?? URL(fileURLWithPath: session.repositoryPath).lastPathComponent
+		let tabCount = state.terminalSessions.filter { $0.repositoryPath == session.repositoryPath }.count
+		return tabCount > 1 ? "\(name) · Terminal \(session.tabIndex)" : name
 	}
 }
 

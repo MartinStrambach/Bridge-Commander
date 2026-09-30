@@ -190,6 +190,40 @@ struct ClaudeStatusDetectorTests {
 		#expect(reported.statuses == [.waitingForInput])
 	}
 
+	// MARK: - Notification requests
+
+	@Test func aNotificationRequestHoldsThePaneUntilTheUserTypes() {
+		// A build that rings for attention draws no Claude prompt. The pane must stay waiting
+		// through any number of quiet checks, and go back to work on the user's keystroke.
+		let screen = FakeScreen()
+		screen.rows = ["build finished"]
+		screen.isClaudeInForeground = false
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		#expect(detector.attentionRequested())
+		detector.checkIdleState()
+		detector.checkIdleState()
+		detector.checkIdleState()
+		#expect(reported.statuses.isEmpty, "the session learns of the request with the notification")
+
+		detector.inputSent(Array("\u{1B}[I".utf8)[...])
+		detector.checkIdleState()
+		detector.checkIdleState()
+		#expect(reported.statuses.isEmpty, "a focus report is not the user answering")
+
+		detector.inputSent(Array("y".utf8)[...])
+		#expect(reported.statuses == [.active])
+	}
+
+	@Test func aNotificationRequestAfterStopIsRefused() {
+		let reported = Reported()
+		let detector = makeDetector(screen: FakeScreen(), reported: reported)
+		detector.stop()
+
+		#expect(!detector.attentionRequested())
+	}
+
 	// MARK: - Stopping
 
 	@Test func reportsNothingOnceStopped() {

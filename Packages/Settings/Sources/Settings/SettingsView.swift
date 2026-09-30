@@ -394,6 +394,17 @@ public struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+
+			Toggle(
+				"Show notifications from terminal tabs",
+				isOn: $store.terminalNotifications.sending(\.setTerminalNotifications)
+			)
+
+			Text(
+				"Posts a notification when Claude Code in a built-in terminal tab you are not looking at needs a response, or when a program asks for one (OSC 9 / OSC 777, as in Ghostty). Click it to open that tab. For Claude's own permission notifications, set its notification channel to Ghostty in /config."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
 		}
 		.frame(maxWidth: .infinity, alignment: .leading)
 		.padding()
