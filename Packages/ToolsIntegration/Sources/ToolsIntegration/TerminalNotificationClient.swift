@@ -46,7 +46,7 @@ extension TerminalNotificationClient: DependencyKey {
 	public static let liveValue = TerminalNotificationClient(
 		post: { notification in
 			let center = UNUserNotificationCenter.current()
-			TerminalNotificationDelegate.shared.install()
+			TerminalNotificationDelegate.install()
 			guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else {
 				return
 			}
@@ -71,8 +71,7 @@ extension TerminalNotificationClient: DependencyKey {
 			center.removePendingNotificationRequests(withIdentifiers: [sessionId.uuidString])
 		},
 		taps: {
-			TerminalNotificationDelegate.shared.install()
-			return TerminalNotificationDelegate.shared.taps()
+			TerminalNotificationDelegate.install().taps()
 		},
 		isAppActive: {
 			await MainActor.run { NSApp.isActive }
@@ -97,19 +96,18 @@ extension TerminalNotificationClient: TestDependencyKey {
 /// Receives the clicks. It has to be the notification center's delegate before a click
 /// arrives, so both posting and subscribing install it.
 private final nonisolated class TerminalNotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Sendable {
-	static let shared = TerminalNotificationDelegate()
+	/// Lazily initialized exactly once, which is what makes `install()` safe to call from anywhere.
+	private static let shared: TerminalNotificationDelegate = {
+		let delegate = TerminalNotificationDelegate()
+		UNUserNotificationCenter.current().delegate = delegate
+		return delegate
+	}()
 
 	private let continuation = Mutex<AsyncStream<UUID>.Continuation?>(nil)
-	private let isInstalled = Mutex(false)
 
-	func install() {
-		let shouldInstall = isInstalled.withLock { installed in
-			defer { installed = true }
-			return !installed
-		}
-		if shouldInstall {
-			UNUserNotificationCenter.current().delegate = self
-		}
+	@discardableResult
+	static func install() -> TerminalNotificationDelegate {
+		shared
 	}
 
 	func taps() -> AsyncStream<UUID> {

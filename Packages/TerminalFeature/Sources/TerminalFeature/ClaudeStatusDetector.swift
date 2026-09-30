@@ -107,7 +107,6 @@ final class ClaudeStatusDetector {
 	///
 	/// - Returns: `false` once the detector is stopped, when the notification belongs to a
 	///   session that is going away and should not be shown.
-	@discardableResult
 	func attentionRequested() -> Bool {
 		guard !isStopped else {
 			return false

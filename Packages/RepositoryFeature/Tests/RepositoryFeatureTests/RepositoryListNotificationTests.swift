@@ -110,6 +110,54 @@ struct RepositoryListNotificationTests {
 		#expect(activated.value)
 	}
 
+	@Test("posts nothing when terminal notifications are turned off")
+	func skipsWhenSettingOff() async {
+		var session = TerminalSession(repositoryPath: "/repos/alpha")
+		session.status = .active
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [session]
+		state.$terminalNotifications.withLock { $0 = false }
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
+			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+		}
+		let notification = TerminalNotification(title: nil, body: "build finished")
+		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification)))
+	}
+
+	@Test("a status change that neither starts nor stops waiting posts and withdraws nothing")
+	func ignoresTransitionsOutsideWaiting() async {
+		let session = TerminalSession(repositoryPath: "/repos/alpha")
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [session]
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .active))) {
+			$0.terminalSessions[id: session.id]?.status = .active
+		}
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .failed("exited")))) {
+			$0.terminalSessions[id: session.id]?.status = .failed("exited")
+		}
+	}
+
+	@Test("clicking the notification of a tab that has since closed still brings the app forward")
+	func tapForClosedSession() async {
+		let activated = LockIsolated(false)
+		let store = TestStore(initialState: RepositoryListReducer.State()) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].activateApp = { activated.setValue(true) }
+		}
+
+		await store.send(.terminalNotificationTapped(sessionId: UUID()))
+		#expect(activated.value)
+	}
+
 	// MARK: - Notifications a program asks for
 
 	@Test("a program's notification marks the session waiting and posts once, with its own text")
