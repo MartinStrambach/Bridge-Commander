@@ -29,6 +29,56 @@ struct RepositoryListNotificationTests {
 		])
 	}
 
+	@Test("a startup command's first prompt posts nothing, and the next one posts")
+	func skipsStartupPrompt() async {
+		var session = TerminalSession(repositoryPath: "/repos/alpha", startupCommand: "claude")
+		session.status = .active
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [session]
+		let posted = LockIsolated<[TerminalNotificationContent]>([])
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
+			$0[TerminalNotificationClient.self].remove = { _ in }
+		}
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
+			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminalSessions[id: session.id]?.awaitsStartupPrompt = false
+		}
+		#expect(posted.value.isEmpty)
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .active))) {
+			$0.terminalSessions[id: session.id]?.status = .active
+		}
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
+			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+		}
+		#expect(posted.value.map(\.sessionId) == [session.id])
+	}
+
+	@Test("a program's notification posts even before a startup command's first prompt")
+	func programNotificationBeforeStartupPrompt() async {
+		var session = TerminalSession(repositoryPath: "/repos/alpha", startupCommand: "claude")
+		session.status = .active
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [session]
+		let posted = LockIsolated<[TerminalNotificationContent]>([])
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
+		}
+
+		let notification = TerminalNotification(title: nil, body: "build finished")
+		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification))) {
+			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminalSessions[id: session.id]?.awaitsStartupPrompt = false
+		}
+		#expect(posted.value.map(\.body) == ["build finished"])
+	}
+
 	@Test("does not post for the tab on screen while the app is active")
 	func skipsVisibleTab() async {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")

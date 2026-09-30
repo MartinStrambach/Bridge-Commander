@@ -27,6 +27,10 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 	public let startupCommand: String?
 	public var tabIndex: Int
 	public var status: TerminalSessionStatus
+	/// Set while a tab opened with a startup command has yet to reach its first prompt. That prompt
+	/// is the command — Claude, typically — having started, not Claude done with something the user
+	/// asked for, so it gets no notification.
+	public var awaitsStartupPrompt: Bool
 
 	public init(
 		repositoryPath: String,
@@ -41,5 +45,6 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		self.startupCommand = command.isEmpty ? nil : command
 		self.tabIndex = tabIndex
 		self.status = .launching
+		self.awaitsStartupPrompt = !command.isEmpty
 	}
 }

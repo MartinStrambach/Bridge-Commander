@@ -190,6 +190,23 @@ struct ClaudeStatusDetectorTests {
 		#expect(reported.statuses == [.waitingForInput])
 	}
 
+	/// Claude Code asks for the cell size whenever its pane gains or loses focus, so every tab switch
+	/// made SwiftTerm answer into both panes — which read as typing and re-posted the notification of
+	/// the pane left behind.
+	@Test func aQueryReplyDoesNotReleaseTheWaitingState() {
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.checkIdleState()
+
+		detector.inputSent(Array("\u{1B}[6;32;16t".utf8)[...])
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
 	// MARK: - Notification requests
 
 	@Test func aNotificationRequestHoldsThePaneUntilTheUserTypes() {
