@@ -49,6 +49,9 @@ struct RepositoryListReducer {
 		@Shared(.terminalStartupCommandInNewTabs)
 		fileprivate(set) var terminalStartupCommandInNewTabs = false
 
+		@Shared(.claudeWaitingNotifications)
+		fileprivate(set) var claudeWaitingNotifications = true
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -79,6 +82,8 @@ struct RepositoryListReducer {
 		case checkAccessibilityPermission
 		case checkPermissions
 		case checkSystemEventsPermission
+		/// A "Claude is waiting" notification was clicked.
+		case claudeNotificationTapped(sessionId: UUID)
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
 		case refreshRepositories
@@ -147,6 +152,7 @@ struct RepositoryListReducer {
 	}
 
 	private nonisolated enum CancellableId: Hashable {
+		case claudeNotificationTaps
 		case periodicRefresh
 		case scan
 		case sortAfterFetch
@@ -154,6 +160,9 @@ struct RepositoryListReducer {
 
 	@Dependency(LastOpenedDirectoryClient.self)
 	private var lastOpenedDirectoryClient
+
+	@Dependency(ClaudeNotificationClient.self)
+	private var claudeNotificationClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -165,11 +174,36 @@ struct RepositoryListReducer {
 				// terminal panel: the panel can be closed while a session keeps running, and the
 				// dots in the repository list still have to move. A late report from a session
 				// that has already been killed finds no entry and changes nothing.
+				guard let session = state.terminalSessions[id: sessionId] else {
+					return .none
+				}
+
 				state.terminalSessions[id: sessionId]?.status = status
-				return .none
+				return claudeNotificationEffect(for: session, changingTo: status, in: state)
 
 			case .view(.onAppear):
-				return .merge(.send(.startScan), .send(.startPeriodicRefresh), .send(.checkPermissions))
+				return .merge(
+					.send(.startScan),
+					.send(.startPeriodicRefresh),
+					.send(.checkPermissions),
+					.run { [claudeNotificationClient] send in
+						for await sessionId in claudeNotificationClient.taps() {
+							await send(.claudeNotificationTapped(sessionId: sessionId))
+						}
+					}
+					.cancellable(id: CancellableId.claudeNotificationTaps, cancelInFlight: true)
+				)
+
+			case let .claudeNotificationTapped(sessionId):
+				// The tab may have been closed since the notification went out; the app still
+				// comes forward, it just opens on nothing new.
+				if let session = state.terminalSessions[id: sessionId] {
+					openTerminal(for: session.repositoryPath, in: &state)
+					state.terminalLayout?.activate(session)
+				}
+				return .run { [claudeNotificationClient] _ in
+					await claudeNotificationClient.activateApp()
+				}
 
 			case .view(.didBecomeActive):
 				return .send(.checkPermissions)
@@ -918,6 +952,45 @@ struct RepositoryListReducer {
 		.ifLet(\.$alert, action: \.alert)
 		.ifLet(\.terminalLayout, action: \.terminalLayout) {
 			TerminalLayoutReducer()
+		}
+	}
+
+	/// Posts a notification when a session starts waiting at Claude's prompt, and withdraws it once
+	/// the session is back at work — by then the user has answered it. Nothing is posted for the
+	/// tab on screen while the app is frontmost: the user is already looking at it.
+	private func claudeNotificationEffect(
+		for session: TerminalSession,
+		changingTo status: TerminalSessionStatus,
+		in state: State
+	) -> Effect<Action> {
+		let wasWaiting = session.status == .waitingForInput
+		let isWaiting = status == .waitingForInput
+		guard wasWaiting != isWaiting else {
+			return .none
+		}
+
+		let client = claudeNotificationClient
+		let sessionId = session.id
+		guard isWaiting else {
+			return .run { _ in await client.remove(sessionId) }
+		}
+
+		guard state.claudeWaitingNotifications else {
+			return .none
+		}
+
+		let isOnScreen = state.terminalLayout?.activeSessionId == sessionId
+		let title = findRowState(for: session.repositoryPath, in: state)?.name
+			?? URL(fileURLWithPath: session.repositoryPath).lastPathComponent
+		let tabCount = state.terminalSessions.filter { $0.repositoryPath == session.repositoryPath }.count
+		let body = tabCount > 1
+			? "Claude is waiting for your input in Terminal \(session.tabIndex)."
+			: "Claude is waiting for your input."
+		return .run { _ in
+			if isOnScreen, await client.isAppActive() {
+				return
+			}
+			await client.post(sessionId, title, body)
 		}
 	}
 }

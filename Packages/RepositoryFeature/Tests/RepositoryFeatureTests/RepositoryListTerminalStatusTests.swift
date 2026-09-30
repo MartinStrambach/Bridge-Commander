@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Foundation
 import TerminalFeature
 import Testing
+import ToolsIntegration
 @testable import RepositoryFeature
 
 // A pane reports its Claude status to the session list, which is parent state: the terminal panel
@@ -18,6 +19,8 @@ struct RepositoryListTerminalStatusTests {
 		state.terminalSessions = [session]
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
+		} withDependencies: {
+			$0[ClaudeNotificationClient.self].post = { _, _, _ in }
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {

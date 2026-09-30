@@ -77,6 +77,12 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var terminalStartupCommandInNewTabs: Self {
 		appStorage("terminalStartupCommandInNewTabs")
 	}
+
+	/// Whether a built-in terminal tab posts a system notification when Claude Code in it starts
+	/// waiting for the user. On by default. Clicking the notification opens that tab.
+	static var claudeWaitingNotifications: Self {
+		appStorage("claudeWaitingNotifications")
+	}
 }
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalThemeSelection> {

@@ -394,6 +394,17 @@ public struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+
+			Toggle(
+				"Notify when Claude is waiting for input",
+				isOn: $store.claudeWaitingNotifications.sending(\.setClaudeWaitingNotifications)
+			)
+
+			Text(
+				"Posts a notification when Claude Code in a built-in terminal tab you are not looking at needs a response. Click it to open that tab."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
 		}
 		.frame(maxWidth: .infinity, alignment: .leading)
 		.padding()
