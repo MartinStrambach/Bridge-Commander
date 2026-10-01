@@ -81,7 +81,7 @@ public final class TerminalViewStore {
 		terminalView.startProcess(
 			executable: shellExecutable,
 			args: shellArguments,
-			environment: nil,
+			environment: TerminalEnvironment.variables(),
 			execName: nil,
 			currentDirectory: session.startingDirectory
 		)

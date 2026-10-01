@@ -168,6 +168,8 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 			case let .notification(notification):
 				notificationReceived(notification)
 			case let .progress(report):
+				// `remove` is what Claude sends when a turn is done; `error` also ends one.
+				detector.progressReported(isWorking: report.state != .remove && report.state != .error)
 				progressReport(source: terminal, report: report)
 			case .ignored:
 				break

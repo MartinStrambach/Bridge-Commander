@@ -27,4 +27,8 @@ protocol PromptScreen: AnyObject {
 	/// Blank rows are reported apart from the rest because a walk over the screen budgets its work
 	/// in rows that have content: untouched cells can't hold a prompt and cost nothing to skip.
 	func row(_ row: Int, drawsScalar scalar: UInt32, withinColumns columns: Int) -> Bool?
+
+	/// The text in `row`'s leading `columns` cells. Read only for a row already known to draw the
+	/// prompt glyph, to tell a dialog's numbered option from Claude's input box.
+	func leadingText(ofRow row: Int, columns: Int) -> String
 }
