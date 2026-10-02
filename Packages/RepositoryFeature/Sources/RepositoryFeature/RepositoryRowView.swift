@@ -322,24 +322,22 @@ struct RepositoryRowView: View {
 			}
 
 			if let androidCR = store.androidCR {
-				let waiting = androidCR == .passed || androidCR == .notApplicable || store
-					.ticketState != .waitingToCodeReview
-				let activeColor: Color = androidCR == .inProgress ? .green : .orange
+				let color = codeReviewColor(androidCR)
 				HStack(spacing: 4) {
 					Image("android")
 						.resizable()
 						.renderingMode(.template)
 						.scaledToFit()
 						.frame(height: 12)
-						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
+						.foregroundColor(color.opacity(0.75))
 					Text(androidCR.rawValue)
 						.font(.caption)
-						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
+						.foregroundColor(color.opacity(0.75))
 						.lineLimit(1)
 					if let reviewerName = store.androidReviewerName {
 						Text("(\(reviewerName))")
 							.font(.caption2)
-							.foregroundColor(waiting ? .secondary : activeColor)
+							.foregroundColor(color)
 							.lineLimit(1)
 					}
 				}
@@ -348,26 +346,35 @@ struct RepositoryRowView: View {
 			}
 
 			if let iosCR = store.iosCR {
-				let waiting = iosCR == .passed || iosCR == .notApplicable || store.ticketState != .waitingToCodeReview
-				let activeColor: Color = iosCR == .inProgress ? .green : .orange
+				let color = codeReviewColor(iosCR)
 				HStack(spacing: 4) {
 					Image(systemName: "apple.logo")
 						.renderingMode(.template)
-						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
+						.foregroundColor(color.opacity(0.75))
 					Text(iosCR.rawValue)
 						.font(.caption)
-						.foregroundColor(waiting ? .secondary : activeColor.opacity(0.75))
+						.foregroundColor(color.opacity(0.75))
 						.lineLimit(1)
 					if let reviewerName = store.iosReviewerName {
 						Text("(\(reviewerName))")
 							.font(.caption2)
-							.foregroundColor(waiting ? .secondary : activeColor)
+							.foregroundColor(color)
 							.lineLimit(1)
 					}
 				}
 				.padding(6)
 				.cornerRadius(4)
 			}
+		}
+	}
+
+	/// The same colors YouTrack gives these values, so a state reads the same in both places.
+	private func codeReviewColor(_ state: CodeReviewState) -> Color {
+		switch state {
+		case .waiting: .orange
+		case .inProgress: .blue
+		case .passed: .green
+		case .notApplicable: .secondary
 		}
 	}
 
