@@ -261,16 +261,10 @@ struct RepositoryListRefreshTests {
 
 	@Test("terminal ⌘R re-detects the Xcode project shown in the terminal toolbar")
 	func terminalRefreshRedetectsToolbarXcodeProject() async {
-		// The toolbar's Xcode button is a copy of the row's state taken when the terminal
-		// opened. A project generated afterwards (e.g. via tuist in the embedded shell)
-		// only appears if ⌘R re-runs the on-disk lookup on the copy, not just on the row.
-		let store = makeStore(
-			terminalActiveRepositoryPath: "/repos/alpha",
-			terminalXcodeButton: XcodeProjectButtonReducer.State(
-				repositoryPath: "/repos/alpha",
-				iosSubfolderPath: ""
-			)
-		)
+		// The toolbar's Xcode button is the opened row's own store. A project generated
+		// while the terminal is open (e.g. via tuist in the embedded shell) appears there
+		// once ⌘R's row refresh re-runs the on-disk lookup.
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
 		store.dependencies[XcodeClient.self].findXcodeProject = { _, _, _ in
 			"/repos/alpha/App.xcodeproj"
 		}
@@ -281,12 +275,14 @@ struct RepositoryListRefreshTests {
 		]))
 
 		await store.send(.terminalLayout(.refreshActiveRepoRequested))
-
-		await store.receive(\.terminalLayout.xcodeButton.refresh)
-		await store.receive(\.terminalLayout.xcodeButton.foundProjectPath)
-		#expect(store.state.terminalLayout?.xcodeButton?.projectPath == "/repos/alpha/App.xcodeproj")
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
 
 		await store.finish()
+		await store.skipReceivedActions()
+		#expect(
+			store.state.repositoryGroups[id: "/repos/alpha"]?.header.xcodeButton.projectPath
+				== "/repos/alpha/App.xcodeproj"
+		)
 	}
 
 	@Test("terminal ⌘R does nothing when the opened session has no repo row")
@@ -400,14 +396,12 @@ struct RepositoryListRefreshTests {
 	private func makeStore(
 		clock: any Clock<Duration> = ImmediateClock(),
 		terminalActiveRepositoryPath: String? = nil,
-		terminalLayoutOpen: Bool = false,
-		terminalXcodeButton: XcodeProjectButtonReducer.State? = nil
+		terminalLayoutOpen: Bool = false
 	) -> TestStoreOf<RepositoryListReducer> {
 		var initialState = RepositoryListReducer.State()
 		if terminalActiveRepositoryPath != nil || terminalLayoutOpen {
 			initialState.terminalLayout = TerminalLayoutReducer.State(
-				activeRepositoryPath: terminalActiveRepositoryPath,
-				xcodeButton: terminalXcodeButton
+				activeRepositoryPath: terminalActiveRepositoryPath
 			)
 		}
 		return TestStore(initialState: initialState) {

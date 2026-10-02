@@ -9,6 +9,9 @@ struct TuistButtonView: View {
 	@Bindable
 	var store: StoreOf<TuistButtonReducer>
 
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	var body: some View {
 		Group {
 			if let runningAction = store.runningAction {
@@ -103,7 +106,7 @@ struct TuistButtonView: View {
 			}
 		}
 		.fixedSize()
-		.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
+		.sheet(item: presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
 	}

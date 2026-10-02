@@ -149,8 +149,10 @@ struct TerminalPanelView: View {
 				GitActionsMenuView(store: gitActionsStore)
 			}
 
-			if let tuistStore = store.scope(\.tuistButton, action: \.tuistButton) {
-				TuistButtonView(store: tuistStore)
+			// The row's own stores, not copies, so a generate shows the same progress here and in
+			// the list and survives the panel being hidden. Gated the same way as in the row.
+			if let rowStore = activeRowStore, rowStore.supportsIOS, rowStore.supportsTuist {
+				TuistButtonView(store: rowStore.scope(\.tuistButton, action: \.tuistButton))
 			}
 
 			if let rowStore = activeRowStore, rowStore.unpushedCommitCount > 0 || store.isPushing {
@@ -231,8 +233,11 @@ struct TerminalPanelView: View {
 				TicketButtonView(store: ticketStore)
 			}
 
-			if let xcodeStore = store.scope(\.xcodeButton, action: \.xcodeButton) {
-				XcodeProjectButtonView(store: xcodeStore, style: .compact)
+			if let rowStore = activeRowStore, rowStore.supportsIOS {
+				XcodeProjectButtonView(
+					store: rowStore.scope(\.xcodeButton, action: \.xcodeButton),
+					style: .compact
+				)
 			}
 
 			if let androidStore = store.scope(\.androidStudioButton, action: \.androidStudioButton) {

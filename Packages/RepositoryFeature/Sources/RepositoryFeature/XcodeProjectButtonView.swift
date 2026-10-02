@@ -16,6 +16,9 @@ struct XcodeProjectButtonView: View {
 
 	var style: Style = .tool
 
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	private var isNotFound: Bool {
 		store.projectState == .idle && store.projectPath == nil && !store.usesTuist
 	}
@@ -87,17 +90,30 @@ struct XcodeProjectButtonView: View {
 				)
 				
 			case .compact:
-				ActionButton(
-					icon: .systemImage(buttonIcon),
-					tooltip: buttonTooltip,
-					color: store.projectPath == nil ? .orange : nil,
-					action: { store.send(.openProject) }
-				)
+				// `ActionButton` has no processing state, so a tuist install & generate started
+				// from the terminal toolbar ran with nothing on screen. Swap in a progress pill
+				// instead, the same way the Tuist menu beside it does.
+				if store.projectState.isProcessing {
+					GitOperationProgressView(
+						text: "\(buttonLabel)…",
+						color: .orange,
+						helpText: buttonTooltip
+					)
+					.fixedSize()
+				}
+				else {
+					ActionButton(
+						icon: .systemImage(buttonIcon),
+						tooltip: buttonTooltip,
+						color: store.projectPath == nil ? .orange : nil,
+						action: { store.send(.openProject) }
+					)
+				}
 			}
 		}
 		.disabled(isNotFound)
-		.alert($store.scope(\.$alert, action: \.alert))
-		.sheet(item: $store.scope(\.$errorAlert, action: \.errorAlert)) { alertStore in
+		.alert(presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil))
+		.sheet(item: presentsAlerts ? $store.scope(\.$errorAlert, action: \.errorAlert) : .constant(nil)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
 	}

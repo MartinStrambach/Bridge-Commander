@@ -40,10 +40,11 @@ struct TerminalLayoutReducer {
 			}
 		}
 
-		var xcodeButton: XcodeProjectButtonReducer.State?
+		// The Xcode and Tuist buttons are deliberately not copied here: the toolbar scopes the
+		// opened row's own stores, so a generate started from either view shows its progress in
+		// both, and hiding the panel (which nils this state and cancels its effects) cannot kill it.
 		var androidStudioButton: AndroidStudioButtonReducer.State?
 		var webButton: WebButtonReducer.State?
-		var tuistButton: TuistButtonReducer.State?
 		var ticketButton: TicketButtonReducer.State?
 		var gitActionsMenu: GitActionsMenuReducer.State?
 
@@ -77,10 +78,8 @@ struct TerminalLayoutReducer {
 		case zoomInRequested
 		case zoomOutRequested
 		case resetZoomRequested
-		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case webButton(WebButtonReducer.Action)
-		case tuistButton(TuistButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
 		case gitActionsMenu(GitActionsMenuReducer.Action)
 	}
@@ -102,17 +101,11 @@ struct TerminalLayoutReducer {
 
 	private var core: some Reducer<State, Action> {
 		coreReduce
-			.ifLet(\.xcodeButton, action: \.xcodeButton) {
-				XcodeProjectButtonReducer()
-			}
 			.ifLet(\.androidStudioButton, action: \.androidStudioButton) {
 				AndroidStudioButtonReducer()
 			}
 			.ifLet(\.webButton, action: \.webButton) {
 				WebButtonReducer()
-			}
-			.ifLet(\.tuistButton, action: \.tuistButton) {
-				TuistButtonReducer()
 			}
 			.ifLet(\.ticketButton, action: \.ticketButton) {
 				TicketButtonReducer()
@@ -213,14 +206,9 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .refreshActiveRepoRequested:
-				// The row refresh is routed by RepositoryListReducer. The toolbar's Xcode
-				// button is a copy of the row's state (synced only on open/selectRepo), so it
-				// must re-detect the project on disk itself — otherwise a project generated
-				// while the terminal is open never shows up here.
-				guard state.xcodeButton != nil else {
-					return .none
-				}
-				return .send(.xcodeButton(.refresh))
+				// Routed to a row refresh by RepositoryListReducer, which also re-detects the
+				// row's Xcode project — the same state the toolbar's Xcode button shows.
+				return .none
 
 			// Zoom is stored, not per-pane: every terminal in the app renders at one size, and the
 			// size the user zoomed to is still there after a restart — the same contract the
@@ -237,16 +225,10 @@ struct TerminalLayoutReducer {
 				state.$terminalFontSize.withLock { $0 = TerminalFontSize.default }
 				return .none
 
-			case .xcodeButton:
-				return .none
-
 			case .androidStudioButton:
 				return .none
 
 			case .webButton:
-				return .none
-
-			case .tuistButton:
 				return .none
 
 			case .ticketButton:

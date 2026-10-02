@@ -1337,18 +1337,14 @@ private func activateOtherRepository(
 
 private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {
 	guard let rowState = findRowState(for: path, in: state) else {
-		state.terminalLayout?.xcodeButton = nil
 		state.terminalLayout?.androidStudioButton = nil
 		state.terminalLayout?.webButton = nil
-		state.terminalLayout?.tuistButton = nil
 		state.terminalLayout?.ticketButton = nil
 		state.terminalLayout?.gitActionsMenu = nil
 		return
 	}
-	state.terminalLayout?.xcodeButton = rowState.supportsIOS ? rowState.xcodeButton : nil
 	state.terminalLayout?.androidStudioButton = rowState.supportsAndroid ? rowState.androidStudioButton : nil
 	state.terminalLayout?.webButton = rowState.webButton
-	state.terminalLayout?.tuistButton = terminalTuistButton(for: rowState)
 	state.terminalLayout?.ticketButton = rowState.ticketButton
 	state.terminalLayout?.gitActionsMenu = rowState.gitActionsMenu
 }
@@ -1380,15 +1376,6 @@ private func syncTerminalGitMenu(
 	state.terminalLayout?.gitActionsMenu?.setDefaultBranch(rowMenu.defaultBranch)
 	// The stash-list state is internal to the menu, so the copy re-checks it itself.
 	return .send(.terminalLayout(.gitActionsMenu(.refresh)))
-}
-
-/// The terminal header shows the Tuist menu under the same gate as the repository row:
-/// the group must support both iOS and Tuist.
-func terminalTuistButton(for rowState: RepositoryRowReducer.State?) -> TuistButtonReducer.State? {
-	guard let rowState, rowState.supportsIOS, rowState.supportsTuist else {
-		return nil
-	}
-	return rowState.tuistButton
 }
 
 private func findRowState(

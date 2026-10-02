@@ -99,7 +99,7 @@ struct XcodeProjectButtonReducer {
 
 				return .run { send in
 					do {
-						try await XcodeProjectGenerator.openProject(at: projectPath)
+						try await xcodeClient.openProject(at: projectPath)
 						await send(.didOpenProject)
 					}
 					catch {
@@ -129,16 +129,16 @@ struct XcodeProjectButtonReducer {
 					runMode = state.tuistRunMode
 				] send in
 					do {
-						let projectPath = try await XcodeProjectGenerator.generateProject(
+						// Progress is awaited, not sent from a detached `Task`: unordered, the last
+						// `.checking` could land after `didOpenProject` and leave the button spinning.
+						let projectPath = try await xcodeClient.generateProject(
 							at: path,
 							iosSubfolderPath: iosSubfolderPath,
 							shouldOpenXcode: shouldOpen,
 							misePath: misePath,
 							runMode: runMode
 						) { newState in
-							Task {
-								await send(.projectGenerationProgress(newState))
-							}
+							await send(.projectGenerationProgress(newState))
 						}
 						await send(.didGenerateProject(projectPath))
 					}
