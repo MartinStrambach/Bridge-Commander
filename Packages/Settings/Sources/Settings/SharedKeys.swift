@@ -86,6 +86,14 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	}
 }
 
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<ClaudeStatusDetection> {
+	/// How built-in terminal tabs judge whether Claude is working or waiting. Read when a tab is
+	/// opened; tabs already open keep what they started with.
+	static var terminalClaudeStatusDetection: Self {
+		appStorage("terminalClaudeStatusDetection")
+	}
+}
+
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalThemeSelection> {
 	/// Keeps the key the built-in-only setting used: a `TerminalThemeSelection` raw value for a
 	/// built-in theme is the bare theme name, so a previously stored theme migrates by itself.

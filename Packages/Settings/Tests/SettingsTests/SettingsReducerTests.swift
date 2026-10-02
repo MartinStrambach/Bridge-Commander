@@ -149,6 +149,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("Claude status detection uses progress reports and the screen until changed")
+	func terminalClaudeStatusDetectionDefaultsToBoth() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalClaudeStatusDetection == .progressAndScreen)
+
+		await store.send(.setTerminalClaudeStatusDetection(.progressOnly)) {
+			$0.$terminalClaudeStatusDetection.withLock { $0 = .progressOnly }
+		}
+		await store.send(.setTerminalClaudeStatusDetection(.screenOnly)) {
+			$0.$terminalClaudeStatusDetection.withLock { $0 = .screenOnly }
+		}
+	}
+
 	@Test("font size starts at the size the terminal already used and is clamped when set")
 	func terminalFontSizeDefaultsAndClamps() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {

@@ -50,4 +50,16 @@ extension ClaudeAwareTerminalView: PromptScreen {
 		}
 		return false
 	}
+
+	func leadingText(ofRow row: Int, columns: Int) -> String {
+		guard
+			let terminal,
+			let line = terminal.getLine(row: row)
+		else {
+			return ""
+		}
+
+		let limit = min(columns, line.getTrimmedLength(), line.count, terminal.cols)
+		return String((0 ..< limit).map { line[$0].getCharacter() })
+	}
 }

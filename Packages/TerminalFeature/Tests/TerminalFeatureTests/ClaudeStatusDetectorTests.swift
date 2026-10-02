@@ -26,6 +26,17 @@ private final class FakeScreen: PromptScreen {
 
 		return text.unicodeScalars.prefix(columns).contains { $0.value == scalar }
 	}
+
+	func leadingText(ofRow row: Int, columns: Int) -> String {
+		guard
+			rows.indices.contains(row),
+			let text = rows[row]
+		else {
+			return ""
+		}
+
+		return String(String.UnicodeScalarView(text.unicodeScalars.prefix(columns)))
+	}
 }
 
 /// Collects what the detector reported, in order.
@@ -46,11 +57,13 @@ struct ClaudeStatusDetectorTests {
 
 	private func makeDetector(
 		screen: FakeScreen,
-		reported: Reported
+		reported: Reported,
+		source: ClaudeStatusSource = .progressAndScreen
 	) -> ClaudeStatusDetector {
 		ClaudeStatusDetector(
 			label: "test",
 			screen: screen,
+			source: source,
 			idleThreshold: Self.neverFires,
 			onStatusChange: { reported.statuses.append($0) }
 		)
@@ -263,6 +276,174 @@ struct ClaudeStatusDetectorTests {
 		detector.checkIdleState()
 
 		#expect(reported.statuses == [.waitingForInput], "a stopped detector has nothing more to say")
+	}
+
+	// MARK: - Progress reports
+
+	/// The stuck dot: Claude keeps its input box on screen while it works, so a pause in its output
+	/// mid-turn read as waiting, and only a keystroke could undo it.
+	@Test func theInputBoxIsNotWaitingWhileClaudeReportsWork() {
+		let screen = FakeScreen()
+		screen.rows = ["⏺ Running a long build…"] + Self.inputBox
+		screen.cursorRow = 2
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+		detector.checkIdleState()
+
+		#expect(reported.statuses.isEmpty)
+	}
+
+	@Test func aDialogIsWaitingWhileClaudeReportsWork() {
+		// A permission prompt comes mid-turn, so Claude still reports work while it is up.
+		let screen = FakeScreen()
+		screen.rows = ["Do you want to proceed?", " ❯ 1. Yes", "   2. No", nil]
+		screen.cursorRow = 3
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test func theInputBoxIsWaitingOnceClaudeReportsTheTurnDone() {
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+		#expect(reported.statuses.isEmpty)
+
+		detector.progressReported(isWorking: false)
+		#expect(reported.statuses.isEmpty, "the idle check decides, since Claude also clears on exit")
+
+		detector.checkIdleState()
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test func aTurnStartingReleasesTheWaitingStateAtOnce() {
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.checkIdleState()
+
+		detector.progressReported(isWorking: true)
+
+		#expect(reported.statuses == [.waitingForInput, .active])
+	}
+
+	@Test func anotherProgramsProgressIsIgnored() {
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+		screen.isClaudeInForeground = false
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.progressReported(isWorking: true)
+
+		screen.isClaudeInForeground = true
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test func aClaudeThatExitedMidTurnLeavesNoWorkBehind() {
+		// Killed without clearing its progress; the next Claude at its prompt must read as waiting.
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported)
+		detector.progressReported(isWorking: true)
+
+		screen.isClaudeInForeground = false
+		detector.checkIdleState()
+
+		screen.isClaudeInForeground = true
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	// MARK: - Status sources
+
+	@Test func progressOnlyTakesAnIdleClaudeAsWaitingWithoutAPrompt() {
+		let screen = FakeScreen()
+		screen.rows = ["⏺ Done.", nil]
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .progressOnly)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+		#expect(reported.statuses.isEmpty)
+
+		detector.progressReported(isWorking: false)
+		detector.checkIdleState()
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test func progressOnlyStillFindsADialogMidTurn() {
+		let screen = FakeScreen()
+		screen.rows = ["Do you want to proceed?", " ❯ 1. Yes", "   2. No", nil]
+		screen.cursorRow = 3
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .progressOnly)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test func progressOnlyLeavesAShellActive() {
+		let screen = FakeScreen()
+		screen.rows = ["❯ "]
+		screen.isClaudeInForeground = false
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .progressOnly)
+		detector.checkIdleState()
+
+		#expect(reported.statuses.isEmpty)
+	}
+
+	@Test func screenOnlyIgnoresProgressReports() {
+		// The stuck dot, as it was: the input box reads as waiting even though Claude says it works.
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .screenOnly)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test(arguments: [
+		("❯ 1. Yes", true),
+		(" ❯ 2. No", true),
+		("❯\u{A0}12. Option", true),
+		("│ ❯ ", false),
+		("❯ fix the 1. bug", false),
+		("❯ 1 thing", false),
+		("1. Yes", false),
+	])
+	func recognisesANumberedOption(text: String, isOption: Bool) {
+		#expect(ClaudeStatusDetector.isNumberedOption(text) == isOption)
 	}
 
 	@Test func outputAloneDoesNotReleaseTheWaitingState() {

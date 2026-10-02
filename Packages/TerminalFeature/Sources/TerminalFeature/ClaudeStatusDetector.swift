@@ -9,6 +9,13 @@ import OSLog
 /// the user switched repository. Two things move the status. Keystrokes release a waiting pane at
 /// once, the user asking Claude for something being the very reason it goes back to work. Otherwise
 /// an idle check, run once the pane has fallen quiet, reads the screen and reports what it finds.
+///
+/// Silence alone cannot tell a finished turn from a working one that paused, because Claude keeps
+/// its input box, prompt glyph and all, on screen while it works. Claude's own progress reports
+/// (OSC 9;4, enabled by `TerminalEnvironment`) settle that: between "working" and "done" an idle
+/// check ignores the input box and only a dialog — a numbered option list such as a permission
+/// prompt, which Claude shows mid-turn — counts as waiting. How much is left to the screen
+/// otherwise is the `ClaudeStatusSource` the pane was created with.
 @MainActor
 final class ClaudeStatusDetector {
 	private static let promptScalar: UInt32 = 0x276F // ❯
@@ -35,6 +42,8 @@ final class ClaudeStatusDetector {
 	/// How long the pane must be quiet before its screen is judged.
 	private let idleThreshold: TimeInterval
 
+	private let source: ClaudeStatusSource
+
 	private let onStatusChange: (TerminalSessionStatus) -> Void
 
 	private var currentStatus: TerminalSessionStatus = .active
@@ -50,6 +59,11 @@ final class ClaudeStatusDetector {
 	/// comes with no Claude prompt to find, and would read as `.active` at the next quiet interval.
 	private var isHeldForAttention = false
 
+	/// Set while Claude reports a turn in progress (OSC 9;4 with a working state), cleared when it
+	/// reports the turn done. Never set by a Claude that does not report progress, which leaves
+	/// the screen-only judgement in charge.
+	private var isClaudeWorking = false
+
 	private var renderTracker = RenderTracker()
 
 	/// Holds a waiting pane until a second idle check agrees it has gone back to work.
@@ -58,11 +72,13 @@ final class ClaudeStatusDetector {
 	init(
 		label: String,
 		screen: any PromptScreen,
+		source: ClaudeStatusSource = .progressAndScreen,
 		idleThreshold: TimeInterval = 1.5,
 		onStatusChange: @escaping (TerminalSessionStatus) -> Void
 	) {
 		self.label = label
 		self.screen = screen
+		self.source = source
 		self.idleThreshold = idleThreshold
 		self.onStatusChange = onStatusChange
 	}
@@ -117,6 +133,34 @@ final class ClaudeStatusDetector {
 		currentStatus = .waitingForInput
 		waitingStateGate.reset()
 		return true
+	}
+
+	/// Takes in a progress report (OSC 9;4) from the program in the pane. Claude Code sends one when
+	/// a turn starts and another when it ends.
+	///
+	/// A turn starting releases a waiting pane at once. A turn ending reports nothing by itself:
+	/// Claude also clears its progress on exit, so "done" may mean the shell is about to come back.
+	/// The next idle check sees which, the same way it does without progress reports.
+	func progressReported(isWorking: Bool) {
+		guard !isStopped, source.requestsProgress else {
+			return
+		}
+
+		// A progress bar from some other program says nothing about Claude.
+		if screen?.isClaudeInForeground == false {
+			return
+		}
+
+		trace("progress report, working: \(isWorking)")
+		isClaudeWorking = isWorking
+		if isWorking {
+			isHeldForAttention = false
+			waitingStateGate.reset()
+			if currentStatus == .waitingForInput {
+				reportStatus(.active, reason: "progress report")
+			}
+		}
+		scheduleIdleCheck()
 	}
 
 	/// Ends all reporting. Called when the pane's session is killed, before the shell is hung up:
@@ -176,6 +220,12 @@ final class ClaudeStatusDetector {
 	private enum IdleVerdict {
 		/// Something other than Claude owns the pane, so the prompt glyph carries no meaning.
 		case foregroundIsNotClaude
+		/// Claude reported a turn in progress and shows no dialog. Its input box may be on screen.
+		case claudeReportsWork
+		/// Claude reported a turn in progress, and a numbered option list is on screen, on this row.
+		case dialogOnScreen(row: Int)
+		/// Claude is in the foreground and not mid-turn, which `progressOnly` takes as waiting.
+		case claudeNotWorking
 		/// The user is reading scrollback, so the last frame drawn is judged in place of the grid.
 		case scrolledBack(drewPrompt: Bool)
 		/// The cursor is sitting in the input box Claude drew.
@@ -187,9 +237,14 @@ final class ClaudeStatusDetector {
 
 		var status: TerminalSessionStatus {
 			switch self {
-			case .foregroundIsNotClaude,
+			case .claudeReportsWork,
+			     .foregroundIsNotClaude,
 			     .noPromptOnScreen:
 				.active
+
+			case .claudeNotWorking,
+			     .dialogOnScreen:
+				.waitingForInput
 
 			case let .scrolledBack(drewPrompt):
 				drewPrompt ? .waitingForInput : .active
@@ -216,7 +271,18 @@ final class ClaudeStatusDetector {
 		// An unidentifiable foreground process falls through to the screen rather than being taken
 		// for something other than Claude.
 		if screen.isClaudeInForeground == false {
+			// A Claude that exits without clearing its progress must not leave the next one, or
+			// the shell, judged as mid-turn.
+			isClaudeWorking = false
 			return .foregroundIsNotClaude
+		}
+
+		if isClaudeWorking {
+			return workingVerdict(on: screen)
+		}
+
+		if source == .progressOnly, screen.isClaudeInForeground == true {
+			return .claudeNotWorking
 		}
 
 		guard screen.isShowingLiveScreen else {
@@ -248,6 +314,69 @@ final class ClaudeStatusDetector {
 		}
 
 		return .noPromptOnScreen
+	}
+
+	/// The verdict while Claude reports a turn in progress: waiting only when a dialog is up.
+	///
+	/// A dialog is told from the input box by what follows the glyph: an option number (`❯ 1. Yes`).
+	/// Scrollback is not judged, since the last frame drawn says only that a glyph was drawn, not
+	/// which kind.
+	private func workingVerdict(on screen: any PromptScreen) -> IdleVerdict {
+		guard screen.isShowingLiveScreen else {
+			return .claudeReportsWork
+		}
+
+		if drawsDialogOption(row: screen.cursorRow, on: screen) == true {
+			return .dialogOnScreen(row: screen.cursorRow)
+		}
+
+		var inspectedRows = 0
+		for row in stride(from: screen.rowCount - 1, through: 0, by: -1) {
+			guard let drawsOption = drawsDialogOption(row: row, on: screen) else {
+				continue // nothing written on this row
+			}
+
+			if drawsOption {
+				return .dialogOnScreen(row: row)
+			}
+
+			inspectedRows += 1
+			if inspectedRows == Self.maxInspectedRows {
+				break
+			}
+		}
+
+		return .claudeReportsWork
+	}
+
+	/// Whether `row` draws a dialog's selected option, or `nil` when the row is blank. The cheap
+	/// glyph scan runs first, so text is read only from a row that has the glyph.
+	private func drawsDialogOption(row: Int, on screen: any PromptScreen) -> Bool? {
+		guard let drawsPrompt = drawsPrompt(row: row, on: screen) else {
+			return nil
+		}
+
+		guard drawsPrompt else {
+			return false
+		}
+
+		let text = screen.leadingText(ofRow: row, columns: Self.promptColumns + Self.optionNumberColumns)
+		return Self.isNumberedOption(text)
+	}
+
+	/// Room after the glyph's column for a space, an option number and its period.
+	private static let optionNumberColumns = 6
+
+	/// Whether `text` holds the prompt glyph followed by an option number: `❯ 1.`, `❯ 12.`.
+	static func isNumberedOption(_ text: String) -> Bool {
+		guard let glyph = text.unicodeScalars.firstIndex(where: { $0.value == promptScalar }) else {
+			return false
+		}
+
+		let rest = text.unicodeScalars[text.unicodeScalars.index(after: glyph)...]
+			.drop { $0 == " " || $0 == "\u{A0}" }
+		let digits = rest.prefix { ("0" ... "9").contains($0) }
+		return !digits.isEmpty && rest.dropFirst(digits.count).first == "."
 	}
 
 	/// Whether `row` draws Claude's prompt glyph where Claude would put it, or `nil` when the row is
