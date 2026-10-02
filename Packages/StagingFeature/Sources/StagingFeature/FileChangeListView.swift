@@ -36,74 +36,84 @@ struct FileChangeListView: View {
 				)
 			}
 			else {
-				List(
-					selection: Binding(
-						get: { store.selectedFileIds },
-						set: { store.send(.updateSelection($0)) }
-					)
-				) {
-					ForEach(store.files) { file in
-						FileChangeRow(
-							file: file.toAppUI(),
-							isStaged: store.listType == .staged,
-							onToggle: { store.send(.toggleTapped(file)) }
+				ScrollViewReader { proxy in
+					List(
+						selection: Binding(
+							get: { store.selectedFileIds },
+							set: { store.send(.updateSelection($0)) }
 						)
-						.tag(file.id)
-						.background(
-							ClickCatcher(
-								onClick: { isListFocused = true },
-								onDoubleClick: {
-									store.send(.updateSelection([file.id]))
-									store.send(.openInIDE(file))
-								}
+					) {
+						ForEach(store.files) { file in
+							FileChangeRow(
+								file: file.toAppUI(),
+								isStaged: store.listType == .staged,
+								onToggle: { store.send(.toggleTapped(file)) }
 							)
-						)
+							.tag(file.id)
+							.background(
+								ClickCatcher(
+									onClick: { isListFocused = true },
+									onDoubleClick: {
+										store.send(.updateSelection([file.id]))
+										store.send(.openInIDE(file))
+									}
+								)
+							)
+						}
 					}
-				}
-				// A single list-level context menu driven by the current selection.
-				// Per-row `.contextMenu` is intentionally avoided: ⌘A is dispatched through
-				// `NSMenu performKeyEquivalent:`, which forces AppKit to build every row's
-				// menu, turning select-all into O(rows^2) work and freezing the app.
-				.contextMenu(forSelectionType: FileChange.ID.self) { ids in
-					contextMenu(forSelection: ids)
-				}
-				.listStyle(.plain)
-				.focused($isListFocused)
-				// Clicking a row does not make the list first responder on macOS 27, so focus is
-				// claimed explicitly: on a click (see `ClickCatcher`), when the list opens with a
-				// file already auto-selected, and whenever the selection changes — which also
-				// carries focus across when staging a file moves the selection into the other list.
-				.onAppear {
-					if !store.selectedFileIds.isEmpty {
-						isListFocused = true
+					// A single list-level context menu driven by the current selection.
+					// Per-row `.contextMenu` is intentionally avoided: ⌘A is dispatched through
+					// `NSMenu performKeyEquivalent:`, which forces AppKit to build every row's
+					// menu, turning select-all into O(rows^2) work and freezing the app.
+					.contextMenu(forSelectionType: FileChange.ID.self) { ids in
+						contextMenu(forSelection: ids)
 					}
-				}
-				.onChange(of: store.selectedFileIds) { _, ids in
-					if !ids.isEmpty {
-						isListFocused = true
+					.listStyle(.plain)
+					.focused($isListFocused)
+					// Clicking a row does not make the list first responder on macOS 27, so focus is
+					// claimed explicitly: on a click (see `ClickCatcher`), when the list opens with a
+					// file already auto-selected, and whenever the selection changes — which also
+					// carries focus across when staging a file moves the selection into the other list.
+					.onAppear {
+						if !store.selectedFileIds.isEmpty {
+							isListFocused = true
+						}
 					}
-				}
-				// ↑/↓ are handled here rather than left to the native table: on macOS 27 they
-				// neither moved the selection nor wrote it back through `selection`. ⇧ is left
-				// to the table so extending the selection keeps working.
-				.onKeyPress(keys: [.upArrow, .downArrow]) { press in
-					guard press.modifiers.isDisjoint(with: [.shift, .command, .option]) else {
-						return .ignored
+					.onChange(of: store.selectedFileIds) { _, ids in
+						if !ids.isEmpty {
+							isListFocused = true
+						}
+						// ↑/↓ move the selection in the reducer, not in the table, so the table never
+						// scrolls it into view by itself. A single selected file is scrolled to with no
+						// anchor, which moves the list only when the row is out of view (a click or a
+						// file already on screen does not scroll). Multi-selections are left alone: the
+						// table already follows ⇧-extension, and ⌘A should not jump anywhere.
+						if ids.count == 1, let id = ids.first {
+							proxy.scrollTo(id)
+						}
 					}
+					// ↑/↓ are handled here rather than left to the native table: on macOS 27 they
+					// neither moved the selection nor wrote it back through `selection`. ⇧ is left
+					// to the table so extending the selection keeps working.
+					.onKeyPress(keys: [.upArrow, .downArrow]) { press in
+						guard press.modifiers.isDisjoint(with: [.shift, .command, .option]) else {
+							return .ignored
+						}
 
-					store.send(.moveSelection(by: press.key == .upArrow ? -1 : 1))
-					return .handled
-				}
-				.onKeyPress(.space) {
-					store.send(.spaceKeyPressed)
-					return .handled
-				}
-				.onReturnPress {
-					if let file = store.files.first(where: { store.selectedFileIds.contains($0.id) }) {
-						store.send(.openInIDE(file))
+						store.send(.moveSelection(by: press.key == .upArrow ? -1 : 1))
+						return .handled
 					}
+					.onKeyPress(.space) {
+						store.send(.spaceKeyPressed)
+						return .handled
+					}
+					.onReturnPress {
+						if let file = store.files.first(where: { store.selectedFileIds.contains($0.id) }) {
+							store.send(.openInIDE(file))
+						}
+					}
+					.alert($store.scope(\.$alert, action: \.alert))
 				}
-				.alert($store.scope(\.$alert, action: \.alert))
 			}
 		}
 	}
