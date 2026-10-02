@@ -9,7 +9,8 @@ public nonisolated enum XcodeProjectGenerator {
 	///   - repositoryPath: The repository root path
 	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
 	///   - shouldOpenXcode: Controls whether Xcode opens after generation
-	///   - onStateChange: Callback invoked when state changes
+	///   - onStateChange: Awaited on every state change, so a caller that forwards the state
+	///     sees each one before the next — and before this function returns
 	/// - Returns: Path to the generated Xcode project/workspace, or throws an error
 	public static func generateProject(
 		at repositoryPath: String,
@@ -17,7 +18,7 @@ public nonisolated enum XcodeProjectGenerator {
 		shouldOpenXcode: Bool,
 		misePath: String,
 		runMode: TuistRunMode,
-		onStateChange: @escaping (XcodeProjectState) -> Void
+		onStateChange: @Sendable (XcodeProjectState) async -> Void
 	) async throws -> String {
 		// Get iOS subfolder path
 		let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
@@ -36,7 +37,7 @@ public nonisolated enum XcodeProjectGenerator {
 		}
 
 		// Step 1: Run ti command in iOS subfolder
-		onStateChange(.runningTi)
+		await onStateChange(.runningTi)
 		let installResult = await TuistCommandHelper.runCommand(
 			.install,
 			at: iosFlashscorePath,
@@ -49,7 +50,7 @@ public nonisolated enum XcodeProjectGenerator {
 		}
 
 		// Step 2: Run tg command in iOS subfolder
-		onStateChange(.runningTg)
+		await onStateChange(.runningTg)
 		let generateResult = await TuistCommandHelper.runCommand(
 			.generate,
 			at: iosFlashscorePath,
@@ -62,7 +63,7 @@ public nonisolated enum XcodeProjectGenerator {
 		}
 
 		// Step 3: Find the generated project
-		onStateChange(.checking)
+		await onStateChange(.checking)
 		guard
 			let projectPath = XcodeProjectDetector.findXcodeProject(
 				in: repositoryPath,
