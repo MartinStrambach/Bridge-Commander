@@ -28,6 +28,8 @@ public final class TerminalViewStore {
 	/// - Parameter cursorColor: The caret color, or `nil` to keep SwiftTerm's default. Most
 	///   Terminal profiles set no cursor color, so `nil` is the usual case.
 	/// - Parameter selectionColor: The selection background, or `nil` to keep SwiftTerm's default.
+	/// - Parameter statusSource: What the pane's waiting/active status is based on. Only read when
+	///   the pane is created.
 	public func view(
 		for session: TerminalSession,
 		foregroundColor: NSColor,
@@ -35,6 +37,7 @@ public final class TerminalViewStore {
 		ansiPalette: [NSColor]? = nil,
 		cursorColor: NSColor? = nil,
 		selectionColor: NSColor? = nil,
+		statusSource: ClaudeStatusSource = .progressAndScreen,
 		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
@@ -46,6 +49,7 @@ public final class TerminalViewStore {
 		let terminalView = ClaudeAwareTerminalView(
 			repositoryPath: session.repositoryPath,
 			sessionId: session.id,
+			statusSource: statusSource,
 			onStatusChange: onStatusChange,
 			onNotification: onNotification
 		)
@@ -81,7 +85,7 @@ public final class TerminalViewStore {
 		terminalView.startProcess(
 			executable: shellExecutable,
 			args: shellArguments,
-			environment: TerminalEnvironment.variables(),
+			environment: TerminalEnvironment.variables(requestingProgress: statusSource.requestsProgress),
 			execName: nil,
 			currentDirectory: session.startingDirectory
 		)

@@ -14,7 +14,8 @@ import OSLog
 /// its input box, prompt glyph and all, on screen while it works. Claude's own progress reports
 /// (OSC 9;4, enabled by `TerminalEnvironment`) settle that: between "working" and "done" an idle
 /// check ignores the input box and only a dialog — a numbered option list such as a permission
-/// prompt, which Claude shows mid-turn — counts as waiting.
+/// prompt, which Claude shows mid-turn — counts as waiting. How much is left to the screen
+/// otherwise is the `ClaudeStatusSource` the pane was created with.
 @MainActor
 final class ClaudeStatusDetector {
 	private static let promptScalar: UInt32 = 0x276F // ❯
@@ -40,6 +41,8 @@ final class ClaudeStatusDetector {
 
 	/// How long the pane must be quiet before its screen is judged.
 	private let idleThreshold: TimeInterval
+
+	private let source: ClaudeStatusSource
 
 	private let onStatusChange: (TerminalSessionStatus) -> Void
 
@@ -69,11 +72,13 @@ final class ClaudeStatusDetector {
 	init(
 		label: String,
 		screen: any PromptScreen,
+		source: ClaudeStatusSource = .progressAndScreen,
 		idleThreshold: TimeInterval = 1.5,
 		onStatusChange: @escaping (TerminalSessionStatus) -> Void
 	) {
 		self.label = label
 		self.screen = screen
+		self.source = source
 		self.idleThreshold = idleThreshold
 		self.onStatusChange = onStatusChange
 	}
@@ -137,7 +142,7 @@ final class ClaudeStatusDetector {
 	/// Claude also clears its progress on exit, so "done" may mean the shell is about to come back.
 	/// The next idle check sees which, the same way it does without progress reports.
 	func progressReported(isWorking: Bool) {
-		guard !isStopped else {
+		guard !isStopped, source.requestsProgress else {
 			return
 		}
 
@@ -219,6 +224,8 @@ final class ClaudeStatusDetector {
 		case claudeReportsWork
 		/// Claude reported a turn in progress, and a numbered option list is on screen, on this row.
 		case dialogOnScreen(row: Int)
+		/// Claude is in the foreground and not mid-turn, which `progressOnly` takes as waiting.
+		case claudeNotWorking
 		/// The user is reading scrollback, so the last frame drawn is judged in place of the grid.
 		case scrolledBack(drewPrompt: Bool)
 		/// The cursor is sitting in the input box Claude drew.
@@ -235,7 +242,8 @@ final class ClaudeStatusDetector {
 			     .noPromptOnScreen:
 				.active
 
-			case .dialogOnScreen:
+			case .claudeNotWorking,
+			     .dialogOnScreen:
 				.waitingForInput
 
 			case let .scrolledBack(drewPrompt):
@@ -271,6 +279,10 @@ final class ClaudeStatusDetector {
 
 		if isClaudeWorking {
 			return workingVerdict(on: screen)
+		}
+
+		if source == .progressOnly, screen.isClaudeInForeground == true {
+			return .claudeNotWorking
 		}
 
 		guard screen.isShowingLiveScreen else {

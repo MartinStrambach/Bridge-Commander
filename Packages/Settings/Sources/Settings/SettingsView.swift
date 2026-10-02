@@ -405,6 +405,20 @@ public struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
+
+			Picker(
+				"Detect Claude waiting from:",
+				selection: $store.terminalClaudeStatusDetection.sending(\.setTerminalClaudeStatusDetection)
+			) {
+				ForEach(ClaudeStatusDetection.allCases, id: \.self) { detection in
+					Text(detection.displayName).tag(detection)
+				}
+			}
+			.frame(maxWidth: 420)
+
+			Text("\(store.terminalClaudeStatusDetection.explanation) Applies to terminals opened after the change.")
+				.font(.caption)
+				.foregroundColor(.secondary)
 		}
 		.frame(maxWidth: .infinity, alignment: .leading)
 		.padding()

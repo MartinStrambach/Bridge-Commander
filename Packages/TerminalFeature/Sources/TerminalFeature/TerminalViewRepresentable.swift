@@ -37,6 +37,9 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let selectionColor: NSColor?
 	public let copyOnSelect: Bool
 	public let mouseReporting: Bool
+	/// What new panes base their waiting/active status on. Unlike the flags beside it, a pane
+	/// keeps the source it was created with — see `ClaudeStatusSource`.
+	public let statusSource: ClaudeStatusSource
 	/// The font every pane renders with. Resolved by the caller — the family and its point size are
 	/// both settings, and this package stays free of a Settings dependency.
 	public let font: NSFont
@@ -54,6 +57,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		selectionColor: NSColor? = nil,
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
+		statusSource: ClaudeStatusSource = .progressAndScreen,
 		font: NSFont,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
@@ -68,6 +72,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.selectionColor = selectionColor
 		self.copyOnSelect = copyOnSelect
 		self.mouseReporting = mouseReporting
+		self.statusSource = statusSource
 		self.font = font
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
@@ -111,6 +116,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					ansiPalette: ansiPalette,
 					cursorColor: cursorColor,
 					selectionColor: selectionColor,
+					statusSource: statusSource,
 					processDelegate: delegate,
 					onStatusChange: onStatusChange,
 					onNotification: onNotification

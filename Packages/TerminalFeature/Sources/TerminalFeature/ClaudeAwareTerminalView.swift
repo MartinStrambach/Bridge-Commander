@@ -15,9 +15,12 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	/// Built on first use, since it takes this view as its screen and `self` isn't available until
 	/// `super.init` has run.
+	private let statusSource: ClaudeStatusSource
+
 	private lazy var detector = ClaudeStatusDetector(
 		label: repositoryPath,
 		screen: self,
+		source: statusSource,
 		onStatusChange: { [weak self] status in
 			guard let self else {
 				return
@@ -30,11 +33,13 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	public init(
 		repositoryPath: String,
 		sessionId: UUID,
+		statusSource: ClaudeStatusSource = .progressAndScreen,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId
+		self.statusSource = statusSource
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
 		super.init(frame: .zero)

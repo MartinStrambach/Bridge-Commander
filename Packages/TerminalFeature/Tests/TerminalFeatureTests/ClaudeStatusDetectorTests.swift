@@ -57,11 +57,13 @@ struct ClaudeStatusDetectorTests {
 
 	private func makeDetector(
 		screen: FakeScreen,
-		reported: Reported
+		reported: Reported,
+		source: ClaudeStatusSource = .progressAndScreen
 	) -> ClaudeStatusDetector {
 		ClaudeStatusDetector(
 			label: "test",
 			screen: screen,
+			source: source,
 			idleThreshold: Self.neverFires,
 			onStatusChange: { reported.statuses.append($0) }
 		)
@@ -370,6 +372,62 @@ struct ClaudeStatusDetectorTests {
 		detector.checkIdleState()
 
 		screen.isClaudeInForeground = true
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	// MARK: - Status sources
+
+	@Test func progressOnlyTakesAnIdleClaudeAsWaitingWithoutAPrompt() {
+		let screen = FakeScreen()
+		screen.rows = ["⏺ Done.", nil]
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .progressOnly)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+		#expect(reported.statuses.isEmpty)
+
+		detector.progressReported(isWorking: false)
+		detector.checkIdleState()
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test func progressOnlyStillFindsADialogMidTurn() {
+		let screen = FakeScreen()
+		screen.rows = ["Do you want to proceed?", " ❯ 1. Yes", "   2. No", nil]
+		screen.cursorRow = 3
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .progressOnly)
+		detector.progressReported(isWorking: true)
+		detector.checkIdleState()
+
+		#expect(reported.statuses == [.waitingForInput])
+	}
+
+	@Test func progressOnlyLeavesAShellActive() {
+		let screen = FakeScreen()
+		screen.rows = ["❯ "]
+		screen.isClaudeInForeground = false
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .progressOnly)
+		detector.checkIdleState()
+
+		#expect(reported.statuses.isEmpty)
+	}
+
+	@Test func screenOnlyIgnoresProgressReports() {
+		// The stuck dot, as it was: the input box reads as waiting even though Claude says it works.
+		let screen = FakeScreen()
+		screen.rows = Self.inputBox
+		screen.cursorRow = 1
+
+		let reported = Reported()
+		let detector = makeDetector(screen: screen, reported: reported, source: .screenOnly)
+		detector.progressReported(isWorking: true)
 		detector.checkIdleState()
 
 		#expect(reported.statuses == [.waitingForInput])
