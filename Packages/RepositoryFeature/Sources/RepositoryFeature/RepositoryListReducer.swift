@@ -821,13 +821,15 @@ struct RepositoryListReducer {
 				return .none
 
 			case let .terminalLayout(.retryTab(sessionId)):
-				guard let old = state.terminalSessions[id: sessionId] else {
+				guard
+					let old = state.terminalSessions[id: sessionId],
+					let position = state.terminalSessions.index(id: sessionId)
+				else {
 					return .none
 				}
 
 				let repoPath = old.repositoryPath
 				let tabIndex = old.tabIndex
-				state.terminalSessions.remove(id: sessionId)
 				// A retried tab runs the command only if the tab it replaces did, so retrying a
 				// plain-shell tab does not suddenly start the command in it.
 				let newSession = TerminalSession(
@@ -837,7 +839,10 @@ struct RepositoryListReducer {
 						: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
 					tabIndex: tabIndex
 				)
-				state.terminalSessions.append(newSession)
+				// In the old one's place, not appended: the tab bar lays tabs out in array order,
+				// so appending moved the retried tab to the end of the bar.
+				state.terminalSessions.remove(id: sessionId)
+				state.terminalSessions.insert(newSession, at: position)
 				state.terminalLayout?.activate(newSession)
 				return .none
 
