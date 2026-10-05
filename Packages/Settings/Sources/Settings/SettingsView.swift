@@ -738,26 +738,6 @@ public struct SettingsView: View {
 			)
 			.font(.caption)
 			.foregroundColor(.secondary)
-
-			Text("Create Worktree Dialog Opens On")
-				.font(.subheadline)
-				.padding(.top, 4)
-
-			Picker(
-				"Create Worktree Dialog Opens On",
-				selection: $store.defaultWorktreeSource.sending(\.setDefaultWorktreeSource)
-			) {
-				ForEach(WorktreeSource.allCases, id: \.self) { source in
-					Text(source.title).tag(source)
-				}
-			}
-			.pickerStyle(.segmented)
-			.labelsHidden()
-			.fixedSize()
-
-			Text("The tab shown first when creating a worktree. Ticket falls back to Branch in groups without a YouTrack URL.")
-				.font(.caption)
-				.foregroundColor(.secondary)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
@@ -972,6 +952,24 @@ public struct SettingsView: View {
 				))
 				.textFieldStyle(.roundedBorder)
 				.font(.system(.body, design: .monospaced))
+			}
+
+			HStack {
+				Text("New Worktree Dialog Opens On")
+					.font(.caption)
+					.foregroundColor(.secondary)
+					.frame(width: 140, alignment: .leading)
+				Picker("New Worktree Dialog Opens On", selection: Binding(
+					get: { settings.openingWorktreeSource(fallback: store.defaultWorktreeSource) },
+					set: { store.send(.setGroupDefaultWorktreeSource(groupId: groupId, source: $0)) }
+				)) {
+					ForEach(settings.worktreeSources, id: \.self) { source in
+						Text(source.title).tag(source)
+					}
+				}
+				.pickerStyle(.segmented)
+				.labelsHidden()
+				.fixedSize()
 			}
 
 			Divider()

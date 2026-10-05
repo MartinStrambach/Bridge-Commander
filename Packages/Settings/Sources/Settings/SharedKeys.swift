@@ -94,8 +94,9 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 }
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<WorktreeSource> {
-	/// The tab the create-worktree dialog opens on. A ticket default falls back to the branch tab
-	/// in groups without a YouTrack instance.
+	/// The tab the create-worktree dialog opened on before the choice moved to each group
+	/// (`RepoGroupSettings.defaultWorktreeSource`). No longer written; read only for groups that
+	/// have not picked one of their own, so an existing choice carries over.
 	static var defaultWorktreeSource: Self {
 		appStorage("defaultWorktreeSource")
 	}

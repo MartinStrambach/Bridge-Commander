@@ -223,7 +223,24 @@ struct CreateWorktreeSourceTests {
 
 	// MARK: - Default tab
 
-	@Test("the dialog opens on the tab chosen in Settings, every time")
+	@Test("the dialog opens on the group's own tab over the app-wide one")
+	func opensOnGroupSource() async {
+		@Shared(.defaultWorktreeSource) var defaultSource = WorktreeSource.branch
+		$defaultSource.withLock { $0 = .ticket }
+		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
+		$groupSettings.withLock {
+			$0[repo] = RepoGroupSettings(youtrackBaseURL: "https://yt.example", defaultWorktreeSource: .branch)
+		}
+		let store = TestStore(initialState: CreateWorktreeButtonReducer.State(repositoryPath: repo)) {
+			CreateWorktreeButtonReducer()
+		}
+		store.exhaustivity = .off
+
+		await store.send(.showDialog)
+		#expect(store.state.source == .branch)
+	}
+
+	@Test("a group without a tab of its own opens on the app-wide one, every time")
 	func opensOnDefaultSource() async {
 		@Shared(.defaultWorktreeSource) var defaultSource = WorktreeSource.branch
 		$defaultSource.withLock { $0 = .ticket }

@@ -73,6 +73,7 @@ struct RepoGroupSettingsCodableTests {
 		#expect(decoded.youtrackBaseURL == "")
 		#expect(decoded.terminalStartupCommand == "")
 		#expect(decoded.skipGlobalTerminalStartupCommand == false)
+		#expect(decoded.defaultWorktreeSource == nil)
 	}
 
 	@Test("an unknown xcodeFilePreference value does not wipe the rest of the settings")

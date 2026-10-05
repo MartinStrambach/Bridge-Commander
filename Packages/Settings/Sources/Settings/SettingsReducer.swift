@@ -69,6 +69,7 @@ public struct SettingsReducer {
 		@Shared(.worktreeBasePath)
 		public var worktreeBasePath = "../worktrees"
 
+		/// Read only: what a group that has not picked its own dialog tab shows in its picker.
 		@Shared(.defaultWorktreeSource)
 		public var defaultWorktreeSource = WorktreeSource.branch
 
@@ -136,6 +137,7 @@ public struct SettingsReducer {
 		case setGroupYouTrackBaseURL(groupId: String, value: String)
 		case setGroupTerminalStartupCommand(groupId: String, value: String)
 		case setGroupSkipGlobalTerminalStartupCommand(groupId: String, value: Bool)
+		case setGroupDefaultWorktreeSource(groupId: String, source: WorktreeSource)
 		case setBranchNameRegex(String)
 		case setTicketBranchNameTemplate(String)
 		case setOpenXcodeAfterGenerate(Bool)
@@ -146,7 +148,6 @@ public struct SettingsReducer {
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
 		case setAndroidStudioPath(String)
 		case setWorktreeBasePath(String)
-		case setDefaultWorktreeSource(WorktreeSource)
 		case setMisePath(String)
 		case setTuistRunMode(TuistRunMode)
 		case setTerminalColorTheme(TerminalThemeSelection)
@@ -422,6 +423,10 @@ public struct SettingsReducer {
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].terminalStartupCommand = value }
 				return .none
 
+			case let .setGroupDefaultWorktreeSource(groupId, source):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].defaultWorktreeSource = source }
+				return .none
+
 			case let .setGroupSkipGlobalTerminalStartupCommand(groupId, value):
 				state.$groupSettings.withLock {
 					$0[groupId, default: RepoGroupSettings()].skipGlobalTerminalStartupCommand = value
@@ -466,10 +471,6 @@ public struct SettingsReducer {
 
 			case let .setWorktreeBasePath(path):
 				state.$worktreeBasePath.withLock { $0 = path }
-				return .none
-
-			case let .setDefaultWorktreeSource(source):
-				state.$defaultWorktreeSource.withLock { $0 = source }
 				return .none
 
 			case let .setMisePath(path):
