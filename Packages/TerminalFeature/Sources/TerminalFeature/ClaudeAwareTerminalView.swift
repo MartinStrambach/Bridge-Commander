@@ -210,14 +210,35 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// window yet — and it is not there one run loop later either, which is all a single deferred
 	/// `makeFirstResponder` waited for. Nothing asked again afterwards, so the new terminal came up
 	/// without the caret until clicked. Waiting for `viewDidMoveToWindow` needs no guess at when.
+	///
+	/// Focus already inside the pane is left where it is. The representable asks on every update
+	/// pass, and a Claude status change is one, so taking focus unconditionally pulled it out of
+	/// SwiftTerm's find bar a moment after ⌘F opened it, and the search text went to the shell.
 	public func requestFocus() {
 		if let window {
 			wantsFocusOnceInWindow = false
-			window.makeFirstResponder(self)
+			if !holdsFocus(in: window) {
+				window.makeFirstResponder(self)
+			}
 		}
 		else {
 			wantsFocusOnceInWindow = true
 		}
+	}
+
+	/// Whether the window's first responder is this pane or a control inside it. A text field
+	/// being edited is not itself the first responder: the window's shared field editor is, with
+	/// the field as its delegate.
+	private func holdsFocus(in window: NSWindow) -> Bool {
+		var responder = window.firstResponder
+		if let editor = responder as? NSTextView, editor.isFieldEditor {
+			responder = editor.delegate as? NSView
+		}
+		guard let view = responder as? NSView else {
+			return false
+		}
+
+		return view.isDescendant(of: self)
 	}
 
 	/// Drops a focus request that has not been met yet, for a pane that stopped being the active

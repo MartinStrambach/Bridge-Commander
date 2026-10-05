@@ -361,6 +361,7 @@ struct TerminalPanelView: View {
 				closeTabShortcut(repoSessions: repoSessions)
 				refreshShortcut
 				zoomShortcuts
+				findShortcuts
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 4)
@@ -476,6 +477,35 @@ struct TerminalPanelView: View {
 					.keyboardShortcut("0", modifiers: .command)
 			}
 			.hidden()
+		}
+	}
+
+	/// ⌘G / ⇧⌘G / ⌘E drive SwiftTerm's find bar in the active pane — the standard Find menu
+	/// shortcuts, registered here because the app has no Find menu for SwiftTerm to hang them on.
+	/// ⌘F, which opens the bar, is `RepositoryListView`'s (it doubles as the list's filter shortcut);
+	/// Escape and Return are the find bar's own (close, next; ⇧Return for previous).
+	///
+	/// The session is read from the store when the key is pressed, not captured, for the reason
+	/// ⌘W documents: SwiftUI can keep the closure a hidden button was first laid out with. Yielded
+	/// while a sheet is up for the same reason the zoom shortcuts are.
+	@ViewBuilder
+	private var findShortcuts: some View {
+		if store.stagingDetail == nil, store.gitGraph == nil {
+			Group {
+				Button("") { find(.next) }
+					.keyboardShortcut("g", modifiers: .command)
+				Button("") { find(.previous) }
+					.keyboardShortcut("g", modifiers: [.command, .shift])
+				Button("") { find(.useSelection) }
+					.keyboardShortcut("e", modifiers: .command)
+			}
+			.hidden()
+		}
+	}
+
+	private func find(_ command: TerminalFindCommand) {
+		if let sessionId = store.activeSessionId {
+			terminalViewStore.performFind(command, sessionId: sessionId)
 		}
 	}
 

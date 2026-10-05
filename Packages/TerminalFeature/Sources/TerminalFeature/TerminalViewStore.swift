@@ -101,6 +101,11 @@ public final class TerminalViewStore {
 		return terminalView
 	}
 
+	/// Sends a find command to a session's pane; a session with no pane yet ignores it.
+	public func performFind(_ command: TerminalFindCommand, sessionId: UUID) {
+		views[sessionId]?.performFind(command)
+	}
+
 	public func killSession(sessionId: UUID) {
 		if let view = views[sessionId] {
 			view.processDelegate = nil // the shell is about to exit on purpose, not fail
