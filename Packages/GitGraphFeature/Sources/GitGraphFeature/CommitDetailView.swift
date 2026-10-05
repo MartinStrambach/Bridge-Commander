@@ -5,8 +5,9 @@ import DiffModelMapping
 import GitCore
 import SwiftUI
 
-/// The list of the graph view that ↑/↓ currently drive.
+/// What has keyboard focus in the graph view: one of the two lists ↑/↓ drive, or the search field.
 enum GitGraphPane: Hashable {
+	case search
 	case commits
 	case files
 }

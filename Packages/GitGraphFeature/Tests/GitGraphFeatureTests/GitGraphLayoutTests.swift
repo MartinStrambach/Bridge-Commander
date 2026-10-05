@@ -131,4 +131,16 @@ struct GitGraphLayoutTests {
 		#expect(rows.isEmpty)
 		#expect(GitGraphLayout.laneCount(rows: rows) == 0)
 	}
+
+	@Test("lanes follow graph parents, so a search result's unlisted parents open no lane")
+	func layoutFollowsGraphParents() {
+		// Search results: neither commit's real parent matched, so the graph links nothing.
+		let rows = GitGraphLayout.layout(commits: [
+			GitLogCommit(hash: "c2", parents: ["c1"], author: "A", date: .distantPast, refs: [], subject: "", graphParents: []),
+			GitLogCommit(hash: "c0", parents: ["cx"], author: "A", date: .distantPast, refs: [], subject: "", graphParents: [])
+		])
+
+		#expect(rows.map(\.column) == [0, 0])
+		#expect(rows.allSatisfy { $0.outgoingColumns.isEmpty && $0.passThroughColumns.isEmpty })
+	}
 }

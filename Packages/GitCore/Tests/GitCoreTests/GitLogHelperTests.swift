@@ -73,4 +73,79 @@ struct GitLogHelperTests {
 		#expect(commits[0].isHead)
 		#expect(commits[0].refs == [GitCommitRef(name: "main", kind: .localBranch, isHead: true)])
 	}
+
+	// MARK: - Search
+
+	@Test("a blank query is no search; a query is trimmed")
+	func searchTrimsAndRejectsBlankQueries() {
+		#expect(GitLogSearch(field: .message, query: "") == nil)
+		#expect(GitLogSearch(field: .message, query: "  \n") == nil)
+		#expect(GitLogSearch(field: .author, query: "  alice ")?.query == "alice")
+	}
+
+	@Test("no search logs the whole history")
+	func argumentsWithoutSearch() {
+		let arguments = GitLogHelper.logArguments(limit: 300, search: nil)
+
+		#expect(arguments.contains("--max-count=300"))
+		#expect(!arguments.contains("--"))
+		#expect(!arguments.contains { $0.hasPrefix("--grep") || $0.hasPrefix("--author") || $0.hasPrefix("-S") })
+	}
+
+	@Test("message, author and content searches are literal and case-insensitive")
+	func argumentsForTextSearches() throws {
+		let message = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .message, query: "fix(")))
+		#expect(message.suffix(3) == ["--regexp-ignore-case", "--fixed-strings", "--grep=fix("])
+
+		let author = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .author, query: "Alice")))
+		#expect(author.suffix(3) == ["--regexp-ignore-case", "--fixed-strings", "--author=Alice"])
+
+		let content = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .content, query: "runGit")))
+		#expect(content.suffix(2) == ["--regexp-ignore-case", "-SrunGit"])
+	}
+
+	@Test("a path search rewrites parents and ends with its pathspecs")
+	func argumentsForPathSearch() throws {
+		let arguments = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .path, query: "GitCore")))
+		let separator = try #require(arguments.firstIndex(of: "--"))
+
+		#expect(arguments[..<separator].contains("--parents"))
+		#expect(Array(arguments[(separator + 1)...]) == GitLogHelper.pathspecs(for: "GitCore"))
+	}
+
+	@Test("pathspecs match a file, a directory and a root-relative path, ignoring outer slashes")
+	func pathspecs() {
+		#expect(GitLogHelper.pathspecs(for: "/Packages/GitCore/") == [
+			":(icase)Packages/GitCore",
+			":(glob,icase)**/*Packages/GitCore*",
+			":(glob,icase)**/*Packages/GitCore*/**"
+		])
+	}
+
+	@Test("only a path search has its parents rewritten by git")
+	func rewritesParents() {
+		let rewriting = GitLogSearch.Field.allCases.filter { GitLogSearch(field: $0, query: "x")?.rewritesParents == true }
+		#expect(rewriting == [.path])
+	}
+
+	@Test("pruning keeps graph parents that are listed, and the real parents untouched")
+	func pruningUnlistedGraphParents() {
+		let commits = [
+			GitLogCommit(hash: "aaa", parents: ["bbb", "ccc"], author: "A", date: .distantPast, refs: [], subject: "Merge"),
+			GitLogCommit(hash: "ccc", parents: ["ddd"], author: "A", date: .distantPast, refs: [], subject: "Side")
+		]
+
+		let pruned = GitLogHelper.pruningUnlistedGraphParents(commits)
+
+		#expect(pruned[0].graphParents == ["ccc"])
+		#expect(pruned[0].parents == ["bbb", "ccc"])
+		#expect(pruned[0].isMerge)
+		#expect(pruned[1].graphParents.isEmpty)
+	}
+
+	@Test("graph parents default to the real parents")
+	func graphParentsDefault() {
+		let commit = GitLogCommit(hash: "aaa", parents: ["bbb"], author: "A", date: .distantPast, refs: [], subject: "x")
+		#expect(commit.graphParents == ["bbb"])
+	}
 }
