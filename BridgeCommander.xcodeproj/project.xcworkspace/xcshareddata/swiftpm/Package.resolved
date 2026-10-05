@@ -1,5 +1,5 @@
 {
-  "originHash" : "cc850cc2ed4ddbad23e4a0434f99a1502179f8987e25e50f6627349350507554",
+  "originHash" : "ef1806557b418c8547816600010b16df0157d5c8e99d0c606714a6931e84434b",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "dcccb979a2183b8df3334237e3dc1ae2b4116a86",
         "version" : "1.2.0"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "eef1a539a373c1f1a320624b1130fc5de7b2e100",
+        "version" : "2.10.0"
       }
     },
     {

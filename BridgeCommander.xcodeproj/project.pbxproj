@@ -14,6 +14,7 @@
 		93B04D052F7933CA008328A2 /* ToolsIntegration in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04D042F7933CA008328A2 /* ToolsIntegration */; };
 		93B04D082F7933D7008328A2 /* TerminalFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04D072F7933D7008328A2 /* TerminalFeature */; };
 		93B04D0B2F7933E3008328A2 /* RepositoryFeature in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04D0A2F7933E3008328A2 /* RepositoryFeature */; };
+		93F5A1012FC1000100AE9EB8 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 93F5A1022FC1000100AE9EB8 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,9 +34,22 @@
 		93E7A1D42FB0000100AE9EB8 /* YouTrackMenu */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = YouTrackMenu; path = Packages/YouTrackMenu; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		93F5A1042FC1000100AE9EB8 /* Exceptions for "BridgeCommander" folder in "BridgeCommander" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 93351BB32ECD3F1A006D4609 /* BridgeCommander */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		93351BB62ECD3F1A006D4609 /* BridgeCommander */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				93F5A1042FC1000100AE9EB8 /* Exceptions for "BridgeCommander" folder in "BridgeCommander" target */,
+			);
 			path = BridgeCommander;
 			sourceTree = "<group>";
 		};
@@ -52,6 +66,7 @@
 				93B04D0B2F7933E3008328A2 /* RepositoryFeature in Frameworks */,
 				93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */,
 				93B04D052F7933CA008328A2 /* ToolsIntegration in Frameworks */,
+				93F5A1012FC1000100AE9EB8 /* Sparkle in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -111,6 +126,7 @@
 				93B04D042F7933CA008328A2 /* ToolsIntegration */,
 				93B04D072F7933D7008328A2 /* TerminalFeature */,
 				93B04D0A2F7933E3008328A2 /* RepositoryFeature */,
+				93F5A1022FC1000100AE9EB8 /* Sparkle */,
 			);
 			productName = BridgeCommander;
 			productReference = 93351BB42ECD3F1A006D4609 /* BridgeCommander.app */;
@@ -142,6 +158,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				93351C492ECF9BAD006D4609 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				93F5A1032FC1000100AE9EB8 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 93351BB52ECD3F1A006D4609 /* Products */;
@@ -302,7 +319,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(MARKETING_VERSION)";
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 2XH9BVCLCV;
 				EAGER_LINKING = YES;
@@ -310,6 +327,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BridgeCommander/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Bridge Commander";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -339,13 +357,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COMPILATION_CACHE_ENABLE_CACHING = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(MARKETING_VERSION)";
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 2XH9BVCLCV;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = BridgeCommander/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Bridge Commander";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -401,6 +420,14 @@
 				ComposableArchitecture2Deprecations,
 			);
 		};
+		93F5A1032FC1000100AE9EB8 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -432,6 +459,11 @@
 		93B04D0A2F7933E3008328A2 /* RepositoryFeature */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RepositoryFeature;
+		};
+		93F5A1022FC1000100AE9EB8 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 93F5A1032FC1000100AE9EB8 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -20,7 +20,18 @@ Produces a Developer ID signed, notarized, stapled `.dmg` suitable for distribut
      --team-id <TEAMID>
    ```
    When prompted for a password, use an [app-specific password](https://support.apple.com/en-us/102654) generated in your Apple ID account settings.
-4. Copy the env template and fill in your values:
+4. Make sure the Sparkle signing key is in your login keychain. Every update is signed with it,
+   and installed copies accept only updates signed with the key whose public half is
+   `SUPublicEDKey` in `BridgeCommander/Info.plist`. The tools come with the Sparkle package, so
+   after the first `make build-release`:
+   ```sh
+   build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys -p          # prints the public key if present
+   build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys -x key.txt  # back the key up somewhere safe
+   build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys -f key.txt  # import it on another machine
+   ```
+   **Losing this key means no installed copy can ever be updated again**: a new key needs a new
+   `SUPublicEDKey`, and only a manually installed build would carry it.
+5. Copy the env template and fill in your values:
    ```sh
    cp .env.release.example .env.release
    $EDITOR .env.release
@@ -49,7 +60,7 @@ Each phase is also a standalone target, useful when iterating:
 | `make notarize-app` | same `.app`, stapled |
 | `make dmg` | `dist/BridgeCommander-<version>.dmg` (signed, not notarized) |
 | `make notarize-dmg` | same DMG, stapled |
-| `make publish` | GitHub release + tag, with the DMG attached |
+| `make publish` | GitHub release + tag, with the DMG and `appcast.xml` attached |
 | `make clean` | removes `build/` and `dist/` |
 
 ## Publish to GitHub
@@ -62,6 +73,8 @@ make publish
 
 Tags the current commit `<version>`, pushes the tag, and creates a GitHub release with `dist/BridgeCommander-<version>.dmg` attached. Release notes are generated from the commits since the previous tag.
 
+The release also carries `appcast.xml`, the Sparkle feed for this version (`scripts/make-appcast.sh`): the DMG's EdDSA signature, its download URL, and the same release notes, rendered as Markdown in the update dialog. Installed copies read it from `releases/latest/download/appcast.xml` (`SUFeedURL`), which GitHub resolves to the newest published release, so publishing a release is what offers it as an update. The script refuses to tag anything if the keychain's Sparkle key does not match the app's `SUPublicEDKey`.
+
 `DRAFT=1 make publish` creates the release as a draft so you can edit the notes before making it public.
 
 The target does **not** rebuild — run `make release` first. It refuses to publish if the working tree is dirty, `HEAD` is not pushed, the DMG is missing or unstapled, the DMG was built from a different commit than `HEAD`, or a release for that version already exists.
@@ -70,7 +83,7 @@ The target does **not** rebuild — run `make release` first. It refuses to publ
 
 ## Version bump
 
-Edit `MARKETING_VERSION` in `BridgeCommander.xcodeproj/project.pbxproj` (bump it in both the Debug and Release configurations), then `make release`.
+Edit `MARKETING_VERSION` in `BridgeCommander.xcodeproj/project.pbxproj` (bump it in both the Debug and Release configurations), then `make release`. `CURRENT_PROJECT_VERSION` (`CFBundleVersion`) is `$(MARKETING_VERSION)`. Sparkle compares versions by `CFBundleVersion`, so it must increase with every release. It used to be a constant `1`, which every release would have shared.
 
 ## Troubleshooting
 

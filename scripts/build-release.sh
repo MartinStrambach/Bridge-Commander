@@ -16,6 +16,7 @@ xcodebuild \
   -configuration Release \
   -destination 'generic/platform=macOS' \
   -archivePath "$ARCHIVE_PATH" \
+  -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="$DEVELOPER_ID_APPLICATION" \
   DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tag the current commit and publish the notarized DMG as a GitHub release.
+# Tag the current commit and publish the notarized DMG as a GitHub release, with the Sparkle
+# appcast that announces it to installed copies.
 # Set DRAFT=1 to create the release as a draft instead of publishing it.
 
 set -euo pipefail
@@ -49,6 +50,10 @@ BUILT_SHA="$(<"$REVISION_FILE")"
 if [[ "$BUILT_SHA" != "$HEAD_SHA" ]]; then
   die "$DMG_PATH was built from ${BUILT_SHA:0:7} but HEAD is ${HEAD_SHA:0:7}. Rebuild with 'make release'."
 fi
+
+# Checked before anything is tagged: the appcast is signed after the notes are generated, and a
+# missing Sparkle key found then would leave a pushed tag with no release.
+bash "$SCRIPT_DIR/make-appcast.sh" --check
 
 if gh release view "$VERSION" >/dev/null 2>&1; then
   die "a GitHub release for $VERSION already exists. Bump MARKETING_VERSION or delete it with: gh release delete $VERSION"
@@ -110,6 +115,8 @@ trap 'rm -f "$NOTES_FILE"' EXIT
   fi
 } > "$NOTES_FILE"
 
+bash "$SCRIPT_DIR/make-appcast.sh" "$NOTES_FILE"
+
 RELEASE_ARGS=(--title "Bridge Commander $VERSION" --notes-file "$NOTES_FILE")
 if [[ -n "${DRAFT:-}" ]]; then
   RELEASE_ARGS+=(--draft)
@@ -118,6 +125,7 @@ else
   echo "==> gh release create $VERSION"
 fi
 
-gh release create "$VERSION" "$DMG_PATH" "${RELEASE_ARGS[@]}"
+# The appcast rides along as an asset: installed copies fetch it from the latest release.
+gh release create "$VERSION" "$DMG_PATH" "$APPCAST_PATH" "${RELEASE_ARGS[@]}"
 
 echo "Published $VERSION: $(gh release view "$VERSION" --json url --jq .url)"
