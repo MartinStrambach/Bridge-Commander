@@ -16,6 +16,13 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 		appStorage("worktreeBasePath")
 	}
 
+	/// How a worktree created from a YouTrack ticket names its branch, with `{ticket}` and
+	/// `{summary}` placeholders. See `BranchNameFormatter.branchName(ticketId:summary:template:)`;
+	/// empty means its default.
+	static var ticketBranchNameTemplate: Self {
+		appStorage("ticketBranchNameTemplate")
+	}
+
 	/// Name of the built-in terminal's font, as `NSFont(name:size:)` takes it. Empty means the
 	/// system monospaced face — see `TerminalFontFamily`.
 	static var terminalFontName: Self {
@@ -83,6 +90,22 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	/// iTerm2 do). On by default. Clicking the notification opens that tab.
 	static var terminalNotifications: Self {
 		appStorage("terminalNotifications")
+	}
+}
+
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<WorktreeSource> {
+	/// The tab the create-worktree dialog opens on. A ticket default falls back to the branch tab
+	/// in groups without a YouTrack instance.
+	static var defaultWorktreeSource: Self {
+		appStorage("defaultWorktreeSource")
+	}
+}
+
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<WorktreeCreationFollowUp> {
+	/// What the create-worktree dialog does once the worktree exists. Remembered from the
+	/// dialog's last use rather than set in Settings.
+	static var worktreeCreationFollowUp: Self {
+		appStorage("worktreeCreationFollowUp")
 	}
 }
 

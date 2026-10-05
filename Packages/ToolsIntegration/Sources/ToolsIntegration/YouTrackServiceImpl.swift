@@ -18,6 +18,11 @@ public struct YouTrackClient: Sendable {
 		_ baseURL: String,
 		_ authToken: String
 	) async throws -> Void
+	public var searchIssues: @Sendable (
+		_ query: String,
+		_ baseURL: String,
+		_ authToken: String
+	) async throws -> [YouTrackIssueSummary]
 }
 
 extension YouTrackClient: DependencyKey {
@@ -33,6 +38,9 @@ extension YouTrackClient: DependencyKey {
 				baseURL: baseURL,
 				authToken: authToken
 			)
+		},
+		searchIssues: { query, baseURL, authToken in
+			try await YouTrackService.searchIssues(query: query, baseURL: baseURL, authToken: authToken)
 		}
 	)
 }
