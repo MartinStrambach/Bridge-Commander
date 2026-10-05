@@ -14,7 +14,7 @@ macOS app for managing Git repositories and worktrees. Built with SwiftUI + TCA 
 The app is modularized into SPM packages under `Packages/`, with the thin app target in `BridgeCommander/`.
 
 ```
-BridgeCommander/          # App entry point (BridgeCommanderApp.swift)
+BridgeCommander/          # App entry point (BridgeCommanderApp.swift), Sparkle updater
 Packages/
   ProcessExecution/       # Shelling out to external processes (ProcessRunner)
   GitCore/                # Git operations and models
@@ -30,6 +30,12 @@ Packages/
   StagingFeature/         # File staging panel (detail view, diff, commit)
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature)
 ```
+
+### App Target
+
+- Updates come from Sparkle (the app target's only direct package besides TCA). `BridgeCommanderApp` owns the `SPUStandardUpdaterController`; `CheckForUpdatesView` is the "Check for Updates…" app-menu item. The updater is started only in Release builds: a Debug build runs out of DerivedData, and installing an update there would replace the build being worked on
+- `BridgeCommander/Info.plist` is merged over the generated plist (`GENERATE_INFOPLIST_FILE` plus `INFOPLIST_FILE`) and holds only keys with no `INFOPLIST_KEY_` setting: `SUFeedURL` and `SUPublicEDKey`. Anything else in it would override the generated value. It is excluded from the synchronized folder's resources. `CFBundleVersion` is `$(MARKETING_VERSION)` because Sparkle compares versions by it
+- The feed is an `appcast.xml` attached to each GitHub release by `make publish` (`scripts/make-appcast.sh`; see RELEASE.md)
 
 ### Package Details
 

@@ -57,6 +57,15 @@ fi
 
 DMG_PATH="$DIST_DIR/BridgeCommander-$VERSION.dmg"
 
+# Release builds resolve packages here rather than into DerivedData, so the tools Sparkle ships
+# in its package artifact (sign_update, generate_keys) are at a path the scripts can rely on.
+SOURCE_PACKAGES_DIR="$BUILD_DIR/SourcePackages"
+SPARKLE_BIN="$SOURCE_PACKAGES_DIR/artifacts/sparkle/Sparkle/bin"
+
+# The Sparkle feed published next to the DMG. The app reads it from the newest GitHub release
+# (SUFeedURL in BridgeCommander/Info.plist points at releases/latest/download/appcast.xml).
+APPCAST_PATH="$DIST_DIR/appcast.xml"
+
 # Records the git commit the artifacts in dist/ were built from, so publishing
 # can refuse to ship a DMG that predates the current checkout. File mtimes are
 # not usable for this: stapling and validating both touch the DMG.
@@ -66,4 +75,4 @@ mkdir -p "$BUILD_DIR" "$DIST_DIR"
 
 export SCRIPT_DIR PROJECT_ROOT APP_NAME SCHEME BUNDLE_ID XCODEPROJ \
        BUILD_DIR DIST_DIR ARCHIVE_PATH APP_PATH ZIP_PATH VERSION DMG_PATH \
-       REVISION_FILE
+       REVISION_FILE SOURCE_PACKAGES_DIR SPARKLE_BIN APPCAST_PATH
