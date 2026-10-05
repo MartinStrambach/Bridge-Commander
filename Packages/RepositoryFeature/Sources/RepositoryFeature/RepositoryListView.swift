@@ -347,10 +347,28 @@ struct RepositoryListView: View {
 
 	// MARK: - Search Bar
 
+	/// ⌘F finds in the active terminal pane while the terminal panel is open, and focuses the
+	/// filter field otherwise. One always-registered button decides at press time, rather than
+	/// handing the shortcut to `TerminalPanelView` the way ⌘T and ⌘R are, so its registration never
+	/// changes: on macOS 27 a shortcut that is inserted conditionally can stop being delivered (see
+	/// `TerminalPanelView.refreshShortcut`), and this one is the list's only way into its filter.
+	/// Before this, ⌘F with the panel open focused this opacity-0 list's field and swallowed the
+	/// typing. The panel's other find shortcuts (⌘G, ⇧⌘G, ⌘E) live in `TerminalPanelView`.
 	private var focusSearchShortcut: some View {
-		Button("") { isSearchFocused = true }
-			.keyboardShortcut("f", modifiers: .command)
-			.hidden()
+		Button("") {
+			if let layout = store.terminalLayout {
+				// Yielded while a sheet is up, like the panel's own shortcuts: the find bar
+				// would open behind it.
+				if layout.stagingDetail == nil, layout.gitGraph == nil, let sessionId = layout.activeSessionId {
+					terminalViewStore.performFind(.show, sessionId: sessionId)
+				}
+			}
+			else {
+				isSearchFocused = true
+			}
+		}
+		.keyboardShortcut("f", modifiers: .command)
+		.hidden()
 	}
 
 	private var toggleActiveTerminalsShortcut: some View {
