@@ -34,11 +34,12 @@ struct CreateWorktreeButtonReducer {
 		var ticketBranchNameTemplate = BranchNameFormatter.defaultTicketBranchTemplate
 		@Shared(.worktreeCreationFollowUp)
 		var followUp = WorktreeCreationFollowUp.nothing
+		/// The app-wide tab, used only where the group has not picked one of its own.
 		@Shared(.defaultWorktreeSource)
-		var defaultSource = WorktreeSource.branch
+		var legacyDefaultSource = WorktreeSource.branch
 		var isCreating: Bool = false
 		var showCreateDialog: Bool = false
-		/// Reset to `defaultSource` (Settings) each time the dialog opens.
+		/// Reset to the group's `defaultWorktreeSource` (Settings) each time the dialog opens.
 		var source: WorktreeSource = .branch
 		var branchName: String = ""
 		var availableBranches: [BranchInfo] = []
@@ -79,9 +80,8 @@ struct CreateWorktreeButtonReducer {
 			YouTrackURLBuilder.normalizedBase(groupSettings[repositoryPath]?.youtrackBaseURL ?? "")
 		}
 
-		/// Without a YouTrack instance there is nothing to search, so the source is not offered.
 		var availableSources: [WorktreeSource] {
-			youtrackBaseURL.isEmpty ? [.branch, .pullRequest] : WorktreeSource.allCases
+			(groupSettings[repositoryPath] ?? RepoGroupSettings()).worktreeSources
 		}
 
 		var selectedTicket: YouTrackIssueSummary? {
@@ -184,7 +184,8 @@ struct CreateWorktreeButtonReducer {
 				state.showCreateDialog = true
 				state.branchName = ""
 				state.claudePrompt = ""
-				state.source = state.availableSources.contains(state.defaultSource) ? state.defaultSource : .branch
+				state.source = (state.groupSettings[state.repositoryPath] ?? RepoGroupSettings())
+					.openingWorktreeSource(fallback: state.legacyDefaultSource)
 				return .merge(.send(.loadBranches), loadSourceItems(for: state.source, in: &state))
 
 			case .loadBranches:

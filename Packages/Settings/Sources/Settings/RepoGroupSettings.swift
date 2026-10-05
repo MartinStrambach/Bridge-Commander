@@ -41,6 +41,9 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	/// When true and `terminalStartupCommand` is blank, this group's tabs start idle instead of
 	/// running the global startup command. Has no effect while the group has a command of its own.
 	public var skipGlobalTerminalStartupCommand: Bool = false
+	/// The tab the create-worktree dialog opens on in this group. Nil until the group picks one,
+	/// which means the app-wide `defaultWorktreeSource` key — the setting this replaced.
+	public var defaultWorktreeSource: WorktreeSource?
 
 	/// Memberwise initializer with default values
 	public init(
@@ -57,7 +60,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		defaultBranch: String = "",
 		youtrackBaseURL: String = "",
 		terminalStartupCommand: String = "",
-		skipGlobalTerminalStartupCommand: Bool = false
+		skipGlobalTerminalStartupCommand: Bool = false,
+		defaultWorktreeSource: WorktreeSource? = nil
 	) {
 		self.supportsIOS = supportsIOS
 		self.supportsAndroid = supportsAndroid
@@ -73,6 +77,20 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.youtrackBaseURL = youtrackBaseURL
 		self.terminalStartupCommand = terminalStartupCommand
 		self.skipGlobalTerminalStartupCommand = skipGlobalTerminalStartupCommand
+		self.defaultWorktreeSource = defaultWorktreeSource
+	}
+
+	/// The create-worktree dialog's tabs in this group. Without a YouTrack instance there is
+	/// nothing to search, so Ticket is not offered.
+	public var worktreeSources: [WorktreeSource] {
+		YouTrackURLBuilder.normalizedBase(youtrackBaseURL).isEmpty ? [.branch, .pullRequest] : WorktreeSource.allCases
+	}
+
+	/// The tab the dialog opens on: the group's own pick, else `fallback` (the app-wide key), and
+	/// Branch when that tab is not offered here.
+	public func openingWorktreeSource(fallback: WorktreeSource) -> WorktreeSource {
+		let source = defaultWorktreeSource ?? fallback
+		return worktreeSources.contains(source) ? source : .branch
 	}
 
 	// Custom decoder: uses decodeIfPresent so keys missing from older JSON
@@ -102,5 +120,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 			Bool.self,
 			forKey: .skipGlobalTerminalStartupCommand
 		) ?? false
+		// `try?`: a tab this build does not know reads as "not picked" rather than failing the
+		// whole decode, which would wipe every group's settings.
+		self.defaultWorktreeSource = (try? c.decodeIfPresent(WorktreeSource.self, forKey: .defaultWorktreeSource)) ?? nil
 	}
 }
