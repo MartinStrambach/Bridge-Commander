@@ -80,7 +80,7 @@ public final class TerminalViewStore {
 		terminalView.terminal.changeHistorySize(3000)
 
 		terminalView.processDelegate = processDelegate
-		terminalView.pendingStartupCommand = session.startupCommand
+		terminalView.pendingStartupCommand = session.commandToType
 
 		terminalView.startProcess(
 			executable: shellExecutable,
@@ -104,6 +104,16 @@ public final class TerminalViewStore {
 	/// Sends a find command to a session's pane; a session with no pane yet ignores it.
 	public func performFind(_ command: TerminalFindCommand, sessionId: UUID) {
 		views[sessionId]?.performFind(command)
+	}
+
+	/// What each pane is doing now, by session: where its shell is, and the Claude conversation in
+	/// its foreground. A session with no pane, or whose shell has exited, is left out.
+	public func paneSnapshots() -> [UUID: TerminalPaneSnapshot] {
+		views.compactMapValues { view in
+			view.currentDirectory.map { directory in
+				TerminalPaneSnapshot(directory: directory, claudeSessionId: view.claudeSessionId)
+			}
+		}
 	}
 
 	public func killSession(sessionId: UUID) {
@@ -135,5 +145,18 @@ public final class TerminalViewStore {
 		for id in sessionIds {
 			killSession(sessionId: id)
 		}
+	}
+}
+
+/// A pane as the app leaves it, for reopening it on the next launch.
+public struct TerminalPaneSnapshot: Equatable, Sendable {
+	/// Where the pane's shell is.
+	public var directory: String
+	/// The Claude Code conversation in the pane's foreground, if there is one.
+	public var claudeSessionId: String?
+
+	public init(directory: String, claudeSessionId: String? = nil) {
+		self.directory = directory
+		self.claudeSessionId = claudeSessionId
 	}
 }

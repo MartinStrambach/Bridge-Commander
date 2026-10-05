@@ -291,6 +291,25 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		kill(process.shellPid, SIGHUP)
 	}
 
+	/// The directory the pane's shell is in now, or `nil` once it has exited.
+	public var currentDirectory: String? {
+		guard let process, process.running else {
+			return nil
+		}
+
+		return ProcessWorkingDirectory.of(processId: process.shellPid)
+	}
+
+	/// The Claude Code conversation in the pane's foreground, or `nil` when Claude is not running
+	/// there.
+	public var claudeSessionId: String? {
+		guard let process, process.running else {
+			return nil
+		}
+
+		return ClaudeSession.id(inForegroundOf: process.childfd)
+	}
+
 	/// Whether highlighting text with the mouse copies it to the pasteboard without a ⌘C.
 	///
 	/// Off unless the user turns it on in Settings: every highlight replaces whatever they copied

@@ -23,8 +23,16 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 	public let id: UUID
 	public let repositoryPath: String
 	public let startingDirectory: String
-	/// Typed into the shell once it has started, or `nil` to leave it idle.
+	/// The command the settings give this tab, or `nil` to leave it idle. A tab reopened to resume
+	/// a Claude conversation types the resume instead (`commandToType`), but keeps this: a retry, or
+	/// a later relaunch that finds no Claude running in it, goes by what the tab was opened to run.
 	public let startupCommand: String?
+	/// The Claude Code conversation this tab picks back up as it opens, if it was reopened at
+	/// launch with one running in it.
+	public let resumedClaudeSessionId: String?
+	/// What the shell is given once it is up: the resume of the conversation the tab had, or else
+	/// its startup command.
+	public let commandToType: String?
 	public var tabIndex: Int
 	public var status: TerminalSessionStatus
 	/// Set while a tab opened with a startup command has yet to reach its first prompt. That prompt
@@ -36,6 +44,7 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		repositoryPath: String,
 		startingDirectory: String? = nil,
 		startupCommand: String? = nil,
+		resumingClaudeSession claudeSessionId: String? = nil,
 		tabIndex: Int = 1
 	) {
 		self.id = UUID()
@@ -43,8 +52,12 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		self.startingDirectory = startingDirectory ?? repositoryPath
 		let command = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 		self.startupCommand = command.isEmpty ? nil : command
+		let resumeCommand = claudeSessionId.flatMap { ClaudeSession.resumeCommand(sessionId: $0) }
+		self.resumedClaudeSessionId = resumeCommand == nil ? nil : claudeSessionId
+		self.commandToType = resumeCommand ?? self.startupCommand
 		self.tabIndex = tabIndex
 		self.status = .launching
-		self.awaitsStartupPrompt = !command.isEmpty
+		// A resumed Claude booting to its prompt is no more news than a fresh one.
+		self.awaitsStartupPrompt = commandToType != nil
 	}
 }
