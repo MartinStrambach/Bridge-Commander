@@ -34,6 +34,11 @@ struct RepositoryListReducer {
 		/// fires again does not reopen them a second time.
 		fileprivate var hasRestoredTerminalTabs = false
 
+		/// Worktrees just created with a terminal follow-up, keyed by their symlink-resolved path.
+		/// The row does not exist until a scan finds the worktree, so the terminal opens from
+		/// `didScanGroup` — whichever scan gets there first — rather than from the creation.
+		fileprivate(set) var pendingWorktreeLaunches: [String: WorktreeTerminalLaunch] = [:]
+
 		@Shared(.trackedRepoPaths)
 		fileprivate(set) var trackedRepoPaths: [String] = []
 
@@ -501,8 +506,11 @@ struct RepositoryListReducer {
 
 			// MARK: - Per-group scan (worktree added/removed)
 
-			case let .repositoryGroups(.element(id: groupId, action: .header(.worktreeCreated))),
-			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated)))):
+			case let .repositoryGroups(.element(id: groupId, action: .header(.worktreeCreated(path, launch)))),
+			     let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(_, .worktreeCreated(path, launch))))):
+				if let launch {
+					state.pendingWorktreeLaunches[resolvedPath(path)] = launch
+				}
 				state.isScanning = true
 				return .run { [groupId] send in
 					let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
@@ -541,6 +549,7 @@ struct RepositoryListReducer {
 				if state.repositoryGroups[id: rootPath] != nil {
 					// Existing group: merge rows, preserving cached PR/ticket data
 					mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
+					openPendingWorktreeTerminals(inGroup: rootPath, state: &state)
 				}
 				else if !scanned.isEmpty {
 					// New group (e.g., from migration path on first launch)
@@ -1161,8 +1170,9 @@ private func lastActiveSession(
 }
 
 /// Reopens the tabs saved by the previous launch, each in the directory its shell was in and
-/// resuming the Claude conversation it had, and the panel on the tab that was on screen. When the panel was closed it stays closed, and the tabs'
-/// shells start the first time it opens — panes are created by the panel.
+/// resuming the Claude conversation it had, and the panel on the tab that was on screen. When the
+/// panel was closed it stays closed, and the tabs' shells start the first time it opens — panes
+/// are created by the panel.
 private func restoreTerminalTabs(
 	_ saved: SavedTerminalTabs,
 	in state: inout RepositoryListReducer.State
@@ -1201,9 +1211,35 @@ private func restoreTerminalTabs(
 	syncTerminalButtons(for: onScreen.repositoryPath, in: &state)
 }
 
+/// Opens the built-in terminal on every worktree of the group that was created with a terminal
+/// follow-up and that the latest scan has now turned into a row.
+private func openPendingWorktreeTerminals(
+	inGroup groupId: String,
+	state: inout RepositoryListReducer.State
+) {
+	guard !state.pendingWorktreeLaunches.isEmpty, let group = state.repositoryGroups[id: groupId] else {
+		return
+	}
+	for row in group.worktrees {
+		guard let launch = state.pendingWorktreeLaunches.removeValue(forKey: resolvedPath(row.path)) else {
+			continue
+		}
+		openTerminal(for: row.path, startupCommandOverride: launch.startupCommandOverride, in: &state)
+	}
+}
+
+/// The creator builds the worktree path itself, while rows carry the one `git worktree list`
+/// reports, which git has run through realpath. Resolving both lets them meet.
+private func resolvedPath(_ path: String) -> String {
+	URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
+}
+
+/// `startupCommandOverride` replaces the group's startup command in a newly created first tab;
+/// a repository that already has a tab just gets it shown.
 @discardableResult
 private func openTerminal(
 	for repositoryPath: String,
+	startupCommandOverride: String? = nil,
 	in state: inout RepositoryListReducer.State
 ) -> EffectOf<RepositoryListReducer> {
 	let session: TerminalSession
@@ -1223,7 +1259,7 @@ private func openTerminal(
 		session = TerminalSession(
 			repositoryPath: repositoryPath,
 			startingDirectory: startingDirectory,
-			startupCommand: startupCommand(for: repoSettings, in: state)
+			startupCommand: startupCommandOverride ?? startupCommand(for: repoSettings, in: state)
 		)
 		state.terminalSessions.append(session)
 	}

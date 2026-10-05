@@ -36,6 +36,9 @@ public struct SettingsReducer {
 		@Shared(.branchNameRegex)
 		public var branchNameRegex = "[a-zA-Z]+-\\d+[_/]"
 
+		@Shared(.ticketBranchNameTemplate)
+		public var ticketBranchNameTemplate = BranchNameFormatter.defaultTicketBranchTemplate
+
 		@Shared(.openXcodeAfterGenerate)
 		public var openXcodeAfterGenerate = true
 
@@ -65,6 +68,9 @@ public struct SettingsReducer {
 
 		@Shared(.worktreeBasePath)
 		public var worktreeBasePath = "../worktrees"
+
+		@Shared(.defaultWorktreeSource)
+		public var defaultWorktreeSource = WorktreeSource.branch
 
 		@Shared(.terminalColorTheme)
 		public var terminalColorTheme = TerminalThemeSelection.builtIn(.basicDark)
@@ -131,6 +137,7 @@ public struct SettingsReducer {
 		case setGroupTerminalStartupCommand(groupId: String, value: String)
 		case setGroupSkipGlobalTerminalStartupCommand(groupId: String, value: Bool)
 		case setBranchNameRegex(String)
+		case setTicketBranchNameTemplate(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
 		case setTuistCacheType(TuistCacheType)
@@ -139,6 +146,7 @@ public struct SettingsReducer {
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
 		case setAndroidStudioPath(String)
 		case setWorktreeBasePath(String)
+		case setDefaultWorktreeSource(WorktreeSource)
 		case setMisePath(String)
 		case setTuistRunMode(TuistRunMode)
 		case setTerminalColorTheme(TerminalThemeSelection)
@@ -424,6 +432,10 @@ public struct SettingsReducer {
 				state.$branchNameRegex.withLock { $0 = regex }
 				return .none
 
+			case let .setTicketBranchNameTemplate(template):
+				state.$ticketBranchNameTemplate.withLock { $0 = template }
+				return .none
+
 			case let .setOpenXcodeAfterGenerate(shouldOpen):
 				state.$openXcodeAfterGenerate.withLock { $0 = shouldOpen }
 				return .none
@@ -454,6 +466,10 @@ public struct SettingsReducer {
 
 			case let .setWorktreeBasePath(path):
 				state.$worktreeBasePath.withLock { $0 = path }
+				return .none
+
+			case let .setDefaultWorktreeSource(source):
+				state.$defaultWorktreeSource.withLock { $0 = source }
 				return .none
 
 			case let .setMisePath(path):

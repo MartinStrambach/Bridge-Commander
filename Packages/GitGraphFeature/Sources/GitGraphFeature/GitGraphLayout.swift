@@ -80,11 +80,11 @@ public nonisolated enum GitGraphLayout {
 			}
 
 			var outgoingColumns: [Int] = []
-			if let firstParent = commit.parents.first {
+			if let firstParent = commit.graphParents.first {
 				lanes[column] = firstParent
 				outgoingColumns.append(column)
 
-				for parent in commit.parents.dropFirst() {
+				for parent in commit.graphParents.dropFirst() {
 					if let existing = lanes.firstIndex(of: parent) {
 						outgoingColumns.append(existing)
 					}
