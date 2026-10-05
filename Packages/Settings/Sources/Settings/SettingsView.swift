@@ -12,6 +12,10 @@ public struct SettingsView: View {
 	@State
 	private var isImportingProfileFiles = false
 
+	/// Groups start collapsed each time Settings opens, so a long list of groups stays scannable.
+	@State
+	private var expandedGroupIds: Set<String> = []
+
 	public init(store: StoreOf<SettingsReducer>) {
 		self.store = store
 	}
@@ -817,13 +821,65 @@ public struct SettingsView: View {
 
 	private func repoGroupRow(groupId: String) -> some View {
 		let settings = store.groupSettings[groupId] ?? RepoGroupSettings()
-		let groupName = URL(fileURLWithPath: groupId).lastPathComponent
+		let isExpanded = expandedGroupIds.contains(groupId)
 
 		return VStack(alignment: .leading, spacing: 8) {
-			Text(groupName)
-				.font(.subheadline)
-				.fontWeight(.semibold)
+			repoGroupHeader(groupId: groupId, settings: settings, isExpanded: isExpanded)
 
+			if isExpanded {
+				repoGroupDetails(groupId: groupId, settings: settings)
+			}
+		}
+		.padding(10)
+		.background(Color(NSColor.windowBackgroundColor))
+		.cornerRadius(6)
+	}
+
+	private func repoGroupHeader(groupId: String, settings: RepoGroupSettings, isExpanded: Bool) -> some View {
+		let platforms = [
+			settings.supportsIOS ? "iOS" : nil,
+			settings.supportsAndroid ? "Android" : nil,
+			settings.supportsIOS && settings.supportsTuist ? "Tuist" : nil,
+			settings.supportsWeb ? "Web" : nil,
+		].compactMap(\.self)
+
+		return Button {
+			withAnimation(.easeInOut(duration: 0.2)) {
+				if isExpanded {
+					expandedGroupIds.remove(groupId)
+				}
+				else {
+					expandedGroupIds.insert(groupId)
+				}
+			}
+		} label: {
+			HStack(spacing: 6) {
+				Image(systemName: "chevron.right")
+					.font(.caption.weight(.semibold))
+					.foregroundColor(.secondary)
+					.rotationEffect(.degrees(isExpanded ? 90 : 0))
+					.frame(width: 12)
+
+				Text(URL(fileURLWithPath: groupId).lastPathComponent)
+					.font(.subheadline)
+					.fontWeight(.semibold)
+
+				if !platforms.isEmpty {
+					Text(platforms.joined(separator: " · "))
+						.font(.caption)
+						.foregroundColor(.secondary)
+				}
+
+				Spacer()
+			}
+			.contentShape(Rectangle())
+		}
+		.buttonStyle(.plain)
+		.help(groupId)
+	}
+
+	private func repoGroupDetails(groupId: String, settings: RepoGroupSettings) -> some View {
+		VStack(alignment: .leading, spacing: 8) {
 			HStack(spacing: 20) {
 				Toggle("iOS", isOn: Binding(
 					get: { settings.supportsIOS },
@@ -1024,9 +1080,6 @@ public struct SettingsView: View {
 				.padding(.top, 2)
 			}
 		}
-		.padding(10)
-		.background(Color(NSColor.windowBackgroundColor))
-		.cornerRadius(6)
 	}
 }
 
