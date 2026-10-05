@@ -11,7 +11,7 @@ public struct GitGraphReducer {
 		var rows: [GitGraphRow] = []
 		var isLoading = false
 		var errorMessage: String?
-		var commitLimit = 300
+		var commitLimit = GitGraphReducer.pageSize
 
 		/// True when the last load filled the limit, so older commits likely exist
 		var canLoadMore = false
@@ -24,6 +24,17 @@ public struct GitGraphReducer {
 		var selectedCommitHash: String?
 
 		var commitDetail: CommitDetailReducer.State?
+
+		/// What the search field searches; kept when the query is cleared.
+		var searchField: GitLogSearch.Field = .message
+
+		/// The search field's text, as typed.
+		var searchQuery = ""
+
+		/// The search the graph is narrowed to, or nil for the whole history.
+		var search: GitLogSearch? {
+			GitLogSearch(field: searchField, query: searchQuery)
+		}
 
 		public init(repositoryPath: String, repositoryName: String) {
 			self.repositoryPath = repositoryPath
@@ -41,7 +52,15 @@ public struct GitGraphReducer {
 		case commitTapped(String)
 		case closeDetailButtonTapped
 		case commitDetail(CommitDetailReducer.Action)
+		case searchQueryChanged(String)
+		case searchFieldChanged(GitLogSearch.Field)
 	}
+
+	static let pageSize = 300
+
+	/// How long typing has to pause before the search runs. Each run is a full history walk
+	/// (`-S` diffs every commit), so one per keystroke would mostly be cancelled work.
+	static let searchDebounce: Duration = .milliseconds(300)
 
 	private nonisolated enum CancellableId: Hashable {
 		case loadCommits
@@ -49,6 +68,12 @@ public struct GitGraphReducer {
 
 	@Dependency(\.dismiss)
 	private var dismiss
+
+	@Dependency(GitLogClient.self)
+	private var gitLog
+
+	@Dependency(\.continuousClock)
+	private var clock
 
 	public init() {}
 
@@ -59,7 +84,7 @@ public struct GitGraphReducer {
 				return loadCommits(state: &state)
 
 			case .loadMoreButtonTapped:
-				state.commitLimit += 300
+				state.commitLimit += Self.pageSize
 				return loadCommits(state: &state)
 
 			case .closeButtonTapped:
@@ -108,6 +133,16 @@ public struct GitGraphReducer {
 
 			case .commitDetail:
 				return .none
+
+			case let .searchQueryChanged(query):
+				let previous = state.search
+				state.searchQuery = query
+				return searchChanged(from: previous, state: &state)
+
+			case let .searchFieldChanged(field):
+				let previous = state.search
+				state.searchField = field
+				return searchChanged(from: previous, state: &state)
 			}
 		}
 		.ifLet(\.commitDetail, action: \.commitDetail) {
@@ -115,11 +150,28 @@ public struct GitGraphReducer {
 		}
 	}
 
-	private func loadCommits(state: inout State) -> Effect<Action> {
+	/// Reloads for a changed search. Edits that leave the search as it was (whitespace around the
+	/// query, a different field while the query is empty) load nothing.
+	private func searchChanged(from previous: GitLogSearch?, state: inout State) -> Effect<Action> {
+		guard state.search != previous else {
+			return .none
+		}
+
+		// Load More raised the limit for the previous results; a new search starts at one page.
+		state.commitLimit = Self.pageSize
+		// Clearing the search brings the whole graph back at once; only a query waits for typing to pause.
+		return loadCommits(state: &state, debounce: state.search != nil)
+	}
+
+	private func loadCommits(state: inout State, debounce: Bool = false) -> Effect<Action> {
 		state.isLoading = true
-		return .run { [path = state.repositoryPath, limit = state.commitLimit] send in
+		return .run { [clock, gitLog, path = state.repositoryPath, limit = state.commitLimit, search = state.search] send in
+			if debounce {
+				try await clock.sleep(for: Self.searchDebounce)
+			}
+
 			do {
-				let commits = try await GitLogHelper.loadCommits(at: path, limit: limit)
+				let commits = try await gitLog.loadCommits(path, limit, search)
 				await send(.commitsLoaded(commits))
 			}
 			catch {

@@ -19,6 +19,11 @@ public struct GitGraphView: View {
 	@State
 	private var hasScrolledToHead = false
 
+	/// Set when the search changes, so the list scrolls once the results for it have loaded.
+	/// Without it the list keeps its old offset, which in the new rows points at nothing in particular.
+	@State
+	private var scrollsAfterSearch = false
+
 	/// Which list ↑/↓ drive. The commit list is focused on open so ↑/↓ walk the commits
 	/// without having to click a row first; clicking a file (or →) hands focus to the file list.
 	///
@@ -48,6 +53,9 @@ public struct GitGraphView: View {
 		.task {
 			store.send(.task)
 		}
+		.onChange(of: store.search) {
+			scrollsAfterSearch = true
+		}
 	}
 
 	// MARK: - Header
@@ -63,6 +71,15 @@ public struct GitGraphView: View {
 				.foregroundStyle(.secondary)
 
 			Spacer()
+
+			if store.search != nil, !store.isLoading, store.errorMessage == nil {
+				Text(store.canLoadMore ? "\(store.rows.count)+ commits" : "^[\(store.rows.count) commit](inflect: true)")
+					.font(.caption)
+					.foregroundStyle(.secondary)
+					.monospacedDigit()
+			}
+
+			searchField
 
 			Button {
 				store.send(.refreshButtonTapped)
@@ -83,10 +100,96 @@ public struct GitGraphView: View {
 			Button("Close") {
 				store.send(.closeButtonTapped)
 			}
-			.keyboardShortcut(.cancelAction)
 		}
 		.padding()
 		.background(Color(nsColor: .windowBackgroundColor))
+		.background {
+			shortcuts
+		}
+	}
+
+	// MARK: - Search
+
+	private var searchField: some View {
+		HStack(spacing: 6) {
+			Picker(
+				"Search in",
+				selection: Binding(get: { store.searchField }, set: { store.send(.searchFieldChanged($0)) })
+			) {
+				ForEach(GitLogSearch.Field.allCases, id: \.self) { field in
+					Text(field.title).tag(field)
+				}
+			}
+			.labelsHidden()
+			.pickerStyle(.menu)
+			.fixedSize()
+			.help(store.searchField.help)
+
+			HStack(spacing: 4) {
+				Image(systemName: "magnifyingglass")
+					.foregroundStyle(.secondary)
+
+				TextField(
+					store.searchField.prompt,
+					text: Binding(get: { store.searchQuery }, set: { store.send(.searchQueryChanged($0)) })
+				)
+				.textFieldStyle(.plain)
+				.focused($focusedPane, equals: .search)
+				// Return and ↓ go on to the results, the way they do from a search field elsewhere.
+				.onSubmit {
+					focusedPane = .commits
+				}
+				.onKeyPress(.downArrow) {
+					focusedPane = .commits
+					return .handled
+				}
+
+				if !store.searchQuery.isEmpty {
+					Button {
+						store.send(.searchQueryChanged(""))
+					} label: {
+						Image(systemName: "xmark.circle.fill")
+							.foregroundStyle(.secondary)
+							.contentShape(Rectangle())
+					}
+					.buttonStyle(.plain)
+					.help("Clear search")
+				}
+			}
+			.padding(.horizontal, 7)
+			.padding(.vertical, 4)
+			.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+			.overlay {
+				RoundedRectangle(cornerRadius: 6)
+					.strokeBorder(Color(nsColor: .separatorColor))
+			}
+			.frame(width: 280)
+		}
+	}
+
+	/// ⌘F and Escape, as hidden buttons so both stay registered whatever has focus.
+	///
+	/// Escape is here rather than on the Close button so it can clear the search first, as a
+	/// search field does: while typing, a cancel shortcut on Close would close the sheet instead.
+	/// Close itself cannot decide by focus — clicking it leaves the focus in the field.
+	private var shortcuts: some View {
+		ZStack {
+			Button("") {
+				focusedPane = .search
+			}
+			.keyboardShortcut("f", modifiers: .command)
+
+			Button("") {
+				if focusedPane == .search, !store.searchQuery.isEmpty {
+					store.send(.searchQueryChanged(""))
+				}
+				else {
+					store.send(.closeButtonTapped)
+				}
+			}
+			.keyboardShortcut(.cancelAction)
+		}
+		.hidden()
 	}
 
 	// MARK: - Content
@@ -120,6 +223,10 @@ public struct GitGraphView: View {
 				Spacer()
 				if store.isLoading {
 					ProgressView("Loading commits…")
+				}
+				else if let search = store.search {
+					Text("No commits match “\(search.query)”")
+						.foregroundStyle(.secondary)
 				}
 				else {
 					Text("No commits")
@@ -200,6 +307,9 @@ public struct GitGraphView: View {
 					// a re-run would yank the list back to HEAD while the user is reading a
 					// much older commit.
 					guard !hasScrolledToHead else {
+						// Back after "No commits match": the rows and the end of loading arrived
+						// together with the list, so the onChange below never saw them.
+						scrollAfterSearch(proxy)
 						return
 					}
 
@@ -210,8 +320,32 @@ public struct GitGraphView: View {
 					}
 					proxy.scrollTo(headRowID, anchor: .center)
 				}
+				.onChange(of: store.isLoading) { _, isLoading in
+					if !isLoading {
+						scrollAfterSearch(proxy)
+					}
+				}
 			}
 		}
+	}
+
+	/// Once a changed search has loaded: keeps the selected commit in view if it is still listed,
+	/// otherwise goes to the top of the results, or back to HEAD when the search was cleared.
+	private func scrollAfterSearch(_ proxy: ScrollViewProxy) {
+		guard scrollsAfterSearch else {
+			return
+		}
+
+		scrollsAfterSearch = false
+		let selectedRowID = store.rows.first { $0.id == store.selectedCommitHash }?.id
+		let fallbackRowID = store.search == nil
+			? store.rows.first(where: \.commit.isHead)?.id
+			: store.rows.first?.id
+		guard let target = selectedRowID ?? fallbackRowID else {
+			return
+		}
+
+		proxy.scrollTo(target, anchor: .center)
 	}
 
 	// MARK: - Selection
@@ -541,6 +675,55 @@ private struct GitGraphRowView: View {
 			.orange
 		case .detachedHead:
 			.red
+		}
+	}
+}
+
+// MARK: - Search Field Labels
+
+private extension GitLogSearch.Field {
+	var title: String {
+		switch self {
+		case .message:
+			"Message"
+		case .author:
+			"Author"
+		case .hash:
+			"Hash"
+		case .path:
+			"File Path"
+		case .content:
+			"Changes"
+		}
+	}
+
+	var prompt: String {
+		switch self {
+		case .message:
+			"Search commit messages (⌘F)"
+		case .author:
+			"Search author names and emails"
+		case .hash:
+			"Commit hash or prefix"
+		case .path:
+			"Search changed file paths"
+		case .content:
+			"Text added or removed"
+		}
+	}
+
+	var help: String {
+		switch self {
+		case .message:
+			"Commits whose message contains the text (git log --grep)"
+		case .author:
+			"Commits whose author name or email contains the text (git log --author)"
+		case .hash:
+			"The commit with this hash, full or abbreviated"
+		case .path:
+			"Commits that changed a file or folder whose path contains the text (git log -- <path>)"
+		case .content:
+			"Commits that add or remove the text (git log -S)"
 		}
 	}
 }
