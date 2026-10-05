@@ -149,8 +149,16 @@ struct RepositoryRowActionRoutingTests {
 	func createdWorktreeReportsCreation() async {
 		let store = makeStore()
 
-		await store.send(.createWorktreeButton(.didCreateSuccessfully(copyResult: nil)))
-		await store.receive(\.worktreeCreated)
+		await store.send(.createWorktreeButton(.didCreateSuccessfully(
+			copyResult: nil,
+			worktreePath: "/repos/worktrees/app/fix",
+			launch: .terminal
+		)))
+		// The path and follow-up ride along: the list opens the terminal from them after the rescan.
+		await store.receive {
+			guard case let .worktreeCreated(path, launch) = $0 else { return false }
+			return path == "/repos/worktrees/app/fix" && launch == .terminal
+		}
 		await store.finish()
 
 		store.exhaustivity = .on

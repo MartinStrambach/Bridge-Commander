@@ -239,7 +239,9 @@ struct RepositoryRowReducer {
 		case createWorktreeButton(CreateWorktreeButtonReducer.Action)
 		case gitActionsMenu(GitActionsMenuReducer.Action)
 		case worktreeDeleted
-		case worktreeCreated
+		/// The list rescans the group, then opens `path` in the built-in terminal when `launch`
+		/// asks for it.
+		case worktreeCreated(path: String, launch: WorktreeTerminalLaunch?)
 	}
 
 	@Dependency(GitClient.self)
@@ -452,8 +454,8 @@ struct RepositoryRowReducer {
 				}
 
 			case let .createWorktreeButton(action):
-				if case .didCreateSuccessfully = action {
-					return .send(.worktreeCreated)
+				if case let .didCreateSuccessfully(_, worktreePath, launch) = action {
+					return .send(.worktreeCreated(path: worktreePath, launch: launch))
 				}
 				return .none
 

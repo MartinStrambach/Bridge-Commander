@@ -74,3 +74,80 @@ public nonisolated enum BranchNameFormatter {
 		return formatted
 	}
 }
+
+// MARK: - Ticket → branch name
+
+public nonisolated extension BranchNameFormatter {
+	/// Placeholders understood by ``branchName(ticketId:summary:template:)``.
+	static let ticketPlaceholder = "{ticket}"
+	static let summaryPlaceholder = "{summary}"
+
+	/// Words first, ticket last, joined with underscores — the shape `format` reads back as the
+	/// bare summary (the ticket is removed by id, the underscores become spaces).
+	static let defaultTicketBranchTemplate = "{summary}_{ticket}"
+
+	/// Longest slug a summary contributes. Ticket summaries run to whole sentences; a branch name
+	/// that long is unreadable in the row and in `git branch`.
+	static let maxSummarySlugLength = 50
+
+	/// Builds a branch name for a ticket from `template`, the inverse of `format`.
+	///
+	/// The summary becomes a lowercase ASCII slug (diacritics folded, so Czech summaries stay
+	/// readable, anything else non-alphanumeric turned into underscores). A blank template falls
+	/// back to ``defaultTicketBranchTemplate``; a summary that slugs to nothing leaves no dangling
+	/// separator behind.
+	static func branchName(ticketId: String, summary: String, template: String) -> String {
+		let trimmedTemplate = template.trimmingCharacters(in: .whitespacesAndNewlines)
+		let pattern = trimmedTemplate.isEmpty ? defaultTicketBranchTemplate : trimmedTemplate
+
+		var name = pattern
+			.replacingOccurrences(of: ticketPlaceholder, with: ticketId)
+			.replacingOccurrences(of: summaryPlaceholder, with: summarySlug(summary))
+
+		// An empty slug leaves "_MOB-1" or "feature/_MOB-1"; collapse the separators it orphaned.
+		while name.contains("__") {
+			name = name.replacingOccurrences(of: "__", with: "_")
+		}
+		name = name
+			.replacingOccurrences(of: "/_", with: "/")
+			.replacingOccurrences(of: "_/", with: "/")
+		return name.trimmingCharacters(in: CharacterSet(charactersIn: "_-/ "))
+	}
+
+	/// `summary` as a lowercase, underscore-separated ASCII slug of at most
+	/// ``maxSummarySlugLength`` characters, cut at a word boundary.
+	static func summarySlug(_ summary: String) -> String {
+		let folded = summary
+			.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: nil)
+			.lowercased()
+
+		var words: [String] = []
+		var current = ""
+		for scalar in folded.unicodeScalars {
+			if scalar.isASCII, CharacterSet.alphanumerics.contains(scalar) {
+				current.unicodeScalars.append(scalar)
+			}
+			else if !current.isEmpty {
+				words.append(current)
+				current = ""
+			}
+		}
+		if !current.isEmpty {
+			words.append(current)
+		}
+
+		var slug = ""
+		for word in words {
+			let candidate = slug.isEmpty ? word : slug + "_" + word
+			if candidate.count > maxSummarySlugLength {
+				// A single over-long first word is still better cut than dropped.
+				if slug.isEmpty {
+					slug = String(word.prefix(maxSummarySlugLength))
+				}
+				break
+			}
+			slug = candidate
+		}
+		return slug
+	}
+}
