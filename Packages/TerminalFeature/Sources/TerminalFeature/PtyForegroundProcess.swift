@@ -40,11 +40,38 @@ enum PtyForegroundProcess {
 		}
 	}
 
+	/// Every process in a process group, leader first when it is still alive.
+	static func processes(inGroup group: pid_t) -> [pid_t] {
+		guard group > 0 else {
+			return []
+		}
+
+		let byteCount = proc_listpids(UInt32(PROC_PGRP_ONLY), UInt32(group), nil, 0)
+		guard byteCount > 0 else {
+			return []
+		}
+
+		// Room for a few more than were counted: the group can grow between the two calls.
+		var pids = [pid_t](repeating: 0, count: Int(byteCount) / MemoryLayout<pid_t>.size + 8)
+		let filled = proc_listpids(
+			UInt32(PROC_PGRP_ONLY),
+			UInt32(group),
+			&pids,
+			Int32(pids.count * MemoryLayout<pid_t>.size)
+		)
+		guard filled > 0 else {
+			return []
+		}
+
+		let members = pids.prefix(Int(filled) / MemoryLayout<pid_t>.size).filter { $0 > 0 }
+		return members.contains(group) ? [group] + members.filter { $0 != group } : Array(members)
+	}
+
 	/// Reads a process's argument vector via `KERN_PROCARGS2`.
 	///
 	/// The buffer holds a 32-bit `argc`, the executable path, then `argc` NUL-terminated arguments
 	/// (with runs of padding NULs in between).
-	private static func arguments(ofProcess pid: pid_t) -> [String]? {
+	static func arguments(ofProcess pid: pid_t) -> [String]? {
 		var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
 		var size = 0
 		guard

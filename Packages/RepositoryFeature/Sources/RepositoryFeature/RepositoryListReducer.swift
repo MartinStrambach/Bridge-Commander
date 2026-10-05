@@ -30,6 +30,9 @@ struct RepositoryListReducer {
 
 		var terminalSessions: IdentifiedArrayOf<TerminalSession> = []
 		var terminalLayout: TerminalLayoutReducer.State?
+		/// Set once the tabs saved by the previous launch have been reopened, so an `onAppear` that
+		/// fires again does not reopen them a second time.
+		fileprivate var hasRestoredTerminalTabs = false
 
 		@Shared(.trackedRepoPaths)
 		fileprivate(set) var trackedRepoPaths: [String] = []
@@ -87,6 +90,8 @@ struct RepositoryListReducer {
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
 		case refreshRepositories
+		/// Reopens the tabs saved when the window last closed. Once per launch.
+		case restoreTerminalTabs
 		case repositoryGroups(IdentifiedActionOf<RepoGroupReducer>)
 		case scanCompleted
 		case scanFailed
@@ -112,6 +117,10 @@ struct RepositoryListReducer {
 			case periodicRefreshIntervalChanged
 			case refreshButtonTapped
 			case repositoryGroupDropped(draggedPath: String, ontoPath: String)
+			/// The window is closing or the app is quitting: the tabs open now are the ones the next
+			/// launch reopens. `panes` is what each pane is doing: its shell's directory, and the
+			/// Claude conversation in it.
+			case saveTerminalTabsRequested(panes: [UUID: TerminalPaneSnapshot])
 			case searchTextChanged(String)
 			case showTerminalsRequested
 			case sortModeButtonTapped
@@ -166,6 +175,9 @@ struct RepositoryListReducer {
 	@Dependency(TerminalNotificationClient.self)
 	private var terminalNotificationClient
 
+	@Dependency(TerminalTabArchiveClient.self)
+	private var terminalTabArchiveClient
+
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
@@ -214,6 +226,7 @@ struct RepositoryListReducer {
 
 			case .view(.onAppear):
 				return .merge(
+					.send(.restoreTerminalTabs),
 					.send(.startScan),
 					.send(.startPeriodicRefresh),
 					.send(.checkPermissions),
@@ -236,8 +249,31 @@ struct RepositoryListReducer {
 					await terminalNotificationClient.activateApp()
 				}
 
+			case .restoreTerminalTabs:
+				guard !state.hasRestoredTerminalTabs else {
+					return .none
+				}
+
+				state.hasRestoredTerminalTabs = true
+				if let saved = terminalTabArchiveClient.load() {
+					restoreTerminalTabs(saved, in: &state)
+				}
+				return .none
+
 			case .view(.didBecomeActive):
 				return .send(.checkPermissions)
+
+			case let .view(.saveTerminalTabsRequested(panes)):
+				// Written here and now, not from an effect: this arrives as the app quits, and an
+				// effect's task would not get to run before the process exits.
+				terminalTabArchiveClient.save(
+					SavedTerminalTabs(
+						sessions: state.terminalSessions,
+						layout: state.terminalLayout,
+						panes: panes
+					)
+				)
+				return .none
 
 			case .stopPeriodicRefresh,
 			     .view(.onDisappear):
@@ -520,6 +556,16 @@ struct RepositoryListReducer {
 						state.repositoryGroups.append(group)
 						sortGroupsByTrackedOrder(in: &state)
 					}
+				}
+				// Tabs restored at launch open the panel before the scan has found their rows, so
+				// the toolbar's button copies start out empty. Fill them in once the row is there —
+				// only then, so a rescan never overwrites a copy that may have an operation running.
+				if
+					let path = state.terminalLayout?.activeRepositoryPath,
+					state.terminalLayout?.gitActionsMenu == nil,
+					findRowState(for: path, in: state) != nil
+				{
+					syncTerminalButtons(for: path, in: &state)
 				}
 				return .none
 
@@ -1112,6 +1158,47 @@ private func lastActiveSession(
 		return remembered
 	}
 	return state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
+}
+
+/// Reopens the tabs saved by the previous launch, each in the directory its shell was in and
+/// resuming the Claude conversation it had, and the panel on the tab that was on screen. When the panel was closed it stays closed, and the tabs'
+/// shells start the first time it opens — panes are created by the panel.
+private func restoreTerminalTabs(
+	_ saved: SavedTerminalTabs,
+	in state: inout RepositoryListReducer.State
+) {
+	guard state.terminalSessions.isEmpty else {
+		return
+	}
+
+	var onScreen: TerminalSession?
+	var currentTabByRepo: [String: UUID] = [:]
+	for tab in saved.tabs {
+		let session = TerminalSession(
+			repositoryPath: tab.repositoryPath,
+			startingDirectory: tab.directory,
+			startupCommand: tab.startupCommand,
+			resumingClaudeSession: tab.claudeSessionId,
+			tabIndex: tab.tabIndex
+		)
+		state.terminalSessions.append(session)
+		if tab.isRepositoryCurrentTab {
+			currentTabByRepo[tab.repositoryPath] = session.id
+		}
+		if tab.isOnScreen {
+			onScreen = session
+		}
+	}
+
+	guard let onScreen else {
+		return
+	}
+
+	var layout = TerminalLayoutReducer.State()
+	layout.lastActiveSessionByRepo = currentTabByRepo
+	state.terminalLayout = layout
+	state.terminalLayout?.activate(onScreen)
+	syncTerminalButtons(for: onScreen.repositoryPath, in: &state)
 }
 
 @discardableResult

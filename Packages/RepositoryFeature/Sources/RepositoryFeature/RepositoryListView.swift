@@ -87,7 +87,15 @@ struct RepositoryListView: View {
 			}
 		}
 		.onAppear { send(.onAppear) }
-		.onDisappear { send(.onDisappear) }
+		// Saved on both: quitting with the window open never takes it off screen, and closing the
+		// window releases the panes — which hangs up their shells — long before any quit.
+		.onDisappear {
+			saveTerminalTabs()
+			send(.onDisappear)
+		}
+		.onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+			saveTerminalTabs()
+		}
 		// Returning to the app is when a permission granted in System Settings should take
 		// effect. Nothing re-probes on refresh any more, so this is what clears the banners.
 		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -461,6 +469,15 @@ struct RepositoryListView: View {
 			.listStyle(.plain)
 			.onDrop(of: [UTType.folder], isTargeted: nil, perform: handleDrop)
 		}
+	}
+
+	// MARK: - Terminal Tabs
+
+	/// Records the open tabs for the next launch. The shells' directories and Claude conversations
+	/// are read here because only the panes know them; the reducer writes the file before `send`
+	/// returns — while Claude is still running, before quitting hangs it up.
+	private func saveTerminalTabs() {
+		send(.saveTerminalTabsRequested(panes: terminalViewStore.paneSnapshots()))
 	}
 
 	// MARK: - Repository Selection

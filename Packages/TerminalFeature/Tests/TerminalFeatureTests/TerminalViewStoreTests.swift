@@ -183,6 +183,29 @@ struct TerminalViewStoreTests {
 		#expect(reported.statuses == reportedBeforeOutput, "a killed pane has nothing more to say")
 	}
 
+	/// What a relaunch reopens a tab in: where its shell is now, which is not where it started once
+	/// the user has `cd`'d.
+	@Test func paneSnapshotsFollowTheShellsDirectory() async throws {
+		let store = makeStore(shell: "/bin/zsh", arguments: ["-f"])
+		let session = TerminalSession(repositoryPath: "/", startingDirectory: "/tmp")
+		let view = store.view(
+			for: session,
+			foregroundColor: .white,
+			backgroundColor: .black,
+			processDelegate: processDelegate,
+			onStatusChange: { _, _ in },
+			onNotification: { _, _ in }
+		)
+		try #require(view.process.shellPid > 0)
+		#expect(await eventually { store.paneSnapshots()[session.id]?.directory == "/private/tmp" })
+
+		view.send(txt: "cd /usr\r")
+
+		#expect(await eventually { store.paneSnapshots()[session.id]?.directory == "/usr" })
+		store.killSession(sessionId: session.id)
+		#expect(store.paneSnapshots().isEmpty)
+	}
+
 	/// The store goes with the window. Whatever it still holds must hang up rather than outlive it.
 	@Test func releasingTheStoreEndsEveryShell() async throws {
 		var store: TerminalViewStore? = makeStore()
