@@ -121,6 +121,12 @@ nonisolated enum GitChangeClassifier {
 		"rebase-apply",
 	]
 
+	/// The file a reftable repository (`git init --ref-format=reftable`, the default from git 3.0)
+	/// rewrites on every ref update. Its refs never touch `refs/`, `packed-refs` or `HEAD`, which
+	/// are stubs there. New tables are written beside this file first, and the update takes effect
+	/// when `tables.list.lock` is renamed over it — so this is the one event that means it is done.
+	static let reftableCommitPoint = ["reftable", "tables.list"]
+
 	static func classify(_ events: [FileSystemEvent], targets: [GitWatchTarget]) -> Classification {
 		var result = Classification()
 		for event in events {
@@ -191,16 +197,29 @@ nonisolated enum GitChangeClassifier {
 		if
 			let owner = targets
 				.filter({ isWithin(path, $0.gitDirectory) })
-				.max(by: { $0.gitDirectory.count < $1.gitDirectory.count }),
-			let entry = relativeComponents(of: path, under: owner.gitDirectory).first,
-			perWorktreeEntries.contains(entry)
+				.max(by: { $0.gitDirectory.count < $1.gitDirectory.count })
 		{
-			result.kinds[owner.repositoryPath, default: []].insert(.status)
-			return
+			let ownComponents = relativeComponents(of: path, under: owner.gitDirectory)
+			// A linked worktree's own reftable holds its `HEAD`; the main checkout's is the shared
+			// one, handled below with the other refs.
+			let isOwnReftable = owner.gitDirectory != commonGitDirectory && ownComponents == reftableCommitPoint
+			if let entry = ownComponents.first, perWorktreeEntries.contains(entry) || isOwnReftable {
+				result.kinds[owner.repositoryPath, default: []].insert(.status)
+				return
+			}
 		}
 
 		let components = relativeComponents(of: path, under: commonGitDirectory)
 		let sharing = targets.filter { $0.commonGitDirectory == commonGitDirectory }
+		if components == reftableCommitPoint {
+			// A reftable repository keeps every ref here — `HEAD`, branches and `refs/stash`
+			// alike — so which one moved cannot be told from the path.
+			for target in sharing {
+				result.kinds[target.repositoryPath, default: []].formUnion([.status, .stash])
+			}
+			return
+		}
+
 		switch components.first {
 		case "refs":
 			// Branch tips are shared: a commit in one worktree, or a fetch, can move another's

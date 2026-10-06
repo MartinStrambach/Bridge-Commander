@@ -53,9 +53,28 @@ struct GitRepositoryWatcherTests {
 		"/r/.git/FETCH_HEAD",
 		"/r/.git/ORIG_HEAD",
 		"/r/.git/worktrees/feature/logs/HEAD",
+		// A reftable update writes its tables first; only `tables.list` commits it.
+		"/r/.git/reftable/0x000000000001-0x000000000004-584e24ab.ref",
+		"/r/.git/reftable/tables.list.lock",
+		"/r/.git/worktrees/feature/reftable/0x000000000001-0x000000000004-746c435d.ref",
 	])
 	func gitDirectoryChurnIsIgnored(path: String) {
 		#expect(classify(FileSystemEvent(path: path, isCreatedOrRemoved: true)) == .init())
+	}
+
+	@Test
+	func sharedReftableRefreshesEveryWorktreeAndItsStash() {
+		#expect(classify(FileSystemEvent(path: "/r/.git/reftable/tables.list")).kinds == [
+			"/r": [.status, .stash],
+			"/r-feature": [.status, .stash],
+		])
+	}
+
+	@Test
+	func linkedWorktreeReftableRefreshesOnlyThatWorktree() {
+		#expect(classify(FileSystemEvent(path: "/r/.git/worktrees/feature/reftable/tables.list")).kinds == [
+			"/r-feature": .status,
+		])
 	}
 
 	@Test
@@ -121,11 +140,18 @@ struct GitRepositoryWatcherTests {
 	private struct Repository {
 		let path: String
 
-		init() async throws {
-			let directory = NSTemporaryDirectory() + "GitRepositoryWatcherTests-" + UUID().uuidString
-			try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+		/// - Parameters:
+		///   - directory: Where to create it; a new temporary directory when nil.
+		///   - refFormat: `git init --ref-format`, git's default when nil.
+		init(at directory: String? = nil, refFormat: String? = nil) async throws {
+			let directory = directory ?? Self.makeDirectory()
 			path = GitWatchTarget.canonicalPath(directory)
-			try await git("init", "--initial-branch=main")
+			if let refFormat {
+				try await git("init", "--initial-branch=main", "--ref-format=\(refFormat)")
+			}
+			else {
+				try await git("init", "--initial-branch=main")
+			}
 			try await git("config", "user.email", "test@example.com")
 			try await git("config", "user.name", "Test")
 			try await git("config", "commit.gpgsign", "false")
@@ -134,6 +160,12 @@ struct GitRepositoryWatcherTests {
 			try write("tracked\n", to: "kept.o")
 			try await git("add", "-f", ".")
 			try await git("commit", "-m", "base")
+		}
+
+		static func makeDirectory() -> String {
+			let directory = NSTemporaryDirectory() + "GitRepositoryWatcherTests-" + UUID().uuidString
+			try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+			return directory
 		}
 
 		func write(_ contents: String, to file: String) throws {
@@ -203,6 +235,51 @@ struct GitRepositoryWatcherTests {
 			_ = await ProcessRunner.runGit(arguments: ["checkout", "-b", "feature"], at: repository.path)
 		}
 		#expect(changes.map(\.repositoryPath) == [repository.path])
+	}
+
+	@Test
+	func fetchInAReftableRepositoryIsReported() async throws {
+		let repository = try await Repository(refFormat: "reftable")
+		defer { repository.remove() }
+
+		// What a fetch does to the upstream, without a remote. It writes no index and, in a
+		// reftable repository, nothing under `refs/` — only the reftable update can report it.
+		let changes = try await firstChange(watching: [repository.path]) {
+			_ = await ProcessRunner.runGit(arguments: ["update-ref", "refs/remotes/origin/main", "HEAD"], at: repository.path)
+		}
+		#expect(changes.map(\.repositoryPath) == [repository.path])
+	}
+
+	@Test
+	func aPathThatBecomesARepositoryLaterIsWatchedOnceItDoes() async throws {
+		let directory = GitWatchTarget.canonicalPath(Repository.makeDirectory())
+		defer { try? FileManager.default.removeItem(atPath: directory) }
+
+		// Nothing to watch at first, so the stream cannot even start; it must keep trying.
+		let changes = try await firstChange(watching: [directory], retryInterval: .milliseconds(200)) {
+			let repository = try? await Repository(at: directory)
+			// Long enough for a retry to pick the repository up, then a change it must report.
+			try? await Task.sleep(for: .milliseconds(1000))
+			_ = try? await repository?.git("checkout", "-b", "feature")
+		}
+		#expect(changes.map(\.repositoryPath) == [directory])
+	}
+
+	@Test
+	func aRepositoryThatAppearsLaterJoinsAWatchAlreadyRunning() async throws {
+		let watched = try await Repository()
+		let directory = GitWatchTarget.canonicalPath(Repository.makeDirectory())
+		defer {
+			watched.remove()
+			try? FileManager.default.removeItem(atPath: directory)
+		}
+
+		let changes = try await firstChange(watching: [watched.path, directory], retryInterval: .milliseconds(200)) {
+			let repository = try? await Repository(at: directory)
+			try? await Task.sleep(for: .milliseconds(1000))
+			_ = try? await repository?.git("checkout", "-b", "feature")
+		}
+		#expect(changes.contains { $0.repositoryPath == directory })
 	}
 
 	// MARK: - Working tree filtering
@@ -323,9 +400,10 @@ struct GitRepositoryWatcherTests {
 	private func firstChange(
 		watching repositoryPaths: [String],
 		matching kind: GitRepositoryChange.Kind = .status,
+		retryInterval: Duration = GitRepositoryWatcher.retryInterval,
 		after action: @escaping @Sendable () async -> Void
 	) async throws -> [GitRepositoryChange] {
-		let stream = GitRepositoryWatcher.changes(repositoryPaths: repositoryPaths)
+		let stream = GitRepositoryWatcher.changes(repositoryPaths: repositoryPaths, retryInterval: retryInterval)
 		let isActing = Atomic(false)
 		let first = Task {
 			for await changes in stream

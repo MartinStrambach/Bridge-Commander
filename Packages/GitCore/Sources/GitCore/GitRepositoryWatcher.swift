@@ -44,47 +44,96 @@ nonisolated enum GitRepositoryWatcher {
 	/// Paths per `git check-ignore` call, keeping a large batch well under `ARG_MAX`.
 	static let checkIgnoreChunkSize = 200
 
-	static func changes(repositoryPaths: [String]) -> AsyncStream<[GitRepositoryChange]> {
+	/// How often a watch that does not cover every repository tries again: a path that was not a
+	/// repository yet (a `git worktree add` still writing its `.git` file when the scan listed it),
+	/// or a stream FSEvents refused. The caller restarts the watch only when its rows change, so
+	/// without this such a row would stay unwatched until then.
+	static let retryInterval: Duration = .seconds(30)
+
+	/// Runs until the stream is dropped, never finishing by itself: a watch that cannot start, or
+	/// cannot cover every repository, keeps trying every `retryInterval`.
+	static func changes(
+		repositoryPaths: [String],
+		retryInterval: Duration = GitRepositoryWatcher.retryInterval
+	) -> AsyncStream<[GitRepositoryChange]> {
 		AsyncStream { continuation in
-			let targets = repositoryPaths.compactMap(GitWatchTarget.init(repositoryPath:))
-			let roots = GitChangeClassifier.watchRoots(for: targets)
-			let (batches, batchContinuation) = AsyncStream<[FileSystemEvent]>.makeStream()
-			guard
-				!roots.isEmpty,
-				let stream = FileSystemEventStream(
-					paths: roots,
-					latency: latency,
-					deliver: { batchContinuation.yield($0) }
-				)
-			else {
-				continuation.finish()
-				return
-			}
-
-			// Finished rather than left open, so a watch that cannot start reads as over, not quiet.
-			guard stream.start() else {
-				stream.stop()
-				continuation.finish()
-				return
-			}
-
-			// One batch at a time, in arrival order: handling one may wait on `git check-ignore`.
 			let task = Task {
-				for await batch in batches {
-					let changes = await changes(in: batch, targets: targets)
-					if !changes.isEmpty {
-						continuation.yield(changes)
+				while !Task.isCancelled {
+					let targets = resolveTargets(repositoryPaths)
+					let didStart = await watch(
+						targets,
+						recheckingEvery: targets.count < repositoryPaths.count ? retryInterval : nil,
+						of: repositoryPaths,
+						into: continuation
+					)
+					if !didStart {
+						try? await Task.sleep(for: retryInterval)
 					}
 				}
 				continuation.finish()
 			}
-
 			continuation.onTermination = { _ in
-				stream.stop()
-				batchContinuation.finish()
 				task.cancel()
 			}
 		}
+	}
+
+	private static func resolveTargets(_ repositoryPaths: [String]) -> [GitWatchTarget] {
+		repositoryPaths.compactMap(GitWatchTarget.init(repositoryPath:))
+	}
+
+	/// Watches `targets` until the task is cancelled or, when `recheckInterval` is set, until
+	/// `repositoryPaths` resolve to a different set of targets.
+	///
+	/// - Returns: Whether the stream started; when not, it returns at once.
+	private static func watch(
+		_ targets: [GitWatchTarget],
+		recheckingEvery recheckInterval: Duration?,
+		of repositoryPaths: [String],
+		into continuation: AsyncStream<[GitRepositoryChange]>.Continuation
+	) async -> Bool {
+		let roots = GitChangeClassifier.watchRoots(for: targets)
+		let (batches, batchContinuation) = AsyncStream<[FileSystemEvent]>.makeStream()
+		guard
+			!roots.isEmpty,
+			let stream = FileSystemEventStream(
+				paths: roots,
+				latency: latency,
+				deliver: { batchContinuation.yield($0) }
+			)
+		else {
+			return false
+		}
+
+		defer { stream.stop() }
+		guard stream.start() else {
+			return false
+		}
+
+		await withTaskGroup(of: Void.self) { group in
+			if let recheckInterval {
+				group.addTask {
+					// Ending the batches ends the watch below, and the caller starts a new one.
+					while (try? await Task.sleep(for: recheckInterval)) != nil {
+						if resolveTargets(repositoryPaths) != targets {
+							batchContinuation.finish()
+							return
+						}
+					}
+				}
+			}
+
+			// One batch at a time, in arrival order: handling one may wait on `git check-ignore`.
+			// Iteration also ends when the task is cancelled.
+			for await batch in batches {
+				let changes = await changes(in: batch, targets: targets)
+				if !changes.isEmpty {
+					continuation.yield(changes)
+				}
+			}
+			group.cancelAll()
+		}
+		return true
 	}
 
 	static func changes(in batch: [FileSystemEvent], targets: [GitWatchTarget]) async -> [GitRepositoryChange] {
