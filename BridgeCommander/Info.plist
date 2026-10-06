@@ -9,5 +9,8 @@
     <string>https://github.com/MartinStrambach/Bridge-Commander/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>PX6+XiQlbR/0Og3/7qdita16JEbiOTxV0MYM2G778F8=</string>
+    <!-- Seconds between automatic update checks (Sparkle's default is one day). -->
+    <key>SUScheduledCheckInterval</key>
+    <integer>43200</integer>
 </dict>
 </plist>
