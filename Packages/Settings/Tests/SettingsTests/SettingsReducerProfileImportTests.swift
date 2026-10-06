@@ -10,18 +10,43 @@ struct SettingsReducerProfileImportTests {
 		TerminalProfile.fixture(name: name, ansi: ansi)
 	}
 
+	/// Holds a stubbed import until the test opens it. `TestStore.send` yields to let effects start
+	/// before it asserts, so an import that returns at once has already written the profiles to
+	/// `@Shared` storage by then, and the send reports them as an unexpected change.
+	private final class Gate: Sendable {
+		private let stream: AsyncStream<Void>
+		private let continuation: AsyncStream<Void>.Continuation
+
+		init() {
+			(stream, continuation) = AsyncStream.makeStream()
+		}
+
+		func wait() async {
+			for await _ in stream {}
+		}
+
+		func open() {
+			continuation.finish()
+		}
+	}
+
 	// MARK: - Importing from Terminal.app
 
 	@Test("the Terminal.app button stores every profile it returns, sorted by name")
 	func importsFromTerminalApp() async {
 		let imported = [Self.profile("Ocean"), Self.profile("Basic")]
+		let gate = Gate()
 		let store = TestStore(initialState: SettingsReducer.State()) {
 			SettingsReducer()
 		} withDependencies: {
-			$0[TerminalProfileImportClient.self].importFromTerminalApp = { imported }
+			$0[TerminalProfileImportClient.self].importFromTerminalApp = {
+				await gate.wait()
+				return imported
+			}
 		}
 
 		await store.send(.importFromTerminalAppButtonTapped)
+		gate.open()
 		await store.receive(\.profilesImported, imported) {
 			$0.terminalProfiles = [Self.profile("Basic"), Self.profile("Ocean")]
 			$0.alert = AlertState {
@@ -65,10 +90,12 @@ struct SettingsReducerProfileImportTests {
 	@Test("one unreadable file does not discard the profiles from the others")
 	func partialFileFailureKeepsGoodProfiles() async {
 		let good = Self.profile("Good")
+		let gate = Gate()
 		let store = TestStore(initialState: SettingsReducer.State()) {
 			SettingsReducer()
 		} withDependencies: {
 			$0[TerminalProfileImportClient.self].importFromFile = { url in
+				await gate.wait()
 				if url.lastPathComponent == "bad.terminal" {
 					throw TerminalProfileImportError.notAPropertyList(name: "bad.terminal")
 				}
@@ -80,6 +107,7 @@ struct SettingsReducerProfileImportTests {
 			URL(fileURLWithPath: "/tmp/bad.terminal"),
 			URL(fileURLWithPath: "/tmp/good.terminal"),
 		]))
+		gate.open()
 
 		await store.receive(\.profilesImported, [good]) {
 			$0.terminalProfiles = [good]

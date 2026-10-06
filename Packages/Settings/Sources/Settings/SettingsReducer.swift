@@ -636,7 +636,7 @@ public struct SettingsReducer {
 			case .importFromTerminalAppButtonTapped:
 				return .run { [profileImport] send in
 					do {
-						await send(.profilesImported(try profileImport.importFromTerminalApp()))
+						await send(.profilesImported(try await profileImport.importFromTerminalApp()))
 					}
 					catch {
 						await send(.profileImportFailed(message: Self.importFailureMessage(error)))
@@ -651,7 +651,7 @@ public struct SettingsReducer {
 					var failure: String?
 					for url in urls {
 						do {
-							imported.append(contentsOf: try profileImport.importFromFile(url))
+							imported.append(contentsOf: try await profileImport.importFromFile(url))
 						}
 						catch {
 							failure = failure ?? Self.importFailureMessage(error)
