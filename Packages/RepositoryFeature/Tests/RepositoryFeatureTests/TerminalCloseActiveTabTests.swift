@@ -54,6 +54,7 @@ struct TerminalCloseActiveTabTests {
 			$0.terminalSessions.remove(id: first.id)
 			$0.terminalLayout?.activeSessionId = second.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = second.id
+			$0.terminalLayout?.recentSessionIds = [second.id]
 		}
 
 		// The regression: a second press has to reach the tab that is active *now*.
@@ -62,6 +63,7 @@ struct TerminalCloseActiveTabTests {
 			$0.terminalSessions.remove(id: second.id)
 			$0.terminalLayout?.activeSessionId = third.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = third.id
+			$0.terminalLayout?.recentSessionIds = [third.id]
 		}
 	}
 
@@ -85,6 +87,7 @@ struct TerminalCloseActiveTabTests {
 			$0.terminalSessions.remove(id: second.id)
 			$0.terminalLayout?.activeSessionId = third.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = third.id
+			$0.terminalLayout?.recentSessionIds = [third.id]
 		}
 	}
 
@@ -108,6 +111,7 @@ struct TerminalCloseActiveTabTests {
 			$0.terminalSessions.remove(id: third.id)
 			$0.terminalLayout?.activeSessionId = second.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = second.id
+			$0.terminalLayout?.recentSessionIds = [second.id]
 		}
 	}
 
@@ -133,6 +137,61 @@ struct TerminalCloseActiveTabTests {
 			$0.terminalSessions.remove(id: first.id)
 			$0.terminalLayout?.activeSessionId = second.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = second.id
+			$0.terminalLayout?.recentSessionIds = [second.id]
+		}
+	}
+
+	@Test("closing a repository's last tab moves to the repository most recently on screen")
+	func lastTabFallsBackToTheMostRecentRepository() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		let gamma = TerminalSession(repositoryPath: "/repos/gamma")
+		var initial = makeState(
+			sessions: [alpha, beta, gamma],
+			activeRepositoryPath: "/repos/beta",
+			activeSessionId: beta.id
+		)
+		// Beta is first in line by position, but gamma was on screen more recently.
+		initial.terminalLayout?.activate(gamma)
+		initial.terminalLayout?.activate(alpha)
+		let store = TestStore(initialState: initial) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.terminalLayout(.killTab(sessionId: alpha.id))) {
+			$0.terminalSessions.remove(id: alpha.id)
+			$0.terminalLayout?.activeRepositoryPath = "/repos/gamma"
+			$0.terminalLayout?.activeSessionId = gamma.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = nil
+			$0.terminalLayout?.recentSessionIds = [beta.id, gamma.id]
+		}
+	}
+
+	@Test("closing the repository on screen moves to the repository most recently on screen")
+	func killRepoFallsBackToTheMostRecentRepository() async {
+		let alphaOne = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
+		let alphaTwo = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		let gamma = TerminalSession(repositoryPath: "/repos/gamma")
+		var initial = makeState(
+			sessions: [beta, gamma, alphaOne, alphaTwo],
+			activeRepositoryPath: "/repos/beta",
+			activeSessionId: beta.id
+		)
+		initial.terminalLayout?.activate(gamma)
+		initial.terminalLayout?.activate(alphaOne)
+		initial.terminalLayout?.activate(alphaTwo)
+		let store = TestStore(initialState: initial) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.terminalLayout(.killRepo(repositoryPath: "/repos/alpha"))) {
+			$0.terminalSessions.remove(id: alphaOne.id)
+			$0.terminalSessions.remove(id: alphaTwo.id)
+			$0.terminalLayout?.activeRepositoryPath = "/repos/gamma"
+			$0.terminalLayout?.activeSessionId = gamma.id
+			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = nil
+			$0.terminalLayout?.recentSessionIds = [beta.id, gamma.id]
 		}
 	}
 
@@ -205,6 +264,7 @@ struct TerminalCloseActiveTabTests {
 			$0.terminalLayout?.activeSessionId = beta.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = nil
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/beta"] = beta.id
+			$0.terminalLayout?.recentSessionIds = [beta.id]
 		}
 	}
 

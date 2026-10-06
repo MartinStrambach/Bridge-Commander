@@ -525,10 +525,11 @@ struct RepositoryListReducer {
 					.map(\.id)
 				for sessionId in toRemove {
 					state.terminalSessions.remove(id: sessionId)
+					state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: worktreePath)
 				}
 				state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
 				if state.terminalLayout?.activeRepositoryPath == worktreePath {
-					if let next = state.terminalSessions.first {
+					if let next = mostRecentRemainingSession(in: state) {
 						activateOtherRepository(next, in: &state)
 					}
 					else {
@@ -815,7 +816,7 @@ struct RepositoryListReducer {
 						// restores it when the user switches back.
 						state.terminalLayout?.activate(neighbour)
 					}
-					else if let next = state.terminalSessions.first {
+					else if let next = mostRecentRemainingSession(in: state) {
 						activateOtherRepository(next, in: &state)
 					}
 					else {
@@ -863,10 +864,11 @@ struct RepositoryListReducer {
 					.map(\.id)
 				for id in toRemove {
 					state.terminalSessions.remove(id: id)
+					state.terminalLayout?.forget(sessionId: id, repositoryPath: repositoryPath)
 				}
 				state.terminalLayout?.lastActiveSessionByRepo[repositoryPath] = nil
 				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
-					if let next = state.terminalSessions.first {
+					if let next = mostRecentRemainingSession(in: state) {
 						activateOtherRepository(next, in: &state)
 					}
 					else {
@@ -898,6 +900,7 @@ struct RepositoryListReducer {
 				// so appending moved the retried tab to the end of the bar.
 				state.terminalSessions.remove(id: sessionId)
 				state.terminalSessions.insert(newSession, at: position)
+				state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: repoPath)
 				state.terminalLayout?.activate(newSession)
 				return .none
 
@@ -1467,6 +1470,12 @@ private func applySettings(
 	}
 	row.defaultBranch = settings.defaultBranch
 	row.gitActionsMenu.setDefaultBranch(settings.defaultBranch)
+}
+
+/// The tab to show once the repository on screen has none left: the one the user was in most
+/// recently, or the first one when none of the remaining tabs has been on screen yet.
+private func mostRecentRemainingSession(in state: RepositoryListReducer.State) -> TerminalSession? {
+	state.terminalLayout?.mostRecent(among: state.terminalSessions) ?? state.terminalSessions.first
 }
 
 /// Switch the panel to a session of a different repository after the active repository's last

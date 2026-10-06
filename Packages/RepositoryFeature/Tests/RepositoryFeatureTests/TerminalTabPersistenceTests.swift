@@ -22,6 +22,7 @@ struct TerminalTabPersistenceTests {
 			activeSessionId: activeSessionId
 		)
 		layout.lastActiveSessionByRepo[activeRepositoryPath] = activeSessionId
+		layout.recentSessionIds = [activeSessionId]
 		state.terminalLayout = layout
 		return state
 	}
@@ -43,6 +44,7 @@ struct TerminalTabPersistenceTests {
 		await store.send(.terminalLayout(.selectTab(sessionId: alphaTwo.id))) {
 			$0.terminalLayout?.activeSessionId = alphaTwo.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = alphaTwo.id
+			$0.terminalLayout?.recentSessionIds = [alphaOne.id, alphaTwo.id]
 		}
 	}
 
@@ -65,15 +67,18 @@ struct TerminalTabPersistenceTests {
 		await store.send(.terminalLayout(.selectTab(sessionId: alphaTwo.id))) {
 			$0.terminalLayout?.activeSessionId = alphaTwo.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = alphaTwo.id
+			$0.terminalLayout?.recentSessionIds = [alphaOne.id, alphaTwo.id]
 		}
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta"))) {
 			$0.terminalLayout?.activeRepositoryPath = "/repos/beta"
 			$0.terminalLayout?.activeSessionId = beta.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/beta"] = beta.id
+			$0.terminalLayout?.recentSessionIds = [alphaOne.id, alphaTwo.id, beta.id]
 		}
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha"))) {
 			$0.terminalLayout?.activeRepositoryPath = "/repos/alpha"
 			$0.terminalLayout?.activeSessionId = alphaTwo.id
+			$0.terminalLayout?.recentSessionIds = [alphaOne.id, beta.id, alphaTwo.id]
 		}
 		// No session was spawned to serve the switches.
 		#expect(store.state.terminalSessions.count == 3)
@@ -98,6 +103,7 @@ struct TerminalTabPersistenceTests {
 			$0.terminalLayout?.activeRepositoryPath = "/repos/beta"
 			$0.terminalLayout?.activeSessionId = betaOne.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/beta"] = betaOne.id
+			$0.terminalLayout?.recentSessionIds = [alpha.id, betaOne.id]
 		}
 	}
 
@@ -148,15 +154,18 @@ struct TerminalTabPersistenceTests {
 			$0.terminalSessions.remove(id: alphaTwo.id)
 			$0.terminalLayout?.activeSessionId = alphaOne.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = alphaOne.id
+			$0.terminalLayout?.recentSessionIds = [alphaOne.id]
 		}
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta"))) {
 			$0.terminalLayout?.activeRepositoryPath = "/repos/beta"
 			$0.terminalLayout?.activeSessionId = beta.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/beta"] = beta.id
+			$0.terminalLayout?.recentSessionIds = [alphaOne.id, beta.id]
 		}
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha"))) {
 			$0.terminalLayout?.activeRepositoryPath = "/repos/alpha"
 			$0.terminalLayout?.activeSessionId = alphaOne.id
+			$0.terminalLayout?.recentSessionIds = [beta.id, alphaOne.id]
 		}
 	}
 
@@ -180,6 +189,7 @@ struct TerminalTabPersistenceTests {
 			$0.terminalLayout?.activeSessionId = beta.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = nil
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/beta"] = beta.id
+			$0.terminalLayout?.recentSessionIds = [beta.id]
 		}
 
 		// Reopening alpha must not resurrect the killed session's id.
