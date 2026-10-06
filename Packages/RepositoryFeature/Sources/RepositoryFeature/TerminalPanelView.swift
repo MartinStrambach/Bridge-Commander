@@ -358,6 +358,7 @@ struct TerminalPanelView: View {
 						.hidden()
 				}
 
+				cycleTabShortcuts
 				closeTabShortcut(repoSessions: repoSessions)
 				refreshShortcut
 				zoomShortcuts
@@ -437,6 +438,22 @@ struct TerminalPanelView: View {
 			Button("") { store.send(.closeActiveTabRequested) }
 				.keyboardShortcut("w", modifiers: .command)
 				.hidden()
+		}
+	}
+
+	/// ⌃Tab / ⌃⇧Tab cycle through the repository's tabs, the shortcut Terminal.app uses. The
+	/// reducer resolves the active tab when the key fires, for the reason ⌘W documents. Yielded
+	/// while a sheet is up for the same reason the zoom shortcuts are.
+	@ViewBuilder
+	private var cycleTabShortcuts: some View {
+		if store.stagingDetail == nil, store.gitGraph == nil {
+			Group {
+				Button("") { store.send(.cycleTabRequested(forward: true)) }
+					.keyboardShortcut(.tab, modifiers: .control)
+				Button("") { store.send(.cycleTabRequested(forward: false)) }
+					.keyboardShortcut(.tab, modifiers: [.control, .shift])
+			}
+			.hidden()
 		}
 	}
 

@@ -754,6 +754,26 @@ struct RepositoryListReducer {
 				}
 				return .none
 
+			// ⌃Tab / ⌃⇧Tab, as in Terminal.app: step through the tabs the bar shows — the active
+			// repository's, in their bar order (`terminalSessions` filtered, so a dragged tab is
+			// stepped through where it now sits) — wrapping at either end. Like ⌘W it names no
+			// session and resolves the active tab when it fires, so a stale closure cannot misfire.
+			case let .terminalLayout(.cycleTabRequested(forward)):
+				guard
+					let layout = state.terminalLayout,
+					let path = layout.activeRepositoryPath
+				else {
+					return .none
+				}
+				let repoSessions = Array(state.terminalSessions.filter { $0.repositoryPath == path })
+				guard repoSessions.count > 1 else {
+					return .none
+				}
+				let current = repoSessions.firstIndex { $0.id == layout.activeSessionId } ?? 0
+				let step = forward ? 1 : repoSessions.count - 1
+				state.terminalLayout?.activate(repoSessions[(current + step) % repoSessions.count])
+				return .none
+
 			// The dragged tab takes the target's place, pushing the target out of the way — the
 			// same rule as reordering repositories. Only a tab of the same repository can be a
 			// target: the bar shows one repository's tabs, and the payload is plain text that any
