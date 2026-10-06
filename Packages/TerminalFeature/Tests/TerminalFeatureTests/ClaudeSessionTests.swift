@@ -4,6 +4,24 @@ import Testing
 
 @testable import TerminalFeature
 
+/// Polls `condition` until it holds or `timeout` passes.
+@MainActor
+private func eventually(
+	within timeout: Duration = .seconds(5),
+	_ condition: @MainActor () -> Bool
+) async -> Bool {
+	let clock = ContinuousClock()
+	let deadline = clock.now + timeout
+	while clock.now < deadline {
+		if condition() {
+			return true
+		}
+
+		try? await Task.sleep(for: .milliseconds(50))
+	}
+	return condition()
+}
+
 @MainActor
 @Suite(.serialized)
 struct ClaudeSessionTests {
@@ -64,7 +82,7 @@ struct ClaudeSessionTests {
 
 	/// `cat` started under the name `claude`, holding the foreground of a real pseudo-terminal the
 	/// way Claude Code does, with a record for its pid in a sessions directory of the test's own.
-	@Test func findsTheConversationInThePanesForeground() throws {
+	@Test func findsTheConversationInThePanesForeground() async throws {
 		let directory = FileManager.default.temporaryDirectory
 			.appending(component: "ClaudeSessionTests-\(UUID().uuidString)")
 		let sessions = directory.appending(component: "sessions")
@@ -90,6 +108,9 @@ struct ClaudeSessionTests {
 		defer { store.killSession(sessionId: session.id) }
 		let pid = view.process.shellPid
 		try #require(pid > 0)
+		// The pid exists from the fork on, but until the exec lands it is not yet `claude`, and
+		// would read as "no session" for that reason alone.
+		try #require(await eventually { PtyForegroundProcess.isClaude(ptyDescriptor: view.process.childfd) == true })
 
 		#expect(ClaudeSession.id(inForegroundOf: view.process.childfd, sessionsDirectory: sessions) == nil)
 
