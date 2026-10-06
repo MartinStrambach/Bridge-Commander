@@ -123,6 +123,57 @@ struct RepositoryChangedOnDiskTests {
 		#expect(watched.value == [["/repos/alpha", "/repos/alpha-one"]])
 	}
 
+	@Test("a rescan that finds a new worktree watches it too")
+	func rescanWithNewRowRestartsWatch() async {
+		let (changes, _) = AsyncStream<[GitRepositoryChange]>.makeStream()
+		let watched = LockIsolated<[[String]]>([])
+		let store = makeListStore(changes: changes, watched: watched)
+
+		await scanAlpha(store)
+		await store.send(.scanCompleted)
+		await waitUntil { watched.value.count == 1 }
+		await scanAlpha(store, extraWorktree: "/repos/alpha-two")
+		await store.send(.scanCompleted)
+		await waitUntil { watched.value.count == 2 }
+
+		#expect(watched.value == [
+			["/repos/alpha", "/repos/alpha-one"],
+			["/repos/alpha", "/repos/alpha-one", "/repos/alpha-two"],
+		])
+		await store.send(.view(.onDisappear))
+		await store.finish()
+	}
+
+	@Test("removing a group stops watching its rows, and removing the last one stops the watch")
+	func removingGroupsRepointsWatch() async {
+		let (changes, _) = AsyncStream<[GitRepositoryChange]>.makeStream()
+		let watched = LockIsolated<[[String]]>([])
+		let store = makeListStore(changes: changes, watched: watched)
+
+		await scanAlpha(store)
+		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+			ScannedRepository(
+				path: "/repos/beta",
+				name: "beta",
+				directory: "/repos/beta",
+				isWorktree: false,
+				branchName: "main"
+			),
+		]))
+		await store.send(.scanCompleted)
+		await waitUntil { watched.value.count == 1 }
+
+		await store.send(.repositoryGroups(.element(id: "/repos/alpha", action: .remove)))
+		await waitUntil { watched.value.count == 2 }
+		#expect(watched.value.last == ["/repos/beta"])
+
+		// The last group gone: the watch is cancelled, not restarted over nothing.
+		await store.send(.repositoryGroups(.element(id: "/repos/beta", action: .remove)))
+		#expect(store.state.watchedRepositoryPaths.isEmpty)
+		await store.finish()
+		#expect(watched.value.count == 2)
+	}
+
 	@Test("a change reaches the row it belongs to")
 	func changeIsRoutedToItsRow() async {
 		let (changes, continuation) = AsyncStream<[GitRepositoryChange]>.makeStream()
@@ -223,7 +274,16 @@ struct RepositoryChangedOnDiskTests {
 		}
 	}
 
-	private func scanAlpha(_ store: TestStoreOf<RepositoryListReducer>) async {
+	private func scanAlpha(_ store: TestStoreOf<RepositoryListReducer>, extraWorktree: String? = nil) async {
+		let extra = extraWorktree.map { path in
+			ScannedRepository(
+				path: path,
+				name: (path as NSString).lastPathComponent,
+				directory: path,
+				isWorktree: true,
+				branchName: "feature-two"
+			)
+		}
 		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
 			ScannedRepository(
 				path: "/repos/alpha",
@@ -239,6 +299,6 @@ struct RepositoryChangedOnDiskTests {
 				isWorktree: true,
 				branchName: "feature-one"
 			),
-		]))
+		] + (extra.map { [$0] } ?? [])))
 	}
 }

@@ -1,5 +1,6 @@
 import Foundation
 import ProcessExecution
+import Synchronization
 import Testing
 
 @testable import GitCore
@@ -92,7 +93,13 @@ struct GitRepositoryWatcherTests {
 		])
 	}
 
-	@Test(arguments: ["/r/.DS_Store", "/r/Sources/.DS_Store", "/r-feature/.git", "/r/vendor/lib/.git/HEAD", "/elsewhere/x"])
+	@Test(arguments: [
+		"/r/.DS_Store",
+		"/r/Sources/.DS_Store",
+		"/r-feature/.git",
+		"/r/vendor/lib/.git/HEAD",
+		"/elsewhere/x",
+	])
 	func pathsGitStatusNeverReportsAreDropped(path: String) {
 		#expect(classify(FileSystemEvent(path: path)) == .init())
 	}
@@ -192,23 +199,153 @@ struct GitRepositoryWatcherTests {
 		let repository = try await Repository()
 		defer { repository.remove() }
 
-		let stream = GitRepositoryWatcher.changes(repositoryPaths: [repository.path])
+		let changes = try await firstChange(watching: [repository.path]) {
+			_ = await ProcessRunner.runGit(arguments: ["checkout", "-b", "feature"], at: repository.path)
+		}
+		#expect(changes.map(\.repositoryPath) == [repository.path])
+	}
+
+	// MARK: - Working tree filtering
+
+	@Test
+	func editOutsideIgnoredFoldersRefreshesStatus() async throws {
+		let repository = try await Repository()
+		defer { repository.remove() }
+		let target = try #require(GitWatchTarget(repositoryPath: repository.path))
+
+		let changes = await GitRepositoryWatcher.changes(
+			in: [
+				FileSystemEvent(path: repository.path + "/build/out.o"),
+				FileSystemEvent(path: repository.path + "/Sources/New.swift"),
+			],
+			targets: [target]
+		)
+		#expect(changes == [GitRepositoryChange(repositoryPath: repository.path, kinds: .status)])
+	}
+
+	@Test
+	func buildOutputAloneChangesNothing() async throws {
+		let repository = try await Repository()
+		defer { repository.remove() }
+		let target = try #require(GitWatchTarget(repositoryPath: repository.path))
+
+		let changes = await GitRepositoryWatcher.changes(
+			in: [
+				FileSystemEvent(path: repository.path + "/build/x/y.o"),
+				FileSystemEvent(path: repository.path + "/main.o"),
+			],
+			targets: [target]
+		)
+		#expect(changes.isEmpty)
+	}
+
+	@Test
+	func gitStateChangeNeedsNoIgnoreCheck() async {
+		// Not a repository at all: `check-ignore` would fail and count every path as changed, so
+		// an empty working-tree list here proves the status change was decided without it.
+		let target = GitWatchTarget(
+			repositoryPath: "/nowhere",
+			workTree: "/nowhere",
+			gitDirectory: "/nowhere/.git",
+			commonGitDirectory: "/nowhere/.git"
+		)
+		let changes = await GitRepositoryWatcher.changes(
+			in: [FileSystemEvent(path: "/nowhere/.git/HEAD"), FileSystemEvent(path: "/nowhere/build/a")],
+			targets: [target]
+		)
+		#expect(changes == [GitRepositoryChange(repositoryPath: "/nowhere", kinds: .status)])
+	}
+
+	@Test
+	func pathsCountAsChangedWhenGitCannotAnswer() async throws {
+		let directory = NSTemporaryDirectory() + "GitRepositoryWatcherTests-" + UUID().uuidString
+		try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+		defer { try? FileManager.default.removeItem(atPath: directory) }
+
+		#expect(await GitRepositoryWatcher.containsUnignoredPath(["build/a"], inWorkTree: directory))
+	}
+
+	// MARK: - Linked worktrees
+
+	@Test
+	func linkedWorktreeResolvesItsOwnAndTheSharedGitDirectory() async throws {
+		let repository = try await Repository()
+		let worktree = repository.path + "-feature"
+		defer {
+			repository.remove()
+			try? FileManager.default.removeItem(atPath: worktree)
+		}
+		try await repository.git("worktree", "add", "-b", "feature", worktree)
+
+		let target = try #require(GitWatchTarget(repositoryPath: worktree))
+		#expect(target.workTree == worktree)
+		#expect(target.gitDirectory == repository.path + "/.git/worktrees/" + (worktree as NSString).lastPathComponent)
+		#expect(target.commonGitDirectory == repository.path + "/.git")
+	}
+
+	@Test
+	func checkoutInALinkedWorktreeIsReportedForThatWorktree() async throws {
+		let repository = try await Repository()
+		let worktree = repository.path + "-feature"
+		defer {
+			repository.remove()
+			try? FileManager.default.removeItem(atPath: worktree)
+		}
+		try await repository.git("worktree", "add", "-b", "feature", worktree)
+		// An existing branch: `checkout -b` would also create a ref, which is shared and rightly
+		// refreshes every worktree of the repository.
+		try await repository.git("branch", "other")
+
+		let changes = try await firstChange(watching: [repository.path, worktree]) {
+			_ = await ProcessRunner.runGit(arguments: ["checkout", "other"], at: worktree)
+		}
+		#expect(changes.contains(GitRepositoryChange(repositoryPath: worktree, kinds: .status)))
+		// Its HEAD lives in the worktree's own git directory, not in the main checkout's.
+		#expect(!changes.contains { $0.repositoryPath == repository.path })
+	}
+
+	@Test
+	func worktreeAddedInATerminalIsReported() async throws {
+		let repository = try await Repository()
+		let worktree = repository.path + "-added"
+		defer {
+			repository.remove()
+			try? FileManager.default.removeItem(atPath: worktree)
+		}
+
+		let changes = try await firstChange(watching: [repository.path], matching: .worktreeList) {
+			_ = await ProcessRunner.runGit(arguments: ["worktree", "add", "-b", "added", worktree], at: repository.path)
+		}
+		#expect(changes.contains { $0.repositoryPath == repository.path && $0.kinds.contains(.worktreeList) })
+	}
+
+	/// The first batch from a live watch that has a change of `kind`, after `action` runs.
+	private func firstChange(
+		watching repositoryPaths: [String],
+		matching kind: GitRepositoryChange.Kind = .status,
+		after action: @escaping @Sendable () async -> Void
+	) async throws -> [GitRepositoryChange] {
+		let stream = GitRepositoryWatcher.changes(repositoryPaths: repositoryPaths)
+		let isActing = Atomic(false)
 		let first = Task {
-			for await changes in stream where changes.contains(where: { $0.kinds.contains(.status) }) {
+			for await changes in stream
+				where isActing.load(ordering: .sequentiallyConsistent) && changes.contains(where: { $0.kinds.contains(kind) })
+			{
 				return changes
 			}
 			return []
 		}
-		// FSEvents only reports what happens after the stream starts.
-		try await Task.sleep(for: .milliseconds(500))
-		try await repository.git("checkout", "-b", "feature")
+		// `kFSEventStreamEventIdSinceNow` still delivers events fseventsd had not yet flushed when
+		// the stream started — here, the test's own setup. Let those arrive and drop them.
+		try await Task.sleep(for: .milliseconds(1000))
+		isActing.store(true, ordering: .sequentiallyConsistent)
+		await action()
 
 		let timeout = Task {
 			try await Task.sleep(for: .seconds(10))
 			first.cancel()
 		}
-		let changes = await first.value
-		timeout.cancel()
-		#expect(changes.map(\.repositoryPath) == [repository.path])
+		defer { timeout.cancel() }
+		return await first.value
 	}
 }
