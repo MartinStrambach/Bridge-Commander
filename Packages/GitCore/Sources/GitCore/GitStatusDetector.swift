@@ -8,7 +8,9 @@ public nonisolated struct GitPorcelainStatus {
 
 	public let branch: String?
 	public let hasRemoteBranch: Bool
-	public let unpushedCount: Int
+	/// Ahead of the upstream, or — for a branch with no upstream — commits on no remote-tracking
+	/// branch at all (`GitStatusDetector.getStatus` fills that in; parsing alone leaves it 0).
+	public internal(set) var unpushedCount: Int
 	public let behindCount: Int
 
 	// MARK: - File changes
@@ -151,6 +153,34 @@ public nonisolated enum GitStatusDetector {
 			arguments: ["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
 			at: path
 		)
-		return GitPorcelainStatus(parsing: result.outputString, didSucceed: result.success)
+		var status = GitPorcelainStatus(parsing: result.outputString, didSucceed: result.success)
+		// git reports ahead/behind only against an upstream, so a branch that was never pushed
+		// would read as having nothing to push.
+		if status.didSucceed, status.branch != nil, !status.hasRemoteBranch {
+			status.unpushedCount = await countCommitsOnNoRemote(at: path)
+		}
+		return status
+	}
+
+	/// Commits reachable from HEAD but from no remote-tracking branch. 0 when the repository has
+	/// no remote-tracking branches at all: there is nothing to measure against, and every commit
+	/// in its history would count.
+	static func countCommitsOnNoRemote(at path: String) async -> Int {
+		let remotes = await ProcessRunner.runGit(
+			arguments: ["for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes"],
+			at: path
+		)
+		guard remotes.success, !remotes.trimmedOutput.isEmpty else {
+			return 0
+		}
+
+		let result = await ProcessRunner.runGit(
+			arguments: ["rev-list", "--count", "HEAD", "--not", "--remotes"],
+			at: path
+		)
+		guard result.success else {
+			return 0
+		}
+		return Int(result.trimmedOutput) ?? 0
 	}
 }

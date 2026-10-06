@@ -168,6 +168,7 @@ Packages/
 **Git status is fetched in one call:**
 - `GitStatusDetector.getBranchAndChanges` runs `git status --porcelain=v2 --branch` and parses everything (branch, staged/unstaged counts, unpushed, behind, remote branch)
 - `RepositoryRowReducer.fetchAll` fires 1 git process per row
+- Exception: git reports ahead/behind only against an upstream, so for a branch without one `getStatus` follows up with `rev-list --count HEAD --not --remotes` (commits on no remote-tracking branch) for `unpushedCount`. It stays 0 when the repository has no remote-tracking refs at all, since every commit would count
 
 **Services (protocol-based, DI via `@Dependency`):**
 - `GitClient` (git ops, defined in GitCore)
