@@ -87,6 +87,7 @@ struct TerminalTabLifecycleTests {
 		// Exhaustive: the sessions are what `killSessions(notIn:)` diffs against, so dropping
 		// any of them here would hang up its shell.
 		await store.send(.terminalLayout(.hideTerminalMode)) {
+			$0.hiddenTerminalTabMemory = $0.terminalLayout?.tabMemory
 			$0.terminalLayout = nil
 		}
 	}

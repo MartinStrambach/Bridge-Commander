@@ -26,11 +26,35 @@ struct TerminalLayoutReducer {
 		/// repository and back reopens the tab the user left, not its first tab.
 		var lastActiveSessionByRepo: [String: UUID] = [:]
 
+		/// Every tab that has been on screen since the panel opened, most recent last, so closing
+		/// the tab on screen goes back to the one the user was in before it.
+		var recentSessionIds: [UUID] = []
+
+		/// What the panel remembers about the tabs it has shown. Hiding the panel drops this whole
+		/// state, so `RepositoryListReducer` keeps the memory meanwhile and hands it back to the
+		/// next panel, which then reopens where the user left off.
+		struct TabMemory: Equatable {
+			var lastActiveSessionByRepo: [String: UUID] = [:]
+			var recentSessionIds: [UUID] = []
+		}
+
+		var tabMemory: TabMemory {
+			get {
+				TabMemory(lastActiveSessionByRepo: lastActiveSessionByRepo, recentSessionIds: recentSessionIds)
+			}
+			set {
+				lastActiveSessionByRepo = newValue.lastActiveSessionByRepo
+				recentSessionIds = newValue.recentSessionIds
+			}
+		}
+
 		/// Show `session` and remember it as the repository's current tab.
 		mutating func activate(_ session: TerminalSession) {
 			activeRepositoryPath = session.repositoryPath
 			activeSessionId = session.id
 			lastActiveSessionByRepo[session.repositoryPath] = session.id
+			recentSessionIds.removeAll { $0 == session.id }
+			recentSessionIds.append(session.id)
 		}
 
 		/// Drop a closed tab from the per-repository memory so it is never restored.
@@ -38,6 +62,18 @@ struct TerminalLayoutReducer {
 			if lastActiveSessionByRepo[repositoryPath] == sessionId {
 				lastActiveSessionByRepo[repositoryPath] = nil
 			}
+			recentSessionIds.removeAll { $0 == sessionId }
+		}
+
+		/// Of `sessions`, the one most recently on screen — nil when none of them has been shown
+		/// since the panel opened (tabs restored from the previous launch, say).
+		func mostRecent(among sessions: some Collection<TerminalSession>) -> TerminalSession? {
+			for id in recentSessionIds.reversed() {
+				if let session = sessions.first(where: { $0.id == id }) {
+					return session
+				}
+			}
+			return nil
 		}
 
 		// The Xcode and Tuist buttons are deliberately not copied here: the toolbar scopes the
