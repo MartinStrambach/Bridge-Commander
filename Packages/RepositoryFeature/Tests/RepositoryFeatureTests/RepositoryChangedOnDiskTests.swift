@@ -91,6 +91,33 @@ struct RepositoryChangedOnDiskTests {
 		await store.finish()
 	}
 
+	@Test("a stash change alongside a status change is checked once, after the status lands")
+	func stashWithStatusIsCheckedAfterStatus() async {
+		// The menu already mirrors the push status, so the status read changes nothing but the flag.
+		var row = knownStatus
+		row.gitActionsMenu.hasRemoteBranch = true
+		row.gitActionsMenu.unpushedCommitsCount = 1
+		let store = TestStore(initialState: row) {
+			RepositoryRowReducer()
+		} withDependencies: {
+			$0[GitClient.self].getCurrentBranch = { _ in
+				GitPorcelainStatus(parsing: "# branch.head feature\n# branch.upstream origin/feature\n# branch.ab +1 -0")
+			}
+		}
+
+		// Exhaustive: a stash check sent alongside the status read, or a second one after it, fails.
+		await store.send(.changedOnDisk([.status, .stash])) {
+			$0.isStashCheckPending = true
+		}
+		await store.receive(\.didFetchStatusAfterChangeOnDisk) {
+			$0.isStashCheckPending = false
+		}
+		await store.receive(\.gitActionsMenu.didCheckGitStatus)
+		await store.receive(\.gitActionsMenu.refresh)
+		store.exhaustivity = .off
+		await store.finish()
+	}
+
 	@Test("a status change re-reads git status")
 	func statusChangeFetchesStatus() async {
 		let store = makeRowStore(knownStatus)

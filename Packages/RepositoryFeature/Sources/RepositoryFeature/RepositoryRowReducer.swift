@@ -67,6 +67,10 @@ struct RepositoryRowReducer {
 		/// A status fetch for `onAppear`/`refresh` is under way. A change on disk cancels it and
 		/// fetches again, and that fetch must then still do what the refresh would have.
 		var isRefreshingStatus = false
+		/// The stash moved in the same change on disk as something `git status` must read. The stash
+		/// menu is keyed on the branch, which that read may change, so it is checked once the read
+		/// lands rather than alongside it under the branch the row knew before.
+		var isStashCheckPending = false
 
 		var supportsIOS: Bool
 		var supportsAndroid: Bool
@@ -349,10 +353,14 @@ struct RepositoryRowReducer {
 				)
 
 			case let .changedOnDisk(kinds):
-				return .merge(
-					kinds.contains(.status) ? fetchBranchInfo(for: &state, afterChangeOnDisk: true) : .none,
-					kinds.contains(.stash) ? .send(.gitActionsMenu(.refresh)) : .none
-				)
+				guard kinds.contains(.status) else {
+					return kinds.contains(.stash) ? .send(.gitActionsMenu(.refresh)) : .none
+				}
+
+				if kinds.contains(.stash) {
+					state.isStashCheckPending = true
+				}
+				return fetchBranchInfo(for: &state, afterChangeOnDisk: true)
 
 			case let .didFetchStatus(status, isMerge):
 				state.isRefreshingStatus = false
@@ -517,9 +525,13 @@ struct RepositoryRowReducer {
 		// banner still clears when the status fetch itself fails.
 		let syncMergeStatus: EffectOf<RepositoryRowReducer> =
 			.send(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: isMerge)))
+		// Sent after this reduce has written the branch, so the check reads under the new one.
+		let pendingStashCheck: EffectOf<RepositoryRowReducer> =
+			state.isStashCheckPending ? .send(.gitActionsMenu(.refresh)) : .none
+		state.isStashCheckPending = false
 
 		guard status.didSucceed else {
-			return syncMergeStatus
+			return .merge(syncMergeStatus, pendingStashCheck)
 		}
 
 		let branch = status.branch ?? state.branchName ?? state.name
@@ -586,7 +598,8 @@ struct RepositoryRowReducer {
 			return .merge(
 				syncMergeStatus,
 				fetchYouTrack(for: state),
-				fetchPullRequest(for: state)
+				fetchPullRequest(for: state),
+				pendingStashCheck
 			)
 		}
 
@@ -595,6 +608,7 @@ struct RepositoryRowReducer {
 		// keyed on it too), or its upstream — a push, a fetch or a pull can change what the PR
 		// shows. A local commit only adds to the unpushed count and asks nothing.
 		if branchChanged {
+			// Covers a pending stash check too.
 			return .merge(
 				syncMergeStatus,
 				fetchYouTrack(for: state),
@@ -603,9 +617,9 @@ struct RepositoryRowReducer {
 			)
 		}
 		if upstreamMoved {
-			return .merge(syncMergeStatus, fetchPullRequest(for: state))
+			return .merge(syncMergeStatus, fetchPullRequest(for: state), pendingStashCheck)
 		}
-		return syncMergeStatus
+		return .merge(syncMergeStatus, pendingStashCheck)
 	}
 
 	// MARK: - Private Effect Builders

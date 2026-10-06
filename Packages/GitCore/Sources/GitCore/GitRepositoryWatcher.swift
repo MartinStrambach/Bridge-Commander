@@ -61,6 +61,13 @@ nonisolated enum GitRepositoryWatcher {
 				return
 			}
 
+			// Finished rather than left open, so a watch that cannot start reads as over, not quiet.
+			guard stream.start() else {
+				stream.stop()
+				continuation.finish()
+				return
+			}
+
 			// One batch at a time, in arrival order: handling one may wait on `git check-ignore`.
 			let task = Task {
 				for await batch in batches {
@@ -71,7 +78,6 @@ nonisolated enum GitRepositoryWatcher {
 				}
 				continuation.finish()
 			}
-			stream.start()
 
 			continuation.onTermination = { _ in
 				stream.stop()

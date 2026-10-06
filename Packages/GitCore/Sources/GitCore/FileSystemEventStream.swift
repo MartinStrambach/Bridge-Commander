@@ -56,7 +56,8 @@ nonisolated final class FileSystemEventStream: @unchecked Sendable {
 		FSEventStreamSetDispatchQueue(stream, queue)
 	}
 
-	func start() {
+	/// - Returns: Whether FSEvents accepted the stream; when not, nothing will ever be delivered.
+	func start() -> Bool {
 		FSEventStreamStart(stream)
 	}
 
@@ -82,7 +83,7 @@ nonisolated final class FileSystemEventStream: @unchecked Sendable {
 		)
 		let dropped = FSEventStreamEventFlags(
 			kFSEventStreamEventFlagMustScanSubDirs | kFSEventStreamEventFlagUserDropped
-				| kFSEventStreamEventFlagKernelDropped | kFSEventStreamEventFlagRootChanged
+				| kFSEventStreamEventFlagKernelDropped
 		)
 		let events = (0 ..< min(count, paths.count)).map { index in
 			FileSystemEvent(
