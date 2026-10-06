@@ -7,19 +7,17 @@ import TerminalFeature
 
 // MARK: - Public entry point
 
-/// Public wrapper that self-initialises the store. Used by BridgeCommanderApp.
+/// The main window's content. The store and the terminal panes come from `RepositoryAppModel`,
+/// which outlives the window.
 public struct RootRepositoryView: View {
-	private let store: StoreOf<RepositoryListReducer>
+	private let model: RepositoryAppModel
 
-	public init() {
-		self.store = Store(
-			initialState: RepositoryListReducer.State(),
-			reducer: { RepositoryListReducer() }
-		)
+	public init(model: RepositoryAppModel) {
+		self.model = model
 	}
 
 	public var body: some View {
-		RepositoryListView(store: store)
+		RepositoryListView(store: model.store, terminalViewStore: model.terminalViewStore)
 	}
 }
 
@@ -30,8 +28,9 @@ struct RepositoryListView: View {
 	@Bindable
 	var store: StoreOf<RepositoryListReducer>
 
-	@State
-	private var terminalViewStore = TerminalViewStore()
+	/// Owned by `RepositoryAppModel`, not the window: closing the window must not hang up the
+	/// shells, which the menu bar extra keeps reporting on.
+	let terminalViewStore: TerminalViewStore
 	@FocusState
 	private var isSearchFocused: Bool
 
@@ -87,15 +86,7 @@ struct RepositoryListView: View {
 			}
 		}
 		.onAppear { send(.onAppear) }
-		// Saved on both: quitting with the window open never takes it off screen, and closing the
-		// window releases the panes — which hangs up their shells — long before any quit.
-		.onDisappear {
-			saveTerminalTabs()
-			send(.onDisappear)
-		}
-		.onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-			saveTerminalTabs()
-		}
+		.onDisappear { send(.onDisappear) }
 		// Returning to the app is when a permission granted in System Settings should take
 		// effect. Nothing re-probes on refresh any more, so this is what clears the banners.
 		.onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -106,12 +97,6 @@ struct RepositoryListView: View {
 		}
 		.onChange(of: store.groupSettings) { _, _ in
 			send(.groupSettingsChanged)
-		}
-		// The reducer can drop a session without going through the buttons that kill panes
-		// directly, as it does when a worktree is deleted. Whatever the reason, a session that
-		// has left the state must hang up its shell rather than run on unseen.
-		.onChange(of: store.terminalSessions.ids) { _, ids in
-			terminalViewStore.killSessions(notIn: Set(ids))
 		}
 		.alert($store.scope(\.$alert, action: \.alert))
 	}
@@ -471,15 +456,6 @@ struct RepositoryListView: View {
 		}
 	}
 
-	// MARK: - Terminal Tabs
-
-	/// Records the open tabs for the next launch. The shells' directories and Claude conversations
-	/// are read here because only the panes know them; the reducer writes the file before `send`
-	/// returns — while Claude is still running, before quitting hangs it up.
-	private func saveTerminalTabs() {
-		send(.saveTerminalTabsRequested(panes: terminalViewStore.paneSnapshots()))
-	}
-
 	// MARK: - Repository Selection
 
 	private func addRepository() {
@@ -534,6 +510,7 @@ private extension View {
 			reducer: {
 				RepositoryListReducer()
 			}
-		)
+		),
+		terminalViewStore: TerminalViewStore()
 	)
 }

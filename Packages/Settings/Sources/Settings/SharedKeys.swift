@@ -91,6 +91,13 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var terminalNotifications: Self {
 		appStorage("terminalNotifications")
 	}
+
+	/// Whether the app puts an icon in the menu bar showing how many terminal tabs are waiting on
+	/// the user and where each repository stands against its remote. On by default. Also cleared
+	/// by ⌘-dragging the icon out of the menu bar.
+	static var showsMenuBarExtra: Self {
+		appStorage("showsMenuBarExtra")
+	}
 }
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<WorktreeSource> {

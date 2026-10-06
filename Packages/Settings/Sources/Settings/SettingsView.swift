@@ -615,6 +615,17 @@ public struct SettingsView<Updates: View>: View {
 				}
 			}
 			.pickerStyle(.segmented)
+
+			Toggle(
+				"Show status in the menu bar",
+				isOn: $store.showsMenuBarExtra.sending(\.setShowsMenuBarExtra)
+			)
+
+			Text(
+				"Shows how many terminal tabs are waiting for input, and what each repository has to push or pull. Keeps working while the main window is closed, and so does the refresh above."
+			)
+			.font(.caption)
+			.foregroundColor(.secondary)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))

@@ -84,6 +84,7 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .active
 		var state = RepositoryListReducer.State()
+		state.isWindowOpen = true
 		state.terminalSessions = [session]
 		state.terminalLayout = TerminalLayoutReducer.State()
 		state.terminalLayout?.activate(session)
@@ -204,8 +205,36 @@ struct RepositoryListNotificationTests {
 			$0[TerminalNotificationClient.self].activateApp = { activated.setValue(true) }
 		}
 
-		await store.send(.terminalNotificationTapped(sessionId: UUID()))
+		await store.send(.terminalNotificationTapped(sessionId: UUID())) {
+			$0.mainWindowRequestCount = 1
+		}
 		#expect(activated.value)
+	}
+
+	@Test("the panel's active tab is not on screen while the window is closed, so it still posts")
+	func postsForActiveTabWithWindowClosed() async {
+		var session = TerminalSession(repositoryPath: "/repos/alpha")
+		session.status = .active
+		var state = RepositoryListReducer.State()
+		state.isWindowOpen = true
+		state.terminalSessions = [session]
+		state.terminalLayout = TerminalLayoutReducer.State()
+		state.terminalLayout?.activate(session)
+		let posted = LockIsolated<[TerminalNotificationContent]>([])
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].isAppActive = { true }
+			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
+		}
+
+		await store.send(.view(.onDisappear)) {
+			$0.isWindowOpen = false
+		}
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
+			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+		}
+		#expect(posted.value.map(\.sessionId) == [session.id])
 	}
 
 	// MARK: - Notifications a program asks for
