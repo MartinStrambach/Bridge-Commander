@@ -15,7 +15,7 @@ struct CreateWorktreeDialogView: View {
 	var body: some View {
 		VStack(spacing: 20) {
 			Text("Create New Worktree in \(store.repositoryName)")
-				.font(.headline)
+				.scaledFont(.headline)
 				.multilineTextAlignment(.center)
 
 			Picker("Source", selection: $store.source.sending(\.sourceChanged)) {
@@ -46,6 +46,7 @@ struct CreateWorktreeDialogView: View {
 				Button("Cancel") {
 					store.send(.cancelCreation)
 				}
+				.buttonStyle(.scaledAutomatic)
 				.keyboardShortcut(.cancelAction)
 
 				Spacer()
@@ -53,6 +54,7 @@ struct CreateWorktreeDialogView: View {
 				Button("Create") {
 					store.send(.confirmCreation)
 				}
+				.buttonStyle(.scaledAutomatic)
 				.keyboardShortcut(.defaultAction)
 				.disabled(!store.canCreate)
 			}
@@ -77,7 +79,7 @@ struct CreateWorktreeDialogView: View {
 	@ViewBuilder
 	private var baseBranchPicker: some View {
 		Text("Base Branch")
-			.font(.subheadline)
+			.scaledFont(.subheadline)
 			.foregroundColor(.secondary)
 
 		if store.isLoadingBranches {
@@ -104,7 +106,7 @@ struct CreateWorktreeDialogView: View {
 	@ViewBuilder
 	private var newBranchNameField: some View {
 		Text("New Branch Name")
-			.font(.subheadline)
+			.scaledFont(.subheadline)
 			.foregroundColor(.secondary)
 
 		TextField("Enter branch name", text: $store.branchName)
@@ -195,7 +197,7 @@ struct CreateWorktreeDialogView: View {
 
 		if let pullRequest = store.selectedPullRequest {
 			Text("Checks out \(pullRequest.sourceBranch)")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 				.lineLimit(1)
 				.truncationMode(.middle)
@@ -208,7 +210,7 @@ struct CreateWorktreeDialogView: View {
 	private var followUpContent: some View {
 		HStack {
 			Text("After creating")
-				.font(.subheadline)
+				.scaledFont(.subheadline)
 				.foregroundColor(.secondary)
 			Spacer()
 			Picker("After creating", selection: $store.followUp.sending(\.followUpChanged)) {
@@ -234,7 +236,7 @@ struct CreateWorktreeDialogView: View {
 
 	private func listPlaceholder(_ text: String, isError: Bool = false) -> some View {
 		Text(text)
-			.font(.callout)
+			.scaledFont(.callout)
 			.foregroundColor(isError ? .orange : .secondary)
 			.multilineTextAlignment(.center)
 			.padding()
@@ -247,7 +249,7 @@ private struct TicketRow: View {
 	var body: some View {
 		HStack(alignment: .firstTextBaseline, spacing: 8) {
 			Text(ticket.id)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 				.foregroundColor(.secondary)
 			Text(ticket.summary)
 				.lineLimit(1)
@@ -265,20 +267,20 @@ private struct PullRequestRow: View {
 		VStack(alignment: .leading, spacing: 2) {
 			HStack(alignment: .firstTextBaseline, spacing: 8) {
 				Text(pullRequest.reference)
-					.font(.system(.body, design: .monospaced))
+					.scaledFont(.body, design: .monospaced)
 					.foregroundColor(.secondary)
 				Text(pullRequest.title)
 					.lineLimit(1)
 					.truncationMode(.tail)
 				if pullRequest.isDraft {
 					Text("Draft")
-						.font(.caption2)
+						.scaledFont(.caption2)
 						.padding(.horizontal, 4)
 						.background(Color.secondary.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
 				}
 			}
 			Text([pullRequest.sourceBranch, pullRequest.author].compactMap(\.self).joined(separator: " · "))
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 				.lineLimit(1)
 				.truncationMode(.middle)

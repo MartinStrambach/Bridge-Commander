@@ -17,6 +17,6 @@ public struct LineStatsView: View {
 			Text("−\(removedLines)")
 				.foregroundStyle(.red)
 		}
-		.font(.caption.monospacedDigit())
+		.scaledFont(.caption).monospacedDigit()
 	}
 }

@@ -1,3 +1,4 @@
+import AppUI
 import SwiftUI
 
 /// Splits a repo group's worktree rows by ticket state or into ticketed and ticketless, depending
@@ -13,12 +14,12 @@ struct RowSectionHeaderView: View {
 				.fill(header.section.color)
 				.frame(width: 6, height: 6)
 			Text(header.section.title.uppercased())
-				.font(.caption2)
+				.scaledFont(.caption2)
 				.fontWeight(.semibold)
 				.foregroundStyle(.secondary)
 				.lineLimit(1)
 			Text("\(header.count)")
-				.font(.caption2)
+				.scaledFont(.caption2)
 				.foregroundStyle(.secondary)
 				.padding(.horizontal, 5)
 				.padding(.vertical, 1)

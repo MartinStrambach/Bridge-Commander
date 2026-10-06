@@ -45,13 +45,14 @@ public struct ImageDiffView: View {
 	private var zoomControls: some View {
 		HStack(spacing: 8) {
 			Text("\(Int((zoom.scale * 100).rounded()))%")
-				.font(.caption)
+				.scaledFont(.caption)
 				.monospacedDigit()
 				.foregroundStyle(.secondary)
 
 			Button("Reset Zoom") {
 				withAnimation(.snappy) { zoom = .identity }
 			}
+			.buttonStyle(.scaledAutomatic)
 			.controlSize(.small)
 		}
 	}
@@ -173,11 +174,11 @@ private struct ImageDiffPane: View {
 				placeholder {
 					VStack(spacing: 6) {
 						Image(systemName: "photo.badge.exclamationmark")
-							.font(.system(size: 28))
+							.scaledFont(size: 28)
 							.foregroundStyle(.secondary)
 
 						Text("Preview unavailable")
-							.font(.caption)
+							.scaledFont(.caption)
 							.foregroundStyle(.secondary)
 					}
 				}
@@ -206,13 +207,13 @@ private struct ImageDiffPane: View {
 	private var header: some View {
 		HStack(spacing: 8) {
 			Text(title)
-				.font(.caption.weight(.semibold))
+				.scaledFont(.caption, weight: .semibold)
 				.foregroundStyle(role.color)
 
 			Spacer()
 
 			Text(caption)
-				.font(.caption)
+				.scaledFont(.caption)
 				.monospacedDigit()
 				.foregroundStyle(.secondary)
 		}

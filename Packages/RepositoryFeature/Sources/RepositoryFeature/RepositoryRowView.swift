@@ -47,7 +47,7 @@ struct RepositoryRowView: View {
 				if let collapsed = isGroupCollapsed, let toggle = onToggleCollapse {
 					Button(action: toggle) {
 						Image(systemName: "chevron.right")
-							.font(.caption)
+							.scaledFont(.caption)
 							.foregroundColor(.secondary)
 							.rotationEffect(.degrees(collapsed ? 0 : 90))
 							.animation(.easeInOut(duration: 0.2), value: collapsed)
@@ -61,7 +61,7 @@ struct RepositoryRowView: View {
 				}
 				else {
 					Image(systemName: "chevron.right")
-						.font(.caption)
+						.scaledFont(.caption)
 						.padding(.horizontal, 8)
 						.padding(.vertical, 12)
 						.hidden()
@@ -156,7 +156,7 @@ struct RepositoryRowView: View {
 				VStack(alignment: .leading, spacing: 2) {
 					HStack(spacing: 8) {
 						Text(isGroupCollapsed != nil ? store.name : store.formattedBranchName)
-							.font(.headline)
+							.scaledFont(.headline)
 							.lineLimit(1)
 						if let worktreeCount, worktreeCount > 0 {
 							worktreeCountBadge(worktreeCount)
@@ -168,10 +168,10 @@ struct RepositoryRowView: View {
 					if let branchName = store.branchName {
 						HStack(spacing: 4) {
 							Image(systemName: "arrow.trianglehead.branch")
-								.font(.caption)
+								.scaledFont(.caption)
 								.foregroundColor(.secondary)
 							Text(branchName)
-								.font(.caption)
+								.scaledFont(.caption)
 								.foregroundColor(.secondary)
 								.lineLimit(1)
 								.truncationMode(.middle)
@@ -182,7 +182,7 @@ struct RepositoryRowView: View {
 										.foregroundColor(.red)
 									Text("Merge")
 										.lineLimit(1)
-										.font(.caption)
+										.scaledFont(.caption)
 								}
 							}
 
@@ -192,7 +192,7 @@ struct RepositoryRowView: View {
 										.foregroundColor(.orange)
 									Text("No remote")
 										.lineLimit(1)
-										.font(.caption)
+										.scaledFont(.caption)
 										.foregroundColor(.orange)
 								}
 							}
@@ -216,9 +216,9 @@ struct RepositoryRowView: View {
 	private func worktreeCountBadge(_ count: Int) -> some View {
 		HStack(spacing: 3) {
 			Image(systemName: "tree.fill")
-				.font(.caption2)
+				.scaledFont(.caption2)
 			Text("\(count)")
-				.font(.caption)
+				.scaledFont(.caption)
 				.lineLimit(1)
 		}
 		.foregroundColor(.blue)
@@ -255,7 +255,7 @@ struct RepositoryRowView: View {
 
 	private func ticketBadgeLabel(_ ticketId: String) -> some View {
 		Text(ticketId)
-			.font(.caption)
+			.scaledFont(.caption)
 			.padding(6)
 			.background(Color.blue.opacity(0.2))
 			.cornerRadius(4)
@@ -274,7 +274,7 @@ struct RepositoryRowView: View {
 						.foregroundColor(.green)
 					Text("\(store.stagedChangesCount)")
 						.lineLimit(1)
-						.font(.caption)
+						.scaledFont(.caption)
 				}
 			}
 
@@ -285,7 +285,7 @@ struct RepositoryRowView: View {
 						.foregroundColor(.orange)
 					Text("\(store.unstagedChangesCount)")
 						.lineLimit(1)
-						.font(.caption)
+						.scaledFont(.caption)
 				}
 			}
 
@@ -296,7 +296,7 @@ struct RepositoryRowView: View {
 						.foregroundColor(.red)
 					Text("\(store.unpushedCommitCount)")
 						.lineLimit(1)
-						.font(.caption)
+						.scaledFont(.caption)
 				}
 			}
 
@@ -307,7 +307,7 @@ struct RepositoryRowView: View {
 						.foregroundColor(.blue)
 					Text("\(store.commitsBehindCount)")
 						.lineLimit(1)
-						.font(.caption)
+						.scaledFont(.caption)
 				}
 			}
 		}
@@ -331,12 +331,12 @@ struct RepositoryRowView: View {
 						.frame(height: 12)
 						.foregroundColor(color.opacity(0.75))
 					Text(androidCR.rawValue)
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(color.opacity(0.75))
 						.lineLimit(1)
 					if let reviewerName = store.androidReviewerName {
 						Text("(\(reviewerName))")
-							.font(.caption2)
+							.scaledFont(.caption2)
 							.foregroundColor(color)
 							.lineLimit(1)
 					}
@@ -352,12 +352,12 @@ struct RepositoryRowView: View {
 						.renderingMode(.template)
 						.foregroundColor(color.opacity(0.75))
 					Text(iosCR.rawValue)
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(color.opacity(0.75))
 						.lineLimit(1)
 					if let reviewerName = store.iosReviewerName {
 						Text("(\(reviewerName))")
-							.font(.caption2)
+							.scaledFont(.caption2)
 							.foregroundColor(color)
 							.lineLimit(1)
 					}

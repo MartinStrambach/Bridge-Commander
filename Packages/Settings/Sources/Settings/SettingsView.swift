@@ -1,3 +1,4 @@
+import AppUI
 import AppKit
 import ComposableArchitecture
 import GitHosting
@@ -42,11 +43,12 @@ public struct SettingsView<Updates: View>: View {
 		ScrollView {
 			VStack(alignment: .leading, spacing: 16) {
 				Text("Settings")
-					.font(.title2)
+					.scaledFont(.title2)
 					.fontWeight(.bold)
 
 				Divider()
 
+				appearanceSection
 				youtrackAuthenticationSection
 				gitHubAuthenticationSection
 				gitLabAuthenticationSection
@@ -74,13 +76,46 @@ public struct SettingsView<Updates: View>: View {
 		.alert($store.scope(\.$alert, action: \.alert))
 	}
 
+	private var appearanceSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Appearance")
+				.scaledFont(.headline)
+
+			HStack(spacing: 8) {
+				Stepper(
+					value: $store.uiFontSize.sending(\.setUIFontSize),
+					in: UIFontSize.minimum ... UIFontSize.maximum,
+					step: UIFontSize.step
+				) {
+					Text("Text size: \(Int(store.uiFontSize)) pt")
+				}
+
+				Button("Reset") {
+					store.send(.setUIFontSize(UIFontSize.default))
+				}
+				.buttonStyle(.scaledAutomatic)
+				.disabled(store.uiFontSize == UIFontSize.default)
+			}
+
+			Text(
+				"Size of body text across the app; headlines, captions and diffs scale with it. The built-in terminal has its own font size below. Default: \(Int(UIFontSize.default)) pt."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+		}
+		.padding()
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+
 	private var terminalBehaviorSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Terminal")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text("Choose which terminal app opens when clicking the Terminal button.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Picker(
@@ -113,10 +148,10 @@ public struct SettingsView<Updates: View>: View {
 	private var claudeCodeBehaviorSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Claude Code Opening Behavior")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text("Choose how Claude Code should open when clicking the Claude Code button.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Picker(
@@ -137,10 +172,10 @@ public struct SettingsView<Updates: View>: View {
 	private var terminalColorThemeSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Terminal Color Theme")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text("Choose the color theme for the built-in terminal. Applies to newly opened terminals.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Picker(
@@ -166,13 +201,13 @@ public struct SettingsView<Updates: View>: View {
 				.padding(.vertical, 2)
 
 			Text("Import Terminal.app Profiles")
-				.font(.subheadline)
+				.scaledFont(.subheadline)
 				.fontWeight(.semibold)
 
 			Text(
 				"Bring in the color schemes from Terminal.app, or from a .terminal file exported via Terminal → Settings → Profiles → Export. A profile that defines no ANSI colors keeps the default palette."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			HStack(spacing: 8) {
@@ -181,14 +216,14 @@ public struct SettingsView<Updates: View>: View {
 				} label: {
 					Label("Import from Terminal.app", systemImage: "square.and.arrow.down.on.square")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 
 				Button {
 					isImportingProfileFiles = true
 				} label: {
 					Label("Import File…", systemImage: "folder")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 			}
 
 			if !store.terminalProfiles.isEmpty {
@@ -223,11 +258,11 @@ public struct SettingsView<Updates: View>: View {
 			profileSwatch(profile)
 
 			Text(profile.name)
-				.font(.caption)
+				.scaledFont(.caption)
 
 			if profile.ansi == nil {
 				Text("default palette")
-					.font(.caption2)
+					.scaledFont(.caption2)
 					.foregroundColor(.secondary)
 					.help("This profile defines no ANSI colors, so the default 16-color palette is used.")
 			}
@@ -253,7 +288,7 @@ public struct SettingsView<Updates: View>: View {
 	private func profileFontBadge(_ font: TerminalProfileFont) -> some View {
 		let available = font.isAvailable
 		return Text("\(font.name) \(Int(font.size))pt")
-			.font(.caption2)
+			.scaledFont(.caption2)
 			.foregroundColor(.secondary)
 			.strikethrough(!available)
 			.help(
@@ -278,7 +313,7 @@ public struct SettingsView<Updates: View>: View {
 				// Without a palette there would be nothing but padding to look at, so show the
 				// text color against the background — which is all this profile actually sets.
 				Text("Aa")
-					.font(.system(size: 10, design: .monospaced))
+					.scaledFont(size: 10, design: .monospaced)
 					.foregroundColor(Color(profile.foreground.nsColor))
 					.frame(width: 94, height: 14)
 			}
@@ -305,7 +340,7 @@ public struct SettingsView<Updates: View>: View {
 	private var builtInTerminalSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Built-in Terminal")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Picker(
 				"Font:",
@@ -325,7 +360,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"Only monospaced fonts are listed — a proportional face would break the terminal's character grid."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			HStack(spacing: 8) {
@@ -355,7 +390,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"Applies to open terminals right away. Also available as ⌘+ and ⌘− while a terminal is focused, with ⌘0 back to \(Int(TerminalFontSize.default)) pt."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			Toggle(
@@ -366,7 +401,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"Highlighting text with the mouse puts it on the clipboard right away, which replaces whatever you copied elsewhere. With this off, use ⌘C to copy the selection."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			Toggle(
@@ -377,7 +412,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"Programs like lazygit and vim can then see clicks and the scroll wheel, so scrolling affects the pane under the pointer instead of the focused one. With this off they never get the pointer position. Hold ⇧ while dragging to select text either way."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			HStack {
@@ -387,13 +422,13 @@ public struct SettingsView<Updates: View>: View {
 					set: { store.send(.setTerminalStartupCommand($0)) }
 				))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 			}
 
 			Text(
 				"Typed into a repository's first built-in terminal tab once its shell is ready. A repository group's own Terminal Command replaces it for that group's tabs."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			Toggle(
@@ -404,7 +439,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"With this off, tabs opened with + or ⌘T start with a plain shell."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			Toggle(
@@ -415,7 +450,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"Posts a notification when Claude Code in a built-in terminal tab you are not looking at needs a response, or when a program asks for one (OSC 9 / OSC 777, as in Ghostty). Click it to open that tab. For Claude's own permission notifications, set its notification channel to Ghostty in /config."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			Picker(
@@ -429,7 +464,7 @@ public struct SettingsView<Updates: View>: View {
 			.frame(maxWidth: 420)
 
 			Text("\(store.terminalClaudeStatusDetection.explanation) Applies to terminals opened after the change.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 		}
 		.frame(maxWidth: .infinity, alignment: .leading)
@@ -441,29 +476,29 @@ public struct SettingsView<Updates: View>: View {
 	private var youtrackAuthenticationSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("YouTrack Authentication")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text(
 				"Enter your YouTrack personal access token. This token will be stored locally and used to fetch issue details."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			SecureField("YouTrack Auth Token", text: $store.youtrackAuthToken.sending(\.setYouTrackToken))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 
 			HStack(spacing: 8) {
 				Button(action: { store.send(.clearTokenButtonTapped) }) {
 					Label("Clear Token", systemImage: "xmark.circle")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.foregroundColor(.red)
 
 				Button(action: { store.send(.testYouTrackTokenButtonTapped) }) {
 					Label("Test Connection", systemImage: "checkmark.shield")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.disabled(store.youtrackTokenTest == .testing)
 			}
 
@@ -477,29 +512,29 @@ public struct SettingsView<Updates: View>: View {
 	private var gitHubAuthenticationSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("GitHub Authentication")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text(
 				"Enter a GitHub personal access token. Fine-grained: grant the repository permission \"Pull requests: Read-only\" (Metadata is added automatically). Classic: `repo` scope. Used to detect open PRs for the current branch."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			SecureField("GitHub Token", text: $store.githubToken.sending(\.setGitHubToken))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 
 			HStack(spacing: 8) {
 				Button(action: { store.send(.clearGitHubToken) }) {
 					Label("Clear Token", systemImage: "xmark.circle")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.foregroundColor(.red)
 
 				Button(action: { store.send(.testGitHubTokenButtonTapped) }) {
 					Label("Test Connection", systemImage: "checkmark.shield")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.disabled(store.githubTokenTest == .testing)
 			}
 
@@ -513,29 +548,29 @@ public struct SettingsView<Updates: View>: View {
 	private var gitLabAuthenticationSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("GitLab Authentication")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text(
 				"Enter a GitLab access token (personal, project, or group) with the `read_api` scope. Fine-grained tokens are not supported — the app uses GitLab's GraphQL API, which they cannot access yet. Used to detect open merge requests for the current branch."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			SecureField("GitLab Token", text: $store.gitlabToken.sending(\.setGitLabToken))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 
 			HStack(spacing: 8) {
 				Button(action: { store.send(.clearGitLabToken) }) {
 					Label("Clear Token", systemImage: "xmark.circle")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.foregroundColor(.red)
 
 				Button(action: { store.send(.testGitLabTokenButtonTapped) }) {
 					Label("Test Connection", systemImage: "checkmark.shield")
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.disabled(store.gitlabTokenTest == .testing)
 			}
 
@@ -559,7 +594,7 @@ public struct SettingsView<Updates: View>: View {
 				ProgressView()
 					.controlSize(.small)
 				Text("Testing…")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			}
 
@@ -568,7 +603,7 @@ public struct SettingsView<Updates: View>: View {
 				Image(systemName: "checkmark.circle.fill")
 					.foregroundColor(.green)
 				Text("Authenticated as \(username)")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			}
 
@@ -577,7 +612,7 @@ public struct SettingsView<Updates: View>: View {
 				Image(systemName: "exclamationmark.triangle.fill")
 					.foregroundColor(.orange)
 				Text(message)
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 					.textSelection(.enabled)
 			}
@@ -587,7 +622,7 @@ public struct SettingsView<Updates: View>: View {
 	private var updatesSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Updates")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			updates
 		}
@@ -600,10 +635,10 @@ public struct SettingsView<Updates: View>: View {
 	private var repositoryRefreshSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Repository Refresh")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text("Automatically refresh repository status at the selected interval.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Picker(
@@ -624,26 +659,26 @@ public struct SettingsView<Updates: View>: View {
 	private var branchNameRegexSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Branch Name Regex Pattern")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text(
 				"Specify the regular expression pattern to remove project prefixes from branch names (e.g., '[a-zA-Z]+-\\\\d+[_/]' matches 'MOB-123_' or 'tech-60/')."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			TextField("Branch Name Regex", text: $store.branchNameRegex.sending(\.setBranchNameRegex))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 
 			Text("Branch Name for Ticket Worktrees")
-				.font(.headline)
+				.scaledFont(.headline)
 				.padding(.top, 8)
 
 			Text(
 				"Used when a worktree is created from a YouTrack ticket. {ticket} is the ticket ID, {summary} its summary as lowercase_words (e.g. 'bugfix/{summary}_{ticket}'). The name can still be edited before creating."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			TextField(
@@ -651,7 +686,7 @@ public struct SettingsView<Updates: View>: View {
 				text: $store.ticketBranchNameTemplate.sending(\.setTicketBranchNameTemplate)
 			)
 			.textFieldStyle(.roundedBorder)
-			.font(.system(.body, design: .monospaced))
+			.scaledFont(.body, design: .monospaced)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
@@ -661,7 +696,7 @@ public struct SettingsView<Updates: View>: View {
 	private var tuistGenerateOptionsSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Tuist Generate Options")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Toggle(
 				"Open Xcode after generating project",
@@ -671,7 +706,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"Automatically open the generated Xcode project after running 'tuist generate'."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 		}
 		.padding()
@@ -682,7 +717,7 @@ public struct SettingsView<Updates: View>: View {
 	private var tuistCacheOptionsSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Tuist Cache Options")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Picker(
 				"Cache Type",
@@ -697,7 +732,7 @@ public struct SettingsView<Updates: View>: View {
 			Text(
 				"Select the cache profile for warming. 'External Only' uses the 'only-external' profile (external dependencies only), while 'All Targets' uses 'all-possible' (internal targets too)."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 		}
 		.padding()
@@ -708,7 +743,7 @@ public struct SettingsView<Updates: View>: View {
 	private var tuistExecutionSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Tuist Execution")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Picker(
 				"Run via",
@@ -726,14 +761,14 @@ public struct SettingsView<Updates: View>: View {
 					text: $store.misePath.sending(\.setMisePath)
 				)
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 
 				Text("Full path to the mise binary. Native install: ~/.local/bin/mise. Homebrew (Apple Silicon): /opt/homebrew/bin/mise.")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			} else {
 				Text("Tuist will be invoked directly from PATH without mise.")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			}
 		}
@@ -745,7 +780,7 @@ public struct SettingsView<Updates: View>: View {
 	private var worktreeOptionsSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Worktree Options")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Toggle(
 				"Delete Xcode DerivedData when removing worktree",
@@ -754,11 +789,11 @@ public struct SettingsView<Updates: View>: View {
 			)
 
 			Text("Automatically deletes the associated Xcode DerivedData folder when a worktree is removed.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Text("Worktree Base Path")
-				.font(.subheadline)
+				.scaledFont(.subheadline)
 				.padding(.top, 4)
 
 			TextField(
@@ -766,12 +801,12 @@ public struct SettingsView<Updates: View>: View {
 				text: $store.worktreeBasePath.sending(\.setWorktreeBasePath)
 			)
 			.textFieldStyle(.roundedBorder)
-			.font(.system(.body, design: .monospaced))
+			.scaledFont(.body, design: .monospaced)
 
 			Text(
 				"Path where new worktrees are created. Can be relative to the repository (e.g. ../worktrees) or absolute."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 		}
 		.padding()
@@ -782,17 +817,17 @@ public struct SettingsView<Updates: View>: View {
 	private var androidStudioPathSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Android Studio Path")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text(
 				"Specify the full path to the Android Studio executable. This is used to open Kotlin files within the project context."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			TextField("Android Studio Path", text: $store.androidStudioPath.sending(\.setAndroidStudioPath))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
@@ -802,15 +837,15 @@ public struct SettingsView<Updates: View>: View {
 	private var repositoryGroupsSection: some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("Repository Groups")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text("Configure which platforms each repository group supports.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			if store.trackedRepoPaths.isEmpty {
 				Text("No repositories tracked yet.")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			}
 			else {
@@ -866,18 +901,18 @@ public struct SettingsView<Updates: View>: View {
 		} label: {
 			HStack(spacing: 6) {
 				Image(systemName: "chevron.right")
-					.font(.caption.weight(.semibold))
+					.scaledFont(.caption, weight: .semibold)
 					.foregroundColor(.secondary)
 					.rotationEffect(.degrees(isExpanded ? 90 : 0))
 					.frame(width: 12)
 
 				Text(URL(fileURLWithPath: groupId).lastPathComponent)
-					.font(.subheadline)
+					.scaledFont(.subheadline)
 					.fontWeight(.semibold)
 
 				if !platforms.isEmpty {
 					Text(platforms.joined(separator: " · "))
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(.secondary)
 				}
 
@@ -918,7 +953,7 @@ public struct SettingsView<Updates: View>: View {
 			if settings.supportsIOS {
 				HStack {
 					Text("iOS Subfolder Path")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(.secondary)
 						.frame(width: 140, alignment: .leading)
 					TextField("e.g. ios/MyApp", text: Binding(
@@ -926,12 +961,12 @@ public struct SettingsView<Updates: View>: View {
 						set: { store.send(.setGroupIOSSubfolderPath(groupId: groupId, path: $0)) }
 					))
 					.textFieldStyle(.roundedBorder)
-					.font(.system(.body, design: .monospaced))
+					.scaledFont(.body, design: .monospaced)
 				}
 
 				HStack {
 					Text("Xcode File Type")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(.secondary)
 						.frame(width: 140, alignment: .leading)
 					Picker("Xcode File Type", selection: Binding(
@@ -950,7 +985,7 @@ public struct SettingsView<Updates: View>: View {
 			if settings.supportsIOS, settings.supportsAndroid {
 				HStack {
 					Text("Mobile Subfolder Path")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(.secondary)
 						.frame(width: 140, alignment: .leading)
 					TextField("e.g. mobile/App", text: Binding(
@@ -958,14 +993,14 @@ public struct SettingsView<Updates: View>: View {
 						set: { store.send(.setGroupMobileSubfolderPath(groupId: groupId, path: $0)) }
 					))
 					.textFieldStyle(.roundedBorder)
-					.font(.system(.body, design: .monospaced))
+					.scaledFont(.body, design: .monospaced)
 				}
 			}
 
 			if settings.supportsWeb {
 				HStack {
 					Text("Web Index Path")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(.secondary)
 						.frame(width: 140, alignment: .leading)
 					TextField("e.g. dist/index.html", text: Binding(
@@ -973,13 +1008,13 @@ public struct SettingsView<Updates: View>: View {
 						set: { store.send(.setGroupWebIndexPath(groupId: groupId, path: $0)) }
 					))
 					.textFieldStyle(.roundedBorder)
-					.font(.system(.body, design: .monospaced))
+					.scaledFont(.body, design: .monospaced)
 				}
 			}
 
 			HStack {
 				Text("Default Branch")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 					.frame(width: 140, alignment: .leading)
 				TextField("master / main (auto)", text: Binding(
@@ -987,12 +1022,12 @@ public struct SettingsView<Updates: View>: View {
 					set: { store.send(.setGroupDefaultBranch(groupId: groupId, value: $0)) }
 				))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 			}
 
 			HStack {
 				Text("Terminal Command")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 					.frame(width: 140, alignment: .leading)
 				TextField("Overrides the global startup command (empty = use global)", text: Binding(
@@ -1000,7 +1035,7 @@ public struct SettingsView<Updates: View>: View {
 					set: { store.send(.setGroupTerminalStartupCommand(groupId: groupId, value: $0)) }
 				))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 			}
 
 			HStack {
@@ -1010,14 +1045,14 @@ public struct SettingsView<Updates: View>: View {
 					get: { settings.skipGlobalTerminalStartupCommand },
 					set: { store.send(.setGroupSkipGlobalTerminalStartupCommand(groupId: groupId, value: $0)) }
 				))
-				.font(.caption)
+				.scaledFont(.caption)
 				// A command of the group's own always wins, so the toggle only matters while it is blank.
 				.disabled(!settings.terminalStartupCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 			}
 
 			HStack {
 				Text("Ticket ID Regex")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 					.frame(width: 140, alignment: .leading)
 				TextField("e.g. MOB-[0-9]+", text: Binding(
@@ -1025,12 +1060,12 @@ public struct SettingsView<Updates: View>: View {
 					set: { store.send(.setGroupTicketIdRegex(groupId: groupId, regex: $0)) }
 				))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 			}
 
 			HStack {
 				Text("YouTrack URL")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 					.frame(width: 140, alignment: .leading)
 				TextField("https://org.youtrack.cloud (empty = disabled)", text: Binding(
@@ -1038,12 +1073,12 @@ public struct SettingsView<Updates: View>: View {
 					set: { store.send(.setGroupYouTrackBaseURL(groupId: groupId, value: $0)) }
 				))
 				.textFieldStyle(.roundedBorder)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 			}
 
 			HStack {
 				Text("New Worktree Dialog Opens On")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 					.frame(width: 140, alignment: .leading)
 				Picker("New Worktree Dialog Opens On", selection: Binding(
@@ -1064,10 +1099,10 @@ public struct SettingsView<Updates: View>: View {
 
 			VStack(alignment: .leading, spacing: 6) {
 				Text("Files to copy into new worktrees")
-					.font(.subheadline)
+					.scaledFont(.subheadline)
 					.fontWeight(.semibold)
 				Text("Relative paths to files or directories copied from this repository into each new worktree.")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 
 				ForEach(Array(settings.worktreeCopyPaths.enumerated()), id: \.offset) { index, path in
@@ -1082,7 +1117,7 @@ public struct SettingsView<Updates: View>: View {
 							}
 						))
 						.textFieldStyle(.roundedBorder)
-						.font(.system(.body, design: .monospaced))
+						.scaledFont(.body, design: .monospaced)
 
 						Button {
 							var updated = settings.worktreeCopyPaths
@@ -1103,7 +1138,7 @@ public struct SettingsView<Updates: View>: View {
 					store.send(.setGroupWorktreeCopyPaths(groupId: groupId, value: updated))
 				} label: {
 					Label("Add path", systemImage: "plus.circle")
-						.font(.caption)
+						.scaledFont(.caption)
 				}
 				.buttonStyle(.borderless)
 				.padding(.top, 2)
