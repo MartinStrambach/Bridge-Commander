@@ -19,6 +19,31 @@ private let terminalProfileContentTypes: [UTType] = [
 /// are initialized lazily, once) rather than on every body evaluation.
 private let installedMonospacedFamilies = TerminalFontFamily.availableMonospacedFamilies()
 
+/// One titled card on a Settings page. Cards span the page's width, so a page's cards line up
+/// whatever their content.
+private struct SettingsSection<Content: View>: View {
+	let title: String
+	let content: Content
+
+	init(_ title: String, @ViewBuilder content: () -> Content) {
+		self.title = title
+		self.content = content()
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text(title)
+				.scaledFont(.headline)
+
+			content
+		}
+		.padding()
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
+	}
+}
+
 /// `Updates` is the Updates section's controls, supplied by the app target: the updater is
 /// Sparkle's, and this package stays free of a Sparkle dependency.
 public struct SettingsView<Updates: View>: View {
@@ -34,53 +59,102 @@ public struct SettingsView<Updates: View>: View {
 	@State
 	private var expandedGroupIds: Set<String> = []
 
+	@Environment(\.uiFontScale)
+	private var uiFontScale
+
+	/// Remembered across launches, so Settings reopens on the page last looked at.
+	@AppStorage("settings.selectedCategory")
+	private var selectedCategory: SettingsCategory = .general
+
 	public init(store: StoreOf<SettingsReducer>, @ViewBuilder updates: () -> Updates) {
 		self.store = store
 		self.updates = updates()
 	}
 
+	/// A sidebar beside the page rather than a `NavigationSplitView`: in the Settings window the
+	/// split view ignored `navigationSplitViewColumnWidth` and opened the sidebar at 144 pt, cutting
+	/// the longer titles.
 	public var body: some View {
-		ScrollView {
-			VStack(alignment: .leading, spacing: 16) {
-				Text("Settings")
-					.scaledFont(.title2)
-					.fontWeight(.bold)
-
-				Divider()
-
-				appearanceSection
-				youtrackAuthenticationSection
-				gitHubAuthenticationSection
-				gitLabAuthenticationSection
-				repositoryRefreshSection
-				branchNameRegexSection
-				HStack(alignment: .top) {
-					tuistCacheOptionsSection
-					tuistGenerateOptionsSection
+		HStack(spacing: 0) {
+			// Ignores nil writes: a click on empty sidebar space would otherwise clear the page.
+			List(selection: Binding(
+				get: { selectedCategory },
+				set: { if let category = $0 { selectedCategory = category } }
+			)) {
+				ForEach(SettingsCategory.allCases) { category in
+					Label(category.title, systemImage: category.systemImage)
+						.tag(category)
 				}
-				tuistExecutionSection
-				HStack(alignment: .top) {
-					terminalBehaviorSection
-					claudeCodeBehaviorSection
-				}
-				terminalColorThemeSection
-				builtInTerminalSection
-				androidStudioPathSection
-				worktreeOptionsSection
-				repositoryGroupsSection
-				updatesSection
 			}
-			.padding()
+			.listStyle(.sidebar)
+			// Grows with the app's text size, which the rows follow.
+			.frame(width: 220 * uiFontScale)
+
+			Divider()
+
+			ScrollView {
+				VStack(alignment: .leading, spacing: 16) {
+					page(for: selectedCategory)
+				}
+				.padding()
+				.frame(maxWidth: .infinity, alignment: .leading)
+			}
+			// A fresh scroll view per page, so switching pages starts at the top.
+			.id(selectedCategory)
 		}
-		.frame(minWidth: 500, idealWidth: 600, minHeight: 600, idealHeight: 800)
+		.navigationTitle(selectedCategory.title)
+		// The minimum fits the widest control on any page (the seven refresh intervals).
+		.frame(minWidth: 940, idealWidth: 1020, minHeight: 560, idealHeight: 720)
 		.alert($store.scope(\.$alert, action: \.alert))
 	}
 
-	private var appearanceSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Appearance")
-				.scaledFont(.headline)
+	@ViewBuilder
+	private func page(for category: SettingsCategory) -> some View {
+		switch category {
+		case .general:
+			appearanceSection
+			repositoryRefreshSection
 
+		case .accounts:
+			youtrackAuthenticationSection
+			gitHubAuthenticationSection
+			gitLabAuthenticationSection
+
+		case .repositoryGroups:
+			repositoryGroupsSection
+
+		case .worktrees:
+			branchNamesSection
+			worktreeOptionsSection
+
+		case .terminal:
+			terminalFontSection
+			terminalColorThemeSection
+			terminalInputSection
+			terminalStartupCommandSection
+			terminalNotificationsSection
+
+		case .externalApps:
+			terminalAppSection
+			claudeCodeBehaviorSection
+			androidStudioPathSection
+
+		case .tuist:
+			tuistExecutionSection
+			tuistCacheOptionsSection
+			tuistGenerateOptionsSection
+
+		case .updates:
+			SettingsSection("Updates") {
+				updates
+			}
+		}
+	}
+
+	// MARK: - General
+
+	private var appearanceSection: some View {
+		SettingsSection("Appearance") {
 			HStack(spacing: 8) {
 				Stepper(
 					value: $store.uiFontSize.sending(\.setUIFontSize),
@@ -98,82 +172,301 @@ public struct SettingsView<Updates: View>: View {
 			}
 
 			Text(
-				"Size of body text across the app; headlines, captions and diffs scale with it. The built-in terminal has its own font size below. Default: \(Int(UIFontSize.default)) pt."
+				"Size of body text across the app; headlines, captions and diffs scale with it. The built-in terminal has its own font size under Terminal. Default: \(Int(UIFontSize.default)) pt."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 		}
-		.padding()
-		.frame(maxWidth: .infinity, alignment: .leading)
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
-	private var terminalBehaviorSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Terminal")
-				.scaledFont(.headline)
-
-			Text("Choose which terminal app opens when clicking the Terminal button.")
+	private var repositoryRefreshSection: some View {
+		SettingsSection("Repository Refresh") {
+			Text("Automatically refresh repository status at the selected interval.")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Picker(
-				"Terminal App",
-				selection: $store.terminalApp.sending(\.setTerminalApp)
+				"Refresh Interval",
+				selection: $store.periodicRefreshInterval.sending(\.setPeriodicRefreshInterval)
 			) {
-				ForEach(TerminalApp.allCases, id: \.self) { app in
-					Text(app.displayName).tag(app)
+				ForEach(PeriodicRefreshInterval.allCases, id: \.self) { interval in
+					Text(interval.displayName).tag(interval)
 				}
 			}
 			.pickerStyle(.segmented)
+			.labelsHidden()
+			.fixedSize()
+		}
+	}
 
-			if store.terminalApp.supportsBehaviorSelection {
-				Picker(
-					"Opening Behavior",
-					selection: $store.terminalOpeningBehavior.sending(\.setTerminalOpeningBehavior)
+	// MARK: - Accounts
+
+	private var youtrackAuthenticationSection: some View {
+		SettingsSection("YouTrack") {
+			Text(
+				"Enter your YouTrack personal access token. This token will be stored locally and used to fetch issue details. Each repository group sets its own YouTrack URL under Repository Groups."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			SecureField("YouTrack Auth Token", text: $store.youtrackAuthToken.sending(\.setYouTrackToken))
+				.textFieldStyle(.roundedBorder)
+				.scaledFont(.body, design: .monospaced)
+
+			HStack(spacing: 8) {
+				Button(action: { store.send(.clearTokenButtonTapped) }) {
+					Label("Clear Token", systemImage: "xmark.circle")
+				}
+				.buttonStyle(.scaledBordered)
+				.foregroundColor(.red)
+
+				Button(action: { store.send(.testYouTrackTokenButtonTapped) }) {
+					Label("Test Connection", systemImage: "checkmark.shield")
+				}
+				.buttonStyle(.scaledBordered)
+				.disabled(store.youtrackTokenTest == .testing)
+			}
+
+			tokenTestResult(store.youtrackTokenTest)
+		}
+	}
+
+	private var gitHubAuthenticationSection: some View {
+		SettingsSection("GitHub") {
+			Text(
+				"Enter a GitHub personal access token. Fine-grained: grant the repository permission \"Pull requests: Read-only\" (Metadata is added automatically). Classic: `repo` scope. Used to detect open PRs for the current branch."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			SecureField("GitHub Token", text: $store.githubToken.sending(\.setGitHubToken))
+				.textFieldStyle(.roundedBorder)
+				.scaledFont(.body, design: .monospaced)
+
+			HStack(spacing: 8) {
+				Button(action: { store.send(.clearGitHubToken) }) {
+					Label("Clear Token", systemImage: "xmark.circle")
+				}
+				.buttonStyle(.scaledBordered)
+				.foregroundColor(.red)
+
+				Button(action: { store.send(.testGitHubTokenButtonTapped) }) {
+					Label("Test Connection", systemImage: "checkmark.shield")
+				}
+				.buttonStyle(.scaledBordered)
+				.disabled(store.githubTokenTest == .testing)
+			}
+
+			tokenTestResult(store.githubTokenTest)
+		}
+	}
+
+	private var gitLabAuthenticationSection: some View {
+		SettingsSection("GitLab") {
+			Text(
+				"Enter a GitLab access token (personal, project, or group) with the `read_api` scope. Fine-grained tokens are not supported — the app uses GitLab's GraphQL API, which they cannot access yet. Used to detect open merge requests for the current branch."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			SecureField("GitLab Token", text: $store.gitlabToken.sending(\.setGitLabToken))
+				.textFieldStyle(.roundedBorder)
+				.scaledFont(.body, design: .monospaced)
+
+			HStack(spacing: 8) {
+				Button(action: { store.send(.clearGitLabToken) }) {
+					Label("Clear Token", systemImage: "xmark.circle")
+				}
+				.buttonStyle(.scaledBordered)
+				.foregroundColor(.red)
+
+				Button(action: { store.send(.testGitLabTokenButtonTapped) }) {
+					Label("Test Connection", systemImage: "checkmark.shield")
+				}
+				.buttonStyle(.scaledBordered)
+				.disabled(store.gitlabTokenTest == .testing)
+			}
+
+			tokenTestResult(store.gitlabTokenTest)
+		}
+	}
+
+	/// Inline verdict shown under a token's buttons. Idle renders nothing so the
+	/// section keeps its compact height until a test has actually run.
+	@ViewBuilder
+	private func tokenTestResult(_ test: TokenTestState) -> some View {
+		switch test {
+		case .idle:
+			EmptyView()
+
+		case .testing:
+			HStack(spacing: 6) {
+				ProgressView()
+					.controlSize(.small)
+				Text("Testing…")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+
+		case let .success(username):
+			HStack(spacing: 6) {
+				Image(systemName: "checkmark.circle.fill")
+					.foregroundColor(.green)
+				Text("Authenticated as \(username)")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+
+		case let .failure(message):
+			HStack(alignment: .firstTextBaseline, spacing: 6) {
+				Image(systemName: "exclamationmark.triangle.fill")
+					.foregroundColor(.orange)
+				Text(message)
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+					.textSelection(.enabled)
+			}
+		}
+	}
+
+	// MARK: - Branches & Worktrees
+
+	private var branchNamesSection: some View {
+		SettingsSection("Branch Names") {
+			Text("Branch Name Regex Pattern")
+				.scaledFont(.subheadline)
+				.fontWeight(.semibold)
+
+			Text(
+				"Specify the regular expression pattern to remove project prefixes from branch names (e.g., '[a-zA-Z]+-\\\\d+[_/]' matches 'MOB-123_' or 'tech-60/')."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			TextField("Branch Name Regex", text: $store.branchNameRegex.sending(\.setBranchNameRegex))
+				.textFieldStyle(.roundedBorder)
+				.scaledFont(.body, design: .monospaced)
+
+			Text("Branch Name for Ticket Worktrees")
+				.scaledFont(.subheadline)
+				.fontWeight(.semibold)
+				.padding(.top, 8)
+
+			Text(
+				"Used when a worktree is created from a YouTrack ticket. {ticket} is the ticket ID, {summary} its summary as lowercase_words (e.g. 'bugfix/{summary}_{ticket}'). The name can still be edited before creating."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			TextField(
+				BranchNameFormatter.defaultTicketBranchTemplate,
+				text: $store.ticketBranchNameTemplate.sending(\.setTicketBranchNameTemplate)
+			)
+			.textFieldStyle(.roundedBorder)
+			.scaledFont(.body, design: .monospaced)
+		}
+	}
+
+	private var worktreeOptionsSection: some View {
+		SettingsSection("Worktrees") {
+			Text("Worktree Base Path")
+				.scaledFont(.subheadline)
+				.fontWeight(.semibold)
+
+			TextField(
+				"Worktree Base Path",
+				text: $store.worktreeBasePath.sending(\.setWorktreeBasePath)
+			)
+			.textFieldStyle(.roundedBorder)
+			.scaledFont(.body, design: .monospaced)
+
+			Text(
+				"Path where new worktrees are created. Can be relative to the repository (e.g. ../worktrees) or absolute."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			Toggle(
+				"Delete Xcode DerivedData when removing worktree",
+				isOn: $store.deleteDerivedDataOnWorktreeDelete
+					.sending(\.setDeleteDerivedDataOnWorktreeDelete)
+			)
+			.padding(.top, 8)
+
+			Text("Automatically deletes the associated Xcode DerivedData folder when a worktree is removed.")
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
+		}
+	}
+
+	// MARK: - Terminal
+
+	/// A stored name that no longer resolves is appended, so the picker still shows what is
+	/// configured instead of silently rewriting it to the default.
+	private var monospacedFontFamilies: [String] {
+		let installed = installedMonospacedFamilies
+		let selected = store.terminalFontName
+		guard !selected.isEmpty, !installed.contains(selected) else { return installed }
+		return installed + [selected]
+	}
+
+	private var terminalFontSection: some View {
+		SettingsSection("Font") {
+			Picker(
+				"Font:",
+				selection: $store.terminalFontName.sending(\.setTerminalFontName)
+			) {
+				Text(TerminalFontFamily.systemDefaultDisplayName)
+					.tag(TerminalFontFamily.systemDefault)
+				Divider()
+				ForEach(monospacedFontFamilies, id: \.self) { family in
+					Text(family)
+						.font(.custom(family, size: NSFont.systemFontSize))
+						.tag(family)
+				}
+			}
+			.fixedSize()
+
+			Text(
+				"Only monospaced fonts are listed — a proportional face would break the terminal's character grid."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			HStack(spacing: 8) {
+				Stepper(
+					value: $store.terminalFontSize.sending(\.setTerminalFontSize),
+					in: TerminalFontSize.minimum ... TerminalFontSize.maximum,
+					step: TerminalFontSize.step
 				) {
-					ForEach(TerminalOpeningBehavior.allCases, id: \.self) { behavior in
-						Text(behavior.displayName).tag(behavior)
-					}
+					Text("Font size: \(Int(store.terminalFontSize)) pt")
 				}
-				.pickerStyle(.segmented)
+
+				// A sample rather than a live preview of a pane: the font and its size are what
+				// change, and seeing them is enough to pick without applying first.
+				Text("Aa")
+					.font(
+						Font(
+							TerminalFontFamily.resolve(
+								name: store.terminalFontName,
+								size: store.terminalFontSize
+							)
+						)
+					)
+					.foregroundColor(.secondary)
+					.frame(minWidth: 40, alignment: .leading)
 			}
+
+			Text(
+				"Applies to open terminals right away. Also available as ⌘+ and ⌘− while a terminal is focused, with ⌘0 back to \(Int(TerminalFontSize.default)) pt."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
 		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	private var claudeCodeBehaviorSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Claude Code Opening Behavior")
-				.scaledFont(.headline)
-
-			Text("Choose how Claude Code should open when clicking the Claude Code button.")
-				.scaledFont(.caption)
-				.foregroundColor(.secondary)
-
-			Picker(
-				"Opening Behavior",
-				selection: $store.claudeCodeOpeningBehavior.sending(\.setClaudeCodeOpeningBehavior)
-			) {
-				ForEach(TerminalOpeningBehavior.allCases, id: \.self) { behavior in
-					Text(behavior.displayName).tag(behavior)
-				}
-			}
-			.pickerStyle(.segmented)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
 	private var terminalColorThemeSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Terminal Color Theme")
-				.scaledFont(.headline)
-
+		SettingsSection("Color Theme") {
 			Text("Choose the color theme for the built-in terminal. Applies to newly opened terminals.")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
@@ -196,6 +489,7 @@ public struct SettingsView<Updates: View>: View {
 				}
 			}
 			.pickerStyle(.menu)
+			.fixedSize()
 
 			Divider()
 				.padding(.vertical, 2)
@@ -235,9 +529,6 @@ public struct SettingsView<Updates: View>: View {
 				.padding(.top, 4)
 			}
 		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 		.fileImporter(
 			isPresented: $isImportingProfileFiles,
 			allowedContentTypes: terminalProfileContentTypes,
@@ -328,71 +619,8 @@ public struct SettingsView<Updates: View>: View {
 		.frame(width: 100, alignment: .leading)
 	}
 
-	/// A stored name that no longer resolves is appended, so the picker still shows what is
-	/// configured instead of silently rewriting it to the default.
-	private var monospacedFontFamilies: [String] {
-		let installed = installedMonospacedFamilies
-		let selected = store.terminalFontName
-		guard !selected.isEmpty, !installed.contains(selected) else { return installed }
-		return installed + [selected]
-	}
-
-	private var builtInTerminalSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Built-in Terminal")
-				.scaledFont(.headline)
-
-			Picker(
-				"Font:",
-				selection: $store.terminalFontName.sending(\.setTerminalFontName)
-			) {
-				Text(TerminalFontFamily.systemDefaultDisplayName)
-					.tag(TerminalFontFamily.systemDefault)
-				Divider()
-				ForEach(monospacedFontFamilies, id: \.self) { family in
-					Text(family)
-						.font(.custom(family, size: NSFont.systemFontSize))
-						.tag(family)
-				}
-			}
-			.frame(maxWidth: 320)
-
-			Text(
-				"Only monospaced fonts are listed — a proportional face would break the terminal's character grid."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
-			HStack(spacing: 8) {
-				Stepper(
-					value: $store.terminalFontSize.sending(\.setTerminalFontSize),
-					in: TerminalFontSize.minimum ... TerminalFontSize.maximum,
-					step: TerminalFontSize.step
-				) {
-					Text("Font size: \(Int(store.terminalFontSize)) pt")
-				}
-
-				// A sample rather than a live preview of a pane: the font and its size are what
-				// change, and seeing them is enough to pick without applying first.
-				Text("Aa")
-					.font(
-						Font(
-							TerminalFontFamily.resolve(
-								name: store.terminalFontName,
-								size: store.terminalFontSize
-							)
-						)
-					)
-					.foregroundColor(.secondary)
-					.frame(minWidth: 40, alignment: .leading)
-			}
-
-			Text(
-				"Applies to open terminals right away. Also available as ⌘+ and ⌘− while a terminal is focused, with ⌘0 back to \(Int(TerminalFontSize.default)) pt."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
+	private var terminalInputSection: some View {
+		SettingsSection("Selection & Mouse") {
 			Toggle(
 				"Copy selected text automatically",
 				isOn: $store.terminalCopyOnSelect.sending(\.setTerminalCopyOnSelect)
@@ -414,7 +642,11 @@ public struct SettingsView<Updates: View>: View {
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
+		}
+	}
 
+	private var terminalStartupCommandSection: some View {
+		SettingsSection("Startup Command") {
 			HStack {
 				Text("Startup command:")
 				TextField("Run in each new built-in terminal (empty = none)", text: Binding(
@@ -426,7 +658,7 @@ public struct SettingsView<Updates: View>: View {
 			}
 
 			Text(
-				"Typed into a repository's first built-in terminal tab once its shell is ready. A repository group's own Terminal Command replaces it for that group's tabs."
+				"Typed into a repository's first built-in terminal tab once its shell is ready. A repository group's own Terminal Command (under Repository Groups) replaces it for that group's tabs."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
@@ -441,7 +673,11 @@ public struct SettingsView<Updates: View>: View {
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
+		}
+	}
 
+	private var terminalNotificationsSection: some View {
+		SettingsSection("Notifications & Claude Code") {
 			Toggle(
 				"Show notifications from terminal tabs",
 				isOn: $store.terminalNotifications.sending(\.setTerminalNotifications)
@@ -461,290 +697,85 @@ public struct SettingsView<Updates: View>: View {
 					Text(detection.displayName).tag(detection)
 				}
 			}
-			.frame(maxWidth: 420)
+			.fixedSize()
 
 			Text("\(store.terminalClaudeStatusDetection.explanation) Applies to terminals opened after the change.")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 		}
-		.frame(maxWidth: .infinity, alignment: .leading)
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
-	private var youtrackAuthenticationSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("YouTrack Authentication")
-				.scaledFont(.headline)
+	// MARK: - External Apps
 
-			Text(
-				"Enter your YouTrack personal access token. This token will be stored locally and used to fetch issue details."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
-			SecureField("YouTrack Auth Token", text: $store.youtrackAuthToken.sending(\.setYouTrackToken))
-				.textFieldStyle(.roundedBorder)
-				.scaledFont(.body, design: .monospaced)
-
-			HStack(spacing: 8) {
-				Button(action: { store.send(.clearTokenButtonTapped) }) {
-					Label("Clear Token", systemImage: "xmark.circle")
-				}
-				.buttonStyle(.scaledBordered)
-				.foregroundColor(.red)
-
-				Button(action: { store.send(.testYouTrackTokenButtonTapped) }) {
-					Label("Test Connection", systemImage: "checkmark.shield")
-				}
-				.buttonStyle(.scaledBordered)
-				.disabled(store.youtrackTokenTest == .testing)
-			}
-
-			tokenTestResult(store.youtrackTokenTest)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	private var gitHubAuthenticationSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("GitHub Authentication")
-				.scaledFont(.headline)
-
-			Text(
-				"Enter a GitHub personal access token. Fine-grained: grant the repository permission \"Pull requests: Read-only\" (Metadata is added automatically). Classic: `repo` scope. Used to detect open PRs for the current branch."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
-			SecureField("GitHub Token", text: $store.githubToken.sending(\.setGitHubToken))
-				.textFieldStyle(.roundedBorder)
-				.scaledFont(.body, design: .monospaced)
-
-			HStack(spacing: 8) {
-				Button(action: { store.send(.clearGitHubToken) }) {
-					Label("Clear Token", systemImage: "xmark.circle")
-				}
-				.buttonStyle(.scaledBordered)
-				.foregroundColor(.red)
-
-				Button(action: { store.send(.testGitHubTokenButtonTapped) }) {
-					Label("Test Connection", systemImage: "checkmark.shield")
-				}
-				.buttonStyle(.scaledBordered)
-				.disabled(store.githubTokenTest == .testing)
-			}
-
-			tokenTestResult(store.githubTokenTest)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	private var gitLabAuthenticationSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("GitLab Authentication")
-				.scaledFont(.headline)
-
-			Text(
-				"Enter a GitLab access token (personal, project, or group) with the `read_api` scope. Fine-grained tokens are not supported — the app uses GitLab's GraphQL API, which they cannot access yet. Used to detect open merge requests for the current branch."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
-			SecureField("GitLab Token", text: $store.gitlabToken.sending(\.setGitLabToken))
-				.textFieldStyle(.roundedBorder)
-				.scaledFont(.body, design: .monospaced)
-
-			HStack(spacing: 8) {
-				Button(action: { store.send(.clearGitLabToken) }) {
-					Label("Clear Token", systemImage: "xmark.circle")
-				}
-				.buttonStyle(.scaledBordered)
-				.foregroundColor(.red)
-
-				Button(action: { store.send(.testGitLabTokenButtonTapped) }) {
-					Label("Test Connection", systemImage: "checkmark.shield")
-				}
-				.buttonStyle(.scaledBordered)
-				.disabled(store.gitlabTokenTest == .testing)
-			}
-
-			tokenTestResult(store.gitlabTokenTest)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	/// Inline verdict shown under a token's buttons. Idle renders nothing so the
-	/// section keeps its compact height until a test has actually run.
-	@ViewBuilder
-	private func tokenTestResult(_ test: TokenTestState) -> some View {
-		switch test {
-		case .idle:
-			EmptyView()
-
-		case .testing:
-			HStack(spacing: 6) {
-				ProgressView()
-					.controlSize(.small)
-				Text("Testing…")
-					.scaledFont(.caption)
-					.foregroundColor(.secondary)
-			}
-
-		case let .success(username):
-			HStack(spacing: 6) {
-				Image(systemName: "checkmark.circle.fill")
-					.foregroundColor(.green)
-				Text("Authenticated as \(username)")
-					.scaledFont(.caption)
-					.foregroundColor(.secondary)
-			}
-
-		case let .failure(message):
-			HStack(alignment: .firstTextBaseline, spacing: 6) {
-				Image(systemName: "exclamationmark.triangle.fill")
-					.foregroundColor(.orange)
-				Text(message)
-					.scaledFont(.caption)
-					.foregroundColor(.secondary)
-					.textSelection(.enabled)
-			}
-		}
-	}
-
-	private var updatesSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Updates")
-				.scaledFont(.headline)
-
-			updates
-		}
-		.frame(maxWidth: .infinity, alignment: .leading)
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	private var repositoryRefreshSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Repository Refresh")
-				.scaledFont(.headline)
-
-			Text("Automatically refresh repository status at the selected interval.")
+	private var terminalAppSection: some View {
+		SettingsSection("Terminal App") {
+			Text("Choose which terminal app opens when clicking the Terminal button.")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Picker(
-				"Refresh Interval",
-				selection: $store.periodicRefreshInterval.sending(\.setPeriodicRefreshInterval)
+				"Terminal App",
+				selection: $store.terminalApp.sending(\.setTerminalApp)
 			) {
-				ForEach(PeriodicRefreshInterval.allCases, id: \.self) { interval in
-					Text(interval.displayName).tag(interval)
+				ForEach(TerminalApp.allCases, id: \.self) { app in
+					Text(app.displayName).tag(app)
 				}
 			}
 			.pickerStyle(.segmented)
+			.fixedSize()
+
+			if store.terminalApp.supportsBehaviorSelection {
+				Picker(
+					"Opening Behavior",
+					selection: $store.terminalOpeningBehavior.sending(\.setTerminalOpeningBehavior)
+				) {
+					ForEach(TerminalOpeningBehavior.allCases, id: \.self) { behavior in
+						Text(behavior.displayName).tag(behavior)
+					}
+				}
+				.pickerStyle(.segmented)
+				.fixedSize()
+			}
 		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
-	private var branchNameRegexSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Branch Name Regex Pattern")
-				.scaledFont(.headline)
-
-			Text(
-				"Specify the regular expression pattern to remove project prefixes from branch names (e.g., '[a-zA-Z]+-\\\\d+[_/]' matches 'MOB-123_' or 'tech-60/')."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
-			TextField("Branch Name Regex", text: $store.branchNameRegex.sending(\.setBranchNameRegex))
-				.textFieldStyle(.roundedBorder)
-				.scaledFont(.body, design: .monospaced)
-
-			Text("Branch Name for Ticket Worktrees")
-				.scaledFont(.headline)
-				.padding(.top, 8)
-
-			Text(
-				"Used when a worktree is created from a YouTrack ticket. {ticket} is the ticket ID, {summary} its summary as lowercase_words (e.g. 'bugfix/{summary}_{ticket}'). The name can still be edited before creating."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
-			TextField(
-				BranchNameFormatter.defaultTicketBranchTemplate,
-				text: $store.ticketBranchNameTemplate.sending(\.setTicketBranchNameTemplate)
-			)
-			.textFieldStyle(.roundedBorder)
-			.scaledFont(.body, design: .monospaced)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	private var tuistGenerateOptionsSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Tuist Generate Options")
-				.scaledFont(.headline)
-
-			Toggle(
-				"Open Xcode after generating project",
-				isOn: $store.openXcodeAfterGenerate.sending(\.setOpenXcodeAfterGenerate)
-			)
-
-			Text(
-				"Automatically open the generated Xcode project after running 'tuist generate'."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
-
-	private var tuistCacheOptionsSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Tuist Cache Options")
-				.scaledFont(.headline)
+	private var claudeCodeBehaviorSection: some View {
+		SettingsSection("Claude Code") {
+			Text("Choose how Claude Code should open when clicking the Claude Code button.")
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
 
 			Picker(
-				"Cache Type",
-				selection: $store.tuistCacheType.sending(\.setTuistCacheType)
+				"Opening Behavior",
+				selection: $store.claudeCodeOpeningBehavior.sending(\.setClaudeCodeOpeningBehavior)
 			) {
-				ForEach(TuistCacheType.allCases, id: \.self) { cacheType in
-					Text(cacheType.displayName).tag(cacheType)
+				ForEach(TerminalOpeningBehavior.allCases, id: \.self) { behavior in
+					Text(behavior.displayName).tag(behavior)
 				}
 			}
 			.pickerStyle(.segmented)
+			.fixedSize()
+		}
+	}
 
+	private var androidStudioPathSection: some View {
+		SettingsSection("Android Studio") {
 			Text(
-				"Select the cache profile for warming. 'External Only' uses the 'only-external' profile (external dependencies only), while 'All Targets' uses 'all-possible' (internal targets too)."
+				"Specify the full path to the Android Studio executable. This is used to open Kotlin files within the project context."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
+
+			TextField("Android Studio Path", text: $store.androidStudioPath.sending(\.setAndroidStudioPath))
+				.textFieldStyle(.roundedBorder)
+				.scaledFont(.body, design: .monospaced)
 		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
-	private var tuistExecutionSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Tuist Execution")
-				.scaledFont(.headline)
+	// MARK: - Tuist
 
+	private var tuistExecutionSection: some View {
+		SettingsSection("Execution") {
 			Picker(
 				"Run via",
 				selection: $store.tuistRunMode.sending(\.setTuistRunMode)
@@ -754,6 +785,7 @@ public struct SettingsView<Updates: View>: View {
 				}
 			}
 			.pickerStyle(.segmented)
+			.fixedSize()
 
 			if store.tuistRunMode == .mise {
 				TextField(
@@ -772,73 +804,48 @@ public struct SettingsView<Updates: View>: View {
 					.foregroundColor(.secondary)
 			}
 		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
-	private var worktreeOptionsSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Worktree Options")
-				.scaledFont(.headline)
+	private var tuistCacheOptionsSection: some View {
+		SettingsSection("Cache") {
+			Picker(
+				"Cache Type",
+				selection: $store.tuistCacheType.sending(\.setTuistCacheType)
+			) {
+				ForEach(TuistCacheType.allCases, id: \.self) { cacheType in
+					Text(cacheType.displayName).tag(cacheType)
+				}
+			}
+			.pickerStyle(.segmented)
+			.fixedSize()
 
+			Text(
+				"Select the cache profile for warming. 'External Only' uses the 'only-external' profile (external dependencies only), while 'All Targets' uses 'all-possible' (internal targets too)."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+		}
+	}
+
+	private var tuistGenerateOptionsSection: some View {
+		SettingsSection("Generate") {
 			Toggle(
-				"Delete Xcode DerivedData when removing worktree",
-				isOn: $store.deleteDerivedDataOnWorktreeDelete
-					.sending(\.setDeleteDerivedDataOnWorktreeDelete)
+				"Open Xcode after generating project",
+				isOn: $store.openXcodeAfterGenerate.sending(\.setOpenXcodeAfterGenerate)
 			)
-
-			Text("Automatically deletes the associated Xcode DerivedData folder when a worktree is removed.")
-				.scaledFont(.caption)
-				.foregroundColor(.secondary)
-
-			Text("Worktree Base Path")
-				.scaledFont(.subheadline)
-				.padding(.top, 4)
-
-			TextField(
-				"Worktree Base Path",
-				text: $store.worktreeBasePath.sending(\.setWorktreeBasePath)
-			)
-			.textFieldStyle(.roundedBorder)
-			.scaledFont(.body, design: .monospaced)
 
 			Text(
-				"Path where new worktrees are created. Can be relative to the repository (e.g. ../worktrees) or absolute."
+				"Automatically open the generated Xcode project after running 'tuist generate'."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
-	private var androidStudioPathSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Android Studio Path")
-				.scaledFont(.headline)
-
-			Text(
-				"Specify the full path to the Android Studio executable. This is used to open Kotlin files within the project context."
-			)
-			.scaledFont(.caption)
-			.foregroundColor(.secondary)
-
-			TextField("Android Studio Path", text: $store.androidStudioPath.sending(\.setAndroidStudioPath))
-				.textFieldStyle(.roundedBorder)
-				.scaledFont(.body, design: .monospaced)
-		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
-	}
+	// MARK: - Repository Groups
 
 	private var repositoryGroupsSection: some View {
-		VStack(alignment: .leading, spacing: 8) {
-			Text("Repository Groups")
-				.scaledFont(.headline)
-
+		SettingsSection("Repository Groups") {
 			Text("Configure which platforms each repository group supports.")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
@@ -860,9 +867,6 @@ public struct SettingsView<Updates: View>: View {
 				}
 			}
 		}
-		.padding()
-		.background(Color(NSColor.controlBackgroundColor))
-		.cornerRadius(8)
 	}
 
 	private func repoGroupRow(groupId: String) -> some View {
