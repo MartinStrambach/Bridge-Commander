@@ -8,6 +8,9 @@ public nonisolated enum YouTrackServiceError: Error {
 	case missingBaseURL
 	case invalidURL
 	case httpFailure(statusCode: Int)
+	/// A 200 whose body is not what the YouTrack API returns — usually a base URL that points
+	/// at another web page.
+	case unexpectedResponse
 }
 
 public nonisolated enum YouTrackService {

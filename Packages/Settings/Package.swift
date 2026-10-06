@@ -28,6 +28,7 @@ let package = Package(
             dependencies: [
                 "Settings",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+                .product(name: "ToolsIntegration", package: "ToolsIntegration"),
             ]
         ),
     ]

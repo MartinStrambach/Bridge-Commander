@@ -445,11 +445,21 @@ public struct SettingsView: View {
 				.textFieldStyle(.roundedBorder)
 				.font(.system(.body, design: .monospaced))
 
-			Button(action: { store.send(.clearTokenButtonTapped) }) {
-				Label("Clear Token", systemImage: "xmark.circle")
+			HStack(spacing: 8) {
+				Button(action: { store.send(.clearTokenButtonTapped) }) {
+					Label("Clear Token", systemImage: "xmark.circle")
+				}
+				.buttonStyle(.bordered)
+				.foregroundColor(.red)
+
+				Button(action: { store.send(.testYouTrackTokenButtonTapped) }) {
+					Label("Test Connection", systemImage: "checkmark.shield")
+				}
+				.buttonStyle(.bordered)
+				.disabled(store.youtrackTokenTest == .testing)
 			}
-			.buttonStyle(.bordered)
-			.foregroundColor(.red)
+
+			tokenTestResult(store.youtrackTokenTest)
 		}
 		.padding()
 		.background(Color(NSColor.controlBackgroundColor))
