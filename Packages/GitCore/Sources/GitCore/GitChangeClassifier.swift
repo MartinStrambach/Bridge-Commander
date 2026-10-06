@@ -39,7 +39,7 @@ nonisolated struct GitWatchTarget: Equatable, Sendable {
 	let workTree: String
 	/// Per-worktree state: `HEAD`, `index`, `MERGE_HEAD`… (`.git/worktrees/<name>` for a linked one).
 	let gitDirectory: String
-	/// Shared by all worktrees: `refs/`, `packed-refs`, `worktrees/`.
+	/// Shared by all worktrees: `refs/`, `packed-refs`, `config`, `worktrees/`.
 	let commonGitDirectory: String
 
 	init(repositoryPath: String, workTree: String, gitDirectory: String, commonGitDirectory: String) {
@@ -119,6 +119,8 @@ nonisolated enum GitChangeClassifier {
 		"REVERT_HEAD",
 		"rebase-merge",
 		"rebase-apply",
+		// `extensions.worktreeConfig`'s per-worktree settings, which can include an upstream.
+		"config.worktree",
 	]
 
 	/// The file a reftable repository (`git init --ref-format=reftable`, the default from git 3.0)
@@ -234,8 +236,18 @@ nonisolated enum GitChangeClassifier {
 				result.kinds[target.repositoryPath, default: []].insert(.status)
 			}
 
-		case "worktrees" where components.count == 2 && event.isCreatedOrRemoved:
-			// `git worktree add` creates `worktrees/<name>`, `remove`/`prune` deletes it. Changes
+		case "config" where components.count == 1:
+			// `git branch -u`/`--unset-upstream` write only here, yet move the upstream `git status`
+			// counts against. Branch settings are shared, and the file rarely changes.
+			for target in sharing {
+				result.kinds[target.repositoryPath, default: []].insert(.status)
+			}
+
+		case "worktrees"
+			where (components.count == 2 && event.isCreatedOrRemoved)
+			|| (components.count == 3 && components[2] == "gitdir"):
+			// `git worktree add` creates `worktrees/<name>`, `remove`/`prune` deletes it, and
+			// `move` (or `repair`) only rewrites its `gitdir` — the worktree's path. Other changes
 			// inside an existing one are its own `HEAD`/`index`, handled above.
 			let main = sharing.first { $0.gitDirectory == commonGitDirectory } ?? sharing.first
 			if let main {

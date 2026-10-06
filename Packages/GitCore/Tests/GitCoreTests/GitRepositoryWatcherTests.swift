@@ -28,13 +28,17 @@ struct GitRepositoryWatcherTests {
 		GitChangeClassifier.classify(events, targets: [main, feature])
 	}
 
-	@Test(arguments: ["HEAD", "index", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge/done"])
+	@Test(arguments: [
+		"HEAD", "index", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge/done", "config.worktree",
+	])
 	func perWorktreeStateRefreshesOnlyItsOwnWorktree(entry: String) {
 		#expect(classify(FileSystemEvent(path: "/r/.git/" + entry)).kinds == ["/r": .status])
 		#expect(classify(FileSystemEvent(path: "/r/.git/worktrees/feature/" + entry)).kinds == ["/r-feature": .status])
 	}
 
-	@Test(arguments: ["/r/.git/refs/heads/main", "/r/.git/refs/remotes/origin/feature", "/r/.git/packed-refs"])
+	@Test(arguments: [
+		"/r/.git/refs/heads/main", "/r/.git/refs/remotes/origin/feature", "/r/.git/packed-refs", "/r/.git/config",
+	])
 	func sharedRefsRefreshEveryWorktree(path: String) {
 		#expect(classify(FileSystemEvent(path: path)).kinds == ["/r": .status, "/r-feature": .status])
 	}
@@ -84,8 +88,21 @@ struct GitRepositoryWatcherTests {
 	}
 
 	@Test
+	func movingAWorktreeAsksForTheListAgain() {
+		// `git worktree move` writes the new path here and nothing else in the git directory.
+		let moved = classify(FileSystemEvent(path: "/r/.git/worktrees/feature/gitdir"))
+		#expect(moved.kinds == ["/r": .worktreeList])
+	}
+
+	@Test
 	func modifyingAWorktreeEntryIsNotAListChange() {
 		#expect(classify(FileSystemEvent(path: "/r/.git/worktrees/feature")) == .init())
+		#expect(classify(FileSystemEvent(path: "/r/.git/worktrees/feature/commondir")) == .init())
+	}
+
+	@Test
+	func configInsideAWorktreeEntryIsNotTheSharedConfig() {
+		#expect(classify(FileSystemEvent(path: "/r/.git/worktrees/feature/config")) == .init())
 	}
 
 	@Test
@@ -251,6 +268,20 @@ struct GitRepositoryWatcherTests {
 	}
 
 	@Test
+	func settingAnUpstreamInATerminalIsReported() async throws {
+		let repository = try await Repository()
+		defer { repository.remove() }
+		try await repository.git("remote", "add", "origin", "/nonexistent")
+		try await repository.git("update-ref", "refs/remotes/origin/main", "HEAD")
+
+		// Writes only `.git/config`, yet changes what `git status` counts against.
+		let changes = try await firstChange(watching: [repository.path]) {
+			_ = await ProcessRunner.runGit(arguments: ["branch", "-u", "origin/main"], at: repository.path)
+		}
+		#expect(changes.map(\.repositoryPath) == [repository.path])
+	}
+
+	@Test
 	func aPathThatBecomesARepositoryLaterIsWatchedOnceItDoes() async throws {
 		let directory = GitWatchTarget.canonicalPath(Repository.makeDirectory())
 		defer { try? FileManager.default.removeItem(atPath: directory) }
@@ -392,6 +423,24 @@ struct GitRepositoryWatcherTests {
 
 		let changes = try await firstChange(watching: [repository.path], matching: .worktreeList) {
 			_ = await ProcessRunner.runGit(arguments: ["worktree", "add", "-b", "added", worktree], at: repository.path)
+		}
+		#expect(changes.contains { $0.repositoryPath == repository.path && $0.kinds.contains(.worktreeList) })
+	}
+
+	@Test
+	func worktreeMovedInATerminalIsReported() async throws {
+		let repository = try await Repository()
+		let worktree = repository.path + "-feature"
+		let moved = repository.path + "-moved"
+		defer {
+			repository.remove()
+			try? FileManager.default.removeItem(atPath: worktree)
+			try? FileManager.default.removeItem(atPath: moved)
+		}
+		try await repository.git("worktree", "add", "-b", "feature", worktree)
+
+		let changes = try await firstChange(watching: [repository.path, worktree], matching: .worktreeList) {
+			_ = await ProcessRunner.runGit(arguments: ["worktree", "move", worktree, moved], at: repository.path)
 		}
 		#expect(changes.contains { $0.repositoryPath == repository.path && $0.kinds.contains(.worktreeList) })
 	}
