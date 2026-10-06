@@ -22,7 +22,7 @@ struct UpdateSettingsView: View {
 				)
 			)
 
-			Text("Checks about once a day.")
+			Text("Checks every 12 hours.")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
