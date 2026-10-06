@@ -40,11 +40,11 @@ struct RepositoryListReducer {
 		/// Whether the main window is on screen. The store and the terminals outlive it (the menu
 		/// bar extra keeps showing them), so the panel's active tab alone no longer means the user
 		/// can see it.
-		var isWindowOpen = false
+		fileprivate(set) var isWindowOpen = false
 		/// Bumped whenever something outside the window — the menu bar extra, a clicked
 		/// notification — needs the main window shown. A reducer cannot open a window, so the menu
 		/// bar's label, which is always on screen, watches this and opens it.
-		var mainWindowRequestCount = 0
+		fileprivate(set) var mainWindowRequestCount = 0
 
 		/// Worktrees just created with a terminal follow-up, keyed by their symlink-resolved path.
 		/// The row does not exist until a scan finds the worktree, so the terminal opens from
@@ -109,7 +109,6 @@ struct RepositoryListReducer {
 		case terminalNotificationTapped(sessionId: UUID)
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
-		case menuBar(MenuBarAction)
 		case refreshRepositories
 		/// Reopens the tabs saved when the window last closed. Once per launch.
 		case restoreTerminalTabs
@@ -128,6 +127,7 @@ struct RepositoryListReducer {
 			/// every row while the main window is closed would otherwise have nothing to show.
 			case appeared
 			case openWindowButtonTapped
+			case quitButtonTapped
 			case refreshButtonTapped
 			/// Opens the main window on that tab, as clicking its notification does.
 			case waitingSessionTapped(sessionId: UUID)
@@ -141,6 +141,7 @@ struct RepositoryListReducer {
 			case dismissAccessibilityPermissionWarningButtonTapped
 			case dismissPermissionWarningButtonTapped
 			case groupSettingsChanged
+			case menuBar(MenuBarAction)
 			case onAppear
 			case onDisappear
 			case openAccessibilitySettingsButtonTapped
@@ -293,13 +294,13 @@ struct RepositoryListReducer {
 					await terminalNotificationClient.activateApp()
 				}
 
-			case .menuBar(.openWindowButtonTapped):
+			case .view(.menuBar(.openWindowButtonTapped)):
 				state.mainWindowRequestCount += 1
 				return .run { [terminalNotificationClient] _ in
 					await terminalNotificationClient.activateApp()
 				}
 
-			case .menuBar(.appeared):
+			case .view(.menuBar(.appeared)):
 				let unloaded = state.repositoryGroups.flatMap { group in
 					([group.header] + group.worktrees)
 						.filter { !$0.isLoaded }
@@ -324,10 +325,13 @@ struct RepositoryListReducer {
 					}
 				}
 
-			case .menuBar(.refreshButtonTapped):
+			case .view(.menuBar(.quitButtonTapped)):
+				return quitApp()
+
+			case .view(.menuBar(.refreshButtonTapped)):
 				return .send(.refreshRepositories)
 
-			case let .menuBar(.waitingSessionTapped(sessionId)):
+			case let .view(.menuBar(.waitingSessionTapped(sessionId))):
 				return .send(.terminalNotificationTapped(sessionId: sessionId))
 
 			case .restoreTerminalTabs:
@@ -1124,13 +1128,7 @@ struct RepositoryListReducer {
 				return .send(.terminalLayout(.killTab(sessionId: sessionId)))
 
 			case .alert(.presented(.quitAppConfirmed)):
-				// The sessions are hung up by `killSessions(notIn:)` on the way out; terminate
-				// runs on the main actor because it drives AppKit's own shutdown sequence.
-				return .run { _ in
-					await MainActor.run {
-						NSApplication.shared.terminate(nil)
-					}
-				}
+				return quitApp()
 
 			case .alert:
 				return .none
@@ -1200,6 +1198,16 @@ struct RepositoryListReducer {
 				return
 			}
 			await client.post(content)
+		}
+	}
+
+	/// Terminate runs on the main actor because it drives AppKit's own shutdown sequence, which is
+	/// also when `RepositoryAppModel` saves the tabs.
+	private func quitApp() -> Effect<Action> {
+		.run { _ in
+			await MainActor.run {
+				NSApplication.shared.terminate(nil)
+			}
 		}
 	}
 

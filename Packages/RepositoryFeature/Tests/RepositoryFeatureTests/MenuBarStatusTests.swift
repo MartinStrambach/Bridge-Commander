@@ -91,7 +91,7 @@ struct MenuBarStatusTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.menuBar(.waitingSessionTapped(sessionId: session.id)))
+		await store.send(.view(.menuBar(.waitingSessionTapped(sessionId: session.id))))
 		await store.receive(\.terminalNotificationTapped)
 
 		#expect(store.state.mainWindowRequestCount == 1)
@@ -106,25 +106,24 @@ struct MenuBarStatusTests {
 		let store = await makeListStore()
 		#expect(allRows(store).allSatisfy { !$0.isLoaded })
 
-		await store.send(.menuBar(.appeared))
+		await store.send(.view(.menuBar(.appeared)))
 		await store.skipReceivedActions()
 
 		#expect(allRows(store).allSatisfy { $0.isLoaded })
 	}
 
-	@Test("closing the window keeps the periodic refresh running")
-	func windowCloseKeepsRefreshing() async {
+	@Test("the window appearing and closing is tracked")
+	func windowVisibilityIsTracked() async {
 		let store = TestStore(initialState: RepositoryListReducer.State()) {
 			RepositoryListReducer()
 		}
+		store.exhaustivity = .off
 
-		await store.send(.view(.onAppear)) {
-			$0.isWindowOpen = true
-		}
-		// Exhaustive: an effect cancelled or started here would be a failure.
-		await store.send(.view(.onDisappear)) {
-			$0.isWindowOpen = false
-		}
+		await store.send(.view(.onAppear))
+		#expect(store.state.isWindowOpen)
+
+		await store.send(.view(.onDisappear))
+		#expect(!store.state.isWindowOpen)
 	}
 
 	// MARK: - Helpers

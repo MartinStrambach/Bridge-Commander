@@ -84,7 +84,6 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.isWindowOpen = true
 		state.terminalSessions = [session]
 		state.terminalLayout = TerminalLayoutReducer.State()
 		state.terminalLayout?.activate(session)
@@ -93,7 +92,11 @@ struct RepositoryListNotificationTests {
 		} withDependencies: {
 			$0[TerminalNotificationClient.self].isAppActive = { true }
 		}
+		// Non-exhaustive only to reach an open window; an unexpected `post` still fails, as the
+		// dependency is unimplemented.
+		store.exhaustivity = .off
 
+		await store.send(.view(.onAppear))
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
 			$0.terminalSessions[id: session.id]?.status = .waitingForInput
 		}
@@ -205,10 +208,12 @@ struct RepositoryListNotificationTests {
 			$0[TerminalNotificationClient.self].activateApp = { activated.setValue(true) }
 		}
 
-		await store.send(.terminalNotificationTapped(sessionId: UUID())) {
-			$0.mainWindowRequestCount = 1
-		}
+		store.exhaustivity = .off
+
+		await store.send(.terminalNotificationTapped(sessionId: UUID()))
 		#expect(activated.value)
+		// The window may have been closed; activating the app alone would not bring it back.
+		#expect(store.state.mainWindowRequestCount == 1)
 	}
 
 	@Test("the panel's active tab is not on screen while the window is closed, so it still posts")
@@ -216,7 +221,6 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.isWindowOpen = true
 		state.terminalSessions = [session]
 		state.terminalLayout = TerminalLayoutReducer.State()
 		state.terminalLayout?.activate(session)
@@ -228,12 +232,11 @@ struct RepositoryListNotificationTests {
 			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
 		}
 
-		await store.send(.view(.onDisappear)) {
-			$0.isWindowOpen = false
-		}
-		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
-		}
+		store.exhaustivity = .off
+
+		await store.send(.view(.onAppear))
+		await store.send(.view(.onDisappear))
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput)))
 		#expect(posted.value.map(\.sessionId) == [session.id])
 	}
 

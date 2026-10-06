@@ -39,15 +39,25 @@ public struct MenuBarStatusLabel: View {
 // MARK: - Content
 
 /// The menu bar extra's window: the tabs waiting on the user, and where each repository's branch
-/// stands against its remote.
+/// stands against its remote. A public wrapper, like `RootRepositoryView`: `@ViewAction` needs a
+/// `store` as visible as the view, and the reducer is internal.
 public struct MenuBarStatusView: View {
-	private let store: StoreOf<RepositoryListReducer>
+	private let model: RepositoryAppModel
 
 	public init(model: RepositoryAppModel) {
-		self.store = model.store
+		self.model = model
 	}
 
 	public var body: some View {
+		MenuBarStatusContentView(store: model.store)
+	}
+}
+
+@ViewAction(for: RepositoryListReducer.self)
+struct MenuBarStatusContentView: View {
+	let store: StoreOf<RepositoryListReducer>
+
+	var body: some View {
 		VStack(alignment: .leading, spacing: 0) {
 			header
 			Divider()
@@ -63,7 +73,7 @@ public struct MenuBarStatusView: View {
 			footer
 		}
 		.frame(width: 340)
-		.onAppear { store.send(.menuBar(.appeared)) }
+		.onAppear { send(.menuBar(.appeared)) }
 	}
 
 	private var header: some View {
@@ -77,7 +87,7 @@ public struct MenuBarStatusView: View {
 			}
 			else {
 				Button {
-					store.send(.menuBar(.refreshButtonTapped))
+					send(.menuBar(.refreshButtonTapped))
 				} label: {
 					Image(systemName: "arrow.clockwise")
 				}
@@ -99,7 +109,7 @@ public struct MenuBarStatusView: View {
 
 			ForEach(sessions) { session in
 				Button {
-					store.send(.menuBar(.waitingSessionTapped(sessionId: session.id)))
+					send(.menuBar(.waitingSessionTapped(sessionId: session.id)))
 				} label: {
 					HStack(spacing: 8) {
 						Circle()
@@ -150,11 +160,11 @@ public struct MenuBarStatusView: View {
 	private var footer: some View {
 		HStack {
 			Button("Open Bridge Commander") {
-				store.send(.menuBar(.openWindowButtonTapped))
+				send(.menuBar(.openWindowButtonTapped))
 			}
 			Spacer()
 			Button("Quit") {
-				NSApp.terminate(nil)
+				send(.menuBar(.quitButtonTapped))
 			}
 		}
 		.buttonStyle(.borderless)
