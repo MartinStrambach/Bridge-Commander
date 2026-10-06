@@ -362,6 +362,7 @@ struct RepositoryChangedOnDiskTests {
 		row.hasRemoteBranch = true
 		row.unpushedCommitCount = 1
 		row.commitsBehindCount = 0
+		row.hasFetchedStatus = true
 		return row
 	}
 

@@ -64,6 +64,9 @@ struct RepositoryRowReducer {
 		var gitActionsMenu: GitActionsMenuReducer.State
 
 		var isLoaded = false
+		/// Set by the first status fetch that succeeds. Until then the counts above are their
+		/// initial zeros, not a branch known to be in sync — `isLoaded` flips as the fetch starts.
+		var hasFetchedStatus = false
 		/// A status fetch for `onAppear`/`refresh` is under way. A change on disk cancels it and
 		/// fetches again, and that fetch must then still do what the refresh would have.
 		var isRefreshingStatus = false
@@ -557,6 +560,7 @@ struct RepositoryRowReducer {
 			state.shareButton.updatePRURL(nil)
 		}
 		state.branchName = branch
+		state.hasFetchedStatus = true
 		let newTicketId = state.ticketIdRegex.isEmpty
 			? nil
 			: GitBranchDetector.extractTicketId(from: branch, pattern: state.ticketIdRegex)

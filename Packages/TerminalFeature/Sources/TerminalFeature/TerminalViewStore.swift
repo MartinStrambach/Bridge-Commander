@@ -43,6 +43,10 @@ public final class TerminalViewStore {
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
 	) -> ClaudeAwareTerminalView {
 		if let existing = views[session.id] {
+			// Panes outlive the representable that made them (hiding the panel, closing the
+			// window), and SwiftTerm holds its delegate weakly: without this the old coordinator's
+			// delegate is gone, and a shell exiting afterwards is never reported.
+			existing.processDelegate = processDelegate
 			return existing
 		}
 

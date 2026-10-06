@@ -27,6 +27,9 @@ public struct SettingsReducer {
 		@Shared(.periodicRefreshInterval)
 		public var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
+		@Shared(.showsMenuBarExtra)
+		public var showsMenuBarExtra = true
+
 		@Shared(.groupSettings)
 		public var groupSettings: [String: RepoGroupSettings] = [:]
 
@@ -129,6 +132,7 @@ public struct SettingsReducer {
 		case gitHubTokenTestFinished(TokenTestState)
 		case gitLabTokenTestFinished(TokenTestState)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
+		case setShowsMenuBarExtra(Bool)
 		case setGroupSupportsIOS(groupId: String, value: Bool)
 		case setGroupSupportsAndroid(groupId: String, value: Bool)
 		case setGroupMobileSubfolderPath(groupId: String, path: String)
@@ -469,6 +473,10 @@ public struct SettingsReducer {
 
 			case let .gitLabTokenTestFinished(outcome):
 				state.gitlabTokenTest = outcome
+				return .none
+
+			case let .setShowsMenuBarExtra(value):
+				state.$showsMenuBarExtra.withLock { $0 = value }
 				return .none
 
 			case let .setPeriodicRefreshInterval(interval):

@@ -33,9 +33,18 @@ struct RepositoryListReducer {
 		/// The panel's tab memory while the panel is hidden (`terminalLayout` is nil then), so
 		/// reopening it lands on the terminal the user was in, not on the first one in the list.
 		var hiddenTerminalTabMemory: TerminalLayoutReducer.State.TabMemory?
-		/// Set once the tabs saved by the previous launch have been reopened, so an `onAppear` that
-		/// fires again does not reopen them a second time.
+		/// Set once the tabs saved by the previous launch have been reopened, so a second
+		/// `appLaunched` does not reopen them again.
 		fileprivate var hasRestoredTerminalTabs = false
+
+		/// Whether the main window is on screen. The store and the terminals outlive it (the menu
+		/// bar extra keeps showing them), so the panel's active tab alone no longer means the user
+		/// can see it.
+		fileprivate(set) var isWindowOpen = false
+		/// Bumped whenever something outside the window — the menu bar extra, a clicked
+		/// notification — needs the main window shown. A reducer cannot open a window, so the menu
+		/// bar's label, which is always on screen, watches this and opens it.
+		fileprivate(set) var mainWindowRequestCount = 0
 
 		/// Worktrees just created with a terminal follow-up, keyed by their symlink-resolved path.
 		/// The row does not exist until a scan finds the worktree, so the terminal opens from
@@ -94,6 +103,9 @@ struct RepositoryListReducer {
 		case addRepositoryFailed(String)
 		case addRepositorySucceeded(rootPath: String, scanned: [ScannedRepository])
 		case alert(PresentationAction<Alert>)
+		/// Sent once by `RepositoryAppModel` when the app starts, not by the window: the window can
+		/// be closed — or not restored at launch — while the menu bar extra still shows the state.
+		case appLaunched
 		case checkAccessibilityPermission
 		case checkPermissions
 		case checkSystemEventsPermission
@@ -115,6 +127,18 @@ struct RepositoryListReducer {
 		case stopPeriodicRefresh
 		case terminalLayout(TerminalLayoutReducer.Action)
 
+		enum MenuBarAction {
+			/// The extra's window opened. Loads the rows the list has not: a row fetches its
+			/// status when it scrolls into view, so collapsed groups, rows below the fold, and
+			/// every row while the main window is closed would otherwise have nothing to show.
+			case appeared
+			case openWindowButtonTapped
+			case quitButtonTapped
+			case refreshButtonTapped
+			/// Opens the main window on that tab, as clicking its notification does.
+			case waitingSessionTapped(sessionId: UUID)
+		}
+
 		enum ViewAction {
 			case activeTerminalFilterChanged(Bool)
 			case clearButtonTapped
@@ -123,6 +147,7 @@ struct RepositoryListReducer {
 			case dismissAccessibilityPermissionWarningButtonTapped
 			case dismissPermissionWarningButtonTapped
 			case groupSettingsChanged
+			case menuBar(MenuBarAction)
 			case onAppear
 			case onDisappear
 			case openAccessibilitySettingsButtonTapped
@@ -242,7 +267,7 @@ struct RepositoryListReducer {
 					in: state
 				)
 
-			case .view(.onAppear):
+			case .appLaunched:
 				return .merge(
 					.send(.restoreTerminalTabs),
 					.send(.startScan),
@@ -256,6 +281,16 @@ struct RepositoryListReducer {
 					.cancellable(id: CancellableId.terminalNotificationTaps, cancelInFlight: true)
 				)
 
+			// Only tracked, not used to start or stop work: the periodic refresh keeps the menu bar
+			// extra current while the window is closed.
+			case .view(.onAppear):
+				state.isWindowOpen = true
+				return .none
+
+			case .view(.onDisappear):
+				state.isWindowOpen = false
+				return .none
+
 			case let .terminalNotificationTapped(sessionId):
 				// The tab may have been closed since the notification went out; the app still
 				// comes forward, it just opens on nothing new.
@@ -263,9 +298,51 @@ struct RepositoryListReducer {
 					openTerminal(for: session.repositoryPath, in: &state)
 					state.terminalLayout?.activate(session)
 				}
+				// The window may be closed, which activating the app does not undo.
+				state.mainWindowRequestCount += 1
 				return .run { [terminalNotificationClient] _ in
 					await terminalNotificationClient.activateApp()
 				}
+
+			case .view(.menuBar(.openWindowButtonTapped)):
+				state.mainWindowRequestCount += 1
+				return .run { [terminalNotificationClient] _ in
+					await terminalNotificationClient.activateApp()
+				}
+
+			case .view(.menuBar(.appeared)):
+				let unloaded = state.repositoryGroups.flatMap { group in
+					([group.header] + group.worktrees)
+						.filter { !$0.isLoaded }
+						.map { (groupId: group.id, rowId: $0.id, isHeader: $0.id == group.header.id) }
+				}
+				guard !unloaded.isEmpty else {
+					return .none
+				}
+
+				// One at a time, for the same reason `refreshRepositories` staggers its refreshes.
+				return .run { send in
+					for row in unloaded {
+						if row.isHeader {
+							await send(.repositoryGroups(.element(id: row.groupId, action: .header(.onAppear))))
+						}
+						else {
+							await send(.repositoryGroups(.element(
+								id: row.groupId,
+								action: .worktrees(.element(id: row.rowId, action: .onAppear))
+							)))
+						}
+					}
+				}
+
+			case .view(.menuBar(.quitButtonTapped)):
+				return quitApp()
+
+			case .view(.menuBar(.refreshButtonTapped)):
+				return .send(.refreshRepositories)
+
+			case let .view(.menuBar(.waitingSessionTapped(sessionId))):
+				return .send(.terminalNotificationTapped(sessionId: sessionId))
 
 			case .restoreTerminalTabs:
 				guard !state.hasRestoredTerminalTabs else {
@@ -1111,13 +1188,7 @@ struct RepositoryListReducer {
 				return .send(.terminalLayout(.killTab(sessionId: sessionId)))
 
 			case .alert(.presented(.quitAppConfirmed)):
-				// The sessions are hung up by `killSessions(notIn:)` on the way out; terminate
-				// runs on the main actor because it drives AppKit's own shutdown sequence.
-				return .run { _ in
-					await MainActor.run {
-						NSApplication.shared.terminate(nil)
-					}
-				}
+				return quitApp()
 
 			case .alert:
 				return .none
@@ -1216,7 +1287,9 @@ struct RepositoryListReducer {
 		}
 
 		let client = terminalNotificationClient
-		let isOnScreen = state.terminalLayout?.activeSessionId == session.id
+		// The panel keeps its active tab while the window is closed, and the app can be frontmost
+		// with only Settings open — neither puts the tab in front of the user.
+		let isOnScreen = state.isWindowOpen && state.terminalLayout?.activeSessionId == session.id
 		return .run { _ in
 			if isOnScreen, await client.isAppActive() {
 				return
@@ -1225,11 +1298,27 @@ struct RepositoryListReducer {
 		}
 	}
 
-	/// Names the tab: the repository, and which tab when it has more than one.
+	/// Terminate runs on the main actor because it drives AppKit's own shutdown sequence, which is
+	/// also when `RepositoryAppModel` saves the tabs.
+	private func quitApp() -> Effect<Action> {
+		.run { _ in
+			await MainActor.run {
+				NSApplication.shared.terminate(nil)
+			}
+		}
+	}
+
 	private func notificationLocation(for session: TerminalSession, in state: State) -> String {
-		let name = findRowState(for: session.repositoryPath, in: state)?.name
+		state.tabLocation(for: session)
+	}
+}
+
+extension RepositoryListReducer.State {
+	/// Names a terminal tab: the repository, and which tab when it has more than one.
+	func tabLocation(for session: TerminalSession) -> String {
+		let name = findRowState(for: session.repositoryPath, in: self)?.name
 			?? URL(fileURLWithPath: session.repositoryPath).lastPathComponent
-		let tabCount = state.terminalSessions.filter { $0.repositoryPath == session.repositoryPath }.count
+		let tabCount = terminalSessions.filter { $0.repositoryPath == session.repositoryPath }.count
 		return tabCount > 1 ? "\(name) · Terminal \(session.tabIndex)" : name
 	}
 }
