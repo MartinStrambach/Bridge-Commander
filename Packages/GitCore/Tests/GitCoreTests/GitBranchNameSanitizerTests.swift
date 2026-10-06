@@ -11,7 +11,19 @@ struct GitBranchNameSanitizerTests {
 	@Test("each whitespace character maps to exactly one underscore")
 	func oneUnderscorePerWhitespaceCharacter() {
 		#expect(GitBranchNameSanitizer.sanitize("fix  bug") == "fix__bug")
-		#expect(GitBranchNameSanitizer.sanitize(" fix ") == "_fix_")
+		#expect(GitBranchNameSanitizer.sanitize("fix ") == "fix_")
+	}
+
+	@Test("leading whitespace is dropped, not turned into underscores")
+	func leadingWhitespaceIsDropped() {
+		#expect(GitBranchNameSanitizer.sanitize("  fix") == "fix")
+		#expect(GitBranchNameSanitizer.sanitize("\t fix bug") == "fix_bug")
+	}
+
+	@Test("a name of only whitespace sanitizes to nothing, so it cannot be submitted")
+	func onlyWhitespaceIsEmpty() {
+		#expect(GitBranchNameSanitizer.sanitize("   ") == "")
+		#expect(GitBranchNameSanitizer.sanitize(" \t\n") == "")
 	}
 
 	@Test("tabs and newlines from pasted text are treated like spaces")

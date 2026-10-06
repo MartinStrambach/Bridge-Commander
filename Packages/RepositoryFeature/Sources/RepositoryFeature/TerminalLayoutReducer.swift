@@ -128,7 +128,7 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case let .gitGraphButtonTapped(repositoryPath, repositoryName):
-				state.gitGraph = GitGraphReducer.State(repositoryPath: repositoryPath, repositoryName: repositoryName)
+				state.gitGraph = .forRepository(path: repositoryPath, name: repositoryName)
 				return .none
 
 			case let .pushButtonTapped(repositoryPath):

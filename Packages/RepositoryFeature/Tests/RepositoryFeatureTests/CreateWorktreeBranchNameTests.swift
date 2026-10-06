@@ -29,7 +29,26 @@ struct CreateWorktreeBranchNameTests {
 		}
 	}
 
-	@Test("other bound fields are untouched by the sanitizer")
+	@Test("leading spaces are dropped instead of becoming underscores")
+	func leadingSpacesAreDropped() async {
+		let store = makeStore()
+
+		await store.send(\.binding.branchName, "  fix login") {
+			$0.branchName = "fix_login"
+		}
+	}
+
+	@Test("a name of only spaces stays empty and cannot be submitted")
+	func onlySpacesCannotBeSubmitted() async {
+		let store = makeStore()
+
+		await store.send(\.binding.branchName, "   ")
+		// Exhaustive: no state change (`isCreating` stays false) and no git process. Before, the
+		// spaces became "___", which passed the empty-name guard and was created as a branch.
+		await store.send(.confirmCreation)
+	}
+
+		@Test("other bound fields are untouched by the sanitizer")
 	func otherBindingsAreNotSanitized() async {
 		let store = makeStore()
 
