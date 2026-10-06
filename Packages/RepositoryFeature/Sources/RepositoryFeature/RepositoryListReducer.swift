@@ -946,7 +946,7 @@ struct RepositoryListReducer {
 				}
 				return refreshRow(for: path, in: state)
 
-			case .terminalLayout(.gitGraph(.presented(.delegate(.worktreeCreated)))):
+			case let .terminalLayout(.gitGraph(.presented(.delegate(.worktreeCreated(worktreePath))))):
 				// Rescan the graph's group, as a worktree created from its rows would.
 				guard
 					let path = state.terminalLayout?.gitGraph?.repositoryPath,
@@ -954,7 +954,7 @@ struct RepositoryListReducer {
 				else {
 					return .none
 				}
-				return .send(.repositoryGroups(.element(id: group.id, action: .header(.worktreeCreated))))
+				return .send(.repositoryGroups(.element(id: group.id, action: .header(.worktreeCreated(path: worktreePath, launch: nil)))))
 
 			case .terminalLayout(.refreshActiveRepoRequested):
 				// ⌘R in terminal mode refreshes just the opened repo. The home-directory

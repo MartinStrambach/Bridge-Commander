@@ -204,7 +204,7 @@ extension GitGraphReducer {
 
 			case let .worktreeCreated(worktree):
 				state.alert = Self.worktreeCreatedAlert(for: worktree)
-				return .merge(loadCommits(state: &state), .send(.delegate(.worktreeCreated)))
+				return .merge(loadCommits(state: &state), .send(.delegate(.worktreeCreated(path: worktree.folder.path))))
 
 			case let .failed(title, message):
 				state.alert = AlertState {

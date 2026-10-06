@@ -90,8 +90,8 @@ public struct GitGraphReducer {
 		public enum Delegate: Equatable {
 			/// HEAD, the current branch or the working tree changed: the presenter's row is stale.
 			case repositoryChanged
-			/// A worktree was added, so the presenter's repository group needs a rescan.
-			case worktreeCreated
+			/// A worktree was added at `path`, so the presenter's repository group needs a rescan.
+			case worktreeCreated(path: String)
 		}
 	}
 

@@ -311,10 +311,10 @@ struct RepositoryRowReducer {
 			case .gitGraph(.presented(.delegate(.repositoryChanged))):
 				return .send(.refresh)
 
-			case .gitGraph(.presented(.delegate(.worktreeCreated))):
+			case let .gitGraph(.presented(.delegate(.worktreeCreated(path)))):
 				// The list rescans the group on this, which is what makes the new worktree's row
 				// appear. The rescan merges rows, so this one — and the open graph — survive it.
-				return .send(.worktreeCreated)
+				return .send(.worktreeCreated(path: path, launch: nil))
 
 			case .onAppear:
 				guard !state.isLoaded else {

@@ -191,7 +191,7 @@ struct RepositoryRowActionRoutingTests {
 		let store = makeStore()
 
 		await store.send(.repositoryIconTapped)
-		await store.send(.gitGraph(.presented(.delegate(.worktreeCreated))))
+		await store.send(.gitGraph(.presented(.delegate(.worktreeCreated(path: "/repos/alpha-feature")))))
 		await store.receive(\.worktreeCreated)
 		await store.finish()
 	}
