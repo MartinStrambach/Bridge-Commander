@@ -40,7 +40,7 @@ struct BridgeCommanderApp: App {
 			}
 		}
 
-		MenuBarExtra(isInserted: Binding($showsMenuBarExtra)) {
+		MenuBarExtra(isInserted: menuBarExtraInserted) {
 			MenuBarStatusView(model: model)
 		} label: {
 			MenuBarStatusLabel(model: model)
@@ -52,5 +52,19 @@ struct BridgeCommanderApp: App {
 				UpdateSettingsView(updater: updaterController.updater)
 			}
 		}
+	}
+
+	/// Writes only a real change. `MenuBarExtra` sets `isInserted` back on every scene update, even
+	/// to the value it already has, and a `@Shared` write always counts as a mutation: it
+	/// invalidated this body, the rebuilt scene set the binding again, and the app recursed in
+	/// SwiftUI's scene update until the stack overflowed at launch (2026-10-06).
+	private var menuBarExtraInserted: Binding<Bool> {
+		Binding(
+			get: { showsMenuBarExtra },
+			set: { isInserted in
+				guard isInserted != showsMenuBarExtra else { return }
+				$showsMenuBarExtra.withLock { $0 = isInserted }
+			}
+		)
 	}
 }
