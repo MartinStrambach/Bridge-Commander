@@ -7,10 +7,14 @@ import Foundation
 /// touching the real Terminal.app preferences.
 @DependencyClient
 public struct TerminalProfileImportClient: Sendable {
+	// Async although the live import is synchronous: a test double can then hold the import
+	// until the test has asserted on the button tap. A synchronous one finishes inside
+	// `TestStore.send`, so the profiles land in `@Shared` storage before that send's assertion.
+
 	/// Every profile currently configured in Terminal.app.
-	public var importFromTerminalApp: @Sendable () throws -> [TerminalProfile]
+	public var importFromTerminalApp: @Sendable () async throws -> [TerminalProfile]
 	/// The profile(s) in one exported `.terminal` file.
-	public var importFromFile: @Sendable (_ url: URL) throws -> [TerminalProfile]
+	public var importFromFile: @Sendable (_ url: URL) async throws -> [TerminalProfile]
 }
 
 extension TerminalProfileImportClient: DependencyKey {

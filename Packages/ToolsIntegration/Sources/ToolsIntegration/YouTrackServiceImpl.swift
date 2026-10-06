@@ -23,6 +23,11 @@ public struct YouTrackClient: Sendable {
 		_ baseURL: String,
 		_ authToken: String
 	) async throws -> [YouTrackIssueSummary]
+	/// Returns the login the token authenticates as on the instance at `baseURL`.
+	public var verifyToken: @Sendable (
+		_ baseURL: String,
+		_ authToken: String
+	) async throws -> String
 }
 
 extension YouTrackClient: DependencyKey {
@@ -41,6 +46,9 @@ extension YouTrackClient: DependencyKey {
 		},
 		searchIssues: { query, baseURL, authToken in
 			try await YouTrackService.searchIssues(query: query, baseURL: baseURL, authToken: authToken)
+		},
+		verifyToken: { baseURL, authToken in
+			try await YouTrackService.verifyToken(baseURL: baseURL, authToken: authToken)
 		}
 	)
 }

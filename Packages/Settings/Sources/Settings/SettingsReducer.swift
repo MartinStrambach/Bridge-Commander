@@ -103,6 +103,7 @@ public struct SettingsReducer {
 		@Shared(.terminalFontName)
 		public var terminalFontName = TerminalFontFamily.systemDefault
 
+		public var youtrackTokenTest = TokenTestState.idle
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
 
@@ -118,8 +119,10 @@ public struct SettingsReducer {
 		case setGitLabToken(String)
 		case clearGitHubToken
 		case clearGitLabToken
+		case testYouTrackTokenButtonTapped
 		case testGitHubTokenButtonTapped
 		case testGitLabTokenButtonTapped
+		case youTrackTokenTestFinished(TokenTestState)
 		case gitHubTokenTestFinished(TokenTestState)
 		case gitLabTokenTestFinished(TokenTestState)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
@@ -176,6 +179,9 @@ public struct SettingsReducer {
 	@Dependency(TokenVerificationClient.self)
 	private var tokenVerification
 
+	@Dependency(YouTrackClient.self)
+	private var youtrack
+
 	@Dependency(TerminalProfileImportClient.self)
 	private var profileImport
 
@@ -231,6 +237,70 @@ public struct SettingsReducer {
 		}
 		catch {
 			return .failure(message: tokenTestFailureMessage(for: error, provider: provider))
+		}
+	}
+
+	/// The YouTrack instances the token is used against: each tracked group's URL, once, in the
+	/// order the groups are listed. The token is global but the URL is per group, so a test has to
+	/// name an instance — and a token can work on one instance and not another.
+	static func youTrackInstances(in state: State) -> [String] {
+		var instances: [String] = []
+		var seen = Set<String>()
+		for groupId in state.trackedRepoPaths {
+			let base = YouTrackURLBuilder.normalizedBase(state.groupSettings[groupId]?.youtrackBaseURL ?? "")
+			if !base.isEmpty, seen.insert(base.lowercased()).inserted {
+				instances.append(base)
+			}
+		}
+		return instances
+	}
+
+	/// Folds the per-instance results into one verdict. Every line names its instance, so with
+	/// several configured it is clear which one the token failed on.
+	static func youTrackTokenTestOutcome(
+		_ results: [(instance: String, result: Result<String, any Error>)]
+	) -> TokenTestState {
+		let logins = results.compactMap { try? $0.result.get() }
+		if logins.count == results.count {
+			return .success(username: zip(logins, results)
+				.map { "\($0) on \(displayName(ofInstance: $1.instance))" }
+				.joined(separator: ", "))
+		}
+		return .failure(message: results.map { instance, result in
+			let outcome = switch result {
+			case let .success(login): "authenticated as \(login)"
+			case let .failure(error): youTrackTokenTestFailureMessage(for: error)
+			}
+			return "\(displayName(ofInstance: instance)): \(outcome)"
+		}.joined(separator: "\n"))
+	}
+
+	/// The instance as a user recognizes it: its base URL without the scheme.
+	private static func displayName(ofInstance base: String) -> String {
+		base.replacing(/^https?:\/\//.ignoresCase(), with: "")
+	}
+
+	private static func youTrackTokenTestFailureMessage(for error: any Error) -> String {
+		switch error {
+		case YouTrackServiceError.httpFailure(statusCode: 401):
+			"HTTP 401 — the token is invalid, revoked, or expired."
+
+		case YouTrackServiceError.httpFailure(statusCode: 403):
+			"HTTP 403 — the token lacks access; check that its scope includes YouTrack."
+
+		// A wrong base URL tends to answer with a web page (200) or a 404, not with an auth error.
+		case YouTrackServiceError.httpFailure(statusCode: 404),
+		     YouTrackServiceError.unexpectedResponse:
+			"no YouTrack API answered at this URL — check the group's YouTrack URL."
+
+		case let YouTrackServiceError.httpFailure(statusCode):
+			"HTTP \(statusCode)."
+
+		case YouTrackServiceError.invalidURL:
+			"the YouTrack URL is not a valid URL."
+
+		default:
+			error.localizedDescription
 		}
 	}
 
@@ -310,6 +380,7 @@ public struct SettingsReducer {
 			// corrupts the Bearer header and makes every request fail with a silent 401.
 			case let .setYouTrackToken(token):
 				state.$youtrackAuthToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
+				state.youtrackTokenTest = .idle
 				return .none
 
 			case let .setGitHubToken(token):
@@ -332,6 +403,44 @@ public struct SettingsReducer {
 			case .clearGitLabToken:
 				state.$gitlabToken.withLock { $0 = "" }
 				state.gitlabTokenTest = .idle
+				return .none
+
+			case .testYouTrackTokenButtonTapped:
+				guard !state.youtrackAuthToken.isEmpty else {
+					state.youtrackTokenTest = .failure(message: "Enter a token first.")
+					return .none
+				}
+				let instances = Self.youTrackInstances(in: state)
+				guard !instances.isEmpty else {
+					state.youtrackTokenTest = .failure(
+						message: "Set a YouTrack URL on a repository group (Repository Groups below) to test against."
+					)
+					return .none
+				}
+				state.youtrackTokenTest = .testing
+				return .run { [token = state.youtrackAuthToken, youtrack] send in
+					let results = await withTaskGroup(of: (Int, Result<String, any Error>).self) { group in
+						for (index, instance) in instances.enumerated() {
+							group.addTask {
+								do {
+									return try await (index, .success(youtrack.verifyToken(instance, token)))
+								}
+								catch {
+									return (index, .failure(error))
+								}
+							}
+						}
+						var results: [(Int, Result<String, any Error>)] = []
+						for await result in group {
+							results.append(result)
+						}
+						return results.sorted { $0.0 < $1.0 }.map { (instance: instances[$0.0], result: $0.1) }
+					}
+					await send(.youTrackTokenTestFinished(Self.youTrackTokenTestOutcome(results)))
+				}
+
+			case let .youTrackTokenTestFinished(outcome):
+				state.youtrackTokenTest = outcome
 				return .none
 
 			case .testGitHubTokenButtonTapped:
@@ -415,6 +524,8 @@ public struct SettingsReducer {
 				// per-keystroke TextField binding (typing "https://" would collapse).
 				let trimmedURL = value.trimmingCharacters(in: .whitespacesAndNewlines)
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].youtrackBaseURL = trimmedURL }
+				// The verdict names the instances it ran against; a changed URL is a different one.
+				state.youtrackTokenTest = .idle
 				return .none
 
 			case let .setGroupTerminalStartupCommand(groupId, value):
@@ -525,7 +636,7 @@ public struct SettingsReducer {
 			case .importFromTerminalAppButtonTapped:
 				return .run { [profileImport] send in
 					do {
-						await send(.profilesImported(try profileImport.importFromTerminalApp()))
+						await send(.profilesImported(try await profileImport.importFromTerminalApp()))
 					}
 					catch {
 						await send(.profileImportFailed(message: Self.importFailureMessage(error)))
@@ -540,7 +651,7 @@ public struct SettingsReducer {
 					var failure: String?
 					for url in urls {
 						do {
-							imported.append(contentsOf: try profileImport.importFromFile(url))
+							imported.append(contentsOf: try await profileImport.importFromFile(url))
 						}
 						catch {
 							failure = failure ?? Self.importFailureMessage(error)
@@ -603,6 +714,7 @@ public struct SettingsReducer {
 
 			case .alert(.presented(.confirmClearToken)):
 				state.$youtrackAuthToken.withLock { $0 = "" }
+				state.youtrackTokenTest = .idle
 				return .none
 
 			case .alert:

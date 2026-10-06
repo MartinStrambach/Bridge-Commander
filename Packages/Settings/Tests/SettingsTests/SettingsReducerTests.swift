@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Foundation
 import GitHosting
 import Testing
+import ToolsIntegration
 @testable import Settings
 
 @MainActor
@@ -322,6 +323,138 @@ struct SettingsReducerTests {
 		await store.send(.clearGitHubToken) {
 			$0.githubToken = ""
 			$0.githubTokenTest = .idle
+		}
+	}
+
+	// MARK: - YouTrack token connection test
+
+	/// Seeds the shared settings the test is reading. Written through `@Shared` after the store
+	/// exists, so they land in the store's own storage rather than in a state built beforehand.
+	private func seedYouTrack(token: String = "perm:abc", urls: [String: String]) {
+		@Shared(.youtrackAuthToken) var youtrackAuthToken = ""
+		@Shared(.trackedRepoPaths) var trackedRepoPaths: [String] = []
+		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
+		$youtrackAuthToken.withLock { $0 = token }
+		$trackedRepoPaths.withLock { $0 = urls.keys.sorted() }
+		$groupSettings.withLock { settings in
+			for (groupId, url) in urls {
+				settings[groupId] = RepoGroupSettings(youtrackBaseURL: url)
+			}
+		}
+	}
+
+	@Test("a passing YouTrack token test names the login and the instance")
+	func youTrackTokenTestSuccess() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[YouTrackClient.self].verifyToken = { baseURL, token in
+				#expect(baseURL == "https://org.youtrack.cloud")
+				#expect(token == "perm:abc")
+				return "jdoe"
+			}
+		}
+		seedYouTrack(urls: ["/repo": "https://org.youtrack.cloud/"])
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.receive(\.youTrackTokenTestFinished) {
+			$0.youtrackTokenTest = .success(username: "jdoe on org.youtrack.cloud")
+		}
+	}
+
+	@Test("groups sharing an instance are tested once; a failure names its instance")
+	func youTrackTokenTestPerInstance() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[YouTrackClient.self].verifyToken = { baseURL, _ in
+				guard baseURL == "https://one.youtrack.cloud" else {
+					throw YouTrackServiceError.httpFailure(statusCode: 401)
+				}
+				return "jdoe"
+			}
+		}
+		seedYouTrack(urls: [
+			"/a": "https://one.youtrack.cloud",
+			"/b": "https://one.youtrack.cloud/api",
+			"/c": "https://two.youtrack.cloud",
+			"/d": "",
+		])
+		#expect(SettingsReducer.youTrackInstances(in: store.state) == [
+			"https://one.youtrack.cloud",
+			"https://two.youtrack.cloud",
+		])
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.receive(\.youTrackTokenTestFinished) {
+			$0.youtrackTokenTest = .failure(message: """
+			one.youtrack.cloud: authenticated as jdoe
+			two.youtrack.cloud: HTTP 401 — the token is invalid, revoked, or expired.
+			""")
+		}
+	}
+
+	@Test("a URL that does not answer as YouTrack points at the group's URL")
+	func youTrackTokenTestWrongURL() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[YouTrackClient.self].verifyToken = { _, _ in throw YouTrackServiceError.unexpectedResponse }
+		}
+		seedYouTrack(urls: ["/repo": "https://example.com"])
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.receive(\.youTrackTokenTestFinished) {
+			$0.youtrackTokenTest = .failure(
+				message: "example.com: no YouTrack API answered at this URL — check the group's YouTrack URL."
+			)
+		}
+	}
+
+	@Test("without a token the test fails without a request")
+	func youTrackTokenTestNeedsToken() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		seedYouTrack(token: "", urls: ["/repo": "https://org.youtrack.cloud"])
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .failure(message: "Enter a token first.")
+		}
+	}
+
+	@Test("without any group's YouTrack URL the test fails without a request")
+	func youTrackTokenTestNeedsURL() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		seedYouTrack(urls: ["/repo": ""])
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .failure(
+				message: "Set a YouTrack URL on a repository group (Repository Groups below) to test against."
+			)
+		}
+	}
+
+	@Test("editing the YouTrack token or a group's URL drops the stale verdict")
+	func youTrackEditResetsTestState() async {
+		var state = SettingsReducer.State()
+		state.youtrackTokenTest = .success(username: "jdoe on org.youtrack.cloud")
+		let store = TestStore(initialState: state) {
+			SettingsReducer()
+		}
+		await store.send(.setGroupYouTrackBaseURL(groupId: "/repo", value: "https://new.youtrack.cloud")) {
+			$0.groupSettings["/repo"] = RepoGroupSettings(youtrackBaseURL: "https://new.youtrack.cloud")
+			$0.youtrackTokenTest = .idle
+		}
+		await store.send(.youTrackTokenTestFinished(.failure(message: "HTTP 500."))) {
+			$0.youtrackTokenTest = .failure(message: "HTTP 500.")
+		}
+		await store.send(.setYouTrackToken("perm:new")) {
+			$0.youtrackAuthToken = "perm:new"
+			$0.youtrackTokenTest = .idle
 		}
 	}
 
