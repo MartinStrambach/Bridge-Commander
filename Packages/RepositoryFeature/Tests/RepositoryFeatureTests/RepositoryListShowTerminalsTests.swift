@@ -96,4 +96,69 @@ struct RepositoryListShowTerminalsTests {
 		// The active tab must not jump to another session.
 		await store.send(.view(.showTerminalsRequested))
 	}
+
+	// Hiding the panel drops its whole state, tab memory included, so the shortcut used to open
+	// on the first live session in the list rather than on the terminal the user had left.
+	@Test("reopens on the terminal the user was in before the panel was hidden")
+	func reopensOnTheMostRecentSession() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let betaOne = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
+		let betaTwo = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 2)
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [alpha, betaOne, betaTwo]
+		var layout = TerminalLayoutReducer.State()
+		layout.activate(betaOne)
+		layout.activate(alpha)
+		layout.activate(betaTwo)
+		state.terminalLayout = layout
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.terminalLayout(.hideTerminalMode)) {
+			$0.hiddenTerminalTabMemory = layout.tabMemory
+			$0.terminalLayout = nil
+		}
+		await store.send(.view(.showTerminalsRequested)) {
+			$0.hiddenTerminalTabMemory = nil
+			$0.terminalLayout = layout
+		}
+	}
+
+	@Test("a failed most recent terminal gives way to the most recent live one")
+	func reopensOnTheMostRecentLiveSession() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		var gamma = TerminalSession(repositoryPath: "/repos/gamma")
+		gamma.status = .failed("exited (1)")
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [alpha, beta, gamma]
+		state.hiddenTerminalTabMemory = TerminalLayoutReducer.State.TabMemory(
+			lastActiveSessionByRepo: [
+				"/repos/alpha": alpha.id,
+				"/repos/beta": beta.id,
+				"/repos/gamma": gamma.id,
+			],
+			recentSessionIds: [alpha.id, beta.id, gamma.id]
+		)
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.view(.showTerminalsRequested)) {
+			$0.hiddenTerminalTabMemory = nil
+			$0.terminalLayout = TerminalLayoutReducer.State(
+				activeRepositoryPath: "/repos/beta",
+				activeSessionId: beta.id
+			)
+			$0.terminalLayout?.tabMemory = TerminalLayoutReducer.State.TabMemory(
+				lastActiveSessionByRepo: [
+					"/repos/alpha": alpha.id,
+					"/repos/beta": beta.id,
+					"/repos/gamma": gamma.id,
+				],
+				recentSessionIds: [alpha.id, gamma.id, beta.id]
+			)
+		}
+	}
 }

@@ -30,6 +30,9 @@ struct RepositoryListReducer {
 
 		var terminalSessions: IdentifiedArrayOf<TerminalSession> = []
 		var terminalLayout: TerminalLayoutReducer.State?
+		/// The panel's tab memory while the panel is hidden (`terminalLayout` is nil then), so
+		/// reopening it lands on the terminal the user was in, not on the first one in the list.
+		var hiddenTerminalTabMemory: TerminalLayoutReducer.State.TabMemory?
 		/// Set once the tabs saved by the previous launch have been reopened, so an `onAppear` that
 		/// fires again does not reopen them a second time.
 		fileprivate var hasRestoredTerminalTabs = false
@@ -403,15 +406,22 @@ struct RepositoryListReducer {
 				guard state.terminalLayout == nil else {
 					return .none
 				}
-				// Prefer a live session so the panel opens on a working terminal
-				// rather than a lingering failed tab.
+				let layout = reopenedTerminalLayout(in: &state)
+				// The terminal the user was in most recently, preferring a live one so the panel
+				// opens on a working terminal rather than a lingering failed tab.
+				let live = state.terminalSessions.filter(\.status.isLive)
 				guard
-					let session = state.terminalSessions.first(where: \.status.isLive)
+					let session = layout.mostRecent(among: live)
+						?? live.first
+						?? layout.mostRecent(among: state.terminalSessions)
 						?? state.terminalSessions.first
 				else {
 					return .none
 				}
-				return openTerminal(for: session.repositoryPath, in: &state)
+				state.terminalLayout = layout
+				state.terminalLayout?.activate(session)
+				syncTerminalButtons(for: session.repositoryPath, in: &state)
+				return .none
 
 			// MARK: - Add Repository
 
@@ -724,6 +734,7 @@ struct RepositoryListReducer {
 				return .none
 
 			case .terminalLayout(.hideTerminalMode):
+				state.hiddenTerminalTabMemory = state.terminalLayout?.tabMemory
 				state.terminalLayout = nil
 				return .none
 
@@ -1263,6 +1274,10 @@ private func openTerminal(
 	startupCommandOverride: String? = nil,
 	in state: inout RepositoryListReducer.State
 ) -> EffectOf<RepositoryListReducer> {
+	// First, so a repository reopened from the list lands on the tab it was left on.
+	if state.terminalLayout == nil {
+		state.terminalLayout = reopenedTerminalLayout(in: &state)
+	}
 	let session: TerminalSession
 	if let existing = lastActiveSession(for: repositoryPath, in: state) {
 		session = existing
@@ -1283,9 +1298,6 @@ private func openTerminal(
 			startupCommand: startupCommandOverride ?? startupCommand(for: repoSettings, in: state)
 		)
 		state.terminalSessions.append(session)
-	}
-	if state.terminalLayout == nil {
-		state.terminalLayout = TerminalLayoutReducer.State()
 	}
 	state.terminalLayout?.activate(session)
 	syncTerminalButtons(for: repositoryPath, in: &state)
@@ -1470,6 +1482,16 @@ private func applySettings(
 	}
 	row.defaultBranch = settings.defaultBranch
 	row.gitActionsMenu.setDefaultBranch(settings.defaultBranch)
+}
+
+/// A panel being shown again, with the tab memory the hidden one left behind.
+private func reopenedTerminalLayout(in state: inout RepositoryListReducer.State) -> TerminalLayoutReducer.State {
+	var layout = TerminalLayoutReducer.State()
+	if let memory = state.hiddenTerminalTabMemory {
+		layout.tabMemory = memory
+		state.hiddenTerminalTabMemory = nil
+	}
+	return layout
 }
 
 /// The tab to show once the repository on screen has none left: the one the user was in most

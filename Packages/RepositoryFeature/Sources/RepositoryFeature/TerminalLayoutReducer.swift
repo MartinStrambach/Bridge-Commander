@@ -30,6 +30,24 @@ struct TerminalLayoutReducer {
 		/// the tab on screen goes back to the one the user was in before it.
 		var recentSessionIds: [UUID] = []
 
+		/// What the panel remembers about the tabs it has shown. Hiding the panel drops this whole
+		/// state, so `RepositoryListReducer` keeps the memory meanwhile and hands it back to the
+		/// next panel, which then reopens where the user left off.
+		struct TabMemory: Equatable {
+			var lastActiveSessionByRepo: [String: UUID] = [:]
+			var recentSessionIds: [UUID] = []
+		}
+
+		var tabMemory: TabMemory {
+			get {
+				TabMemory(lastActiveSessionByRepo: lastActiveSessionByRepo, recentSessionIds: recentSessionIds)
+			}
+			set {
+				lastActiveSessionByRepo = newValue.lastActiveSessionByRepo
+				recentSessionIds = newValue.recentSessionIds
+			}
+		}
+
 		/// Show `session` and remember it as the repository's current tab.
 		mutating func activate(_ session: TerminalSession) {
 			activeRepositoryPath = session.repositoryPath
