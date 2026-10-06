@@ -5,9 +5,26 @@ import SwiftUI
 import ToolsIntegration
 import UniformTypeIdentifiers
 
-public struct SettingsView: View {
+/// `.terminal` has no registered system type, so it is built from the extension; the
+/// property-list type is allowed alongside it because that is what the files actually are.
+/// At file scope because `SettingsView` is generic, and generic types have no static storage.
+private let terminalProfileContentTypes: [UTType] = [
+	UTType(filenameExtension: "terminal"),
+	.propertyList,
+]
+.compactMap(\.self)
+
+/// Enumerating installed fonts touches the font server, so it happens once per process (globals
+/// are initialized lazily, once) rather than on every body evaluation.
+private let installedMonospacedFamilies = TerminalFontFamily.availableMonospacedFamilies()
+
+/// `Updates` is the Updates section's controls, supplied by the app target: the updater is
+/// Sparkle's, and this package stays free of a Sparkle dependency.
+public struct SettingsView<Updates: View>: View {
 	@Bindable
 	public var store: StoreOf<SettingsReducer>
+
+	private let updates: Updates
 
 	@State
 	private var isImportingProfileFiles = false
@@ -16,8 +33,9 @@ public struct SettingsView: View {
 	@State
 	private var expandedGroupIds: Set<String> = []
 
-	public init(store: StoreOf<SettingsReducer>) {
+	public init(store: StoreOf<SettingsReducer>, @ViewBuilder updates: () -> Updates) {
 		self.store = store
+		self.updates = updates()
 	}
 
 	public var body: some View {
@@ -48,6 +66,7 @@ public struct SettingsView: View {
 				androidStudioPathSection
 				worktreeOptionsSection
 				repositoryGroupsSection
+				updatesSection
 			}
 			.padding()
 		}
@@ -186,7 +205,7 @@ public struct SettingsView: View {
 		.cornerRadius(8)
 		.fileImporter(
 			isPresented: $isImportingProfileFiles,
-			allowedContentTypes: Self.terminalProfileContentTypes,
+			allowedContentTypes: terminalProfileContentTypes,
 			allowsMultipleSelection: true
 		) { result in
 			switch result {
@@ -198,14 +217,6 @@ public struct SettingsView: View {
 			}
 		}
 	}
-
-	/// `.terminal` has no registered system type, so it is built from the extension; the
-	/// property-list type is allowed alongside it because that is what the files actually are.
-	private static let terminalProfileContentTypes: [UTType] = [
-		UTType(filenameExtension: "terminal"),
-		.propertyList,
-	]
-	.compactMap(\.self)
 
 	private func importedProfileRow(_ profile: TerminalProfile) -> some View {
 		HStack(spacing: 8) {
@@ -282,13 +293,10 @@ public struct SettingsView: View {
 		.frame(width: 100, alignment: .leading)
 	}
 
-	/// Enumerating installed fonts touches the font server, so it happens once per process rather
-	/// than on every body evaluation. A stored name that no longer resolves is appended, so the
-	/// picker still shows what is configured instead of silently rewriting it to the default.
-	private static let installedMonospacedFamilies = TerminalFontFamily.availableMonospacedFamilies()
-
+	/// A stored name that no longer resolves is appended, so the picker still shows what is
+	/// configured instead of silently rewriting it to the default.
 	private var monospacedFontFamilies: [String] {
-		let installed = Self.installedMonospacedFamilies
+		let installed = installedMonospacedFamilies
 		let selected = store.terminalFontName
 		guard !selected.isEmpty, !installed.contains(selected) else { return installed }
 		return installed + [selected]
@@ -564,6 +572,19 @@ public struct SettingsView: View {
 					.textSelection(.enabled)
 			}
 		}
+	}
+
+	private var updatesSection: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("Updates")
+				.font(.headline)
+
+			updates
+		}
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.padding()
+		.background(Color(NSColor.controlBackgroundColor))
+		.cornerRadius(8)
 	}
 
 	private var repositoryRefreshSection: some View {
@@ -1085,6 +1106,7 @@ public struct SettingsView: View {
 	SettingsView(
 		store: Store(initialState: SettingsReducer.State()) {
 			SettingsReducer()
-		}
+		},
+		updates: { EmptyView() }
 	)
 }

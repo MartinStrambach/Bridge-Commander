@@ -32,7 +32,9 @@ struct BridgeCommanderApp: App {
 		}
 
 		Settings {
-			SettingsView(store: settingsStore)
+			SettingsView(store: settingsStore) {
+				UpdateSettingsView(updater: updaterController.updater)
+			}
 		}
 	}
 }
