@@ -217,7 +217,13 @@ struct RepositoryRowReducer {
 	enum Action {
 		case onAppear
 		case refresh
+		/// Something the row shows changed on disk (`GitRepositoryWatcherClient`): a checkout in the
+		/// terminal, an edit, a commit, a fetch. Unlike `refresh`, it asks the network only when the
+		/// branch or its upstream moved — it can arrive on every save.
+		case changedOnDisk(GitRepositoryChange.Kind)
 		case didFetchStatus(GitPorcelainStatus, Bool)
+		/// `didFetchStatus` for a fetch started by `changedOnDisk`.
+		case didFetchStatusAfterChangeOnDisk(GitPorcelainStatus, Bool)
 		case didFetchYouTrack(IssueDetails?)
 		case didFetchPullRequest(PullRequestDetails?)
 		case didFetchPullRequestFailed(String)
@@ -335,79 +341,17 @@ struct RepositoryRowReducer {
 					.send(.xcodeButton(.refresh))
 				)
 
-			case let .didFetchStatus(status, isMerge):
-				// `fetchBranchInfo` is the only place the repository is probed for an in-progress
-				// merge; the menu used to repeat the same filesystem check on every refresh, so it
-				// now takes the answer from here instead. Sent before the success guard so the
-				// banner still clears when the status fetch itself fails.
-				let syncMergeStatus: EffectOf<RepositoryRowReducer> =
-					.send(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: isMerge)))
-
-				guard status.didSucceed else {
-					return syncMergeStatus
-				}
-
-				let branch = status.branch ?? state.branchName ?? state.name
-				let unstaged = isMerge ? 0 : status.unstagedCount
-				let staged = isMerge ? 0 : status.stagedCount
-				// Failed YouTrack/PR fetches keep last-known state, so it must be dropped
-				// here the moment its key changes — otherwise a checkout followed by a
-				// failed fetch would keep showing the previous branch's data.
-				if branch != state.branchName {
-					state.prUrl = nil
-					state.prState = nil
-					state.prProvider = nil
-					state.pipelineState = nil
-					state.pipelineUrl = nil
-					state.prHasConflicts = false
-					state.prUnresolvedDiscussions = nil
-					state.prApprovals = nil
-					state.prFetchError = nil
-					state.shareButton.updatePRURL(nil)
-				}
-				state.branchName = branch
-				let newTicketId = state.ticketIdRegex.isEmpty
-					? nil
-					: GitBranchDetector.extractTicketId(from: branch, pattern: state.ticketIdRegex)
-				if newTicketId != state.ticketId {
-					state.androidCR = nil
-					state.iosCR = nil
-					state.androidReviewerName = nil
-					state.iosReviewerName = nil
-					state.ticketState = nil
-					state.youtrackButton = nil
-				}
-				state.ticketId = newTicketId
-				state.ticketButton = newTicketId.flatMap { id in
-					YouTrackURLBuilder.issueURL(baseURL: state.youtrackBaseURL, ticketId: id)
-						.map { TicketButtonReducer.State(ticketId: id, ticketURL: $0) }
-				}
-				state.shareButton.updateTicketURL(state.ticketButton?.ticketURL ?? "")
-				state.unstagedChangesCount = unstaged
-				state.stagedChangesCount = staged
-				state.gitActionsMenu.setCurrentBranch(branch)
-				state.commitsBehindCount = status.behindCount
-				state.hasRemoteBranch = status.hasRemoteBranch
-				state.unpushedCommitCount = status.unpushedCount
-				let hasChanges = unstaged > 0 || staged > 0
-				state.gitActionsMenu.stashButton.hasChanges = hasChanges
-				// Untracked files are reported in the unstaged array (status `.untracked`);
-				// distinguish them so each discard button only shows when it would do work.
-				let hasUntracked = !isMerge && status.unstaged.contains { $0.status == .untracked }
-				let hasTrackedChanges = !isMerge
-					&& (staged > 0 || status.unstaged.contains { $0.status != .untracked })
-				state.gitActionsMenu.discardButton.hasTrackedChanges = hasTrackedChanges
-				state.gitActionsMenu.discardButton.hasUntrackedFiles = hasUntracked
-				state.gitActionsMenu.unpushedCommitsCount = status.unpushedCount
-				state.gitActionsMenu.hasRemoteBranch = status.hasRemoteBranch
-				// YouTrack and PR fetches are keyed on the ticket/branch resolved
-				// above — running them in parallel with the status fetch would use
-				// the pre-refresh values and resurrect stale state after a branch switch.
+			case let .changedOnDisk(kinds):
 				return .merge(
-					syncMergeStatus,
-					fetchYouTrack(for: state),
-					fetchPullRequest(for: state)
+					kinds.contains(.status) ? fetchBranchInfo(for: state, afterChangeOnDisk: true) : .none,
+					kinds.contains(.stash) ? .send(.gitActionsMenu(.refresh)) : .none
 				)
+
+			case let .didFetchStatus(status, isMerge):
+				return applyStatus(status, isMerge: isMerge, afterChangeOnDisk: false, to: &state)
+
+			case let .didFetchStatusAfterChangeOnDisk(status, isMerge):
+				return applyStatus(status, isMerge: isMerge, afterChangeOnDisk: true, to: &state)
 
 			case let .didFetchYouTrack(details):
 				state.androidCR = details?.androidCR
@@ -550,13 +494,126 @@ struct RepositoryRowReducer {
 		return button
 	}
 
+	/// Writes a status fetch into the row, then asks YouTrack and the PR provider about the
+	/// branch it found — always after a refresh, and after a change on disk only when the branch
+	/// or its upstream moved.
+	private func applyStatus(
+		_ status: GitPorcelainStatus,
+		isMerge: Bool,
+		afterChangeOnDisk: Bool,
+		to state: inout State
+	) -> EffectOf<RepositoryRowReducer> {
+		// `fetchBranchInfo` is the only place the repository is probed for an in-progress
+		// merge; the menu used to repeat the same filesystem check on every refresh, so it
+		// now takes the answer from here instead. Sent before the success guard so the
+		// banner still clears when the status fetch itself fails.
+		let syncMergeStatus: EffectOf<RepositoryRowReducer> =
+			.send(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: isMerge)))
+
+		guard status.didSucceed else {
+			return syncMergeStatus
+		}
+
+		let branch = status.branch ?? state.branchName ?? state.name
+		let branchChanged = branch != state.branchName
+		let upstreamMoved = status.hasRemoteBranch != state.hasRemoteBranch
+			|| status.behindCount != state.commitsBehindCount
+			|| status.unpushedCount < state.unpushedCommitCount
+		let unstaged = isMerge ? 0 : status.unstagedCount
+		let staged = isMerge ? 0 : status.stagedCount
+		// Failed YouTrack/PR fetches keep last-known state, so it must be dropped
+		// here the moment its key changes — otherwise a checkout followed by a
+		// failed fetch would keep showing the previous branch's data.
+		if branchChanged {
+			state.prUrl = nil
+			state.prState = nil
+			state.prProvider = nil
+			state.pipelineState = nil
+			state.pipelineUrl = nil
+			state.prHasConflicts = false
+			state.prUnresolvedDiscussions = nil
+			state.prApprovals = nil
+			state.prFetchError = nil
+			state.shareButton.updatePRURL(nil)
+		}
+		state.branchName = branch
+		let newTicketId = state.ticketIdRegex.isEmpty
+			? nil
+			: GitBranchDetector.extractTicketId(from: branch, pattern: state.ticketIdRegex)
+		if newTicketId != state.ticketId {
+			state.androidCR = nil
+			state.iosCR = nil
+			state.androidReviewerName = nil
+			state.iosReviewerName = nil
+			state.ticketState = nil
+			state.youtrackButton = nil
+		}
+		state.ticketId = newTicketId
+		state.ticketButton = newTicketId.flatMap { id in
+			YouTrackURLBuilder.issueURL(baseURL: state.youtrackBaseURL, ticketId: id)
+				.map { TicketButtonReducer.State(ticketId: id, ticketURL: $0) }
+		}
+		state.shareButton.updateTicketURL(state.ticketButton?.ticketURL ?? "")
+		state.unstagedChangesCount = unstaged
+		state.stagedChangesCount = staged
+		state.gitActionsMenu.setCurrentBranch(branch)
+		state.commitsBehindCount = status.behindCount
+		state.hasRemoteBranch = status.hasRemoteBranch
+		state.unpushedCommitCount = status.unpushedCount
+		let hasChanges = unstaged > 0 || staged > 0
+		state.gitActionsMenu.stashButton.hasChanges = hasChanges
+		// Untracked files are reported in the unstaged array (status `.untracked`);
+		// distinguish them so each discard button only shows when it would do work.
+		let hasUntracked = !isMerge && status.unstaged.contains { $0.status == .untracked }
+		let hasTrackedChanges = !isMerge
+			&& (staged > 0 || status.unstaged.contains { $0.status != .untracked })
+		state.gitActionsMenu.discardButton.hasTrackedChanges = hasTrackedChanges
+		state.gitActionsMenu.discardButton.hasUntrackedFiles = hasUntracked
+		state.gitActionsMenu.unpushedCommitsCount = status.unpushedCount
+		state.gitActionsMenu.hasRemoteBranch = status.hasRemoteBranch
+		// YouTrack and PR fetches are keyed on the ticket/branch resolved
+		// above — running them in parallel with the status fetch would use
+		// the pre-refresh values and resurrect stale state after a branch switch.
+		guard afterChangeOnDisk else {
+			return .merge(
+				syncMergeStatus,
+				fetchYouTrack(for: state),
+				fetchPullRequest(for: state)
+			)
+		}
+
+		// A change on disk can be any saved file, so the network is asked only when what it
+		// answers about moved: the branch (its ticket and PR, and the stash the menu offers is
+		// keyed on it too), or its upstream — a push, a fetch or a pull can change what the PR
+		// shows. A local commit only adds to the unpushed count and asks nothing.
+		if branchChanged {
+			return .merge(
+				syncMergeStatus,
+				fetchYouTrack(for: state),
+				fetchPullRequest(for: state),
+				.send(.gitActionsMenu(.refresh))
+			)
+		}
+		if upstreamMoved {
+			return .merge(syncMergeStatus, fetchPullRequest(for: state))
+		}
+		return syncMergeStatus
+	}
+
 	// MARK: - Private Effect Builders
 
-	private func fetchBranchInfo(for state: State) -> EffectOf<RepositoryRowReducer> {
+	private func fetchBranchInfo(
+		for state: State,
+		afterChangeOnDisk: Bool = false
+	) -> EffectOf<RepositoryRowReducer> {
 		.run { [path = state.path] send in
 			let info = await gitClient.getCurrentBranch(at: path)
 			let isMerge = GitMergeDetector.isGitOperationInProgress(at: path)
-			await send(.didFetchStatus(info, isMerge))
+			await send(
+				afterChangeOnDisk
+					? .didFetchStatusAfterChangeOnDisk(info, isMerge)
+					: .didFetchStatus(info, isMerge)
+			)
 		}
 	}
 
