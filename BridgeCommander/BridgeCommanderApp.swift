@@ -22,6 +22,7 @@ struct BridgeCommanderApp: App {
 	var body: some Scene {
 		WindowGroup {
 			RootRepositoryView()
+				.appUIFontSize()
 		}
 		.windowStyle(.hiddenTitleBar)
 		.windowResizability(.contentSize)
@@ -35,6 +36,7 @@ struct BridgeCommanderApp: App {
 			SettingsView(store: settingsStore) {
 				UpdateSettingsView(updater: updaterController.updater)
 			}
+			.appUIFontSize()
 		}
 	}
 }

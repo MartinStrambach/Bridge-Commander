@@ -12,6 +12,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.9.1"),
         .package(path: "../ToolsIntegration"),
         .package(path: "../GitHosting"),
+        .package(path: "../AppUI"),
     ],
     targets: [
         .target(
@@ -21,6 +22,7 @@ let package = Package(
                 .product(name: "Sharing", package: "swift-sharing"),
                 .product(name: "ToolsIntegration", package: "ToolsIntegration"),
                 .product(name: "GitHosting", package: "GitHosting"),
+                .product(name: "AppUI", package: "AppUI"),
             ]
         ),
         .testTarget(

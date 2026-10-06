@@ -9,6 +9,12 @@ public struct GitActionsMenuView: View {
 	@Bindable
 	var store: StoreOf<GitActionsMenuReducer>
 
+	/// Read here and applied to the menu's label as a plain font: a `.borderlessButton` menu's
+	/// label is flattened by AppKit, which drops `scaledFont`'s environment lookup and keeps only
+	/// a font set directly on the `Text`.
+	@Environment(\.uiFontScale)
+	private var uiFontScale
+
 	public var body: some View {
 		Group {
 			if store.fetchButton.isFetching {
@@ -105,7 +111,7 @@ public struct GitActionsMenuView: View {
 					.labelStyle(.titleAndIcon)
 				} label: {
 					Text("Git Actions")
-						.font(.system(size: 12))
+						.font(.system(size: 12 * uiFontScale))
 				}
 				.menuStyle(.borderlessButton)
 				.help("Quick Git Actions")

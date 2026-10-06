@@ -46,12 +46,12 @@ public struct FileChangeRow: View {
 			// File Info
 			VStack(alignment: .leading, spacing: 2) {
 				Text(file.fileName)
-					.font(.body)
+					.scaledFont(.body)
 					.lineLimit(1)
 
 				if !file.directoryPath.isEmpty {
 					Text(file.directoryPath)
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
 						.lineLimit(1)
 				}

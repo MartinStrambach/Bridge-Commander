@@ -50,14 +50,14 @@ public struct ScrollableAlertView: View {
 			HStack(alignment: .center, spacing: 12) {
 				Image(systemName: store.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
 					.foregroundStyle(store.isError ? .red : .green)
-					.font(.system(size: 32))
+					.scaledFont(size: 32)
 				Text(store.title)
-					.font(.headline)
+					.scaledFont(.headline)
 			}
 
 			ScrollView {
 				Text(store.message)
-					.font(.system(.body, design: store.isError ? .monospaced : .default))
+					.scaledFont(.body, design: store.isError ? .monospaced : .default)
 					.textSelection(.enabled)
 					.frame(maxWidth: .infinity, alignment: .leading)
 					.padding(8)
@@ -76,6 +76,7 @@ public struct ScrollableAlertView: View {
 				Button("OK") {
 					store.send(.dismissTapped)
 				}
+				.buttonStyle(.scaledAutomatic)
 				.keyboardShortcut(.defaultAction)
 			}
 		}

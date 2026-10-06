@@ -1,3 +1,4 @@
+import AppUI
 import AppKit
 import ComposableArchitecture
 import GitCore
@@ -31,6 +32,9 @@ public struct GitGraphView: View {
 	/// focus after a file was clicked, so ↑/↓ went on moving the commit selection.
 	@FocusState
 	private var focusedPane: GitGraphPane?
+
+	@Environment(\.uiFontScale)
+	private var uiFontScale
 
 	private struct ColumnDrag: Equatable {
 		let column: GitGraphColumnWidths.Column
@@ -79,11 +83,11 @@ public struct GitGraphView: View {
 	private var header: some View {
 		HStack {
 			Text("Commit Graph")
-				.font(.title2)
+				.scaledFont(.title2)
 				.fontWeight(.semibold)
 
 			Text(store.repositoryName)
-				.font(.title3)
+				.scaledFont(.title3)
 				.foregroundStyle(.secondary)
 
 			Spacer()
@@ -92,13 +96,13 @@ public struct GitGraphView: View {
 				ProgressView()
 					.controlSize(.small)
 				Text(runningCommitAction)
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundStyle(.secondary)
 			}
 
 			if store.search != nil, !store.isLoading, store.errorMessage == nil {
 				Text(store.canLoadMore ? "\(store.rows.count)+ commits" : "^[\(store.rows.count) commit](inflect: true)")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundStyle(.secondary)
 					.monospacedDigit()
 			}
@@ -124,6 +128,7 @@ public struct GitGraphView: View {
 			Button("Close") {
 				store.send(.closeButtonTapped)
 			}
+			.buttonStyle(.scaledAutomatic)
 		}
 		.padding()
 		.background(Color(nsColor: .windowBackgroundColor))
@@ -287,7 +292,7 @@ public struct GitGraphView: View {
 							Button("Load More") {
 								store.send(.loadMoreButtonTapped)
 							}
-							.buttonStyle(.bordered)
+							.buttonStyle(.scaledBordered)
 							.controlSize(.small)
 							.disabled(store.isLoading)
 							.padding(.vertical, 12)
@@ -316,7 +321,7 @@ public struct GitGraphView: View {
 				}
 				// Rows draw their lane lines edge to edge, so the list must not pad them to a
 				// taller default row — a gap would break the vertical lines between commits.
-				.environment(\.defaultMinListRowHeight, GitGraphRowView.rowHeight)
+				.environment(\.defaultMinListRowHeight, GitGraphRowView.rowHeight(scale: uiFontScale))
 				// One list-level menu driven by the selection. Per-row `.contextMenu` is
 				// deliberately avoided: ⌘A is dispatched through `NSMenu
 				// performKeyEquivalent:`, which makes AppKit build every row's menu, turning
@@ -486,18 +491,18 @@ public struct GitGraphView: View {
 		VStack(spacing: 16) {
 			Spacer()
 			Image(systemName: "exclamationmark.triangle.fill")
-				.font(.largeTitle)
+				.scaledFont(.largeTitle)
 				.foregroundColor(.red)
 			Text("Failed to load commit history")
-				.font(.headline)
+				.scaledFont(.headline)
 			Text(message)
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundStyle(.secondary)
 				.textSelection(.enabled)
 			Button("Retry") {
 				store.send(.refreshButtonTapped)
 			}
-			.buttonStyle(.borderedProminent)
+			.buttonStyle(.scaledBorderedProminent)
 			Spacer()
 		}
 		.frame(maxWidth: .infinity)
@@ -543,7 +548,7 @@ public struct GitGraphView: View {
 
 	private func columnTitle(_ title: String) -> some View {
 		Text(title)
-			.font(.caption)
+			.scaledFont(.caption)
 			.fontWeight(.medium)
 			.foregroundStyle(.secondary)
 			.lineLimit(1)
@@ -595,8 +600,14 @@ private struct GitGraphRowView: View {
 	let widths: GitGraphColumnWidths
 	let columnGap: CGFloat
 
-	/// Read by the list to keep rows flush, so the lane lines join up between commits.
-	static let rowHeight: CGFloat = 26
+	/// Read by the list to keep rows flush, so the lane lines join up between commits. Grows with
+	/// the UI text size so a larger subject line still fits; the lanes are drawn to the row's height.
+	static func rowHeight(scale: CGFloat) -> CGFloat {
+		(26 * scale).rounded()
+	}
+
+	@Environment(\.uiFontScale)
+	private var uiFontScale
 
 	private static let laneWidth: CGFloat = 14
 
@@ -608,7 +619,7 @@ private struct GitGraphRowView: View {
 	var body: some View {
 		HStack(spacing: 0) {
 			graphCell
-				.frame(width: widths.graph, height: Self.rowHeight)
+				.frame(width: widths.graph, height: Self.rowHeight(scale: uiFontScale))
 				.clipped()
 			columnSpacer
 
@@ -618,7 +629,7 @@ private struct GitGraphRowView: View {
 				}
 
 				Text(row.commit.subject)
-					.font(.callout)
+					.scaledFont(.callout)
 					.fontWeight(row.commit.isHead ? .semibold : .regular)
 					.lineLimit(1)
 					.truncationMode(.tail)
@@ -628,7 +639,7 @@ private struct GitGraphRowView: View {
 			columnSpacer
 
 			Text(row.commit.author)
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundStyle(.secondary)
 				.lineLimit(1)
 				.padding(.leading, 4)
@@ -636,7 +647,7 @@ private struct GitGraphRowView: View {
 			columnSpacer
 
 			Text(row.commit.date, format: .dateTime.day().month(.abbreviated).year().hour().minute())
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundStyle(.secondary)
 				.lineLimit(1)
 				.padding(.leading, 4)
@@ -644,14 +655,14 @@ private struct GitGraphRowView: View {
 			columnSpacer
 
 			Text(row.commit.shortHash)
-				.font(.system(.caption, design: .monospaced))
+				.scaledFont(.caption, design: .monospaced)
 				.foregroundStyle(.secondary)
 				.lineLimit(1)
 				.padding(.leading, 4)
 				.frame(width: widths.hash, alignment: .leading)
 		}
 		.padding(.trailing, 12)
-		.frame(height: Self.rowHeight)
+		.frame(height: Self.rowHeight(scale: uiFontScale))
 		// The selected row's fill is the list's own. This tint only marks HEAD, and stays
 		// translucent so it reads as a tint over that fill rather than hiding it.
 		.background {
@@ -735,9 +746,9 @@ private struct GitGraphRowView: View {
 	private func refChip(_ ref: GitCommitRef) -> some View {
 		HStack(spacing: 3) {
 			Image(systemName: refIcon(ref.kind))
-				.font(.system(size: 8))
+				.scaledFont(size: 8)
 			Text(ref.name)
-				.font(.caption2)
+				.scaledFont(.caption2)
 				.fontWeight(ref.isHead ? .bold : .medium)
 				.lineLimit(1)
 		}
@@ -788,9 +799,9 @@ private struct BranchFormView: View {
 			VStack(alignment: .leading, spacing: 14) {
 				VStack(alignment: .leading, spacing: 4) {
 					Text(form.kind == .branch ? "New Branch" : "New Worktree")
-						.font(.headline)
+						.scaledFont(.headline)
 					Text("From \(form.commit.shortHash) “\(form.commit.subject)”")
-						.font(.callout)
+						.scaledFont(.callout)
 						.foregroundStyle(.secondary)
 						.lineLimit(2)
 				}
@@ -814,7 +825,7 @@ private struct BranchFormView: View {
 
 				case .worktree:
 					Text(worktreeFolder(for: form))
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
 						.textSelection(.enabled)
 						.lineLimit(2)
@@ -826,11 +837,13 @@ private struct BranchFormView: View {
 					Button("Cancel", role: .cancel) {
 						store.send(.commitAction(.branchFormCancelled))
 					}
+					.buttonStyle(.scaledAutomatic)
 					.keyboardShortcut(.cancelAction)
 
 					Button(form.kind == .branch ? "Create Branch" : "Create Worktree") {
 						store.send(.commitAction(.branchFormSubmitted))
 					}
+					.buttonStyle(.scaledAutomatic)
 					.keyboardShortcut(.defaultAction)
 					.disabled(!form.canSubmit)
 				}

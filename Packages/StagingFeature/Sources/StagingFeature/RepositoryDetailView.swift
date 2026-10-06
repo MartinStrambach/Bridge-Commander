@@ -17,7 +17,7 @@ public struct RepositoryDetailView: View {
 			// Custom Header
 			HStack {
 				Text("Repository Changes")
-					.font(.title2)
+					.scaledFont(.title2)
 					.fontWeight(.semibold)
 
 				if store.hasChanges {
@@ -82,6 +82,7 @@ public struct RepositoryDetailView: View {
 				Button("Close") {
 					store.send(.cancelButtonTapped)
 				}
+				.buttonStyle(.scaledAutomatic)
 				.keyboardShortcut(.cancelAction)
 			}
 			.padding()

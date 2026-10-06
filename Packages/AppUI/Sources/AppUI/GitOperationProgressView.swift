@@ -18,7 +18,7 @@ public struct GitOperationProgressView: View {
 				.controlSize(.small)
 				.scaleEffect(0.8)
 			Text(text)
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 		}
 		.padding(.horizontal, 8)

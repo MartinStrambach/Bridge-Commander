@@ -1,3 +1,4 @@
+import AppUI
 import ComposableArchitecture
 import SwiftUI
 import Settings
@@ -66,7 +67,7 @@ struct TerminalLayoutView: View {
 		VStack(spacing: 0) {
 			HStack {
 				Text("REPOSITORIES")
-					.font(.caption2)
+					.scaledFont(.caption2)
 					.fontWeight(.semibold)
 					.foregroundColor(.secondary)
 				Spacer()
@@ -74,7 +75,7 @@ struct TerminalLayoutView: View {
 					showOnlyWithTerminals.toggle()
 				} label: {
 					Image(systemName: showOnlyWithTerminals ? "terminal.fill" : "terminal")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(showOnlyWithTerminals ? .green : .secondary)
 						.padding(8)
 						.background(Color.secondary.opacity(showOnlyWithTerminals ? 0.2 : 0.1), in: RoundedRectangle(cornerRadius: 6))
@@ -110,7 +111,7 @@ struct TerminalLayoutView: View {
 				store.send(.hideTerminalMode)
 			}
 			.buttonStyle(.plain)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 			.padding(12)
 			.frame(maxWidth: .infinity, alignment: .leading)
@@ -150,7 +151,7 @@ struct TerminalLayoutView: View {
 
 	private func sidebarGroupLabel(rootPath: String) -> some View {
 		Text(URL(fileURLWithPath: rootPath).lastPathComponent.uppercased())
-			.font(.caption2)
+			.scaledFont(.caption2)
 			.fontWeight(.semibold)
 			.foregroundColor(.secondary)
 			.frame(maxWidth: .infinity, alignment: .leading)
@@ -168,12 +169,12 @@ struct TerminalLayoutView: View {
 				TerminalStatusDotView(status: status, size: 12)
 				VStack(alignment: .leading, spacing: 2) {
 					Text("Home Directory")
-						.font(.caption)
+						.scaledFont(.caption)
 						.fontWeight(isActive ? .semibold : .regular)
 						.foregroundColor(isActive ? .primary : .secondary)
 						.lineLimit(1)
 					Text("~")
-						.font(.caption2)
+						.scaledFont(.caption2)
 						.foregroundColor(.secondary)
 						.lineLimit(1)
 				}

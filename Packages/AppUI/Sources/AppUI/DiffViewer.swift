@@ -133,12 +133,12 @@ public struct DiffViewer: View {
 					.foregroundStyle(.secondary)
 
 				Text(diff.fileChange.path)
-					.font(.headline)
+					.scaledFont(.headline)
 
 				Spacer()
 
 				Text(diff.fileChange.status.displayName)
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundStyle(.secondary)
 			}
 			.padding()
@@ -151,14 +151,14 @@ public struct DiffViewer: View {
 	private var binaryFileView: some View {
 		VStack(spacing: 8) {
 			Image(systemName: "doc.badge.ellipsis")
-				.font(.system(size: 48))
+				.scaledFont(size: 48)
 				.foregroundStyle(.secondary)
 
 			Text("Binary File")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text("Cannot display diff for binary files")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundStyle(.secondary)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -168,14 +168,14 @@ public struct DiffViewer: View {
 	private var noChangesView: some View {
 		VStack(spacing: 8) {
 			Image(systemName: "doc.plaintext")
-				.font(.system(size: 48))
+				.scaledFont(size: 48)
 				.foregroundStyle(.secondary)
 
 			Text("No Changes to Display")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			Text("The file has no viewable differences")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundStyle(.secondary)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)

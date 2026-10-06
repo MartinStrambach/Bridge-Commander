@@ -9,6 +9,12 @@ struct TuistButtonView: View {
 	@Bindable
 	var store: StoreOf<TuistButtonReducer>
 
+	/// Read here and applied to the menu's label as a plain font: a `.borderlessButton` menu's
+	/// label is flattened by AppKit, which drops `scaledFont`'s environment lookup and keeps only
+	/// a font set directly on the `Text`.
+	@Environment(\.uiFontScale)
+	private var uiFontScale
+
 	@Environment(\.presentsButtonAlerts)
 	private var presentsAlerts
 
@@ -100,7 +106,7 @@ struct TuistButtonView: View {
 					.labelStyle(.titleAndIcon)
 				} label: {
 					Text("Tuist")
-						.font(.system(size: 12))
+						.font(.system(size: 12 * uiFontScale))
 				}
 				.menuStyle(.borderlessButton)
 			}

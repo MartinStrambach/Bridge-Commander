@@ -1,3 +1,4 @@
+import AppUI
 import Sparkle
 import SwiftUI
 
@@ -22,7 +23,7 @@ struct UpdateSettingsView: View {
 			)
 
 			Text("Checks about once a day.")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 
 			Toggle(
@@ -37,7 +38,7 @@ struct UpdateSettingsView: View {
 			Text(
 				"A downloaded update is installed when you quit Bridge Commander, and runs from the next launch. Needs automatic checks."
 			)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			HStack {
@@ -47,13 +48,13 @@ struct UpdateSettingsView: View {
 				.disabled(!viewModel.canCheckForUpdates)
 
 				Text(statusText)
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			}
 
 			if !startsUpdater {
 				Text("Updates are off in Debug builds.")
-					.font(.caption)
+					.scaledFont(.caption)
 					.foregroundColor(.orange)
 			}
 		}

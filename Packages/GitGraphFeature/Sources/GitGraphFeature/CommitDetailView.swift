@@ -57,7 +57,7 @@ struct CommitDetailView: View {
 	private var commitSummary: some View {
 		VStack(alignment: .leading, spacing: 4) {
 			Text(store.commit.subject)
-				.font(.headline)
+				.scaledFont(.headline)
 				.lineLimit(2)
 				.textSelection(.enabled)
 
@@ -67,7 +67,7 @@ struct CommitDetailView: View {
 				Text(store.commit.date, format: .dateTime.day().month(.abbreviated).year().hour().minute())
 				Text("·")
 				Text(store.commit.shortHash)
-					.font(.system(.caption, design: .monospaced))
+					.scaledFont(.caption, design: .monospaced)
 
 				if store.commit.isMerge {
 					Text("·")
@@ -77,7 +77,7 @@ struct CommitDetailView: View {
 						.italic()
 				}
 			}
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundStyle(.secondary)
 			.lineLimit(1)
 		}

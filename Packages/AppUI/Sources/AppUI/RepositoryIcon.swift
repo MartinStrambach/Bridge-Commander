@@ -12,7 +12,7 @@ public struct RepositoryIcon: View {
 	public var body: some View {
 		ZStack(alignment: .topTrailing) {
 			Image(systemName: isWorktree ? "tree.fill" : "folder.badge.gearshape")
-				.font(.title2)
+				.scaledFont(.title2)
 				.foregroundColor(isWorktree ? .blue : .green)
 				.frame(width: 32)
 

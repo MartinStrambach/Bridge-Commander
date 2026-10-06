@@ -9,10 +9,10 @@ struct CommitView: View {
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			Text("Commit Staged Changes")
-				.font(.headline)
+				.scaledFont(.headline)
 
 			TextEditor(text: $store.message)
-				.font(.body)
+				.scaledFont(.body)
 				.frame(height: 120)
 				.overlay(
 					RoundedRectangle(cornerRadius: 6)
@@ -33,12 +33,14 @@ struct CommitView: View {
 				Button("Cancel") {
 					store.send(.cancelTapped)
 				}
+				.buttonStyle(.scaledAutomatic)
 				.keyboardShortcut(.cancelAction)
 				.disabled(store.isCommitting)
 
 				Button("Commit & Push") {
 					store.send(.commitAndPushTapped)
 				}
+				.buttonStyle(.scaledAutomatic)
 				.disabled(store.isCommitting || store.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 				.overlay {
 					if store.isCommitting && store.shouldPushAfterCommit {
@@ -50,6 +52,7 @@ struct CommitView: View {
 				Button("Commit") {
 					store.send(.commitTapped)
 				}
+				.buttonStyle(.scaledAutomatic)
 				.keyboardShortcut(.defaultAction)
 				.disabled(store.isCommitting || store.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 				.overlay {

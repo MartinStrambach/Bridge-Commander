@@ -47,7 +47,7 @@ public struct ToolButton: View {
 				Spacer(minLength: 0)
 
 				Text(label)
-					.font(.caption2)
+					.scaledFont(.caption2)
 					.lineLimit(2)
 					.multilineTextAlignment(.center)
 					.fixedSize(horizontal: false, vertical: true)
@@ -55,7 +55,7 @@ public struct ToolButton: View {
 			.padding(4)
 			.frame(width: buttonSize, height: buttonSize)
 		}
-		.buttonStyle(.bordered)
+		.buttonStyle(.scaledBordered)
 		.fixedSize()
 		.tint(tint)
 		.disabled(isProcessing)
