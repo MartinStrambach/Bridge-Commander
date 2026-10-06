@@ -10,6 +10,14 @@ public struct MenuBarStatusLabel: View {
 	@Environment(\.openWindow)
 	private var openWindow
 
+	/// The app icon's git graph, drawn as a template so the menu bar tints it. In the app target's
+	/// asset catalog, hence the main bundle.
+	private static let logo = Image("MenuBarLogo", bundle: .main).renderingMode(.template)
+
+	/// Text sets an inline image on its baseline, which leaves the 16 pt glyph riding above the
+	/// count; this centers it on the digits.
+	private static let logoBaselineOffset: CGFloat = -3
+
 	public init(model: RepositoryAppModel) {
 		self.store = model.store
 	}
@@ -20,10 +28,10 @@ public struct MenuBarStatusLabel: View {
 		// drops the rest of a composed label.
 		Group {
 			if waitingCount > 0 {
-				Text("\(Image(systemName: "bubble.left.and.exclamationmark.bubble.right.fill")) \(waitingCount)")
+				Text(Self.logo).baselineOffset(Self.logoBaselineOffset) + Text(" \(waitingCount)")
 			}
 			else {
-				Image(systemName: "arrow.triangle.branch")
+				Self.logo
 			}
 		}
 		.help(waitingCount > 0 ? "\(waitingCount) waiting for input" : "Bridge Commander")
