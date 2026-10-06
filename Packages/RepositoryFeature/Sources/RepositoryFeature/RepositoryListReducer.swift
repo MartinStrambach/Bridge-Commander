@@ -938,6 +938,24 @@ struct RepositoryListReducer {
 				}
 				return refreshRow(for: path, in: state)
 
+			case .terminalLayout(.gitGraph(.presented(.delegate(.repositoryChanged)))):
+				// The graph's commit menu checked something out or added a commit: same row
+				// refresh as the graph opened from a row gets (RepositoryRowReducer.gitGraph).
+				guard let path = state.terminalLayout?.gitGraph?.repositoryPath else {
+					return .none
+				}
+				return refreshRow(for: path, in: state)
+
+			case .terminalLayout(.gitGraph(.presented(.delegate(.worktreeCreated)))):
+				// Rescan the graph's group, as a worktree created from its rows would.
+				guard
+					let path = state.terminalLayout?.gitGraph?.repositoryPath,
+					let group = state.repositoryGroups.first(where: { $0.header.path == path || $0.worktrees[id: path] != nil })
+				else {
+					return .none
+				}
+				return .send(.repositoryGroups(.element(id: group.id, action: .header(.worktreeCreated))))
+
 			case .terminalLayout(.refreshActiveRepoRequested):
 				// ⌘R in terminal mode refreshes just the opened repo. The home-directory
 				// session has no repo row, so refreshRow falls through to .none there.

@@ -21,6 +21,9 @@ public enum GitError: LocalizedError, Equatable {
 	case commitFailed(String)
 	case fileOperationFailed(String)
 	case logFailed(String)
+	case cherryPickFailed(String)
+	case revertFailed(String)
+	case branchCreationFailed(String)
 
 	public var errorDescription: String? {
 		switch self {
@@ -62,6 +65,12 @@ public enum GitError: LocalizedError, Equatable {
 			"File operation failed: \(message)"
 		case let .logFailed(message):
 			"Failed to load commit history: \(message)"
+		case let .cherryPickFailed(message):
+			"Failed to cherry-pick: \(message)"
+		case let .revertFailed(message):
+			"Failed to revert: \(message)"
+		case let .branchCreationFailed(message):
+			"Failed to create branch: \(message)"
 		}
 	}
 }

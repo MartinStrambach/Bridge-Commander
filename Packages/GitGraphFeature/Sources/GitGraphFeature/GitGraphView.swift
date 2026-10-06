@@ -56,6 +56,22 @@ public struct GitGraphView: View {
 		.onChange(of: store.search) {
 			scrollsAfterSearch = true
 		}
+		.alert($store.scope(\.$alert, action: \.alert))
+		.sheet(item: branchFormBinding) { _ in
+			BranchFormView(store: store)
+		}
+	}
+
+	/// Dismissing the sheet any way other than its buttons cancels the form.
+	private var branchFormBinding: Binding<BranchForm?> {
+		Binding(
+			get: { store.branchForm },
+			set: { form in
+				if form == nil, store.branchForm != nil {
+					store.send(.commitAction(.branchFormCancelled))
+				}
+			}
+		)
 	}
 
 	// MARK: - Header
@@ -71,6 +87,14 @@ public struct GitGraphView: View {
 				.foregroundStyle(.secondary)
 
 			Spacer()
+
+			if let runningCommitAction = store.runningCommitAction {
+				ProgressView()
+					.controlSize(.small)
+				Text(runningCommitAction)
+					.font(.caption)
+					.foregroundStyle(.secondary)
+			}
 
 			if store.search != nil, !store.isLoading, store.errorMessage == nil {
 				Text(store.canLoadMore ? "\(store.rows.count)+ commits" : "^[\(store.rows.count) commit](inflect: true)")
@@ -376,13 +400,84 @@ public struct GitGraphView: View {
 	@ViewBuilder
 	private func contextMenu(forSelection ids: Set<GitGraphRow.ID>) -> some View {
 		if let id = ids.first, let commit = store.rows.first(where: { $0.id == id })?.commit {
+			// One write action at a time: a second git command started mid-way would fail on
+			// the first one's index lock, or worse, act on a half-changed branch.
+			Group {
+				checkoutItems(for: commit)
+
+				Divider()
+
+				Button("New Branch from Commit…") {
+					store.send(.commitAction(.newBranchTapped(commit)))
+				}
+				Button("New Worktree from Commit…") {
+					store.send(.commitAction(.newWorktreeTapped(commit)))
+				}
+
+				Divider()
+
+				// HEAD's own changes are already on the branch it would be picked onto.
+				if !commit.isHead {
+					Button("Cherry-Pick onto Current Branch…") {
+						store.send(.commitAction(.cherryPickTapped(commit)))
+					}
+				}
+				Button("Revert Commit…") {
+					store.send(.commitAction(.revertTapped(commit)))
+				}
+			}
+			.disabled(store.runningCommitAction != nil)
+
+			Divider()
+
 			Button("Copy Commit Hash") {
 				NSPasteboard.general.clearContents()
 				NSPasteboard.general.setString(commit.hash, forType: .string)
 			}
+			Button("Copy Short Hash") {
+				NSPasteboard.general.clearContents()
+				NSPasteboard.general.setString(commit.shortHash, forType: .string)
+			}
 			Button("Copy Commit Message") {
 				NSPasteboard.general.clearContents()
 				NSPasteboard.general.setString(commit.subject, forType: .string)
+			}
+		}
+	}
+
+	/// The branches on this commit that can be checked out, then the commit itself.
+	///
+	/// A remote branch checks out its local namesake (created to track it when missing), so it is
+	/// left out when that local branch is decorating the same commit and already has an item.
+	@ViewBuilder
+	private func checkoutItems(for commit: GitLogCommit) -> some View {
+		let localBranches = commit.refs.filter { $0.kind == .localBranch }
+		let localNames = Set(localBranches.map(\.name))
+		let remoteBranches = commit.refs.filter { ref in
+			guard
+				ref.kind == .remoteBranch,
+				let localName = GitCommitActionHelper.localBranchName(forRemoteBranch: ref.name)
+			else {
+				return false
+			}
+
+			return !localNames.contains(localName)
+		}
+
+		ForEach(localBranches.filter { !$0.isHead }, id: \.name) { branch in
+			Button("Check Out “\(branch.name)”") {
+				store.send(.commitAction(.checkoutBranchTapped(branch.name)))
+			}
+		}
+		ForEach(remoteBranches, id: \.name) { branch in
+			let localName = GitCommitActionHelper.localBranchName(forRemoteBranch: branch.name) ?? branch.name
+			Button("Check Out “\(localName)” from \(branch.name)") {
+				store.send(.commitAction(.checkoutRemoteBranchTapped(branch.name)))
+			}
+		}
+		if !commit.isHead {
+			Button("Check Out Commit (Detached HEAD)…") {
+				store.send(.commitAction(.checkoutCommitTapped(commit)))
 			}
 		}
 	}
@@ -676,6 +771,91 @@ private struct GitGraphRowView: View {
 		case .detachedHead:
 			.red
 		}
+	}
+}
+
+// MARK: - Branch Form
+
+/// Names the branch for "New Branch…" / "New Worktree…".
+private struct BranchFormView: View {
+	let store: StoreOf<GitGraphReducer>
+
+	@FocusState
+	private var isNameFocused: Bool
+
+	var body: some View {
+		if let form = store.branchForm {
+			VStack(alignment: .leading, spacing: 14) {
+				VStack(alignment: .leading, spacing: 4) {
+					Text(form.kind == .branch ? "New Branch" : "New Worktree")
+						.font(.headline)
+					Text("From \(form.commit.shortHash) “\(form.commit.subject)”")
+						.font(.callout)
+						.foregroundStyle(.secondary)
+						.lineLimit(2)
+				}
+
+				TextField(
+					"Branch name",
+					text: Binding(get: { form.name }, set: { store.send(.commitAction(.branchFormNameChanged($0))) })
+				)
+				.textFieldStyle(.roundedBorder)
+				.focused($isNameFocused)
+				.onSubmit {
+					store.send(.commitAction(.branchFormSubmitted))
+				}
+
+				switch form.kind {
+				case .branch:
+					Toggle(
+						"Check out the new branch",
+						isOn: Binding(get: { form.checksOut }, set: { store.send(.commitAction(.branchFormChecksOutChanged($0))) })
+					)
+
+				case .worktree:
+					Text(worktreeFolder(for: form))
+						.font(.caption)
+						.foregroundStyle(.secondary)
+						.textSelection(.enabled)
+						.lineLimit(2)
+						.truncationMode(.middle)
+				}
+
+				HStack {
+					Spacer()
+					Button("Cancel", role: .cancel) {
+						store.send(.commitAction(.branchFormCancelled))
+					}
+					.keyboardShortcut(.cancelAction)
+
+					Button(form.kind == .branch ? "Create Branch" : "Create Worktree") {
+						store.send(.commitAction(.branchFormSubmitted))
+					}
+					.keyboardShortcut(.defaultAction)
+					.disabled(!form.canSubmit)
+				}
+			}
+			.padding(20)
+			.frame(width: 440)
+			.onAppear {
+				isNameFocused = true
+			}
+		}
+	}
+
+	private func worktreeFolder(for form: BranchForm) -> String {
+		guard form.canSubmit else {
+			return "Created next to the repository’s other worktrees"
+		}
+
+		let folder = GitWorktreeCreator.worktreeFolder(
+			repositoryPath: store.mainRepositoryPath,
+			branchName: form.branchName,
+			baseBranch: "",
+			createNewBranch: true,
+			worktreeBasePath: store.worktreeBasePath
+		)
+		return "Created in \(folder.path)"
 	}
 }
 

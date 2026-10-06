@@ -6,7 +6,7 @@ import GitCore
 public struct GitGraphReducer {
 	@ObservableState
 	public struct State: Equatable {
-		let repositoryPath: String
+		public let repositoryPath: String
 		let repositoryName: String
 		var rows: [GitGraphRow] = []
 		var isLoading = false
@@ -36,9 +36,37 @@ public struct GitGraphReducer {
 			GitLogSearch(field: searchField, query: searchQuery)
 		}
 
-		public init(repositoryPath: String, repositoryName: String) {
+		/// Where "New Worktree from Commit…" puts the worktree (relative to the main repository,
+		/// like the row's Create Worktree button) and which untracked files it copies into it.
+		/// Handed in by the presenter, which owns the settings.
+		let worktreeBasePath: String
+		let worktreeCopyPaths: [String]
+
+		/// The working tree of the repository this one belongs to (itself, unless it is a linked
+		/// worktree). Only used to show where a new worktree will go.
+		let mainRepositoryPath: String
+
+		/// The write action running now, as the header names it ("Cherry-picking…"). While it is
+		/// set the commit menu offers nothing else, so two git commands never race each other.
+		var runningCommitAction: String?
+
+		/// The name prompt for "New Branch…" / "New Worktree…", or nil when it is closed.
+		var branchForm: BranchForm?
+
+		@Presents
+		var alert: AlertState<CommitAction.Alert>?
+
+		public init(
+			repositoryPath: String,
+			repositoryName: String,
+			worktreeBasePath: String = "../worktrees",
+			worktreeCopyPaths: [String] = []
+		) {
 			self.repositoryPath = repositoryPath
 			self.repositoryName = repositoryName
+			self.worktreeBasePath = worktreeBasePath
+			self.worktreeCopyPaths = worktreeCopyPaths
+			self.mainRepositoryPath = GitDirectoryResolver.resolveMainRepositoryPath(at: repositoryPath) ?? repositoryPath
 		}
 	}
 
@@ -54,6 +82,17 @@ public struct GitGraphReducer {
 		case commitDetail(CommitDetailReducer.Action)
 		case searchQueryChanged(String)
 		case searchFieldChanged(GitLogSearch.Field)
+		case commitAction(CommitAction)
+		case alert(PresentationAction<CommitAction.Alert>)
+		case delegate(Delegate)
+
+		@CasePathable
+		public enum Delegate: Equatable {
+			/// HEAD, the current branch or the working tree changed: the presenter's row is stale.
+			case repositoryChanged
+			/// A worktree was added, so the presenter's repository group needs a rescan.
+			case worktreeCreated
+		}
 	}
 
 	static let pageSize = 300
@@ -71,6 +110,9 @@ public struct GitGraphReducer {
 
 	@Dependency(GitLogClient.self)
 	private var gitLog
+
+	@Dependency(GitCommitActionClient.self)
+	var gitCommitActions
 
 	@Dependency(\.continuousClock)
 	private var clock
@@ -143,11 +185,21 @@ public struct GitGraphReducer {
 				let previous = state.search
 				state.searchField = field
 				return searchChanged(from: previous, state: &state)
+
+			case let .commitAction(action):
+				return reduce(commitAction: action, state: &state)
+
+			case let .alert(.presented(action)):
+				return reduce(alertAction: action, state: &state)
+
+			case .alert, .delegate:
+				return .none
 			}
 		}
 		.ifLet(\.commitDetail, action: \.commitDetail) {
 			CommitDetailReducer()
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 
 	/// Reloads for a changed search. Edits that leave the search as it was (whitespace around the
@@ -163,7 +215,7 @@ public struct GitGraphReducer {
 		return loadCommits(state: &state, debounce: state.search != nil)
 	}
 
-	private func loadCommits(state: inout State, debounce: Bool = false) -> Effect<Action> {
+	func loadCommits(state: inout State, debounce: Bool = false) -> Effect<Action> {
 		state.isLoading = true
 		return .run { [clock, gitLog, path = state.repositoryPath, limit = state.commitLimit, search = state.search] send in
 			if debounce {

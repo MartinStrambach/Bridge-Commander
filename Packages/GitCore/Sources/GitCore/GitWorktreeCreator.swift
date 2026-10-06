@@ -135,4 +135,44 @@ public nonisolated enum GitWorktreeCreator {
 
 		return folder
 	}
+
+	/// Adds a worktree on a new branch `branchName` that starts at `startPoint` (any revision —
+	/// the graph passes a commit hash). Nothing is fetched: the start point is already local.
+	///
+	/// The folder is placed as `createWorktree` places it, relative to the main repository even
+	/// when `repositoryPath` is itself a linked worktree, so worktrees made from either end up
+	/// side by side. Returns the folder.
+	public static func createWorktree(
+		branchName: String,
+		startPoint: String,
+		repositoryPath: String,
+		worktreeBasePath: String
+	) async throws -> URL {
+		guard !branchName.hasPrefix("-") else {
+			throw GitError.worktreeCreationFailed("'\(branchName)' is not a valid branch name.")
+		}
+
+		let mainRepositoryPath = GitDirectoryResolver.resolveMainRepositoryPath(at: repositoryPath) ?? repositoryPath
+		let folder = worktreeFolder(
+			repositoryPath: mainRepositoryPath,
+			branchName: branchName,
+			baseBranch: "",
+			createNewBranch: true,
+			worktreeBasePath: worktreeBasePath
+		)
+
+		// `worktree add` creates the missing parent folders itself, and refuses an existing
+		// non-empty folder or an existing branch with a message that says so.
+		let result = await ProcessRunner.runGit(
+			arguments: ["worktree", "add", "-b", branchName, folder.path, startPoint],
+			at: repositoryPath
+		)
+
+		guard result.success else {
+			let message = result.trimmedError
+			throw GitError.worktreeCreationFailed(message.isEmpty ? "Unknown error" : message)
+		}
+
+		return folder
+	}
 }

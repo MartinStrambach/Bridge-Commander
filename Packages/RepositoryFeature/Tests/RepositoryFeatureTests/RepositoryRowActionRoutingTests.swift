@@ -173,7 +173,30 @@ struct RepositoryRowActionRoutingTests {
 		}
 	}
 
-	// MARK: - Helpers
+	// MARK: - Commit graph
+
+	@Test("a commit graph action that changed the repository refreshes the row")
+	func graphChangeRefreshesRow() async {
+		let store = makeStore()
+
+		await store.send(.repositoryIconTapped)
+		await store.send(.gitGraph(.presented(.delegate(.repositoryChanged))))
+		await store.receive(\.refresh)
+		await store.finish()
+		#expect(store.state.gitGraph != nil)
+	}
+
+	@Test("a worktree created from the commit graph tells the list to rescan")
+	func graphWorktreeReportsCreation() async {
+		let store = makeStore()
+
+		await store.send(.repositoryIconTapped)
+		await store.send(.gitGraph(.presented(.delegate(.worktreeCreated))))
+		await store.receive(\.worktreeCreated)
+		await store.finish()
+	}
+
+		// MARK: - Helpers
 
 	/// Each finished operation the git menu can report, success or failure alike — a failed pull
 	/// or merge can still have moved the branch or left conflicts.

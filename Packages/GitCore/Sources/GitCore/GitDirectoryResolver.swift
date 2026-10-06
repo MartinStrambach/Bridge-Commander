@@ -43,6 +43,17 @@ public nonisolated enum GitDirectoryResolver {
 		resolveGitDirectory(at: path).map(commonGitDirectory(from:))
 	}
 
+	/// The working tree of the main repository `path` belongs to: `path` itself for a regular
+	/// repository, the repository it was added from for a linked worktree. Nil for a bare
+	/// repository or a path that is not one.
+	public static func resolveMainRepositoryPath(at path: String) -> String? {
+		guard let common = resolveCommonGitDirectory(at: path), (common as NSString).lastPathComponent == ".git" else {
+			return nil
+		}
+
+		return (common as NSString).deletingLastPathComponent
+	}
+
 	/// Maps a per-worktree git directory (".../.git/worktrees/<name>") to the
 	/// common git directory; returns any other git directory unchanged.
 	static func commonGitDirectory(from gitDirectory: String) -> String {

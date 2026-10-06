@@ -303,13 +303,18 @@ struct RepositoryRowReducer {
 				return .none
 
 			case .repositoryIconTapped:
-				// Read-only: the graph only shells out to `git log`/`git show`, so opening it
-				// from the row cannot touch the working tree it is describing.
-				state.gitGraph = GitGraphReducer.State(
-					repositoryPath: state.path,
-					repositoryName: state.name
-				)
+				// Opening and browsing only read (`git log`/`git show`); the graph writes only
+				// through its commit menu, and reports back through its delegate.
+				state.gitGraph = .forRepository(path: state.path, name: state.name)
 				return .none
+
+			case .gitGraph(.presented(.delegate(.repositoryChanged))):
+				return .send(.refresh)
+
+			case .gitGraph(.presented(.delegate(.worktreeCreated))):
+				// The list rescans the group on this, which is what makes the new worktree's row
+				// appear. The rescan merges rows, so this one — and the open graph — survive it.
+				return .send(.worktreeCreated)
 
 			case .onAppear:
 				guard !state.isLoaded else {
