@@ -18,9 +18,7 @@ enum SortMode: String, Equatable {
 struct RepositoryListReducer {
 	@ObservableState
 	struct State: Equatable {
-		/// Settable from the module (not `fileprivate(set)` like its neighbours) only so tests can
-		/// assert a row's state through the list.
-		var repositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> = []
+		fileprivate(set) var repositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> = []
 		fileprivate(set) var isScanning = false
 		fileprivate(set) var sortMode: SortMode = .state
 
@@ -621,6 +619,16 @@ struct RepositoryListReducer {
 					let rowKinds = change.kinds.subtracting(.worktreeList)
 					if !rowKinds.isEmpty {
 						effects.append(sendToRow(.changedOnDisk(rowKinds), for: change.repositoryPath, in: state))
+					}
+					// The toolbar's copy of the git menu re-checks its stash whenever a status read
+					// syncs it (`syncTerminalGitMenu`). A stash that moved alone (`git stash drop`
+					// in that very terminal) brings no status read, so it is told directly.
+					if
+						rowKinds == .stash,
+						state.terminalLayout?.activeRepositoryPath == change.repositoryPath,
+						state.terminalLayout?.gitActionsMenu != nil
+					{
+						effects.append(.send(.terminalLayout(.gitActionsMenu(.refresh))))
 					}
 				}
 				return .merge(effects)
@@ -1691,3 +1699,15 @@ private func startupCommand(
 	if !own.isEmpty { return own }
 	return repoSettings.skipGlobalTerminalStartupCommand ? "" : state.terminalStartupCommand
 }
+
+#if DEBUG
+extension RepositoryListReducer.State {
+	/// Write access for `TestStore` assertions, which describe an expected change by mutating
+	/// state — a row's, here, reached through the list. Debug builds only, and in this file
+	/// because nothing else can use `repositoryGroups`' setter.
+	var repositoryGroupsForTesting: IdentifiedArrayOf<RepoGroupReducer.State> {
+		get { repositoryGroups }
+		set { repositoryGroups = newValue }
+	}
+}
+#endif

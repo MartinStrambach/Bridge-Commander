@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 import GitCore
+import GitActionsMenu
 import GitHosting
 import Testing
 import ToolsIntegration
@@ -281,6 +282,43 @@ struct RepositoryChangedOnDiskTests {
 		await store.finish()
 	}
 
+	@Test("a stash change in the terminal's repository reaches the toolbar's git menu too")
+	func stashChangeRefreshesTerminalGitMenu() async {
+		let store = makeListStore(
+			terminalOpen(on: "/repos/alpha-one"),
+			changes: AsyncStream { $0.finish() },
+			watched: LockIsolated([])
+		)
+
+		await scanAlpha(store)
+		await store.send(.repositoriesChangedOnDisk([
+			GitRepositoryChange(repositoryPath: "/repos/alpha-one", kinds: .stash),
+		]))
+
+		await store.receive(\.terminalLayout.gitActionsMenu.refresh)
+		await store.finish()
+	}
+
+	@Test("a stash change in another repository leaves the toolbar's git menu alone")
+	func stashChangeElsewhereLeavesTerminalGitMenu() async {
+		let store = makeListStore(
+			terminalOpen(on: "/repos/alpha-one"),
+			changes: AsyncStream { $0.finish() },
+			watched: LockIsolated([])
+		)
+		await scanAlpha(store)
+
+		// Exhaustive from here: the row's own stash check is all the change may cause.
+		store.exhaustivity = .on
+		await store.send(.repositoriesChangedOnDisk([
+			GitRepositoryChange(repositoryPath: "/repos/alpha", kinds: .stash),
+		]))
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.changedOnDisk)
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.refresh)
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.stashButton.checkStashStatus)
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.stashButton.didFindStash)
+	}
+
 	@Test("a worktree added in a terminal rescans its group")
 	func worktreeListChangeRescansGroup() async {
 		let (changes, continuation) = AsyncStream<[GitRepositoryChange]>.makeStream()
@@ -309,6 +347,15 @@ struct RepositoryChangedOnDiskTests {
 
 	// MARK: - Helpers
 
+	/// The terminal panel open on `path`, its toolbar showing that repository's git menu.
+	private func terminalOpen(on path: String) -> RepositoryListReducer.State {
+		var state = RepositoryListReducer.State()
+		var layout = TerminalLayoutReducer.State(activeRepositoryPath: path)
+		layout.gitActionsMenu = GitActionsMenuReducer.State(repositoryPath: path, currentBranch: "feature-one")
+		state.terminalLayout = layout
+		return state
+	}
+
 	/// Branch `feature`, one commit ahead of `origin/feature`, nothing behind.
 	private var knownStatus: RepositoryRowReducer.State {
 		var row = RepositoryRowReducer.State(path: "/repos/app", name: "app", branchName: "feature")
@@ -328,10 +375,11 @@ struct RepositoryChangedOnDiskTests {
 	}
 
 	private func makeListStore(
+		_ initialState: RepositoryListReducer.State = RepositoryListReducer.State(),
 		changes: AsyncStream<[GitRepositoryChange]>,
 		watched: LockIsolated<[[String]]>
 	) -> TestStoreOf<RepositoryListReducer> {
-		let store = TestStore(initialState: RepositoryListReducer.State()) {
+		let store = TestStore(initialState: initialState) {
 			RepositoryListReducer()
 		} withDependencies: {
 			$0[GitRepositoryWatcherClient.self].changes = { paths in
