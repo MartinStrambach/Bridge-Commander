@@ -45,12 +45,12 @@ public struct BannerView: View {
 
 			VStack(alignment: .leading, spacing: 2) {
 				Text(title)
-					.font(.headline)
+					.scaledFont(.headline)
 					.foregroundStyle(color)
 
 				if let subtitle {
 					Text(subtitle)
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
 				}
 			}
@@ -66,7 +66,7 @@ public struct BannerView: View {
 						Text(actionLabel)
 					}
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.tint(color)
 				.help(actionHelp ?? "")
 				.opacity(isLoading ? 0 : 1)

@@ -16,7 +16,7 @@ public struct SectionHeader: View {
 	public var body: some View {
 		HStack {
 			Text(title)
-				.font(.headline)
+				.scaledFont(.headline)
 				.foregroundStyle(.secondary)
 			Spacer()
 
@@ -24,12 +24,12 @@ public struct SectionHeader: View {
 				Button(actionTitle) {
 					action()
 				}
-				.font(.caption)
+				.scaledFont(.caption)
 				.buttonStyle(.borderless)
 			}
 
 			Text("\(count)")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundStyle(.secondary)
 		}
 		.padding(.horizontal, 12)

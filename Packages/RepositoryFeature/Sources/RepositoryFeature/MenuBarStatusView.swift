@@ -1,3 +1,4 @@
+import AppUI
 import ComposableArchitecture
 import SwiftUI
 
@@ -87,7 +88,7 @@ struct MenuBarStatusContentView: View {
 	private var header: some View {
 		HStack {
 			Text("Bridge Commander")
-				.font(.headline)
+				.scaledFont(.headline)
 			Spacer()
 			if store.isScanning {
 				ProgressView()
@@ -110,7 +111,7 @@ struct MenuBarStatusContentView: View {
 	private func waitingSection(_ sessions: [MenuBarWaitingSession]) -> some View {
 		VStack(alignment: .leading, spacing: 2) {
 			Text(sessions.count == 1 ? "1 waiting for input" : "\(sessions.count) waiting for input")
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundStyle(.secondary)
 				.padding(.horizontal, 12)
 				.padding(.bottom, 2)
@@ -198,7 +199,7 @@ private struct MenuBarRepositoryRow: View {
 					.truncationMode(.middle)
 				if let branchName = repository.branchName, branchName != repository.name {
 					Text(branchName)
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
 						.lineLimit(1)
 						.truncationMode(.middle)
@@ -248,7 +249,8 @@ private struct MenuBarRepositoryRow: View {
 						.help("\(behind) to pull")
 				}
 			}
-			.font(.callout.monospacedDigit())
+			.scaledFont(.callout)
+			.monospacedDigit()
 		}
 	}
 }

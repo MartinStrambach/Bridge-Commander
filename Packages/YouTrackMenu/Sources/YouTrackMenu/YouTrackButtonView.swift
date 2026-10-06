@@ -9,6 +9,12 @@ public struct YouTrackButtonView: View {
 	@Bindable
 	var store: StoreOf<YouTrackButtonReducer>
 
+	/// Read here and applied to the menu's label as a plain font: a `.borderlessButton` menu's
+	/// label is flattened by AppKit, which drops `scaledFont`'s environment lookup and keeps only
+	/// a font set directly on the `Text`.
+	@Environment(\.uiFontScale)
+	private var uiFontScale
+
 	public init(store: StoreOf<YouTrackButtonReducer>) {
 		self.store = store
 	}
@@ -35,7 +41,7 @@ public struct YouTrackButtonView: View {
 					}
 				} label: {
 					Text("YouTrack")
-						.font(.system(size: 12))
+						.font(.system(size: 12 * uiFontScale))
 				}
 				.menuStyle(.borderlessButton)
 				.help("Move \(store.ticketId) to a different state")

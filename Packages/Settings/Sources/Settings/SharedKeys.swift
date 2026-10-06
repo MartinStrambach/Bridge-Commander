@@ -44,6 +44,12 @@ public extension SharedReaderKey where Self == AppStorageKey<Double> {
 	static var terminalFontSize: Self {
 		appStorage("terminalFontSize")
 	}
+
+	/// Body text size of the app's own UI. See `UIFontSize` for the range and the default, which is
+	/// the size macOS draws body text at.
+	static var uiFontSize: Self {
+		appStorage("uiFontSize")
+	}
 }
 
 public extension SharedReaderKey where Self == AppStorageKey<PeriodicRefreshInterval> {

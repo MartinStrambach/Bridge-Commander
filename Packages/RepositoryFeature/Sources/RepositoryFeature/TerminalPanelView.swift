@@ -136,7 +136,7 @@ struct TerminalPanelView: View {
 			if let rowStore = activeRowStore {
 				if let ticketId = rowStore.ticketId {
 					Text(ticketId)
-						.font(.caption)
+						.scaledFont(.caption)
 						.fontWeight(.medium)
 						.foregroundStyle(.secondary)
 						.padding(.horizontal, 5)
@@ -146,7 +146,7 @@ struct TerminalPanelView: View {
 				}
 
 				Text(rowStore.formattedBranchName)
-					.font(.subheadline)
+					.scaledFont(.subheadline)
 					.fontWeight(.semibold)
 					.lineLimit(1)
 
@@ -154,7 +154,7 @@ struct TerminalPanelView: View {
 					.foregroundColor(.secondary)
 
 				Text(rowStore.name)
-					.font(.subheadline)
+					.scaledFont(.subheadline)
 					.foregroundColor(.secondary)
 					.lineLimit(1)
 			}
@@ -188,7 +188,7 @@ struct TerminalPanelView: View {
 						Text("Push (\(rowStore.unpushedCommitCount))")
 					}
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.controlSize(.small)
 				.tint(.orange)
 				.disabled(store.isPushing)
@@ -270,7 +270,7 @@ struct TerminalPanelView: View {
 //						store.send(.stagingButtonTapped(repositoryPath: path))
 //					}
 //				}
-//				.buttonStyle(.bordered)
+//				.buttonStyle(.scaledBordered)
 //				.controlSize(.small)
 //			}
 			
@@ -282,7 +282,7 @@ struct TerminalPanelView: View {
 					))
 				}
 			}
-			.buttonStyle(.bordered)
+			.buttonStyle(.scaledBordered)
 			.controlSize(.small)
 			.help("Show commit graph")
 
@@ -294,13 +294,13 @@ struct TerminalPanelView: View {
 					))
 				}
 			}
-			.buttonStyle(.bordered)
+			.buttonStyle(.scaledBordered)
 			.controlSize(.small)
 
 			Button("← Hide") {
 				store.send(.hideTerminalMode)
 			}
-			.buttonStyle(.bordered)
+			.buttonStyle(.scaledBordered)
 			.controlSize(.small)
 		}
 		.padding(.horizontal, 12)
@@ -341,7 +341,7 @@ struct TerminalPanelView: View {
 
 				Button(action: onNewTab) {
 					Image(systemName: "plus")
-						.font(.system(size: 11))
+						.scaledFont(size: 11)
 						.padding(.horizontal, 6)
 						.padding(.vertical, 4)
 						.contentShape(Rectangle())
@@ -358,6 +358,7 @@ struct TerminalPanelView: View {
 						.hidden()
 				}
 
+				cycleTabShortcuts
 				closeTabShortcut(repoSessions: repoSessions)
 				refreshShortcut
 				zoomShortcuts
@@ -440,6 +441,22 @@ struct TerminalPanelView: View {
 		}
 	}
 
+	/// ⌃Tab / ⌃⇧Tab cycle through the repository's tabs, the shortcut Terminal.app uses. The
+	/// reducer resolves the active tab when the key fires, for the reason ⌘W documents. Yielded
+	/// while a sheet is up for the same reason the zoom shortcuts are.
+	@ViewBuilder
+	private var cycleTabShortcuts: some View {
+		if store.stagingDetail == nil, store.gitGraph == nil {
+			Group {
+				Button("") { store.send(.cycleTabRequested(forward: true)) }
+					.keyboardShortcut(.tab, modifiers: .control)
+				Button("") { store.send(.cycleTabRequested(forward: false)) }
+					.keyboardShortcut(.tab, modifiers: [.control, .shift])
+			}
+			.hidden()
+		}
+	}
+
 	/// ⌘R refreshes only the repo opened in the terminal; the full-list refresh in
 	/// `RepositoryListView` hands the shortcut off while the panel is open. The staging sheet and
 	/// the commit graph claim ⌘R for their own refresh, so yield it there — a shortcut registered
@@ -513,13 +530,13 @@ struct TerminalPanelView: View {
 		let isActive = session.id == activeSessionId
 		return HStack(spacing: 4) {
 			Text("Terminal \(session.tabIndex)")
-				.font(.caption)
+				.scaledFont(.caption)
 				.fontWeight(isActive ? .semibold : .regular)
 
 			if totalCount > 1 {
 				Button(action: { onKillTab(session.id) }) {
 					Image(systemName: "xmark")
-						.font(.system(size: 8))
+						.scaledFont(size: 8)
 						.padding(4)
 						.contentShape(Rectangle())
 				}
@@ -549,17 +566,17 @@ struct TerminalPanelView: View {
 	private func terminalErrorView(message: String, sessionId: UUID) -> some View {
 		VStack(spacing: 16) {
 			Image(systemName: "exclamationmark.triangle.fill")
-				.font(.largeTitle)
+				.scaledFont(.largeTitle)
 				.foregroundColor(.red)
 			Text("Terminal failed to start")
-				.font(.headline)
+				.scaledFont(.headline)
 			Text(message)
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 			Button("Retry") {
 				onRetry(sessionId)
 			}
-			.buttonStyle(.borderedProminent)
+			.buttonStyle(.scaledBorderedProminent)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(NSColor.textBackgroundColor))

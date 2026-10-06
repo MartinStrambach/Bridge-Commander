@@ -31,6 +31,7 @@ struct BridgeCommanderApp: App {
 		// one set of terminal panes, and a pane can only be in one window.
 		Window("Bridge Commander", id: RepositoryAppModel.mainWindowId) {
 			RootRepositoryView(model: model)
+				.appUIFontSize()
 		}
 		.windowStyle(.hiddenTitleBar)
 		.windowResizability(.contentSize)
@@ -42,6 +43,7 @@ struct BridgeCommanderApp: App {
 
 		MenuBarExtra(isInserted: menuBarExtraInserted) {
 			MenuBarStatusView(model: model)
+				.appUIFontSize()
 		} label: {
 			MenuBarStatusLabel(model: model)
 		}
@@ -51,6 +53,7 @@ struct BridgeCommanderApp: App {
 			SettingsView(store: settingsStore) {
 				UpdateSettingsView(updater: updaterController.updater)
 			}
+			.appUIFontSize()
 		}
 	}
 

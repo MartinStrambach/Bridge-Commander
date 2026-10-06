@@ -106,6 +106,9 @@ public struct SettingsReducer {
 		@Shared(.terminalFontName)
 		public var terminalFontName = TerminalFontFamily.systemDefault
 
+		@Shared(.uiFontSize)
+		public var uiFontSize = UIFontSize.default
+
 		public var youtrackTokenTest = TokenTestState.idle
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
@@ -166,6 +169,7 @@ public struct SettingsReducer {
 		case setTerminalClaudeStatusDetection(ClaudeStatusDetection)
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
+		case setUIFontSize(Double)
 		case importFromTerminalAppButtonTapped
 		case profileFilesSelected([URL])
 		case profilesImported([TerminalProfile])
@@ -639,6 +643,10 @@ public struct SettingsReducer {
 				// falls back to the system face, so a name that stops resolving degrades rather
 				// than leaving the terminal with no font.
 				state.$terminalFontName.withLock { $0 = name }
+				return .none
+
+			case let .setUIFontSize(size):
+				state.$uiFontSize.withLock { $0 = UIFontSize.clamped(size) }
 				return .none
 
 			case .importFromTerminalAppButtonTapped:

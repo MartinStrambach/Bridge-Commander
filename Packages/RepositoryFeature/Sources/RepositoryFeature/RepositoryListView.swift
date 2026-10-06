@@ -189,7 +189,7 @@ struct RepositoryListView: View {
 			// Title and the list filter read as one unit, set apart from the action buttons.
 			HStack(spacing: 12) {
 				Text("Bridge Commander")
-					.font(.title2)
+					.scaledFont(.title2)
 					.fontWeight(.bold)
 
 				if !store.repositoryGroups.isEmpty {
@@ -241,7 +241,7 @@ struct RepositoryListView: View {
 					HStack(spacing: 12) {
 						let repoCount = store.repositoryGroups.count
 						Text("\(repoCount) \(repoCount == 1 ? "repository" : "repositories")")
-							.font(.subheadline)
+							.scaledFont(.subheadline)
 							.foregroundColor(.secondary)
 
 						HeaderButton(
@@ -312,16 +312,16 @@ struct RepositoryListView: View {
 	private var emptyStateView: some View {
 		VStack(spacing: 20) {
 			Image(systemName: "folder.badge.gearshape")
-				.font(.system(size: 64))
+				.scaledFont(size: 64)
 				.foregroundColor(.secondary)
 
 			VStack(spacing: 8) {
 				Text("No Repositories Found")
-					.font(.title3)
+					.scaledFont(.title3)
 					.fontWeight(.semibold)
 
 				Text("Add a Git repository to get started")
-					.font(.body)
+					.scaledFont(.body)
 					.foregroundColor(.secondary)
 					.multilineTextAlignment(.center)
 			}
@@ -330,7 +330,7 @@ struct RepositoryListView: View {
 				Label("Add Repository", systemImage: "folder.badge.plus")
 					.padding(.horizontal, 8)
 			}
-			.buttonStyle(.borderedProminent)
+			.buttonStyle(.scaledBorderedProminent)
 			.controlSize(.large)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
