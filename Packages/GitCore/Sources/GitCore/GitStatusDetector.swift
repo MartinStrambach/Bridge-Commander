@@ -148,9 +148,13 @@ public nonisolated struct GitPorcelainStatus {
 
 public nonisolated enum GitStatusDetector {
 	/// Runs `git status --porcelain=v2 --branch` and returns the parsed result.
+	///
+	/// `--no-optional-locks` keeps git from writing the index back with refreshed stat data. A
+	/// plain `git status` does that whenever a file's timestamps changed, and the index is one of
+	/// the files `GitRepositoryWatcher` reacts to — each refresh would schedule the next one.
 	public static func getStatus(at path: String) async -> GitPorcelainStatus {
 		let result = await ProcessRunner.runGit(
-			arguments: ["status", "--porcelain=v2", "--branch", "--untracked-files=all"],
+			arguments: ["--no-optional-locks", "status", "--porcelain=v2", "--branch", "--untracked-files=all"],
 			at: path
 		)
 		var status = GitPorcelainStatus(parsing: result.outputString, didSucceed: result.success)

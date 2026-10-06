@@ -42,6 +42,10 @@ struct RepositoryListReducer {
 		/// `didScanGroup` — whichever scan gets there first — rather than from the creation.
 		fileprivate(set) var pendingWorktreeLaunches: [String: WorktreeTerminalLaunch] = [:]
 
+		/// The rows the file system watch covers, sorted. A rescan that finds the same rows leaves
+		/// the running watch alone instead of restarting it.
+		fileprivate(set) var watchedRepositoryPaths: [String] = []
+
 		@Shared(.trackedRepoPaths)
 		fileprivate(set) var trackedRepoPaths: [String] = []
 
@@ -98,6 +102,8 @@ struct RepositoryListReducer {
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
 		case refreshRepositories
+		/// Rows' repositories changed on disk; see `GitRepositoryWatcherClient`.
+		case repositoriesChangedOnDisk([GitRepositoryChange])
 		/// Reopens the tabs saved when the window last closed. Once per launch.
 		case restoreTerminalTabs
 		case repositoryGroups(IdentifiedActionOf<RepoGroupReducer>)
@@ -173,6 +179,7 @@ struct RepositoryListReducer {
 	private nonisolated enum CancellableId: Hashable {
 		case terminalNotificationTaps
 		case periodicRefresh
+		case repositoryWatch
 		case scan
 		case sortAfterFetch
 	}
@@ -185,6 +192,9 @@ struct RepositoryListReducer {
 
 	@Dependency(TerminalTabArchiveClient.self)
 	private var terminalTabArchiveClient
+
+	@Dependency(GitRepositoryWatcherClient.self)
+	private var gitRepositoryWatcherClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -283,9 +293,16 @@ struct RepositoryListReducer {
 				)
 				return .none
 
-			case .stopPeriodicRefresh,
-			     .view(.onDisappear):
+			case .stopPeriodicRefresh:
 				return .cancel(id: CancellableId.periodicRefresh)
+
+			case .view(.onDisappear):
+				// Forgotten too, so the scan after the next `onAppear` starts the watch again.
+				state.watchedRepositoryPaths = []
+				return .merge(
+					.cancel(id: CancellableId.periodicRefresh),
+					.cancel(id: CancellableId.repositoryWatch)
+				)
 
 			case .view(.periodicRefreshIntervalChanged):
 				return .run { send in
@@ -361,7 +378,11 @@ struct RepositoryListReducer {
 				state.$trackedRepoPaths.withLock { $0.removeAll() }
 				state.$collapsedRepoPaths.withLock { $0.removeAll() }
 				state.isScanning = false
-				return .cancel(id: CancellableId.periodicRefresh)
+				state.watchedRepositoryPaths = []
+				return .merge(
+					.cancel(id: CancellableId.periodicRefresh),
+					.cancel(id: CancellableId.repositoryWatch)
+				)
 
 			case let .view(.addRepository(path)):
 				return .send(.addRepository(path))
@@ -468,7 +489,7 @@ struct RepositoryListReducer {
 					state.repositoryGroups.append(group)
 					sortGroupsByTrackedOrder(in: &state)
 				}
-				return .none
+				return watchRepositories(in: &state)
 
 			// MARK: - Full Scan (all tracked repos)
 
@@ -521,13 +542,7 @@ struct RepositoryListReducer {
 				if let launch {
 					state.pendingWorktreeLaunches[resolvedPath(path)] = launch
 				}
-				state.isScanning = true
-				return .run { [groupId] send in
-					let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
-					await send(.didScanGroup(rootPath: groupId, rows: rows))
-					await send(.scanCompleted)
-				}
-				.cancellable(id: CancellableId.scan)
+				return rescanGroup(groupId, in: &state)
 
 			case let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(id: worktreePath, .worktreeDeleted)))):
 				let toRemove = state.terminalSessions
@@ -546,13 +561,7 @@ struct RepositoryListReducer {
 						state.terminalLayout = nil
 					}
 				}
-				state.isScanning = true
-				return .run { [groupId] send in
-					let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
-					await send(.didScanGroup(rootPath: groupId, rows: rows))
-					await send(.scanCompleted)
-				}
-				.cancellable(id: CancellableId.scan)
+				return rescanGroup(groupId, in: &state)
 
 			// MARK: - Scan Results
 
@@ -592,7 +601,37 @@ struct RepositoryListReducer {
 			case .scanCompleted,
 			     .scanFailed:
 				state.isScanning = false
-				return .none
+				return watchRepositories(in: &state)
+
+			case let .repositoriesChangedOnDisk(changes):
+				var effects: [EffectOf<RepositoryListReducer>] = []
+				var rescannedGroupIds: Set<String> = []
+				for change in changes {
+					guard let groupId = groupId(containing: change.repositoryPath, in: state) else {
+						continue
+					}
+
+					// A worktree made or removed outside the app (`git worktree add` in a terminal)
+					// gets or loses its row the same way one made from the dialog does.
+					if change.kinds.contains(.worktreeList), rescannedGroupIds.insert(groupId).inserted {
+						effects.append(rescanGroup(groupId, in: &state))
+					}
+					let rowKinds = change.kinds.subtracting(.worktreeList)
+					if !rowKinds.isEmpty {
+						effects.append(sendToRow(.changedOnDisk(rowKinds), for: change.repositoryPath, in: state))
+					}
+					// The toolbar's copy of the git menu re-checks its stash whenever a status read
+					// syncs it (`syncTerminalGitMenu`). A stash that moved alone (`git stash drop`
+					// in that very terminal) brings no status read, so it is told directly.
+					if
+						rowKinds == .stash,
+						state.terminalLayout?.activeRepositoryPath == change.repositoryPath,
+						state.terminalLayout?.gitActionsMenu != nil
+					{
+						effects.append(.send(.terminalLayout(.gitActionsMenu(.refresh))))
+					}
+				}
+				return .merge(effects)
 
 			// MARK: - Refresh
 
@@ -668,7 +707,7 @@ struct RepositoryListReducer {
 				state.repositoryGroups.remove(id: groupId)
 				state.$trackedRepoPaths.withLock { $0.removeAll { $0 == groupId } }
 				state.$collapsedRepoPaths.withLock { $0.removeAll { $0 == groupId } }
-				return .none
+				return watchRepositories(in: &state)
 
 			// MARK: - Re-sort on YouTrack fetch
 
@@ -1096,6 +1135,43 @@ struct RepositoryListReducer {
 		.ifLet(\.terminalLayout, action: \.terminalLayout) {
 			TerminalLayoutReducer()
 		}
+	}
+
+	/// Points the file system watch at the rows the list has now. Rows update the moment their
+	/// repository changes on disk — a checkout in the built-in terminal, an edit, a fetch — so the
+	/// periodic refresh is only a fallback. Called after every scan; leaves a running watch alone
+	/// when the rows are the same, since restarting it would drop events in between.
+	private func watchRepositories(in state: inout State) -> EffectOf<RepositoryListReducer> {
+		let paths = state.repositoryGroups
+			.flatMap { [$0.header.path] + $0.worktrees.map(\.path) }
+			.sorted()
+		guard paths != state.watchedRepositoryPaths else {
+			return .none
+		}
+
+		state.watchedRepositoryPaths = paths
+		guard !paths.isEmpty else {
+			return .cancel(id: CancellableId.repositoryWatch)
+		}
+
+		return .run { [gitRepositoryWatcherClient] send in
+			for await changes in gitRepositoryWatcherClient.changes(paths) {
+				await send(.repositoriesChangedOnDisk(changes))
+			}
+		}
+		.cancellable(id: CancellableId.repositoryWatch, cancelInFlight: true)
+	}
+
+	/// Re-lists one group's worktrees, for a worktree added or removed. The rows are merged, so
+	/// their loaded state survives.
+	private func rescanGroup(_ groupId: String, in state: inout State) -> EffectOf<RepositoryListReducer> {
+		state.isScanning = true
+		return .run { send in
+			let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
+			await send(.didScanGroup(rootPath: groupId, rows: rows))
+			await send(.scanCompleted)
+		}
+		.cancellable(id: CancellableId.scan)
 	}
 
 	/// Posts a notification when a session starts waiting at Claude's prompt, and withdraws it once
@@ -1590,18 +1666,35 @@ private func refreshRow(
 	for path: String,
 	in state: RepositoryListReducer.State
 ) -> EffectOf<RepositoryListReducer> {
+	sendToRow(.refresh, for: path, in: state)
+}
+
+private func sendToRow(
+	_ action: RepositoryRowReducer.Action,
+	for path: String,
+	in state: RepositoryListReducer.State
+) -> EffectOf<RepositoryListReducer> {
 	for group in state.repositoryGroups {
 		if group.header.path == path {
-			return .send(.repositoryGroups(.element(id: group.id, action: .header(.refresh))))
+			return .send(.repositoryGroups(.element(id: group.id, action: .header(action))))
 		}
 		if group.worktrees[id: path] != nil {
 			return .send(.repositoryGroups(.element(
 				id: group.id,
-				action: .worktrees(.element(id: path, action: .refresh))
+				action: .worktrees(.element(id: path, action: action))
 			)))
 		}
 	}
 	return .none
+}
+
+private func groupId(
+	containing path: String,
+	in state: RepositoryListReducer.State
+) -> String? {
+	state.repositoryGroups.first { group in
+		group.header.path == path || group.worktrees[id: path] != nil
+	}?.id
 }
 
 private func groupSettings(
@@ -1626,3 +1719,15 @@ private func startupCommand(
 	if !own.isEmpty { return own }
 	return repoSettings.skipGlobalTerminalStartupCommand ? "" : state.terminalStartupCommand
 }
+
+#if DEBUG
+extension RepositoryListReducer.State {
+	/// Write access for `TestStore` assertions, which describe an expected change by mutating
+	/// state — a row's, here, reached through the list. Debug builds only, and in this file
+	/// because nothing else can use `repositoryGroups`' setter.
+	var repositoryGroupsForTesting: IdentifiedArrayOf<RepoGroupReducer.State> {
+		get { repositoryGroups }
+		set { repositoryGroups = newValue }
+	}
+}
+#endif

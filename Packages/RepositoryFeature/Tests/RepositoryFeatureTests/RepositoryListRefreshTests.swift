@@ -160,7 +160,9 @@ struct RepositoryListRefreshTests {
 
 		// Exhaustive: the alpha header refresh must be the first and only action the
 		// request produces — a `startScan` or any other row's refresh fails here.
-		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") } assert: {
+			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.header.isRefreshingStatus = true
+		}
 
 		// The received refresh runs the row reducer, whose own fan-out (git status,
 		// actions menu, Xcode lookup) is out of scope — same as the full-refresh test.
@@ -185,6 +187,8 @@ struct RepositoryListRefreshTests {
 		// Exhaustive: a header refresh arriving first (or instead) fails here.
 		await store.receive {
 			isWorktreeRefresh($0, groupId: "/repos/alpha", worktreeId: "/repos/alpha-one")
+		} assert: {
+			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.worktrees[id: "/repos/alpha-one"]?.isRefreshingStatus = true
 		}
 
 		store.exhaustivity = .off
@@ -336,7 +340,9 @@ struct RepositoryListRefreshTests {
 		// The toolbar's own Push button has no other route back to the row, so without this
 		// refresh the unpushed count it renders keeps the pre-push value. Exhaustive: any
 		// other action — or none at all — fails here.
-		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") } assert: {
+			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.header.isRefreshingStatus = true
+		}
 
 		store.exhaustivity = .off
 		await store.finish()
@@ -385,7 +391,9 @@ struct RepositoryListRefreshTests {
 		await store.send(.terminalLayout(.stagingDetail(.dismiss))) {
 			$0.terminalLayout?.stagingDetail = nil
 		}
-		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") } assert: {
+			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.header.isRefreshingStatus = true
+		}
 
 		store.exhaustivity = .off
 		await store.finish()
