@@ -64,6 +64,9 @@ struct RepositoryRowReducer {
 		var gitActionsMenu: GitActionsMenuReducer.State
 
 		var isLoaded = false
+		/// A status fetch for `onAppear`/`refresh` is under way. A change on disk cancels it and
+		/// fetches again, and that fetch must then still do what the refresh would have.
+		var isRefreshingStatus = false
 
 		var supportsIOS: Bool
 		var supportsAndroid: Bool
@@ -250,6 +253,10 @@ struct RepositoryRowReducer {
 		case worktreeCreated(path: String, launch: WorktreeTerminalLaunch?)
 	}
 
+	private nonisolated enum CancelID: Hashable {
+		case statusFetch(String)
+	}
+
 	@Dependency(GitClient.self)
 	private var gitClient
 
@@ -329,25 +336,26 @@ struct RepositoryRowReducer {
 
 				state.isLoaded = true
 				return .merge(
-					fetchBranchInfo(for: state),
+					fetchBranchInfo(for: &state),
 					.send(.gitActionsMenu(.onAppear)),
 					.send(.xcodeButton(.onAppear))
 				)
 
 			case .refresh:
 				return .merge(
-					fetchBranchInfo(for: state),
+					fetchBranchInfo(for: &state),
 					.send(.gitActionsMenu(.refresh)),
 					.send(.xcodeButton(.refresh))
 				)
 
 			case let .changedOnDisk(kinds):
 				return .merge(
-					kinds.contains(.status) ? fetchBranchInfo(for: state, afterChangeOnDisk: true) : .none,
+					kinds.contains(.status) ? fetchBranchInfo(for: &state, afterChangeOnDisk: true) : .none,
 					kinds.contains(.stash) ? .send(.gitActionsMenu(.refresh)) : .none
 				)
 
 			case let .didFetchStatus(status, isMerge):
+				state.isRefreshingStatus = false
 				return applyStatus(status, isMerge: isMerge, afterChangeOnDisk: false, to: &state)
 
 			case let .didFetchStatusAfterChangeOnDisk(status, isMerge):
@@ -602,19 +610,26 @@ struct RepositoryRowReducer {
 
 	// MARK: - Private Effect Builders
 
+	/// Starts a status fetch, cancelling any still under way: changes on disk arrive every few
+	/// tenths of a second during a checkout or a pull, and a slower, older `git status` landing
+	/// after a newer one would leave the row showing a snapshot from the middle of it. A refresh
+	/// superseded this way is not lost — the fetch replacing it reports as one.
 	private func fetchBranchInfo(
-		for state: State,
+		for state: inout State,
 		afterChangeOnDisk: Bool = false
 	) -> EffectOf<RepositoryRowReducer> {
-		.run { [path = state.path] send in
+		let reportsAsRefresh = !afterChangeOnDisk || state.isRefreshingStatus
+		state.isRefreshingStatus = reportsAsRefresh
+		return .run { [path = state.path] send in
 			let info = await gitClient.getCurrentBranch(at: path)
 			let isMerge = GitMergeDetector.isGitOperationInProgress(at: path)
 			await send(
-				afterChangeOnDisk
-					? .didFetchStatusAfterChangeOnDisk(info, isMerge)
-					: .didFetchStatus(info, isMerge)
+				reportsAsRefresh
+					? .didFetchStatus(info, isMerge)
+					: .didFetchStatusAfterChangeOnDisk(info, isMerge)
 			)
 		}
+		.cancellable(id: CancelID.statusFetch(state.path), cancelInFlight: true)
 	}
 
 	private func fetchYouTrack(for state: State) -> EffectOf<RepositoryRowReducer> {

@@ -103,6 +103,60 @@ struct RepositoryChangedOnDiskTests {
 		await store.finish()
 	}
 
+	@Test("a newer change cancels a status fetch still running, so an older snapshot cannot land last")
+	func newerChangeSupersedesRunningFetch() async {
+		let store = makeRowStore(knownStatus)
+		let calls = LockIsolated(0)
+		store.dependencies[GitClient.self].getCurrentBranch = slowThenFast(calls: calls, fast: """
+		# branch.head feature
+		# branch.upstream origin/feature
+		# branch.ab +1 -0
+		1 .M N... 100644 100644 100644 abc1234 def5678 Sources/App.swift
+		""")
+
+		await store.send(.changedOnDisk(.status))
+		await waitUntil { calls.value == 1 }
+		await store.send(.changedOnDisk(.status))
+		await store.receive(\.didFetchStatusAfterChangeOnDisk)
+		await store.finish()
+		// Brings `store.state` up to whatever arrived after the `receive`, a stale result included.
+		await store.skipReceivedActions()
+
+		// The first fetch's stale branch never lands, even once its `git status` is killed.
+		#expect(store.state.branchName == "feature")
+		#expect(store.state.unstagedChangesCount == 1)
+	}
+
+	@Test("a change that cancels a refresh's status fetch still asks what the refresh would have")
+	func changeSupersedingRefreshKeepsItsLookups() async {
+		let store = makeRowStore(knownStatus)
+		// Same branch, same upstream: on its own, a change on disk would ask nothing.
+		let calls = LockIsolated(0)
+		store.dependencies[GitClient.self].getCurrentBranch = slowThenFast(calls: calls, fast: """
+		# branch.head feature
+		# branch.upstream origin/feature
+		# branch.ab +1 -0
+		""")
+		let askedForRemote = LockIsolated(false)
+		store.dependencies[GitClient.self].getOriginRemote = { _ in
+			askedForRemote.setValue(true)
+			return nil
+		}
+		store.dependencies[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
+
+		await store.send(.refresh)
+		await waitUntil { calls.value == 1 }
+		await store.send(.changedOnDisk(.status))
+		await store.receive(\.didFetchStatus)
+		await store.finish()
+		// Brings `store.state` up to whatever arrived after the `receive`, a stale result included.
+		await store.skipReceivedActions()
+
+		#expect(askedForRemote.value)
+		#expect(store.state.branchName == "feature")
+		#expect(!store.state.isRefreshingStatus)
+	}
+
 	// MARK: - List
 
 	@Test("a finished scan watches every row, and a rescan of the same rows keeps the watch")
@@ -265,6 +319,36 @@ struct RepositoryChangedOnDiskTests {
 		}
 		store.exhaustivity = .off
 		return store
+	}
+
+	/// A `getCurrentBranch` whose first call is the slow one: it answers a stale branch only after
+	/// a later call has answered `fast`, so unless it is cancelled its result lands last.
+	private func slowThenFast(
+		calls: LockIsolated<Int>,
+		fast: String
+	) -> @Sendable (String) async -> GitPorcelainStatus {
+		let fastAnswered = LockIsolated(false)
+		return { _ in
+			let call = calls.withValue { count in
+				count += 1
+				return count
+			}
+			guard call == 1 else {
+				fastAnswered.setValue(true)
+				return GitPorcelainStatus(parsing: fast)
+			}
+
+			// Cancellation ends the wait early, as killing `git status` would.
+			do {
+				while !fastAnswered.value {
+					try await Task.sleep(for: .milliseconds(10))
+				}
+				// Give the fast answer time to reach the reducer first.
+				try await Task.sleep(for: .milliseconds(50))
+			}
+			catch {}
+			return GitPorcelainStatus(parsing: "# branch.head stale")
+		}
 	}
 
 	/// The watch starts in an effect, which may not have run by the time `send` returns.

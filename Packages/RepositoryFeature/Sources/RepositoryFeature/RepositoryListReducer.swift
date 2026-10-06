@@ -18,7 +18,9 @@ enum SortMode: String, Equatable {
 struct RepositoryListReducer {
 	@ObservableState
 	struct State: Equatable {
-		fileprivate(set) var repositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> = []
+		/// Settable from the module (not `fileprivate(set)` like its neighbours) only so tests can
+		/// assert a row's state through the list.
+		var repositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> = []
 		fileprivate(set) var isScanning = false
 		fileprivate(set) var sortMode: SortMode = .state
 
