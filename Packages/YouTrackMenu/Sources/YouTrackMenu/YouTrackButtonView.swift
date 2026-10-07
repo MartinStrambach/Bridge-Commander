@@ -85,9 +85,12 @@ private struct YouTrackMenuPresentations: ViewModifier {
 	@Bindable
 	var store: StoreOf<YouTrackButtonReducer>
 
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	func body(content: Content) -> some View {
 		content
-			.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
+			.sheet(item: presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil)) { alertStore in
 				ScrollableAlertView(store: alertStore)
 			}
 	}
