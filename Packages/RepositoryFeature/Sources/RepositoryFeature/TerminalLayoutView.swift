@@ -133,6 +133,7 @@ struct TerminalLayoutView: View {
 			.padding(.horizontal, 8)
 			.padding(.top, 12)
 			.padding(.bottom, 4)
+			.windowTitleBarArea()
 
 			ScrollView {
 				LazyVStack(alignment: .leading, spacing: 2) {

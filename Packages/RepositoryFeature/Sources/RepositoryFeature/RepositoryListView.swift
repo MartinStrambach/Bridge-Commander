@@ -296,6 +296,7 @@ struct RepositoryListView: View {
 			}
 		}
 		.padding()
+		.windowTitleBarArea()
 	}
 
 	// MARK: - Permission Warning Banner
