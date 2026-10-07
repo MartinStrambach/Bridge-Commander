@@ -130,7 +130,7 @@ nonisolated final class HomerCookieJar: Sendable {
 	}
 }
 
-private nonisolated func applicationSupportURL(name: String) -> URL {
+nonisolated func applicationSupportURL(name: String) -> URL {
 	let urls = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
 	let appSupport = urls.first ?? URL(fileURLWithPath: NSHomeDirectory())
 		.appending(component: "Library/Application Support")

@@ -184,6 +184,8 @@ public struct HomerConsoleReducer: Sendable {
 					return .none
 				}
 				state.$instanceURLs.withLock { [ids = state.instances.ids.elements] in $0 = ids }
+				@Shared(.homerUsernames) var usernames
+				$usernames.withLock { _ = $0.removeValue(forKey: id) }
 				if state.instances.isEmpty {
 					state.addInstance = HomerSignInReducer.State(addingInstanceCanCancel: false)
 				}

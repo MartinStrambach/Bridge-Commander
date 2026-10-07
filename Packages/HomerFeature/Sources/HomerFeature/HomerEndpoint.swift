@@ -18,6 +18,14 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 	}
 }
 
+public nonisolated extension SharedReaderKey where Self == FileStorageKey<[String: String]>.Default {
+	/// The username last signed in to each instance, by base URL, so its form is filled after a
+	/// relaunch outlived the session. Not a secret; the password is never stored.
+	static var homerUsernames: Self {
+		Self[.fileStorage(applicationSupportURL(name: "homerUsernames.json")), default: [:]]
+	}
+}
+
 public nonisolated enum HomerEndpointError: Error, Equatable, LocalizedError {
 	case empty
 	case invalid

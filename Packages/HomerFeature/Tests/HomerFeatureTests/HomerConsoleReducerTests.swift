@@ -168,6 +168,9 @@ struct HomerConsoleReducerTests {
 		await store.receive(\.addInstance.delegate.signedIn) {
 			$0.addInstance = nil
 			$0.instances.append(HomerInstanceReducer.State(baseURL: Self.second))
+			// The expectation's state reads the username the step below already remembered;
+			// the instance itself was made before it.
+			$0.instances[id: Self.second]?.signIn.username = ""
 		}
 		await store.receive(\.instances[id: Self.second].signedIn) {
 			$0.instances[id: Self.second]?.session = .signedIn(admin)
@@ -182,6 +185,8 @@ struct HomerConsoleReducerTests {
 	@Test("removing the instance on screen signs it out and shows the next")
 	func removeSelectedInstance() async {
 		let signedOut = LockIsolated<[String]>([])
+		@Shared(.homerUsernames) var usernames
+		$usernames.withLock { $0 = [Self.first: "admin", Self.second: "admin"] }
 		let store = TestStore(initialState: signedInState(selected: Self.first)) {
 			HomerConsoleReducer()
 		} withDependencies: {
@@ -196,6 +201,7 @@ struct HomerConsoleReducerTests {
 		await store.finish()
 
 		#expect(signedOut.value == [Self.first])
+		#expect(usernames == [Self.second: "admin"])
 	}
 
 	@Test("removing the last instance brings back the first-run form")

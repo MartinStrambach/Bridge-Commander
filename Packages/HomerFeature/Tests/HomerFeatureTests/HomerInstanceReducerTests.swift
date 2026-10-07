@@ -44,12 +44,26 @@ struct HomerInstanceReducerTests {
 		await store.send(.start)
 		await store.receive(\.sessionChecked) {
 			$0.session = .signedIn(admin)
+			$0.signIn.username = "admin"
 		}
 		await store.receive(\.questionsLoaded) {
 			$0.questions = [question]
 			$0.hasLoadedQuestions = true
 		}
 		await store.skipInFlightEffects()
+
+		@Shared(.homerUsernames) var usernames
+		#expect(usernames == [Self.baseURL: "admin"])
+	}
+
+	@Test("the username of an earlier sign-in fills the form after a relaunch")
+	func rememberedUsername() {
+		@Shared(.homerUsernames) var usernames
+		$usernames.withLock { $0 = [Self.baseURL: "admin"] }
+
+		let state = HomerInstanceReducer.State(baseURL: Self.baseURL)
+
+		#expect(state.signIn.username == "admin")
 	}
 
 	@Test("an expired cookie at launch shows the form without an error")

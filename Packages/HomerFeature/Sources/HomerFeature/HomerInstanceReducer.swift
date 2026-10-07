@@ -113,7 +113,8 @@ public struct HomerInstanceReducer: Sendable {
 
 		public init(baseURL: String) {
 			self.baseURL = baseURL
-			self.signIn = HomerSignInReducer.State(baseURL: baseURL)
+			@Shared(.homerUsernames) var usernames
+			self.signIn = HomerSignInReducer.State(baseURL: baseURL, username: usernames[baseURL] ?? "")
 			self.continuations = HomerContinuationsReducer.State(baseURL: baseURL)
 			self.agents = HomerAgentsReducer.State(baseURL: baseURL)
 			self.costs = HomerCostsReducer.State(baseURL: baseURL)
@@ -276,6 +277,7 @@ public struct HomerInstanceReducer: Sendable {
 
 			case let .sessionChecked(.success(user)):
 				state.session = .signedIn(user)
+				rememberUsername(user, in: &state)
 				return .merge(startPolling(state), syncShownChildPage(&state))
 
 			case let .sessionChecked(.failure(error)):
@@ -312,7 +314,7 @@ public struct HomerInstanceReducer: Sendable {
 				// is not this user's to see.
 				let cleared = state.user?.username != user.username ? clearData(&state) : nil
 				state.session = .signedIn(user)
-				state.signIn.username = user.username
+				rememberUsername(user, in: &state)
 				state.signIn.password = ""
 				state.signIn.loginError = nil
 				state.signIn.sessionExpired = false
@@ -704,6 +706,13 @@ public struct HomerInstanceReducer: Sendable {
 			}
 		}
 		.cancellable(id: CancelID.questionPolling, cancelInFlight: true)
+	}
+
+	/// The form's username for the next sign-in, kept across relaunches.
+	private func rememberUsername(_ user: HomerUser, in state: inout State) {
+		state.signIn.username = user.username
+		@Shared(.homerUsernames) var usernames
+		$usernames.withLock { [baseURL = state.baseURL] in $0[baseURL] = user.username }
 	}
 
 	/// A call answered 401 on a live session: the cookie expired or the server dropped it.

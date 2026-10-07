@@ -17,6 +17,11 @@ struct HomerLoginView: View {
 	@FocusState
 	private var focusedField: Field?
 
+	/// "Fill from Passwords" opened the picker for the username, so the picked one is followed by
+	/// a second pick for the password.
+	@State
+	private var awaitsPickedUsername = false
+
 	var body: some View {
 		ScrollView {
 			VStack(spacing: 20) {
@@ -72,6 +77,10 @@ struct HomerLoginView: View {
 							.buttonStyle(.scaledBordered)
 							.keyboardShortcut(.cancelAction)
 					}
+					Button("Fill from Passwords", systemImage: "key.fill", action: fillFromPasswords)
+						.buttonStyle(.scaledBordered)
+						.help("Choose a login saved in Passwords")
+						.disabled(store.isSigningIn)
 					Spacer()
 					if store.isSigningIn {
 						ProgressView()
@@ -92,6 +101,18 @@ struct HomerLoginView: View {
 		.onAppear {
 			focusedField = store.isAddingInstance && store.endpoint.isEmpty ? .endpoint : .username
 		}
+		.onChange(of: store.username) { old, new in
+			guard awaitsPickedUsername else {
+				return
+			}
+			awaitsPickedUsername = false
+			// A picked username arrives whole; a single character is the user typing after
+			// dismissing the picker.
+			guard old.isEmpty, new.count > 1 else {
+				return
+			}
+			showPasswordsPicker(in: .password, after: .milliseconds(300))
+		}
 	}
 
 	private var title: String {
@@ -110,6 +131,29 @@ struct HomerLoginView: View {
 		store.isAddingInstance
 			? "Enter an instance and sign in with your Homer console username and password. Every instance you add stays signed in; switch between them from the header."
 			: "Sign in with your Homer console username and password."
+	}
+
+	/// The picker fills only the focused field, with the login's username or password by the
+	/// field's content type — never its website. With the username remembered one pick is enough;
+	/// otherwise the username is picked first and the password right after.
+	private func fillFromPasswords() {
+		let field: Field = store.username.isEmpty ? .username : .password
+		awaitsPickedUsername = field == .username
+		showPasswordsPicker(in: field, after: .milliseconds(100))
+	}
+
+	private func showPasswordsPicker(in field: Field, after delay: Duration) {
+		guard focusedField != field else {
+			HomerPasswordAutoFill.showPicker()
+			return
+		}
+		focusedField = field
+		Task {
+			// The field becomes first responder on a later pass, and the previous picker has to
+			// be gone before the next one opens.
+			try? await Task.sleep(for: delay)
+			HomerPasswordAutoFill.showPicker()
+		}
 	}
 
 	private var signInTitle: String {
