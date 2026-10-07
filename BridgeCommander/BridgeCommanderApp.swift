@@ -20,12 +20,18 @@ struct BridgeCommanderApp: App {
 	)
 
 	var body: some Scene {
-		WindowGroup {
+		WindowGroup(id: "main") {
 			RootRepositoryView()
 				.appUIFontSize()
 		}
 		.windowStyle(.hiddenTitleBar)
 		.windowResizability(.contentSize)
+		// Opens filling the visible area of the screen it lands on, every launch.
+		.defaultWindowPlacement { _, context in
+			let screen = context.defaultDisplay.visibleRect
+			return WindowPlacement(.center, size: screen.size)
+		}
+		.restorationBehavior(.disabled)
 		.commands {
 			CommandGroup(after: .appInfo) {
 				CheckForUpdatesView(updater: updaterController.updater)
