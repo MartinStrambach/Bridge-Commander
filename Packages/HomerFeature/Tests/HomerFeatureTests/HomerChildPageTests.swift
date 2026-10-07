@@ -19,11 +19,13 @@ struct HomerChildPageTests {
 	@Test("a page reducer is told when it comes on screen and when it leaves")
 	func shownAndHidden() async {
 		let initialState = activeState(user: HomerUser(username: "admin", role: "admin"))
+		let agent = HomerAgent(name: "factory")
 		let store = TestStore(initialState: initialState) {
 			HomerInstanceReducer()
 		} withDependencies: {
 			$0.continuousClock = TestClock()
 			$0[HomerContinuationsClient.self].continuations = { _, _ in [] }
+			$0[HomerAgentsClient.self].agents = { _ in [agent] }
 		}
 
 		await store.send(.pageChanged(.continuations)) {
@@ -45,7 +47,13 @@ struct HomerChildPageTests {
 		await store.receive(\.continuations.hidden) {
 			$0.continuations.isShown = false
 		}
-		await store.receive(\.agents.shown)
+		await store.receive(\.agents.shown) {
+			$0.agents.isShown = true
+		}
+		await store.receive(\.agents.agentsLoaded) {
+			$0.agents.agents = [agent]
+			$0.agents.hasLoaded = true
+		}
 		await store.send(.pageChanged(.schedules)) {
 			$0.page = .schedules
 		}
@@ -54,7 +62,9 @@ struct HomerChildPageTests {
 			$0.isActive = false
 			$0.shownChildPage = nil
 		}
-		await store.receive(\.agents.hidden)
+		await store.receive(\.agents.hidden) {
+			$0.agents.isShown = false
+		}
 	}
 
 	@Test("an admin-only page stays hidden for anyone else")
