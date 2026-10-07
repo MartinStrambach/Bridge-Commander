@@ -42,7 +42,11 @@ struct SimulatorMCPHandlerTests {
 				role: "Application",
 				label: "Demo",
 				frame: CGRect(x: 0, y: 0, width: 402, height: 874),
-				children: [SimulatorAccessibilityNode(role: "Button", label: "Go", frame: CGRect(x: 10, y: 20, width: 30, height: 40))]
+				children: [
+					SimulatorAccessibilityNode(role: "Button", label: "Go", frame: CGRect(x: 10, y: 20, width: 30, height: 40)),
+					SimulatorAccessibilityNode(role: "StaticText", label: "Welcome", frame: CGRect(x: 10, y: 80, width: 200, height: 20)),
+					SimulatorAccessibilityNode(role: "TextField", identifier: "email", frame: CGRect(x: 10, y: 120, width: 300, height: 40)),
+				]
 			)
 		}
 		func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode? {
@@ -60,6 +64,26 @@ struct SimulatorMCPHandlerTests {
 		func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult {
 			record(baseline == Self.baseline ? "settle from baseline" : "settle")
 			return .settled(after: .milliseconds(640))
+		}
+
+		/// Matches against `accessibilityTree` as the live side does; the effect stands in for the
+		/// simulator's: buttons take AXPress, other elements get a tap, text fields take values.
+		func elementAction(_ action: SimulatorElementAction, on query: SimulatorElementQuery, device: SimulatorDevice) async throws -> SimulatorElementOutcome {
+			let candidates = try await accessibilityTree(device: device).flattened()
+			let element = candidates[try query.match(in: candidates, preferring: action.preferredRoles)]
+			record("element \(action) \(element.label ?? element.identifier ?? "")")
+			switch action {
+			case .press:
+				let effect: SimulatorElementOutcome.Effect = element.role == "Button" ? .pressed : .tappedCentre(CGPoint(x: element.frame.midX, y: element.frame.midY))
+				return SimulatorElementOutcome(element: element, effect: effect)
+			case let .setValue(value):
+				guard element.role == "TextField" else {
+					throw SimulatorElementError.notSettable(element: SimulatorAccessibilityFormatter.line(for: element))
+				}
+				return SimulatorElementOutcome(element: element, effect: .valueSet(readBack: value))
+			case .scrollToVisible:
+				return SimulatorElementOutcome(element: element, effect: .scrolled(to: element.frame.offsetBy(dx: 0, dy: -50)))
+			}
 		}
 
 		private func record(_ call: String) {
@@ -131,7 +155,7 @@ struct SimulatorMCPHandlerTests {
 		let names = tools.compactMap { $0["name"]?.stringValue }
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
-			"type_text", "press_key", "press_button",
+			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -240,6 +264,9 @@ struct SimulatorMCPHandlerTests {
 			("type_text", ["text": "hi"]),
 			("press_key", ["key": "return"]),
 			("press_button", ["button": "home"]),
+			("press_element", ["label": "Go"]),
+			("set_value", ["value": "x"]),
+			("scroll_to_element", ["identifier": "email"]),
 		]
 		for (name, arguments) in calls {
 			let waiting = FakeActions()
@@ -275,7 +302,64 @@ struct SimulatorMCPHandlerTests {
 		let offering = tools.filter { $0["inputSchema"]?["properties"]?["wait_for_settle"]?["type"] == "boolean" }
 		#expect(offering.compactMap { $0["name"]?.stringValue } == [
 			"tap", "swipe", "pinch", "two_finger_drag", "type_text", "press_key", "press_button",
+			"press_element", "set_value", "scroll_to_element",
 		])
+	}
+
+	private func callText(_ actions: FakeActions, _ name: String, _ arguments: JSONValue) async throws -> (text: String?, isError: Bool) {
+		let response = await handler(actions).response(to: try post([
+			"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": ["name": .string(name), "arguments": arguments],
+		]))
+		let result = try decode(response)["result"]
+		guard case let .array(content)? = result?["content"] else {
+			return (nil, true)
+		}
+		return (content.first?["text"]?.stringValue, result?["isError"] == true)
+	}
+
+	@Test
+	func pressElementPressesOrTapsWhatItFinds() async throws {
+		let actions = FakeActions()
+		let pressed = try await callText(actions, "press_element", ["label": "go"])
+		#expect(pressed.text == "Pressed Button \"Go\" frame=(10,20,30,40) (AXPress). Screen settled after 640 ms.")
+		#expect(pressed.isError == false)
+
+		let tapped = try await callText(actions, "press_element", ["label": "Welcome"])
+		#expect(tapped.text == "Tapped the centre of StaticText \"Welcome\" frame=(10,80,200,20) at (110, 90): it has no accessibility press, or refused it. Screen settled after 640 ms.")
+		#expect(actions.calls.withLock { $0 }.filter { $0.hasPrefix("element") } == ["element press Go", "element press Welcome"])
+	}
+
+	@Test
+	func pressElementReportsMissesAndNeedsSomethingToGoOn() async throws {
+		let missing = try await callText(FakeActions(), "press_element", ["identifier": "nope"])
+		#expect(missing.isError)
+		#expect(missing.text?.hasPrefix("No element matches identifier \"nope\". Elements on screen:\nButton \"Go\"") == true)
+
+		let nothing = try await callText(FakeActions(), "press_element", [:])
+		#expect(nothing.isError)
+		#expect(nothing.text == SimulatorElementError.noCriteria.localizedDescription)
+	}
+
+	@Test
+	func setValueFillsTheOnlyFieldOrRefuses() async throws {
+		let actions = FakeActions()
+		let set = try await callText(actions, "set_value", ["value": "me@example.com"])
+		#expect(set.text == "Set the value of TextField id=email frame=(10,120,300,40); it now reads \"me@example.com\". Screen settled after 640 ms.")
+		#expect(actions.calls.withLock { $0 } == ["fingerprint", "element setValue(\"me@example.com\") email", "settle from baseline"])
+
+		let refused = try await callText(actions, "set_value", ["label": "Go", "value": "x"])
+		#expect(refused.isError)
+		#expect(refused.text?.contains("Tap it and use type_text instead") == true)
+
+		let noValue = try await callText(actions, "set_value", ["identifier": "email"])
+		#expect(noValue.isError)
+		#expect(noValue.text == "Missing \"value\".")
+	}
+
+	@Test
+	func scrollToElementReportsTheNewFrame() async throws {
+		let scrolled = try await callText(FakeActions(), "scroll_to_element", ["identifier": "email", "index": 0, "wait_for_settle": false])
+		#expect(scrolled.text == "Scrolled TextField id=email frame=(10,120,300,40) into view; its frame is now (10,70,300,40).")
 	}
 }
 

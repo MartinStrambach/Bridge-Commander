@@ -62,6 +62,18 @@ final class SimulatorAccessibility: @unchecked Sendable {
 
 	/// The frontmost application's tree (SpringBoard's on the home screen).
 	func frontmostTree(device: ObjectBox) async throws -> SimulatorAccessibilityNode {
+		try await withFrontmostApplication(device: device) { element in
+			var budget = Self.maximumNodes
+			return Self.read(element, depth: 0, budget: &budget)
+		}
+	}
+
+	/// Runs `body` on the work queue with the frontmost application's live element, for work that
+	/// reads or acts on elements rather than on a copied tree.
+	func withFrontmostApplication<T: Sendable>(
+		device: ObjectBox,
+		_ body: @escaping @Sendable (NSAccessibilityElement) throws -> T
+	) async throws -> T {
 		try await perform { [self] translator in
 			try withToken(device: device) { token in
 				typealias Frontmost = @convention(c) (AnyObject, Selector, UInt32, NSString) -> Unmanaged<AnyObject>?
@@ -74,8 +86,7 @@ final class SimulatorAccessibility: @unchecked Sendable {
 				guard let element = platformElement(translation, token: token, translator: translator) else {
 					throw SimulatorError.accessibilityUnavailable("no frontmost application; the simulator may still be starting up")
 				}
-				var budget = Self.maximumNodes
-				return Self.read(element, depth: 0, budget: &budget)
+				return try body(element)
 			}
 		}
 	}
@@ -173,19 +184,7 @@ final class SimulatorAccessibility: @unchecked Sendable {
 
 	private static func read(_ element: NSAccessibilityElement, depth: Int, budget: inout Int) -> SimulatorAccessibilityNode {
 		budget -= 1
-		var role = element.accessibilityRole()?.rawValue ?? "Element"
-		if role.hasPrefix("AX") {
-			role.removeFirst(2)
-		}
-
-		var node = SimulatorAccessibilityNode(
-			role: role,
-			label: nonEmpty(element.accessibilityLabel()),
-			value: nonEmpty(describe(element.accessibilityValue())),
-			identifier: nonEmpty(element.accessibilityIdentifier()),
-			frame: element.accessibilityFrame(),
-			isEnabled: element.isAccessibilityEnabled()
-		)
+		var node = attributes(of: element)
 
 		guard depth < maximumDepth else {
 			return node
@@ -199,6 +198,22 @@ final class SimulatorAccessibility: @unchecked Sendable {
 			}
 		}
 		return node
+	}
+
+	/// One element's own attributes, without its children. On `workQueue` only.
+	static func attributes(of element: NSAccessibilityElement) -> SimulatorAccessibilityNode {
+		var role = element.accessibilityRole()?.rawValue ?? "Element"
+		if role.hasPrefix("AX") {
+			role.removeFirst(2)
+		}
+		return SimulatorAccessibilityNode(
+			role: role,
+			label: nonEmpty(element.accessibilityLabel()),
+			value: nonEmpty(describe(element.accessibilityValue())),
+			identifier: nonEmpty(element.accessibilityIdentifier()),
+			frame: element.accessibilityFrame(),
+			isEnabled: element.isAccessibilityEnabled()
+		)
 	}
 
 	private static func describe(_ value: Any?) -> String? {

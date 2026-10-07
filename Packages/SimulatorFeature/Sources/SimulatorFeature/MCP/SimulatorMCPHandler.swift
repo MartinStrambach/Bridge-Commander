@@ -19,6 +19,7 @@ protocol SimulatorToolActions: Sendable {
 	/// The screen before an action, for `waitForScreenToSettle` to compare against.
 	func screenFingerprint(device: SimulatorDevice) async -> ScreenFingerprint?
 	func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult
+	func elementAction(_ action: SimulatorElementAction, on query: SimulatorElementQuery, device: SimulatorDevice) async throws -> SimulatorElementOutcome
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.
@@ -98,8 +99,10 @@ struct SimulatorMCPHandler: Sendable {
 	install with xcodebuild and `xcrun simctl install`/`launch` as usual; use these tools to look \
 	at the running app and interact with it. Coordinates are in points with the origin at the top \
 	left — the same size as the screenshot image. describe_ui lists the screen's elements with \
-	their frames: prefer it for finding what to tap, and screenshots for how things look. The \
-	actions (tap, swipe, pinch, two_finger_drag, type_text, press_key, press_button) return once \
+	their frames: prefer it for finding what to tap, and screenshots for how things look. To act \
+	on an element describe_ui lists, press_element, set_value and scroll_to_element find it by \
+	identifier or label, with no coordinates. The actions (tap, swipe, pinch, two_finger_drag, \
+	type_text, press_key, press_button and the element tools) return once \
 	the screen has stopped changing, up to 3 s, and say whether it settled, did not change or is \
 	still changing — so look at the result right away instead of waiting or taking extra \
 	screenshots to catch up. Only when it is still changing (loading, a long animation) may a \

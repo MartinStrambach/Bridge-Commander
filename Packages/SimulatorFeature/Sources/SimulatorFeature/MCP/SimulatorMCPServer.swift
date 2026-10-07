@@ -289,4 +289,8 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult {
 		await host.waitForScreenToSettle(device: device, baseline: baseline)
 	}
+
+	func elementAction(_ action: SimulatorElementAction, on query: SimulatorElementQuery, device: SimulatorDevice) async throws -> SimulatorElementOutcome {
+		try await host.performElementAction(action, on: query, device: device)
+	}
 }
