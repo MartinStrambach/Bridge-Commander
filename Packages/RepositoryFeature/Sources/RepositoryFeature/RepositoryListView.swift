@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import AppUI
 import HomerFeature
 import Settings
+import SimulatorFeature
 import TerminalFeature
 
 // MARK: - Public entry point
@@ -80,8 +81,13 @@ struct RepositoryListView: View {
 	/// Stands where the window title used to; see `RootRepositoryView`.
 	let sectionSwitcher: AppSectionSwitcher
 
+	/// Every pane's shell is told where the simulator MCP server listens and which session it is,
+	/// so a `claude` started in it reaches the pane beside it (`ClaudeCodeRegistration`) and acts on
+	/// its repository's device.
 	@State
-	private var terminalViewStore = TerminalViewStore()
+	private var terminalViewStore = TerminalViewStore(additionalEnvironment: { session in
+		SimulatorMCPServer.shared.terminalEnvironment(sessionId: session.id, repositoryPath: session.repositoryPath)
+	})
 	@FocusState
 	private var isSearchFocused: Bool
 

@@ -29,6 +29,7 @@ Packages/
   GitGraphFeature/        # Commit graph view + selected commit's diff
   StagingFeature/         # File staging panel (detail view, diff, commit)
   HomerFeature/           # Homer console section (instances, sign-in, processes, questions)
+  SimulatorFeature/       # iOS simulator pane beside the terminal + MCP server for Claude Code
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature; hosts the window's sections)
 ```
 
