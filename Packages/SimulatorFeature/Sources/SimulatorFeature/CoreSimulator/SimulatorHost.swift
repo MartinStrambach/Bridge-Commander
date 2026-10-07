@@ -132,13 +132,15 @@ public final class SimulatorHost: @unchecked Sendable {
 			return nil
 		}
 
+		let state = SimulatorDevice.State(rawValue: ObjCRuntime.unsignedInteger(device, "state"))
 		return SimulatorDevice(
 			id: udid.uuidString,
 			name: name,
 			runtimeName: runtimeName,
-			state: SimulatorDevice.State(rawValue: ObjCRuntime.unsignedInteger(device, "state")),
+			state: state,
 			screenPixelSize: ObjCRuntime.size(deviceType, "mainScreenSize"),
-			screenScale: CGFloat(ObjCRuntime.float(deviceType, "mainScreenScale"))
+			screenScale: CGFloat(ObjCRuntime.float(deviceType, "mainScreenScale")),
+			rotation: state == .booted ? (try? mainScreen(of: device)).map(screenRotation(of:)) ?? .upright : .upright
 		)
 	}
 
@@ -190,7 +192,10 @@ public final class SimulatorHost: @unchecked Sendable {
 	/// The main display's port descriptor: the `SimScreen` whose size is the device type's main
 	/// screen. A device also lists screens for external displays and CarPlay.
 	func mainScreen(udid: String) throws -> AnyObject {
-		let device = try simDevice(udid: udid)
+		try Self.mainScreen(of: simDevice(udid: udid))
+	}
+
+	static func mainScreen(of device: AnyObject) throws -> AnyObject {
 		guard
 			let deviceType = ObjCRuntime.object(device, "deviceType"),
 			let io = ObjCRuntime.object(device, "io"),
@@ -225,24 +230,32 @@ public final class SimulatorHost: @unchecked Sendable {
 		return largest.screen
 	}
 
-	/// The screen as it is now, at its native pixel size.
+	/// The screen as it is now, at its native pixel size, portrait (the framebuffer is, whatever
+	/// the rotation).
 	public func screenImage(udid: String) throws -> CGImage {
-		let screen = try mainScreen(udid: udid)
+		try framebufferImage(screen: mainScreen(udid: udid), orientation: .up)
+	}
+
+	private func framebufferImage(screen: AnyObject, orientation: CGImagePropertyOrientation) throws -> CGImage {
 		guard let surface = ObjCRuntime.object(screen, "framebufferSurface") else {
 			throw SimulatorError.noFramebuffer
 		}
 
-		let image = CIImage(ioSurface: unsafeDowncast(surface, to: IOSurfaceRef.self))
+		let image = CIImage(ioSurface: unsafeDowncast(surface, to: IOSurfaceRef.self)).oriented(orientation)
 		guard let cgImage = ciContext.createCGImage(image, from: image.extent) else {
 			throw SimulatorError.noFramebuffer
 		}
 		return cgImage
 	}
 
-	/// A JPEG of the screen scaled to points, so a pixel in it is a point the tools take.
+	/// A JPEG of the screen scaled to points and turned the way the interface is, so a pixel in it
+	/// is a point the tools take. The rotation is read with the frame rather than taken from
+	/// `device`, so the image is the right way up even if the device turned since it was read.
 	public func screenshotJPEG(device: SimulatorDevice, quality: Double = 0.8) throws -> Data {
-		let image = try screenImage(udid: device.id)
-		let target = device.screenPointSize
+		let screen = try mainScreen(udid: device.id)
+		let rotation = Self.screenRotation(of: screen)
+		let image = try framebufferImage(screen: screen, orientation: rotation.framebufferImageOrientation)
+		let target = rotation.displayedSize(native: device.nativePointSize)
 		let scaled = Self.scaled(image, to: target) ?? image
 
 		let data = NSMutableData()

@@ -91,7 +91,9 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 		throw SimulatorError.inputUnavailable(lastError?.localizedDescription ?? "no answer")
 	}
 
-	private static func makeConnection(device: AnyObject) throws -> xpc_connection_t {
+	/// A connection, not yet resumed, to a `dtuhidd`-style service in `device`'s bootstrap
+	/// namespace. Also used for the guest's orientation service, which speaks the same envelope.
+	static func makeConnection(device: AnyObject, service: String = digitizerService) throws -> xpc_connection_t {
 		typealias EndpointFromPort = @convention(c) (mach_port_t, UInt64, UInt64) -> Unmanaged<AnyObject>?
 		typealias ConnectionFromEndpoint = @convention(c) (xpc_object_t) -> Unmanaged<AnyObject>?
 		typealias EnableSimToHost = @convention(c) (xpc_connection_t) -> Void
@@ -105,9 +107,9 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 		}
 
 		var error: NSError?
-		let port = ObjCRuntime.machPort(device, "lookup:error:", digitizerService as NSString, error: &error)
+		let port = ObjCRuntime.machPort(device, "lookup:error:", service as NSString, error: &error)
 		guard port != MACH_PORT_NULL else {
-			throw SimulatorError.inputUnavailable(error?.localizedDescription ?? "\(digitizerService) not found")
+			throw SimulatorError.inputUnavailable(error?.localizedDescription ?? "\(service) not found")
 		}
 
 		// Both create functions return +1; the endpoint takes over the lookup's send right.
@@ -117,7 +119,7 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 			let connection = unsafeBitCast(connectionSymbol, to: ConnectionFromEndpoint.self)(endpoint)?
 			.takeRetainedValue() as? xpc_connection_t
 		else {
-			throw SimulatorError.inputUnavailable("could not connect to \(digitizerService)")
+			throw SimulatorError.inputUnavailable("could not connect to \(service)")
 		}
 		unsafeBitCast(simToHostSymbol, to: EnableSimToHost.self)(connection)
 		return connection

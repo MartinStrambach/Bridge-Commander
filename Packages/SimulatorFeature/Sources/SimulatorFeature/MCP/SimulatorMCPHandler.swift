@@ -21,6 +21,8 @@ protocol SimulatorToolActions: Sendable {
 	func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult
 	func elementAction(_ action: SimulatorElementAction, on query: SimulatorElementQuery, device: SimulatorDevice) async throws -> SimulatorElementOutcome
 	var crashReports: any SimulatorCrashReportSource { get }
+	/// Turns the device and returns it as it then is, its `rotation` the interface's.
+	func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.
@@ -99,7 +101,8 @@ struct SimulatorMCPHandler: Sendable {
 	Drives the iOS Simulator shown in Bridge Commander, beside the terminal you run in. Build and \
 	install with xcodebuild and `xcrun simctl install`/`launch` as usual; use these tools to look \
 	at the running app and interact with it. Coordinates are in points with the origin at the top \
-	left — the same size as the screenshot image. describe_ui lists the screen's elements with \
+	left — the same size as the screenshot image, and as displayed when rotate has turned the \
+	interface to landscape. describe_ui lists the screen's elements with \
 	their frames: prefer it for finding what to tap, and screenshots for how things look. To act \
 	on an element describe_ui lists, press_element, set_value and scroll_to_element find it by \
 	identifier or label, with no coordinates. The actions (tap, swipe, pinch, two_finger_drag, \

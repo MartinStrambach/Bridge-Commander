@@ -20,9 +20,10 @@ extension SimulatorHost {
 		try await SimulatorAccessibility.shared.frontmostTree(device: ObjectBox(object: simDevice(udid: device.id)))
 	}
 
-	/// The element at a point in screen points, if any.
+	/// The element at a point in screen points, if any. Hit-testing takes the point on the portrait
+	/// panel, though the frames it returns are in the interface's space like the tree's.
 	public func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode? {
-		try await SimulatorAccessibility.shared.element(at: point, device: ObjectBox(object: simDevice(udid: device.id)))
+		try await SimulatorAccessibility.shared.element(at: device.nativePoint(point), device: ObjectBox(object: simDevice(udid: device.id)))
 	}
 
 	// MARK: - Multi-touch
@@ -45,12 +46,8 @@ extension SimulatorHost {
 		duration: Duration = .milliseconds(400)
 	) async throws {
 		let connection = try await hidConnection(udid: device.id)
-		let size = device.screenPointSize
 		func normalized(_ point: CGPoint) -> CGPoint {
-			CGPoint(
-				x: min(max(point.x, 0), size.width) / max(size.width, 1),
-				y: min(max(point.y, 0), size.height) / max(size.height, 1)
-			)
+			device.normalizedPoint(clamping: point)
 		}
 
 		let interval = Duration.milliseconds(16)

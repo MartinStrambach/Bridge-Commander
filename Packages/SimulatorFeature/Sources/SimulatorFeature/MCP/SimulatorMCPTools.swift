@@ -152,6 +152,19 @@ enum SimulatorMCPTools {
 			required: ["name"],
 			readOnly: true
 		),
+		tool(
+			"rotate",
+			"Turn the device to an orientation. The app's interface follows if it supports that orientation (an iPhone home screen and portrait-only apps stay portrait). Screenshots, tap/swipe coordinates and describe_ui frames all follow the interface, so take a new screenshot after rotating.",
+			properties: [
+				"orientation": [
+					"type": "string",
+					"enum": .array(SimulatorDeviceOrientation.allCases.map { .string($0.rawValue) }),
+					"description": "landscape_left has the top of the device on the left, landscape_right on the right.",
+				],
+				"udid": optionalUdid,
+			],
+			required: ["orientation"]
+		),
 	]
 
 	/// Runs a tool and returns its `CallToolResult`. Failures are reported in the result
@@ -181,10 +194,11 @@ enum SimulatorMCPTools {
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
 				let jpeg = try await actions.screenshotJPEG(device: device)
 				let size = device.screenPointSize
+				let rotation = device.rotation == .upright ? "" : " (\(device.rotation.label))"
 				return [
 					"content": [
 						["type": "image", "data": .string(jpeg.base64EncodedString()), "mimeType": "image/jpeg"],
-						["type": "text", "text": .string("\(device.name), \(Int(size.width))×\(Int(size.height)) points.")],
+						["type": "text", "text": .string("\(device.name), \(Int(size.width))×\(Int(size.height)) points\(rotation).")],
 					],
 				]
 
@@ -308,6 +322,15 @@ enum SimulatorMCPTools {
 			case "crash_report":
 				return text(try await SimulatorCrashReports.report(named: string(arguments, "name"), source: actions.crashReports))
 
+			case "rotate":
+				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				let name = try string(arguments, "orientation")
+				guard let orientation = SimulatorDeviceOrientation(rawValue: name) else {
+					throw ToolError("Unknown orientation \"\(name)\".")
+				}
+				let rotated = try await actions.rotate(device: device, to: orientation)
+				return text(rotationReport(rotated, orientation: orientation))
+
 			default:
 				return text("Unknown tool \(name).", isError: true)
 			}
@@ -326,9 +349,20 @@ enum SimulatorMCPTools {
 		return devices.map { device in
 			let size = device.screenPointSize
 			let shown = device.id == selected ? " [shown]" : ""
-			return "\(device.name) (\(device.runtimeName)) \(device.id) — \(device.state.label), \(Int(size.width))×\(Int(size.height)) pt\(shown)"
+			let rotation = device.rotation == .upright ? "" : " \(device.rotation.label)"
+			return "\(device.name) (\(device.runtimeName)) \(device.id) — \(device.state.label), \(Int(size.width))×\(Int(size.height)) pt\(rotation)\(shown)"
 		}
 		.joined(separator: "\n")
+	}
+
+	/// What a rotation did, including when the interface did not follow the device.
+	private static func rotationReport(_ device: SimulatorDevice, orientation: SimulatorDeviceOrientation) -> String {
+		let size = device.screenPointSize
+		let points = "\(Int(size.width))×\(Int(size.height)) points"
+		guard device.rotation == orientation.screenRotation else {
+			return "Turned the device to \(orientation.label), but the interface stayed \(device.rotation.label) — the app does not support that orientation. The screen is \(points)."
+		}
+		return "Rotated to \(orientation.label). The screen is now \(points); take a new screenshot before using coordinates."
 	}
 
 	/// The device a call addresses, reported so the pane can come up showing it.

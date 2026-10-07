@@ -48,9 +48,12 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 	/// The runtime's display name, e.g. "iOS 27.0".
 	public let runtimeName: String
 	public var state: State
-	/// The main screen in pixels, portrait.
+	/// The main screen in pixels, portrait: the panel's native size, whatever the rotation.
 	public let screenPixelSize: CGSize
 	public let screenScale: CGFloat
+	/// How the interface is turned on the panel, when the device was read. Always upright for a
+	/// device that is not booted.
+	public var rotation: SimulatorScreenRotation
 
 	public init(
 		id: String,
@@ -58,7 +61,8 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 		runtimeName: String,
 		state: State,
 		screenPixelSize: CGSize,
-		screenScale: CGFloat
+		screenScale: CGFloat,
+		rotation: SimulatorScreenRotation = .upright
 	) {
 		self.id = id
 		self.name = name
@@ -66,29 +70,56 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 		self.state = state
 		self.screenPixelSize = screenPixelSize
 		self.screenScale = screenScale
+		self.rotation = rotation
 	}
 
-	/// The main screen in points — the coordinate space the MCP tools and screenshots use, and the
-	/// one an app's layout is written in.
-	public var screenPointSize: CGSize {
+	/// The panel in points, portrait.
+	public var nativePointSize: CGSize {
 		guard screenScale > 0 else {
 			return screenPixelSize
 		}
 		return CGSize(width: screenPixelSize.width / screenScale, height: screenPixelSize.height / screenScale)
 	}
 
+	/// The screen in points as the interface is laid out — landscape when the app is — which is the
+	/// coordinate space the MCP tools and screenshots use, and the one an app's layout is written in.
+	public var screenPointSize: CGSize {
+		rotation.displayedSize(native: nativePointSize)
+	}
+
+	/// The screen in pixels as the interface is laid out, for the pane's aspect ratio.
+	public var displayedPixelSize: CGSize {
+		rotation.displayedSize(native: screenPixelSize)
+	}
+
 	public var isBooted: Bool {
 		state == .booted
 	}
 
-	/// A point in screen points as the normalized, top-left-origin ratio the digitizer takes.
-	/// `nil` for a point outside the screen.
+	/// A point in screen points (interface space, top-left origin) as the normalized ratio the
+	/// digitizer takes, which is of the portrait panel whatever the rotation. `nil` for a point
+	/// outside the screen.
 	public func normalizedPoint(x: Double, y: Double) -> CGPoint? {
 		let size = screenPointSize
 		guard size.width > 0, size.height > 0, x >= 0, y >= 0, x <= size.width, y <= size.height else {
 			return nil
 		}
-		return CGPoint(x: x / size.width, y: y / size.height)
+		return normalizedPoint(clamping: CGPoint(x: x, y: y))
+	}
+
+	/// Like `normalizedPoint(x:y:)`, with a point off the screen moved to its edge.
+	func normalizedPoint(clamping point: CGPoint) -> CGPoint {
+		let size = screenPointSize
+		let clamped = CGPoint(x: min(max(point.x, 0), size.width), y: min(max(point.y, 0), size.height))
+		let unit = CGSize(width: 1, height: 1)
+		let displayed = CGPoint(x: clamped.x / max(size.width, 1), y: clamped.y / max(size.height, 1))
+		return rotation.nativePoint(fromDisplayed: displayed, nativeSize: unit)
+	}
+
+	/// A point in screen points (interface space) as a point on the portrait panel, in points —
+	/// what accessibility hit-testing takes.
+	func nativePoint(_ point: CGPoint) -> CGPoint {
+		rotation.nativePoint(fromDisplayed: point, nativeSize: nativePointSize)
 	}
 }
 

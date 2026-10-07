@@ -297,4 +297,8 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	func elementAction(_ action: SimulatorElementAction, on query: SimulatorElementQuery, device: SimulatorDevice) async throws -> SimulatorElementOutcome {
 		try await host.performElementAction(action, on: query, device: device)
 	}
+
+	func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
+		try await host.rotate(device: device, to: orientation)
+	}
 }

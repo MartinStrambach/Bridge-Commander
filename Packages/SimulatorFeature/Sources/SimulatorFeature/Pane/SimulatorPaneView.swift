@@ -20,7 +20,7 @@ public struct SimulatorPaneView: View {
 	/// Wide enough for the device's screen at the height left under the header, within limits that
 	/// keep the terminal usable.
 	private var paneWidth: CGFloat {
-		let aspect: CGFloat = if let size = store.selectedDevice?.screenPixelSize, size.height > 0 {
+		let aspect: CGFloat = if let size = store.selectedDevice?.displayedPixelSize, size.height > 0 {
 			size.width / size.height
 		}
 		else {
@@ -65,6 +65,8 @@ public struct SimulatorPaneView: View {
 						.controlSize(.small)
 				}
 				else if device.isBooted {
+					iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
+					iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
 					iconButton("house", help: "Home") { store.send(.hardwareButtonTapped(.home)) }
 					iconButton("lock", help: "Lock") { store.send(.hardwareButtonTapped(.lock)) }
 					iconButton("power", help: "Shut down \(device.name)") { store.send(.shutdownButtonTapped) }
@@ -148,7 +150,7 @@ public struct SimulatorPaneView: View {
 		if let device = store.selectedDevice {
 			if device.isBooted {
 				SimulatorScreen(deviceId: device.id, screenPixelSize: device.screenPixelSize)
-					.aspectRatio(device.screenPixelSize, contentMode: .fit)
+					.aspectRatio(device.displayedPixelSize, contentMode: .fit)
 					.padding(Self.screenPadding)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
