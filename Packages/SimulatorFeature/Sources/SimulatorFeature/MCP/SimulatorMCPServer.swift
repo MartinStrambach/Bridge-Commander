@@ -242,6 +242,10 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 		try host.resolveDevice(udid: udid)
 	}
 
+	var crashReports: any SimulatorCrashReportSource {
+		DiagnosticReportsDirectory()
+	}
+
 	func select(_ device: SimulatorDevice) async {
 		host.selectedDeviceId = device.id
 	}

@@ -51,6 +51,8 @@ struct SimulatorMCPHandlerTests {
 		func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
 			record("two \(from.first.x),\(from.second.x) -> \(to.first.x),\(to.second.x)")
 		}
+		var crashReports: any SimulatorCrashReportSource { crashSource }
+		let crashSource = SimulatorCrashReportsTests.source()
 
 		private func record(_ call: String) {
 			calls.withLock { $0.append(call) }
@@ -121,7 +123,7 @@ struct SimulatorMCPHandlerTests {
 		let names = tools.compactMap { $0["name"]?.stringValue }
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
-			"type_text", "press_key", "press_button",
+			"type_text", "press_key", "press_button", "list_crashes", "crash_report",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -216,5 +218,32 @@ struct SimulatorMCPHandlerTests {
 			"params": ["name": "two_finger_drag", "arguments": ["from_x": 100, "from_y": 500, "to_x": 100, "to_y": 300]],
 		]))
 		#expect(actions.calls.withLock { $0 } == ["two 170.0,230.0 -> 140.0,260.0", "two 80.0,120.0 -> 80.0,120.0"])
+	}
+
+	@Test
+	func crashToolsListAndSummariseReports() async throws {
+		func call(_ name: String, _ arguments: JSONValue) async throws -> JSONValue? {
+			let response = await handler(FakeActions()).response(to: try post([
+				"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": ["name": .string(name), "arguments": arguments],
+			]))
+			return try decode(response)["result"]
+		}
+
+		let list = try await call("list_crashes", ["udid": .string(CrashFixtures.udid), "since_minutes": 100_000])
+		guard case let .array(listContent)? = list?["content"] else {
+			Issue.record("expected content")
+			return
+		}
+		#expect(list?["isError"] == false)
+		#expect(listContent.first?["text"]?.stringValue?.contains("CrashDemo-2026-10-07-193128.ips") == true)
+
+		let report = try await call("crash_report", ["name": "CrashDemo-2026-10-07-193214.ips"])
+		guard case let .array(reportContent)? = report?["content"] else {
+			Issue.record("expected content")
+			return
+		}
+		#expect(reportContent.first?["text"]?.stringValue?.contains("0  CrashDemo  crash(_:) + 780 (main.swift:31)") == true)
+
+		#expect(try await call("crash_report", ["name": "../../.ssh/id_rsa"])?["isError"] == true)
 	}
 }

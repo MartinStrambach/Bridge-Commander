@@ -108,6 +108,25 @@ enum SimulatorMCPTools {
 			],
 			required: ["button"]
 		),
+		tool(
+			"list_crashes",
+			"List recent crash reports of apps in the simulator, newest first: time, app, bundle id, exception and a short reason, and the report's file name for crash_report. Crashes of the simulator's own processes (PosterBoard, daemons) are left out unless include_system is set.",
+			properties: [
+				"bundle_id": ["type": "string", "description": "Optional: only this app's crashes."],
+				"since_minutes": number("How far back to look, in minutes. Default 60."),
+				"limit": number("How many to list at most. Default 10."),
+				"include_system": ["type": "boolean", "description": "Also list crashes of the simulator's own processes. Default false."],
+				"udid": udidProperty("Which simulator. Defaults to the one shown in Bridge Commander, or else a booted one; it need not be booted."),
+			],
+			readOnly: true
+		),
+		tool(
+			"crash_report",
+			"Summarise one crash report: app and version, time, exception type, codes and signal, termination reason, the crash message from the simulator's log (an uncaught exception's reason, a Swift fatal error) and the symbolicated backtrace of the crashed thread.",
+			properties: ["name": ["type": "string", "description": "The report's file name, as list_crashes gives it."]],
+			required: ["name"],
+			readOnly: true
+		),
 	]
 
 	/// Runs a tool and returns its `CallToolResult`. Failures are reported in the result
@@ -220,6 +239,13 @@ enum SimulatorMCPTools {
 				}
 				try await actions.press(device: device, button: button)
 				return text("Pressed \(name).")
+
+			case "list_crashes":
+				let request = await SimulatorCrashReports.listRequest(arguments: arguments, actions: actions)
+				return text(try await SimulatorCrashReports.list(request, source: actions.crashReports))
+
+			case "crash_report":
+				return text(try await SimulatorCrashReports.report(named: string(arguments, "name"), source: actions.crashReports))
 
 			default:
 				return text("Unknown tool \(name).", isError: true)
