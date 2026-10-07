@@ -20,6 +20,7 @@ let package = Package(
 		.package(path: "../ActionButtons"),
 		.package(path: "../StagingFeature"),
 		.package(path: "../YouTrackMenu"),
+		.package(path: "../HomerFeature"),
 	],
 	targets: [
 		.target(
@@ -37,6 +38,7 @@ let package = Package(
 				.product(name: "ActionButtons", package: "ActionButtons"),
 				.product(name: "StagingFeature", package: "StagingFeature"),
 				.product(name: "YouTrackMenu", package: "YouTrackMenu"),
+				.product(name: "HomerFeature", package: "HomerFeature"),
 			]
 		),
 		.testTarget(

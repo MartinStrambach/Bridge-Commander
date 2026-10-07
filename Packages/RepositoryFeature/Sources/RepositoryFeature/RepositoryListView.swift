@@ -2,24 +2,72 @@ import ComposableArchitecture
 import SwiftUI
 import UniformTypeIdentifiers
 import AppUI
+import HomerFeature
 import Settings
 import TerminalFeature
 
 // MARK: - Public entry point
 
-/// Public wrapper that self-initialises the store. Used by BridgeCommanderApp.
+public extension SharedReaderKey where Self == AppStorageKey<AppSection> {
+	/// The main window's section on screen, remembered across launches.
+	static var selectedAppSection: Self {
+		appStorage("selectedAppSection")
+	}
+}
+
+/// Public wrapper that self-initialises the stores. Used by BridgeCommanderApp.
+///
+/// Hosts the window's two sections, switched by the `AppSectionSwitcher` that heads each one.
+/// The repository list stays mounted while the Homer console is shown — like it does under the
+/// terminal overlay — so switching back costs no rescan and its terminals keep running; it is
+/// disabled meanwhile so its keyboard shortcuts (⌘R, ⌘T, ⌘F, ⌘A) do not fire from under the
+/// console. The switcher is only reachable with the terminal panel closed (the overlay covers
+/// the list's header), and the panel opening for any other reason (a notification click, tabs
+/// restored at launch) brings the repositories back, so the console never sits over a terminal
+/// that still has keyboard focus.
 public struct RootRepositoryView: View {
 	private let store: StoreOf<RepositoryListReducer>
+	private let homerStore: StoreOf<HomerConsoleReducer>
+
+	@Shared(.selectedAppSection)
+	private var section = AppSection.repositories
 
 	public init() {
 		self.store = Store(
 			initialState: RepositoryListReducer.State(),
 			reducer: { RepositoryListReducer() }
 		)
+		self.homerStore = Store(
+			initialState: HomerConsoleReducer.State(),
+			reducer: { HomerConsoleReducer() }
+		)
 	}
 
 	public var body: some View {
-		RepositoryListView(store: store)
+		ZStack {
+			RepositoryListView(store: store, sectionSwitcher: sectionSwitcher)
+				.opacity(section == .repositories ? 1 : 0)
+				.disabled(section != .repositories)
+
+			if section == .homer {
+				HomerConsoleView(store: homerStore, sectionSwitcher: sectionSwitcher)
+			}
+		}
+		// Not tied to the Homer section being shown: the open-question badge on the switcher
+		// needs the session from launch.
+		.task { homerStore.send(.start) }
+		.onChange(of: store.terminalLayout != nil) { _, isTerminalOpen in
+			if isTerminalOpen, section != .repositories {
+				$section.withLock { $0 = .repositories }
+			}
+		}
+	}
+
+	private var sectionSwitcher: AppSectionSwitcher {
+		AppSectionSwitcher(
+			selection: Binding($section),
+			badges: [.homer: homerStore.openQuestionCount]
+		)
 	}
 }
 
@@ -29,6 +77,8 @@ public struct RootRepositoryView: View {
 struct RepositoryListView: View {
 	@Bindable
 	var store: StoreOf<RepositoryListReducer>
+	/// Stands where the window title used to; see `RootRepositoryView`.
+	let sectionSwitcher: AppSectionSwitcher
 
 	@State
 	private var terminalViewStore = TerminalViewStore()
@@ -203,9 +253,7 @@ struct RepositoryListView: View {
 		HStack {
 			// Title and the list filter read as one unit, set apart from the action buttons.
 			HStack(spacing: 12) {
-				Text("Bridge Commander")
-					.scaledFont(.title2)
-					.fontWeight(.bold)
+				sectionSwitcher
 
 				if !store.repositoryGroups.isEmpty {
 					// Bound manually rather than with @Bindable: the flag is fileprivate(set) and
@@ -535,6 +583,7 @@ private extension View {
 			reducer: {
 				RepositoryListReducer()
 			}
-		)
+		),
+		sectionSwitcher: AppSectionSwitcher(selection: .constant(.repositories))
 	)
 }
