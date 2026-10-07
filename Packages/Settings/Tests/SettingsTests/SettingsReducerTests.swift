@@ -16,7 +16,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupDefaultBranch(groupId: "repo", value: "  develop \n")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "develop")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(defaultBranch: "develop") }
 		}
 	}
 
@@ -26,7 +26,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupDefaultBranch(groupId: "repo", value: "   \n\t")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(defaultBranch: "") }
 		}
 	}
 
@@ -39,10 +39,10 @@ struct SettingsReducerTests {
 		}
 		// The TextField writes on every keystroke; trimming here would eat the space between words.
 		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "mise ")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(terminalStartupCommand: "mise ")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(terminalStartupCommand: "mise ") }
 		}
 		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "mise install")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(terminalStartupCommand: "mise install")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(terminalStartupCommand: "mise install") }
 		}
 	}
 
@@ -52,13 +52,13 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupDefaultBranch(groupId: "repo", value: "develop")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "develop")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(defaultBranch: "develop") }
 		}
 		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "claude")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "develop", terminalStartupCommand: "claude")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(defaultBranch: "develop", terminalStartupCommand: "claude") }
 		}
 		await store.send(.setGroupTerminalStartupCommand(groupId: "repo", value: "")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(defaultBranch: "develop")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(defaultBranch: "develop") }
 		}
 	}
 
@@ -68,10 +68,10 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupSkipGlobalTerminalStartupCommand(groupId: "repo", value: true)) {
-			$0.groupSettings["repo"] = RepoGroupSettings(skipGlobalTerminalStartupCommand: true)
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(skipGlobalTerminalStartupCommand: true) }
 		}
 		await store.send(.setGroupSkipGlobalTerminalStartupCommand(groupId: "repo", value: false)) {
-			$0.groupSettings["repo"] = RepoGroupSettings()
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings() }
 		}
 	}
 
@@ -113,10 +113,10 @@ struct SettingsReducerTests {
 		#expect(store.state.terminalCopyOnSelect == false)
 
 		await store.send(.setTerminalCopyOnSelect(true)) {
-			$0.terminalCopyOnSelect = true
+			$0.$terminalCopyOnSelect.withLock { $0 = true }
 		}
 		await store.send(.setTerminalCopyOnSelect(false)) {
-			$0.terminalCopyOnSelect = false
+			$0.$terminalCopyOnSelect.withLock { $0 = false }
 		}
 	}
 
@@ -128,10 +128,10 @@ struct SettingsReducerTests {
 		#expect(store.state.terminalMouseReporting == true)
 
 		await store.send(.setTerminalMouseReporting(false)) {
-			$0.terminalMouseReporting = false
+			$0.$terminalMouseReporting.withLock { $0 = false }
 		}
 		await store.send(.setTerminalMouseReporting(true)) {
-			$0.terminalMouseReporting = true
+			$0.$terminalMouseReporting.withLock { $0 = true }
 		}
 	}
 
@@ -173,13 +173,13 @@ struct SettingsReducerTests {
 		#expect(store.state.terminalFontSize == TerminalFontSize.default)
 
 		await store.send(.setTerminalFontSize(16)) {
-			$0.terminalFontSize = 16
+			$0.$terminalFontSize.withLock { $0 = 16 }
 		}
 		await store.send(.setTerminalFontSize(999)) {
-			$0.terminalFontSize = TerminalFontSize.maximum
+			$0.$terminalFontSize.withLock { $0 = TerminalFontSize.maximum }
 		}
 		await store.send(.setTerminalFontSize(0)) {
-			$0.terminalFontSize = TerminalFontSize.minimum
+			$0.$terminalFontSize.withLock { $0 = TerminalFontSize.minimum }
 		}
 	}
 
@@ -191,7 +191,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupYouTrackBaseURL(groupId: "repo", value: "  https://youtrack.example.com \n")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(youtrackBaseURL: "https://youtrack.example.com")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(youtrackBaseURL: "https://youtrack.example.com") }
 		}
 	}
 
@@ -201,7 +201,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupYouTrackBaseURL(groupId: "repo", value: "   \n\t")) {
-			$0.groupSettings["repo"] = RepoGroupSettings(youtrackBaseURL: "")
+			$0.$groupSettings.withLock { $0["repo"] = RepoGroupSettings(youtrackBaseURL: "") }
 		}
 	}
 
@@ -213,13 +213,13 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGitLabToken("glpat-abc123\n")) {
-			$0.gitlabToken = "glpat-abc123"
+			$0.$gitlabToken.withLock { $0 = "glpat-abc123" }
 		}
 		await store.send(.setGitHubToken("  ghp_abc123 ")) {
-			$0.githubToken = "ghp_abc123"
+			$0.$githubToken.withLock { $0 = "ghp_abc123" }
 		}
 		await store.send(.setYouTrackToken("perm:abc.123\t\n")) {
-			$0.youtrackAuthToken = "perm:abc.123"
+			$0.$youtrackAuthToken.withLock { $0 = "perm:abc.123" }
 		}
 	}
 
@@ -317,11 +317,11 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGitLabToken("glpat-new")) {
-			$0.gitlabToken = "glpat-new"
+			$0.$gitlabToken.withLock { $0 = "glpat-new" }
 			$0.gitlabTokenTest = .idle
 		}
 		await store.send(.clearGitHubToken) {
-			$0.githubToken = ""
+			$0.$githubToken.withLock { $0 = "" }
 			$0.githubTokenTest = .idle
 		}
 	}
@@ -446,14 +446,14 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupYouTrackBaseURL(groupId: "/repo", value: "https://new.youtrack.cloud")) {
-			$0.groupSettings["/repo"] = RepoGroupSettings(youtrackBaseURL: "https://new.youtrack.cloud")
+			$0.$groupSettings.withLock { $0["/repo"] = RepoGroupSettings(youtrackBaseURL: "https://new.youtrack.cloud") }
 			$0.youtrackTokenTest = .idle
 		}
 		await store.send(.youTrackTokenTestFinished(.failure(message: "HTTP 500."))) {
 			$0.youtrackTokenTest = .failure(message: "HTTP 500.")
 		}
 		await store.send(.setYouTrackToken("perm:new")) {
-			$0.youtrackAuthToken = "perm:new"
+			$0.$youtrackAuthToken.withLock { $0 = "perm:new" }
 			$0.youtrackTokenTest = .idle
 		}
 	}
@@ -466,7 +466,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupSupportsIOS(groupId: "new-group", value: true)) {
-			$0.groupSettings["new-group"] = RepoGroupSettings(supportsIOS: true)
+			$0.$groupSettings.withLock { $0["new-group"] = RepoGroupSettings(supportsIOS: true) }
 		}
 	}
 
@@ -476,13 +476,13 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGroupSupportsIOS(groupId: "g", value: true)) {
-			$0.groupSettings["g"] = RepoGroupSettings(supportsIOS: true)
+			$0.$groupSettings.withLock { $0["g"] = RepoGroupSettings(supportsIOS: true) }
 		}
 		await store.send(.setGroupTicketIdRegex(groupId: "g", regex: "MOB-[0-9]+")) {
-			$0.groupSettings["g"]?.ticketIdRegex = "MOB-[0-9]+"
+			$0.$groupSettings.withLock { $0["g"]?.ticketIdRegex = "MOB-[0-9]+" }
 		}
 		await store.send(.setGroupSupportsTuist(groupId: "g", value: true)) {
-			$0.groupSettings["g"]?.supportsTuist = true
+			$0.$groupSettings.withLock { $0["g"]?.supportsTuist = true }
 		}
 	}
 
@@ -517,7 +517,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setYouTrackToken("secret-token")) {
-			$0.youtrackAuthToken = "secret-token"
+			$0.$youtrackAuthToken.withLock { $0 = "secret-token" }
 		}
 		await store.send(.clearTokenButtonTapped) {
 			$0.alert = AlertState {
@@ -536,7 +536,7 @@ struct SettingsReducerTests {
 			}
 		}
 		await store.send(.alert(.presented(.confirmClearToken))) {
-			$0.youtrackAuthToken = ""
+			$0.$youtrackAuthToken.withLock { $0 = "" }
 			$0.alert = nil
 		}
 	}
@@ -547,7 +547,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setYouTrackToken("keep-me")) {
-			$0.youtrackAuthToken = "keep-me"
+			$0.$youtrackAuthToken.withLock { $0 = "keep-me" }
 		}
 		await store.send(.clearTokenButtonTapped) {
 			$0.alert = AlertState {
@@ -579,10 +579,10 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setGitHubToken("ghp_abc")) {
-			$0.githubToken = "ghp_abc"
+			$0.$githubToken.withLock { $0 = "ghp_abc" }
 		}
 		await store.send(.clearGitHubToken) {
-			$0.githubToken = ""
+			$0.$githubToken.withLock { $0 = "" }
 		}
 	}
 
@@ -592,7 +592,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setPeriodicRefreshInterval(.thirtyMinutes)) {
-			$0.periodicRefreshInterval = .thirtyMinutes
+			$0.$periodicRefreshInterval.withLock { $0 = .thirtyMinutes }
 		}
 	}
 
@@ -602,7 +602,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		}
 		await store.send(.setBranchNameRegex("FOO-[0-9]+")) {
-			$0.branchNameRegex = "FOO-[0-9]+"
+			$0.$branchNameRegex.withLock { $0 = "FOO-[0-9]+" }
 		}
 	}
 }

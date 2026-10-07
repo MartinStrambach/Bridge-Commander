@@ -48,7 +48,7 @@ struct SettingsReducerProfileImportTests {
 		await store.send(.importFromTerminalAppButtonTapped)
 		gate.open()
 		await store.receive(\.profilesImported, imported) {
-			$0.terminalProfiles = [Self.profile("Basic"), Self.profile("Ocean")]
+			$0.$terminalProfiles.withLock { $0 = [Self.profile("Basic"), Self.profile("Ocean")] }
 			$0.alert = AlertState {
 				TextState("Profiles Imported")
 			} actions: {
@@ -110,7 +110,7 @@ struct SettingsReducerProfileImportTests {
 		gate.open()
 
 		await store.receive(\.profilesImported, [good]) {
-			$0.terminalProfiles = [good]
+			$0.$terminalProfiles.withLock { $0 = [good] }
 			$0.alert = AlertState {
 				TextState("Profiles Imported")
 			} actions: {
@@ -169,7 +169,7 @@ struct SettingsReducerProfileImportTests {
 			SettingsReducer()
 		}
 		await store.send(.profilesImported([Self.profile("Ocean")])) {
-			$0.terminalProfiles = [Self.profile("Ocean")]
+			$0.$terminalProfiles.withLock { $0 = [Self.profile("Ocean")] }
 			$0.alert = AlertState {
 				TextState("Profiles Imported")
 			} actions: {
@@ -179,12 +179,12 @@ struct SettingsReducerProfileImportTests {
 			}
 		}
 		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
-			$0.terminalColorTheme = .imported(name: "Ocean")
+			$0.$terminalColorTheme.withLock { $0 = .imported(name: "Ocean") }
 		}
 
 		await store.send(.deleteProfileButtonTapped(name: "Ocean")) {
-			$0.terminalProfiles = []
-			$0.terminalColorTheme = .builtIn(.basicDark)
+			$0.$terminalProfiles.withLock { $0 = [] }
+			$0.$terminalColorTheme.withLock { $0 = .builtIn(.basicDark) }
 		}
 	}
 
@@ -194,7 +194,7 @@ struct SettingsReducerProfileImportTests {
 			SettingsReducer()
 		}
 		await store.send(.profilesImported([Self.profile("Ocean"), Self.profile("Grass")])) {
-			$0.terminalProfiles = [Self.profile("Grass"), Self.profile("Ocean")]
+			$0.$terminalProfiles.withLock { $0 = [Self.profile("Grass"), Self.profile("Ocean")] }
 			$0.alert = AlertState {
 				TextState("Profiles Imported")
 			} actions: {
@@ -206,11 +206,11 @@ struct SettingsReducerProfileImportTests {
 			}
 		}
 		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
-			$0.terminalColorTheme = .imported(name: "Ocean")
+			$0.$terminalColorTheme.withLock { $0 = .imported(name: "Ocean") }
 		}
 
 		await store.send(.deleteProfileButtonTapped(name: "Grass")) {
-			$0.terminalProfiles = [Self.profile("Ocean")]
+			$0.$terminalProfiles.withLock { $0 = [Self.profile("Ocean")] }
 		}
 	}
 
@@ -224,7 +224,7 @@ struct SettingsReducerProfileImportTests {
 			SettingsReducer()
 		}
 		await store.send(.profilesImported([ocean])) {
-			$0.terminalProfiles = [ocean]
+			$0.$terminalProfiles.withLock { $0 = [ocean] }
 			$0.alert = AlertState {
 				TextState("Profiles Imported")
 			} actions: {
@@ -235,9 +235,9 @@ struct SettingsReducerProfileImportTests {
 		}
 
 		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
-			$0.terminalColorTheme = .imported(name: "Ocean")
-			$0.terminalFontName = "Menlo-Regular"
-			$0.terminalFontSize = 15
+			$0.$terminalColorTheme.withLock { $0 = .imported(name: "Ocean") }
+			$0.$terminalFontName.withLock { $0 = "Menlo-Regular" }
+			$0.$terminalFontSize.withLock { $0 = 15 }
 		}
 	}
 
@@ -251,7 +251,7 @@ struct SettingsReducerProfileImportTests {
 			SettingsReducer()
 		}
 		await store.send(.profilesImported([ocean])) {
-			$0.terminalProfiles = [ocean]
+			$0.$terminalProfiles.withLock { $0 = [ocean] }
 			$0.alert = AlertState {
 				TextState("Profiles Imported")
 			} actions: {
@@ -262,8 +262,8 @@ struct SettingsReducerProfileImportTests {
 		}
 
 		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
-			$0.terminalColorTheme = .imported(name: "Ocean")
-			$0.terminalFontSize = 12
+			$0.$terminalColorTheme.withLock { $0 = .imported(name: "Ocean") }
+			$0.$terminalFontSize.withLock { $0 = 12 }
 		}
 		#expect(store.state.terminalFontName == TerminalFontFamily.systemDefault)
 	}
@@ -273,10 +273,10 @@ struct SettingsReducerProfileImportTests {
 		let store = TestStore(initialState: SettingsReducer.State()) {
 			SettingsReducer()
 		}
-		await store.send(.setTerminalFontName("Menlo-Regular")) { $0.terminalFontName = "Menlo-Regular" }
-		await store.send(.setTerminalFontSize(20)) { $0.terminalFontSize = 20 }
+		await store.send(.setTerminalFontName("Menlo-Regular")) { $0.$terminalFontName.withLock { $0 = "Menlo-Regular" } }
+		await store.send(.setTerminalFontSize(20)) { $0.$terminalFontSize.withLock { $0 = 20 } }
 		await store.send(.profilesImported([Self.profile("Ocean")])) {
-			$0.terminalProfiles = [Self.profile("Ocean")]
+			$0.$terminalProfiles.withLock { $0 = [Self.profile("Ocean")] }
 			$0.alert = AlertState {
 				TextState("Profiles Imported")
 			} actions: {
@@ -287,10 +287,10 @@ struct SettingsReducerProfileImportTests {
 		}
 
 		await store.send(.setTerminalColorTheme(.imported(name: "Ocean"))) {
-			$0.terminalColorTheme = .imported(name: "Ocean")
+			$0.$terminalColorTheme.withLock { $0 = .imported(name: "Ocean") }
 		}
 		await store.send(.setTerminalColorTheme(.builtIn(.dracula))) {
-			$0.terminalColorTheme = .builtIn(.dracula)
+			$0.$terminalColorTheme.withLock { $0 = .builtIn(.dracula) }
 		}
 	}
 

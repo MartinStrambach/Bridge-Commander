@@ -155,7 +155,7 @@ struct RepositoryListView: View {
 
 			guard
 				let groupStore = store.scope(
-					state: \.repositoryGroups[id: group.id],
+					\.repositoryGroups[id: group.id],
 					action: \.repositoryGroups[id: group.id]
 				)
 			else {
@@ -165,7 +165,7 @@ struct RepositoryListView: View {
 			if isHeader {
 				return groupStore.scope(\.header, action: \.header)
 			}
-			return groupStore.scope(state: \.worktrees[id: path], action: \.worktrees[id: path])
+			return groupStore.scope(\.worktrees[id: path], action: \.worktrees[id: path])
 		}
 		// No row behind the path: the home-directory session is the one such case.
 		return nil

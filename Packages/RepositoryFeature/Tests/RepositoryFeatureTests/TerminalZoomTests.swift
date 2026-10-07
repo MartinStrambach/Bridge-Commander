@@ -17,10 +17,10 @@ struct TerminalZoomTests {
 		let store = makeStore()
 
 		await store.send(.zoomInRequested) {
-			$0.terminalFontSize = TerminalFontSize.default + TerminalFontSize.step
+			$0.$terminalFontSize.withLock { $0 = TerminalFontSize.default + TerminalFontSize.step }
 		}
 		await store.send(.zoomOutRequested) {
-			$0.terminalFontSize = TerminalFontSize.default
+			$0.$terminalFontSize.withLock { $0 = TerminalFontSize.default }
 		}
 	}
 
@@ -41,12 +41,12 @@ struct TerminalZoomTests {
 
 		store.state.$terminalFontSize.withLock { $0 = TerminalFontSize.maximum }
 		await store.send(.resetZoomRequested) {
-			$0.terminalFontSize = TerminalFontSize.default
+			$0.$terminalFontSize.withLock { $0 = TerminalFontSize.default }
 		}
 
 		store.state.$terminalFontSize.withLock { $0 = TerminalFontSize.minimum }
 		await store.send(.resetZoomRequested) {
-			$0.terminalFontSize = TerminalFontSize.default
+			$0.$terminalFontSize.withLock { $0 = TerminalFontSize.default }
 		}
 	}
 }
