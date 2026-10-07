@@ -305,6 +305,9 @@ struct TerminalPanelView: View {
 		}
 		.padding(.horizontal, 12)
 		.padding(.vertical, 8)
+		// Before the color: a background added after it would sit behind the color, which takes
+		// the clicks.
+		.windowTitleBarArea()
 		.background(Color(NSColor.windowBackgroundColor))
 	}
 
