@@ -197,27 +197,54 @@ struct HomerInstanceReducerTests {
 		await store.skipInFlightEffects()
 	}
 
-	@Test("a process opens its web console page with the session's cookies")
-	func processOpensWebPage() async {
-		let cookie = HTTPCookie(properties: [
-			.name: "homer_session", .value: "abc", .domain: "homer.example.com", .path: "/",
-		])!
+	@Test("a process opens its page natively, for the signed-in user")
+	func processOpensDetail() async {
 		let initialState = signedInState()
 		let store = TestStore(initialState: initialState) {
 			HomerInstanceReducer()
-		} withDependencies: {
-			$0[HomerClient.self].sessionCookies = { _ in [cookie] }
 		}
 
-		await store.send(.processTapped(processId: 42))
-		await store.receive(\.openWebConsoleTapped) {
-			$0.webPage = HomerWebPage(
-				url: URL(string: "https://homer.example.com/processes/42")!,
-				title: "Process #42",
-				cookies: [cookie],
-				dataStoreID: HomerEndpoint.webDataStoreID(baseURL: Self.baseURL)
+		await store.send(.processTapped(processId: 42)) {
+			$0.processDetail = HomerProcessDetailReducer.State(
+				baseURL: Self.baseURL,
+				processId: 42,
+				user: admin
 			)
 		}
+	}
+
+	@Test("a 401 on the process page signs the instance out and closes the page")
+	func processDetailUnauthorized() async {
+		var initialState = signedInState()
+		initialState.processDetail = HomerProcessDetailReducer.State(baseURL: Self.baseURL, processId: 42, user: admin)
+		let store = TestStore(initialState: initialState) {
+			HomerInstanceReducer()
+		}
+
+		await store.send(.processDetail(.presented(.delegate(.unauthorized)))) {
+			$0.session = .signedOut
+			$0.signIn.sessionExpired = true
+			$0.processDetail = nil
+		}
+	}
+
+	@Test("the process page's question count moving refreshes the instance's questions")
+	func processDetailQuestionsChanged() async {
+		let clock = TestClock()
+		var initialState = signedInState()
+		initialState.processDetail = HomerProcessDetailReducer.State(baseURL: Self.baseURL, processId: 42, user: admin)
+		let store = TestStore(initialState: initialState) {
+			HomerInstanceReducer()
+		} withDependencies: {
+			$0.continuousClock = clock
+			$0[HomerClient.self].openQuestions = { _ in [] }
+		}
+
+		await store.send(.processDetail(.presented(.delegate(.questionsChanged))))
+		await store.receive(\.questionsLoaded) {
+			$0.hasLoadedQuestions = true
+		}
+		await store.skipInFlightEffects()
 	}
 
 	@Test("a tag chip filters the list and re-reads it from the top")
@@ -342,13 +369,11 @@ struct HomerInstanceReducerTests {
 		await store.receive(\.processActionFinished) {
 			$0.processActionsInFlight = []
 		}
-		await store.receive(\.processTapped)
-		await store.receive(\.openWebConsoleTapped) {
-			$0.webPage = HomerWebPage(
-				url: URL(string: "https://homer.example.com/processes/43")!,
-				title: "Process #43",
-				cookies: [],
-				dataStoreID: HomerEndpoint.webDataStoreID(baseURL: Self.baseURL)
+		await store.receive(\.processTapped) {
+			$0.processDetail = HomerProcessDetailReducer.State(
+				baseURL: Self.baseURL,
+				processId: 43,
+				user: admin
 			)
 		}
 	}

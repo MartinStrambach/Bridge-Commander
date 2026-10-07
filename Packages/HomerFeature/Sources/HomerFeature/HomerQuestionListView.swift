@@ -44,6 +44,8 @@ struct HomerQuestionListView: View {
 struct HomerQuestionCard: View {
 	let store: StoreOf<HomerInstanceReducer>
 	let question: HomerQuestion
+	/// Off on the process's own page, which it would only open again.
+	var showsProcessLink = true
 
 	private var isAnswering: Bool {
 		store.answeringQuestionIDs.contains(question.id)
@@ -122,14 +124,16 @@ struct HomerQuestionCard: View {
 				.scaledFont(.callout)
 				.fontWeight(.semibold)
 
-			Button {
-				store.send(.processTapped(processId: question.processId))
-			} label: {
-				Text(verbatim: "#\(question.processId)")
-					.scaledFont(.callout, design: .monospaced)
+			if showsProcessLink {
+				Button {
+					store.send(.processTapped(processId: question.processId))
+				} label: {
+					Text(verbatim: "#\(question.processId)")
+						.scaledFont(.callout, design: .monospaced)
+				}
+				.buttonStyle(.link)
+				.help("Open the process that asked")
 			}
-			.buttonStyle(.link)
-			.help("Open the process that asked")
 
 			Spacer()
 

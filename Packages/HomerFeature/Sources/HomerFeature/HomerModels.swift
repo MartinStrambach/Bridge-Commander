@@ -38,21 +38,68 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 		}
 	}
 
+	/// A finished command of the run (`ProcessExecution`).
 	public nonisolated struct Execution: Equatable, Sendable, Decodable {
 		public var label: String
 		public var resultCode: Int
 		public var skipped: Bool?
+		public var start: Double?
+		public var end: Double?
+		/// The command's output files, as the server's absolute paths — `HomerArtifactPath`
+		/// turns them into what the artifact calls take.
+		public var stdOut: String?
+		public var stdErr: String?
+		/// Why the command failed, or why it was skipped.
+		public var errMsg: String?
 
-		public init(label: String, resultCode: Int, skipped: Bool? = nil) {
+		public init(
+			label: String,
+			resultCode: Int,
+			skipped: Bool? = nil,
+			start: Double? = nil,
+			end: Double? = nil,
+			stdOut: String? = nil,
+			stdErr: String? = nil,
+			errMsg: String? = nil
+		) {
 			self.label = label
 			self.resultCode = resultCode
 			self.skipped = skipped
+			self.start = start
+			self.end = end
+			self.stdOut = stdOut
+			self.stdErr = stdErr
+			self.errMsg = errMsg
 		}
 	}
 
 	/// Where the run executes (`RunnerState`). The pod fields are set only for a Kubernetes
 	/// runner.
 	public nonisolated struct Runner: Equatable, Sendable, Decodable {
+		/// Why the run's pod never became ready (`PodStartupFailure`).
+		public nonisolated struct StartupFailure: Equatable, Sendable, Decodable {
+			public var reason: String
+			public var message: String
+			public var events: [String]
+
+			public init(reason: String, message: String, events: [String] = []) {
+				self.reason = reason
+				self.message = message
+				self.events = events
+			}
+
+			public init(from decoder: any Decoder) throws {
+				let container = try decoder.container(keyedBy: CodingKeys.self)
+				reason = try container.decode(String.self, forKey: .reason)
+				message = try container.decodeIfPresent(String.self, forKey: .message) ?? ""
+				events = try container.decodeIfPresent([String].self, forKey: .events) ?? []
+			}
+
+			private enum CodingKeys: String, CodingKey {
+				case reason, message, events
+			}
+		}
+
 		/// The backend's own name for the runner. Sent to admins only — everyone else gets the
 		/// generic `type` (Homer ADR-0077).
 		public var alias: String?
@@ -61,12 +108,29 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 		public var type: String?
 		public var podName: String?
 		public var podPhase: String?
+		public var createdAt: Double?
+		public var readyAt: Double?
+		public var endedAt: Double?
+		public var startupFailure: StartupFailure?
 
-		public init(alias: String? = nil, type: String? = nil, podName: String? = nil, podPhase: String? = nil) {
+		public init(
+			alias: String? = nil,
+			type: String? = nil,
+			podName: String? = nil,
+			podPhase: String? = nil,
+			createdAt: Double? = nil,
+			readyAt: Double? = nil,
+			endedAt: Double? = nil,
+			startupFailure: StartupFailure? = nil
+		) {
 			self.alias = alias
 			self.type = type
 			self.podName = podName
 			self.podPhase = podPhase
+			self.createdAt = createdAt
+			self.readyAt = readyAt
+			self.endedAt = endedAt
+			self.startupFailure = startupFailure
 		}
 
 		/// What the console's Runner column shows.
@@ -83,6 +147,8 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 	public var history: [HistoryEntry]
 	public var executions: [Execution]
 	public var currentCommand: String?
+	/// When the running command started, in epoch seconds.
+	public var currentCommandStart: Double?
 	/// When the run's workspace is deleted, in epoch seconds; nil while it runs or before the
 	/// purge is scheduled.
 	public var purgeAt: Double?
@@ -95,6 +161,8 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 	/// The first run of this run's flow; nil at the root itself.
 	public var rootProcessId: Int?
 	public var tags: [String]?
+	/// The run's Langfuse trace; nil unless the server has Langfuse configured.
+	public var langfuseTraceUrl: String?
 
 	public init(
 		id: Int,
@@ -104,13 +172,15 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 		history: [HistoryEntry] = [],
 		executions: [Execution] = [],
 		currentCommand: String? = nil,
+		currentCommandStart: Double? = nil,
 		purgeAt: Double? = nil,
 		runner: Runner? = nil,
 		openQuestions: Int? = nil,
 		costUsd: Double? = nil,
 		parentProcessId: Int? = nil,
 		rootProcessId: Int? = nil,
-		tags: [String]? = nil
+		tags: [String]? = nil,
+		langfuseTraceUrl: String? = nil
 	) {
 		self.id = id
 		self.status = status
@@ -119,6 +189,7 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 		self.history = history
 		self.executions = executions
 		self.currentCommand = currentCommand
+		self.currentCommandStart = currentCommandStart
 		self.purgeAt = purgeAt
 		self.runner = runner
 		self.openQuestions = openQuestions
@@ -126,6 +197,7 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 		self.parentProcessId = parentProcessId
 		self.rootProcessId = rootProcessId
 		self.tags = tags
+		self.langfuseTraceUrl = langfuseTraceUrl
 	}
 
 	public init(from decoder: any Decoder) throws {
@@ -138,6 +210,7 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 		history = try container.decodeIfPresent([HistoryEntry].self, forKey: .history) ?? []
 		executions = try container.decodeIfPresent([Execution].self, forKey: .executions) ?? []
 		currentCommand = try container.decodeIfPresent(String.self, forKey: .currentCommand)
+		currentCommandStart = try container.decodeIfPresent(Double.self, forKey: .currentCommandStart)
 		purgeAt = try container.decodeIfPresent(Double.self, forKey: .purgeAt)
 		runner = try container.decodeIfPresent(Runner.self, forKey: .runner)
 		openQuestions = try container.decodeIfPresent(Int.self, forKey: .openQuestions)
@@ -145,11 +218,13 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 		parentProcessId = try container.decodeIfPresent(Int.self, forKey: .parentProcessId)
 		rootProcessId = try container.decodeIfPresent(Int.self, forKey: .rootProcessId)
 		tags = try container.decodeIfPresent([String].self, forKey: .tags)
+		langfuseTraceUrl = try container.decodeIfPresent(String.self, forKey: .langfuseTraceUrl)
 	}
 
 	private enum CodingKeys: String, CodingKey {
-		case id, status, agentName, owner, history, executions, currentCommand, purgeAt, runner
-		case openQuestions, costUsd, parentProcessId, rootProcessId, tags
+		case id, status, agentName, owner, history, executions, currentCommand, currentCommandStart
+		case purgeAt, runner, openQuestions, costUsd, parentProcessId, rootProcessId, tags
+		case langfuseTraceUrl
 	}
 
 	/// A run that can still be killed (the console's `canKill`).
@@ -160,6 +235,12 @@ public nonisolated struct HomerProcess: Equatable, Sendable, Identifiable, Decod
 	/// A run that has ended and can be started again with the same inputs (`canRetry`).
 	public var isRetryable: Bool {
 		status == .finished || status == .failed || status == .killed
+	}
+
+	/// A run the console offers to resume from its LangGraph checkpoint — if it has one, which
+	/// only the LangGraph probe tells (`resumeEligible` on the process page).
+	public var isResumeEligible: Bool {
+		status == .failed || status == .killed || status == .unknown
 	}
 
 	/// When the process entered its current status: its last history entry, as the console's

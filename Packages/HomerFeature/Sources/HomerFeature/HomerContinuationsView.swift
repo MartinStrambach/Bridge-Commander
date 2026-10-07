@@ -5,8 +5,7 @@ import SwiftUI
 
 /// The console's Continuations page (`app/(dashboard)/continuations/page.tsx`): the pending
 /// continuations, then — only when there are any — those that failed to fire, each a card as in
-/// `components/continuations/continuation-item.tsx`. A run number opens that run's web console
-/// page.
+/// `components/continuations/continuation-item.tsx`. A run number opens that run's page.
 struct HomerContinuationsView: View {
 	@Bindable
 	var store: StoreOf<HomerContinuationsReducer>

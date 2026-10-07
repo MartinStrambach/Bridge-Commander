@@ -17,6 +17,20 @@ public nonisolated enum HomerFormat {
 		String(format: "$%.4f", usd)
 	}
 
+	/// "1h 2m 5s", "2m 5s" or "5s" — how long a command ran (`formatDuration`).
+	public static func duration(from start: Double, to end: Double) -> String {
+		let seconds = max(0, Int(end) - Int(start))
+		let minutes = seconds / 60
+		let hours = minutes / 60
+		if hours > 0 {
+			return "\(hours)h \(minutes % 60)m \(seconds % 60)s"
+		}
+		if minutes > 0 {
+			return "\(minutes)m \(seconds % 60)s"
+		}
+		return "\(seconds)s"
+	}
+
 	/// "in 2d 3h", "in 4h 10m", "in 12m", "in 30s" or "expired" — the Purge column.
 	public static func timeUntil(_ epochSeconds: Double, now: Date) -> String {
 		let seconds = Int(epochSeconds) - Int(now.timeIntervalSince1970.rounded(.down))

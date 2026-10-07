@@ -217,7 +217,7 @@ struct HomerAgentsReducerTests {
 			$0.processToOpen = nil
 		}
 		await store.receive(\.processTapped)
-		await store.receive(\.delegate, .openWebConsole(path: "processes/43", title: "Process #43"))
+		await store.receive(\.delegate, .openProcess(processId: 43))
 
 		#expect(sent.value?.0 == "factory")
 		#expect(sent.value?.1 == HomerAgentRunRequest(queryItems: [URLQueryItem(name: "ticket", value: "MOB-1")]))

@@ -125,6 +125,20 @@ struct HomerChildPageTests {
 		await store.receive(\.costs.hidden)
 	}
 
+	@Test("a page opens a run natively")
+	func pageOpensProcess() async {
+		let user = HomerUser(username: "admin", role: "admin")
+		let initialState = activeState(user: user)
+		let store = TestStore(initialState: initialState) {
+			HomerInstanceReducer()
+		}
+
+		await store.send(.continuations(.delegate(.openProcess(processId: 12))))
+		await store.receive(\.processTapped) {
+			$0.processDetail = HomerProcessDetailReducer.State(baseURL: Self.baseURL, processId: 12, user: user)
+		}
+	}
+
 	@Test("a page opens the web console in the instance's sheet")
 	func pageOpensWebConsole() async {
 		let initialState = activeState(user: HomerUser(username: "admin", role: "admin"))

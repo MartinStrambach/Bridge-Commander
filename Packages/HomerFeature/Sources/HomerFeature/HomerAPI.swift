@@ -151,6 +151,127 @@ nonisolated enum HomerAPI {
 		body: Data? = nil,
 		refusalsInServerWords: Bool = false
 	) async throws -> Data {
+		try await sendForResponse(
+			method,
+			path,
+			baseURL: baseURL,
+			queryItems: queryItems,
+			percentEncodedQueryItems: percentEncodedQueryItems,
+			headers: headers,
+			body: body,
+			refusalsInServerWords: refusalsInServerWords
+		).data
+	}
+
+	/// `send`, for a caller that reads the answer's headers too.
+	static func sendForResponse(
+		_ method: String,
+		_ path: String,
+		baseURL: String,
+		queryItems: [URLQueryItem] = [],
+		percentEncodedQueryItems: [URLQueryItem] = [],
+		headers: [(name: String, value: String)] = [],
+		body: Data? = nil,
+		refusalsInServerWords: Bool = false
+	) async throws -> (data: Data, response: HTTPURLResponse) {
+		let request = try makeRequest(
+			method,
+			path,
+			baseURL: baseURL,
+			queryItems: queryItems,
+			percentEncodedQueryItems: percentEncodedQueryItems,
+			headers: headers,
+			body: body
+		)
+		let data: Data
+		let response: URLResponse
+		do {
+			(data, response) = try await session.data(for: request)
+		}
+		catch {
+			throw HomerAPIError.unreachable(error.localizedDescription)
+		}
+
+		guard let http = response as? HTTPURLResponse else {
+			throw HomerAPIError.unexpectedResponse
+		}
+		jar.update(for: baseURL, from: http)
+		try check(http, body: data, refusalsInServerWords: refusalsInServerWords)
+		return (data, http)
+	}
+
+	/// A server-sent event stream (`text/event-stream`), parsed into its events. It ends when
+	/// the server closes it; cancelling the consuming task closes it from this side. Comments
+	/// (the server's heartbeat pings) are skipped.
+	static func events(
+		_ path: String,
+		baseURL: String,
+		queryItems: [URLQueryItem] = [],
+		headers: [(name: String, value: String)] = []
+	) -> AsyncThrowingStream<HomerServerSentEvent, any Error> {
+		AsyncThrowingStream { continuation in
+			let task = Task {
+				do {
+					var request = try makeRequest(
+						"GET",
+						path,
+						baseURL: baseURL,
+						queryItems: queryItems,
+						headers: headers,
+						body: nil
+					)
+					request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+					let bytes: URLSession.AsyncBytes
+					let response: URLResponse
+					do {
+						(bytes, response) = try await session.bytes(for: request)
+					}
+					catch {
+						throw HomerAPIError.unreachable(error.localizedDescription)
+					}
+					guard let http = response as? HTTPURLResponse else {
+						throw HomerAPIError.unexpectedResponse
+					}
+					jar.update(for: baseURL, from: http)
+					try check(http, body: Data(), refusalsInServerWords: false)
+
+					var parser = HomerServerSentEventParser()
+					var line: [UInt8] = []
+					for try await byte in bytes {
+						guard byte == UInt8(ascii: "\n") else {
+							line.append(byte)
+							continue
+						}
+						if let event = parser.consume(line: String(decoding: line, as: UTF8.self)) {
+							continuation.yield(event)
+						}
+						line.removeAll(keepingCapacity: true)
+					}
+					continuation.finish()
+				}
+				catch is CancellationError {
+					continuation.finish()
+				}
+				catch let error as HomerAPIError {
+					continuation.finish(throwing: error)
+				}
+				catch {
+					continuation.finish(throwing: HomerAPIError.unreachable(error.localizedDescription))
+				}
+			}
+			continuation.onTermination = { _ in task.cancel() }
+		}
+	}
+
+	private static func makeRequest(
+		_ method: String,
+		_ path: String,
+		baseURL: String,
+		queryItems: [URLQueryItem],
+		percentEncodedQueryItems: [URLQueryItem] = [],
+		headers: [(name: String, value: String)],
+		body: Data?
+	) throws -> URLRequest {
 		guard var components = URLComponents(string: baseURL + path) else {
 			throw HomerAPIError.unexpectedResponse
 		}
@@ -178,23 +299,13 @@ nonisolated enum HomerAPI {
 		for (field, value) in HTTPCookie.requestHeaderFields(with: jar.cookies(for: baseURL)) {
 			request.setValue(value, forHTTPHeaderField: field)
 		}
+		return request
+	}
 
-		let data: Data
-		let response: URLResponse
-		do {
-			(data, response) = try await session.data(for: request)
-		}
-		catch {
-			throw HomerAPIError.unreachable(error.localizedDescription)
-		}
-
-		guard let http = response as? HTTPURLResponse else {
-			throw HomerAPIError.unexpectedResponse
-		}
-		jar.update(for: baseURL, from: http)
+	private static func check(_ http: HTTPURLResponse, body data: Data, refusalsInServerWords: Bool) throws {
 		switch http.statusCode {
 		case 200 ..< 300:
-			return data
+			return
 		case 401:
 			throw HomerAPIError.unauthorized
 		case 403:
@@ -227,5 +338,62 @@ nonisolated enum HomerAPI {
 			var msg: String?
 		}
 		return (try? JSONDecoder().decode(ErrorBody.self, from: data))?.msg
+	}
+}
+
+/// One event of a `text/event-stream`.
+nonisolated struct HomerServerSentEvent: Equatable, Sendable {
+	var name: String
+	var id: String?
+	var data: String
+}
+
+/// The `text/event-stream` format, a line at a time: `event:`, `id:` and `data:` fields
+/// accumulate until a blank line ends the event.
+nonisolated struct HomerServerSentEventParser {
+	private var name: String?
+	private var id: String?
+	private var dataLines: [String] = []
+
+	mutating func consume(line rawLine: String) -> HomerServerSentEvent? {
+		let line = rawLine.hasSuffix("\r") ? String(rawLine.dropLast()) : rawLine
+		guard !line.isEmpty else {
+			defer {
+				name = nil
+				id = nil
+				dataLines = []
+			}
+			guard name != nil || !dataLines.isEmpty else {
+				return nil
+			}
+			return HomerServerSentEvent(name: name ?? "message", id: id, data: dataLines.joined(separator: "\n"))
+		}
+		guard !line.hasPrefix(":") else {
+			return nil
+		}
+		let field: Substring
+		var value: Substring
+		if let colon = line.firstIndex(of: ":") {
+			field = line[..<colon]
+			value = line[line.index(after: colon)...]
+			if value.hasPrefix(" ") {
+				value = value.dropFirst()
+			}
+		}
+		else {
+			field = Substring(line)
+			value = ""
+		}
+		switch field {
+		case "event":
+			name = String(value)
+		case "id":
+			id = String(value)
+		case "data":
+			dataLines.append(String(value))
+		default:
+			break
+		}
+		return nil
 	}
 }

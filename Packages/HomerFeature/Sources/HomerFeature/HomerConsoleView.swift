@@ -274,6 +274,9 @@ struct HomerInstanceView: View {
 		.sheet(item: $store.webPage) { page in
 			HomerWebPageView(page: page)
 		}
+		.sheet(item: $store.scope(\.$processDetail, action: \.processDetail)) { detailStore in
+			HomerProcessDetailView(store: detailStore, instanceStore: store)
+		}
 	}
 }
 

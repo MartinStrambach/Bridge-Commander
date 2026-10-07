@@ -121,7 +121,7 @@ public struct HomerContinuationsReducer: Sendable {
 				return .none
 
 			case let .processTapped(processId):
-				return .send(.delegate(.openWebConsole(path: "processes/\(processId)", title: "Process #\(processId)")))
+				return .send(.delegate(.openProcess(processId: processId)))
 
 			case let .cancelTapped(id):
 				guard let continuation = state.pending[id: id], continuation.isCancellable else {

@@ -28,7 +28,7 @@ public struct HomerAgentsReducer: Sendable {
 		public internal(set) var reloadError: String?
 		@Presents
 		public var runAgent: HomerRunAgentReducer.State?
-		/// The run the Run sheet started, opened once the sheet is gone — the web page is a sheet
+		/// The run the Run sheet started, opened once the sheet is gone — the run's page is a sheet
 		/// too, and one sheet cannot come up while the other is still going.
 		var processToOpen: Int?
 		/// Between `shown` and `hidden`: the page polls.
@@ -205,7 +205,7 @@ public struct HomerAgentsReducer: Sendable {
 				return .send(.delegate(.openWebConsole(path: "agents", title: "Agents")))
 
 			case let .processTapped(processId):
-				return .send(.delegate(.openWebConsole(path: "processes/\(processId)", title: "Process #\(processId)")))
+				return .send(.delegate(.openProcess(processId: processId)))
 
 			case .delegate:
 				return .none

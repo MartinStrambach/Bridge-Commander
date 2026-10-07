@@ -14,10 +14,25 @@ public struct HomerWebPage: Equatable, Identifiable {
 	}
 }
 
-/// One Homer instance of the console section: its session, sign-in form, process list and open
-/// questions. Everything a list can't show natively (logs, artifacts, workflow graphs) opens as
-/// the web console's own page in `webPage`. `HomerConsoleReducer` holds one per instance, all
-/// live at once: switching shows another's last data straight away.
+extension HomerWebPage {
+	/// A page of the instance's web console, e.g. `processes/42`, opened with the session the
+	/// app holds for it.
+	init?(baseURL: String, path: String, title: String, cookies: [HTTPCookie]) {
+		guard let url = HomerEndpoint.pageURL(baseURL: baseURL, path: path) else {
+			return nil
+		}
+		self.url = url
+		self.title = title
+		self.cookies = cookies
+		self.dataStoreID = HomerEndpoint.webDataStoreID(baseURL: baseURL)
+	}
+}
+
+/// One Homer instance of the console section: its session, sign-in form, process list, open
+/// questions and other pages. A process opens natively in `processDetail`; what the app does not
+/// show natively (agent details, the file editor, workflow graphs) opens as the web console's
+/// own page in `webPage`. `HomerConsoleReducer` holds one per instance, all live at once:
+/// switching shows another's last data straight away.
 @Reducer
 public struct HomerInstanceReducer: Sendable {
 	/// The console's own page size (`pagination.defaultLimit`).
@@ -88,6 +103,9 @@ public struct HomerInstanceReducer: Sendable {
 		var shownChildPage: HomerChildPage?
 
 		public var webPage: HomerWebPage?
+		/// A run's page, over whichever page opened it.
+		@Presents
+		public var processDetail: HomerProcessDetailReducer.State?
 
 		/// Whether this instance is the one on screen. Its processes are polled only then; the
 		/// questions of every signed-in instance always, for the badges.
@@ -195,6 +213,7 @@ public struct HomerInstanceReducer: Sendable {
 		case continuations(HomerContinuationsReducer.Action)
 		case agents(HomerAgentsReducer.Action)
 		case costs(HomerCostsReducer.Action)
+		case processDetail(PresentationAction<HomerProcessDetailReducer.Action>)
 
 		public enum ProcessAction: Equatable, Sendable {
 			case kill
@@ -280,6 +299,8 @@ public struct HomerInstanceReducer: Sendable {
 
 			case .deactivated:
 				state.isActive = false
+				// Its polls belong to the instance on screen.
+				state.processDetail = nil
 				return .merge(
 					.cancel(id: CancelID.processPolling),
 					.cancel(id: CancelID.flowSummaryPolling),
@@ -480,7 +501,27 @@ public struct HomerInstanceReducer: Sendable {
 				return .none
 
 			case let .processTapped(processId):
-				return .send(.openWebConsoleTapped(path: "processes/\(processId)", title: "Process #\(processId)"))
+				guard let user = state.user else {
+					return .none
+				}
+				state.processDetail = HomerProcessDetailReducer.State(
+					baseURL: state.baseURL,
+					processId: processId,
+					user: user
+				)
+				return .none
+
+			case .processDetail(.presented(.delegate(.unauthorized))):
+				guard state.user != nil else {
+					return .none
+				}
+				return expireSession(&state)
+
+			case .processDetail(.presented(.delegate(.questionsChanged))):
+				return state.user != nil ? pollQuestions(state) : .none
+
+			case .processDetail:
+				return .none
 
 			case let .questionsLoaded(.success(questions)):
 				guard state.user != nil else {
@@ -540,14 +581,11 @@ public struct HomerInstanceReducer: Sendable {
 				return error as? HomerAPIError == .conflict ? pollQuestions(state) : .none
 
 			case let .openWebConsoleTapped(path, title):
-				guard let url = HomerEndpoint.pageURL(baseURL: state.baseURL, path: path) else {
-					return .none
-				}
 				state.webPage = HomerWebPage(
-					url: url,
+					baseURL: state.baseURL,
+					path: path,
 					title: title,
-					cookies: homerClient.sessionCookies(state.baseURL),
-					dataStoreID: HomerEndpoint.webDataStoreID(baseURL: state.baseURL)
+					cookies: homerClient.sessionCookies(state.baseURL)
 				)
 				return .none
 
@@ -562,6 +600,8 @@ public struct HomerInstanceReducer: Sendable {
 					return expireSession(&state)
 				case let .openWebConsole(path, title):
 					return .send(.openWebConsoleTapped(path: path, title: title))
+				case let .openProcess(processId):
+					return .send(.processTapped(processId: processId))
 				}
 
 			case .continuations, .agents, .costs:
@@ -569,6 +609,9 @@ public struct HomerInstanceReducer: Sendable {
 			}
 		}
 		.ifLet(\.$alert, action: \.alert)
+		.ifLet(\.$processDetail, action: \.processDetail) {
+			HomerProcessDetailReducer()
+		}
 	}
 
 	// MARK: - Polling
@@ -777,6 +820,7 @@ public struct HomerInstanceReducer: Sendable {
 		state.answeringQuestionIDs = []
 		state.answerErrors = [:]
 		state.webPage = nil
+		state.processDetail = nil
 		return shownChildPage
 	}
 }

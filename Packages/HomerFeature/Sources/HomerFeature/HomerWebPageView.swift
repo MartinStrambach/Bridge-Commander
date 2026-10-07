@@ -2,11 +2,11 @@ import AppUI
 import SwiftUI
 import WebKit
 
-/// A page of the web console in a sheet — the process detail, with its logs, artifacts and
-/// workflow graph, which the native list leaves to the console. The app's session cookies are
-/// copied into the instance's own web data store (`HomerWebDataStore`) before the page loads, so
-/// it opens signed in; if they are missing or stale the console shows its own sign-in page,
-/// which works as well.
+/// A page of the web console in a sheet — what the app does not show natively: an agent's page,
+/// the file editor, a run's workflow graph, or any page from the header's Safari button. The
+/// app's session cookies are copied into the instance's own web data store
+/// (`HomerWebDataStore`) before the page loads, so it opens signed in; if they are missing or
+/// stale the console shows its own sign-in page, which works as well.
 ///
 /// Loaded as the top-level page, not in a frame: the console sends `X-Frame-Options: DENY` and
 /// `frame-ancestors 'none'`, which only an embedding `<iframe>` would trip over.

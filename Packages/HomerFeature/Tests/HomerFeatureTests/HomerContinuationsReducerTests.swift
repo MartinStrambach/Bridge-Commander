@@ -232,13 +232,13 @@ struct HomerContinuationsReducerTests {
 		await store.receive(\.delegate, .unauthorized)
 	}
 
-	@Test("a run number opens its web console page")
+	@Test("a run number opens the run's page")
 	func processTapped() async {
 		let store = TestStore(initialState: shownState()) {
 			HomerContinuationsReducer()
 		}
 
 		await store.send(.processTapped(processId: 12))
-		await store.receive(\.delegate, .openWebConsole(path: "processes/12", title: "Process #12"))
+		await store.receive(\.delegate, .openProcess(processId: 12))
 	}
 }

@@ -5,8 +5,10 @@ import Foundation
 public enum HomerPageDelegate: Equatable, Sendable {
 	/// A call answered 401: the instance's session expired, and the instance signs out.
 	case unauthorized
-	/// A page of the web console, e.g. `processes/42`, opened in the embedded browser sheet.
+	/// A page of the web console, e.g. `agents/factory`, opened in the embedded browser sheet.
 	case openWebConsole(path: String, title: String)
+	/// A run's page, opened natively.
+	case openProcess(processId: Int)
 }
 
 /// The instance's pages that have a reducer of their own. Each is told when it comes on screen
