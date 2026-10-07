@@ -8,7 +8,12 @@ import SwiftUI
 /// The simulator renders into an `IOSurface` that this process can map, so the layer shows that
 /// surface itself: no copy, no encode. CoreSimulator calls back once per presented frame
 /// (`SimScreen`'s grouped callbacks, which idb also uses), and the layer is told its contents
-/// changed; it calls back again when it replaces the surface (a rotation, a resolution change).
+/// changed; it calls back again when it replaces the surface (a resolution change).
+///
+/// The framebuffer stays portrait when the interface rotates — a landscape app is drawn sideways
+/// into it — so the surface sits in a sublayer turned to bring the interface upright, and the
+/// view's own coordinates (clicks, finger indicators) are the interface's. They are turned back to
+/// the portrait panel's only as touches are sent, since that is the space the digitizer takes.
 @MainActor
 final class SimulatorScreenView: NSView {
 	/// The device on screen; setting it reattaches.
@@ -21,8 +26,34 @@ final class SimulatorScreenView: NSView {
 		}
 	}
 
-	/// The device's screen in pixels, for mapping a click to the image. The layer draws aspect-fit.
-	var screenPixelSize: CGSize = .zero
+	/// The device's screen in pixels, portrait, for mapping a click to the image. The layer draws
+	/// aspect-fit.
+	var screenPixelSize: CGSize = .zero {
+		didSet {
+			if screenPixelSize != oldValue {
+				layoutScreenLayer()
+			}
+		}
+	}
+
+	/// How the interface is turned, as the screen's properties report it — straight from
+	/// CoreSimulator rather than the pane's device poll, so the picture turns with the device.
+	private(set) var rotation: SimulatorScreenRotation = .upright {
+		didSet {
+			if rotation != oldValue {
+				layoutScreenLayer()
+			}
+		}
+	}
+
+	/// Holds the framebuffer surface, turned upright.
+	private let screenLayer: CALayer = {
+		let layer = CALayer()
+		layer.contentsGravity = .resize
+		layer.magnificationFilter = .linear
+		layer.minificationFilter = .trilinear
+		return layer
+	}()
 
 	private let host = SimulatorHost.shared
 	private var attachment: ScreenAttachment?
@@ -35,9 +66,7 @@ final class SimulatorScreenView: NSView {
 	override init(frame frameRect: NSRect) {
 		super.init(frame: frameRect)
 		wantsLayer = true
-		layer?.contentsGravity = .resizeAspect
-		layer?.magnificationFilter = .linear
-		layer?.minificationFilter = .trilinear
+		layer?.addSublayer(screenLayer)
 	}
 
 	@available(*, unavailable)
@@ -69,6 +98,31 @@ final class SimulatorScreenView: NSView {
 
 	// MARK: - Frames
 
+	override func layout() {
+		super.layout()
+		layoutScreenLayer()
+	}
+
+	override func setFrameSize(_ newSize: NSSize) {
+		super.setFrameSize(newSize)
+		layoutScreenLayer()
+	}
+
+	/// Sizes the surface's layer to the portrait panel at the scale the interface is shown at, and
+	/// turns it about the centre of the shown image. The view is flipped (y down), so a positive
+	/// angle turns clockwise.
+	private func layoutScreenLayer() {
+		let rect = imageRect
+		let nativeSize = rotation.isLandscape ? CGSize(width: rect.height, height: rect.width) : rect.size
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		screenLayer.setAffineTransform(.identity)
+		screenLayer.bounds = CGRect(origin: .zero, size: nativeSize)
+		screenLayer.position = CGPoint(x: rect.midX, y: rect.midY)
+		screenLayer.setAffineTransform(CGAffineTransform(rotationAngle: rotation.uprightingAngle))
+		CATransaction.commit()
+	}
+
 	private func attach() {
 		detach()
 		guard let deviceId, window != nil else {
@@ -84,7 +138,15 @@ final class SimulatorScreenView: NSView {
 						return
 					}
 					self.surface = surface?.object
-					self.layer?.contents = surface?.object
+					self.screenLayer.contents = surface?.object
+				}
+			},
+			onRotation: { [weak self] rotation in
+				Task { @MainActor in
+					guard let self, self.attachment === attachment else {
+						return
+					}
+					self.rotation = rotation
 				}
 			},
 			onFrame: { [weak self] in
@@ -102,7 +164,7 @@ final class SimulatorScreenView: NSView {
 		attachment?.stop()
 		attachment = nil
 		surface = nil
-		layer?.contents = nil
+		screenLayer.contents = nil
 	}
 
 	/// Coalesces a burst of frame callbacks into one layer update per main-loop turn.
@@ -123,9 +185,10 @@ final class SimulatorScreenView: NSView {
 	/// The surface is the same object frame after frame, so assigning it again changes nothing;
 	/// `setContentsChanged` (what WebKit uses for the same situation) makes the layer re-read it.
 	private func refreshContents() {
-		guard let layer, let surface else {
+		guard let surface else {
 			return
 		}
+		let layer = screenLayer
 		let selector = NSSelectorFromString("setContentsChanged")
 		if layer.responds(to: selector) {
 			layer.perform(selector)
@@ -138,13 +201,14 @@ final class SimulatorScreenView: NSView {
 
 	// MARK: - Touches
 
-	/// Where the screen is drawn in the view: aspect-fit, centred.
+	/// Where the screen is drawn in the view, the way the interface is turned: aspect-fit, centred.
 	private var imageRect: CGRect {
-		guard screenPixelSize.width > 0, screenPixelSize.height > 0 else {
+		let displayedSize = rotation.displayedSize(native: screenPixelSize)
+		guard displayedSize.width > 0, displayedSize.height > 0 else {
 			return bounds
 		}
-		let scale = min(bounds.width / screenPixelSize.width, bounds.height / screenPixelSize.height)
-		let size = CGSize(width: screenPixelSize.width * scale, height: screenPixelSize.height * scale)
+		let scale = min(bounds.width / displayedSize.width, bounds.height / displayedSize.height)
+		let size = CGSize(width: displayedSize.width * scale, height: displayedSize.height * scale)
 		return CGRect(
 			x: bounds.midX - size.width / 2,
 			y: bounds.midY - size.height / 2,
@@ -178,12 +242,18 @@ final class SimulatorScreenView: NSView {
 		}
 	}
 
+	/// A normalized point in the view's (interface) space on the portrait panel the digitizer maps.
+	private func panelPoint(_ point: CGPoint) -> CGPoint {
+		rotation.nativePoint(fromDisplayed: point, nativeSize: CGSize(width: 1, height: 1))
+	}
+
 	private func touch(_ point: CGPoint, phase: Int) {
 		guard let deviceId else {
 			return
 		}
 		let host = host
-		enqueue { try await host.touch(udid: deviceId, at: point, phase: phase) }
+		let panelPoint = panelPoint(point)
+		enqueue { try await host.touch(udid: deviceId, at: panelPoint, phase: phase) }
 	}
 
 	private func touch(_ fingers: FingerPair, phase: Int) {
@@ -191,7 +261,8 @@ final class SimulatorScreenView: NSView {
 			return
 		}
 		let host = host
-		enqueue { try await host.twoFingerTouch(udid: deviceId, fingers: fingers, phase: phase) }
+		let panelFingers = FingerPair(panelPoint(fingers.first), panelPoint(fingers.second))
+		enqueue { try await host.twoFingerTouch(udid: deviceId, fingers: panelFingers, phase: phase) }
 		showIndicators(phase == 2 ? nil : fingers)
 	}
 
@@ -371,6 +442,7 @@ final class SimulatorScreenView: NSView {
 		layer.strokeColor = NSColor.black.withAlphaComponent(0.35).cgColor
 		layer.lineWidth = 1
 		layer.isHidden = true
+		layer.zPosition = 1
 		self.layer?.addSublayer(layer)
 		return layer
 	}
@@ -525,13 +597,18 @@ private final class ScreenAttachment: @unchecked Sendable {
 		self.host = host
 	}
 
-	func start(onSurface: @escaping @Sendable (ObjectBox?) -> Void, onFrame: @escaping @Sendable () -> Void) {
+	func start(
+		onSurface: @escaping @Sendable (ObjectBox?) -> Void,
+		onRotation: @escaping @Sendable (SimulatorScreenRotation) -> Void,
+		onFrame: @escaping @Sendable () -> Void
+	) {
 		queue.async { [self] in
 			guard !isStopped, let screen = try? host.mainScreen(udid: deviceId) else {
 				return
 			}
 			self.screen = ObjectBox(object: screen)
 			onSurface(Self.surface(of: screen, masked: nil, plain: nil))
+			onRotation(SimulatorHost.screenRotation(of: screen))
 
 			guard ObjCRuntime.responds(
 				screen,
@@ -547,7 +624,11 @@ private final class ScreenAttachment: @unchecked Sendable {
 				surfacesChanged: { plain, masked in
 					onSurface(Self.surface(of: nil, masked: masked, plain: plain))
 				},
-				propertiesChanged: { _ in }
+				// Delivers the screen's new properties — among them `uiOrientation` when the
+				// interface turns.
+				propertiesChanged: { properties in
+					onRotation(properties.map(SimulatorHost.screenRotation(ofProperties:)) ?? SimulatorHost.screenRotation(of: screen))
+				}
 			)
 		}
 	}

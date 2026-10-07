@@ -41,6 +41,7 @@ public struct SimulatorPaneReducer {
 		case shutdownButtonTapped
 		case transitionFinished(errorMessage: String?)
 		case hardwareButtonTapped(SimulatorHardwareButton)
+		case rotateButtonTapped(clockwise: Bool)
 		case connectClaudeCodeButtonTapped
 		case claudeCodeStatusChecked(Bool)
 		case connectClaudeCodeFinished(errorMessage: String?)
@@ -170,6 +171,23 @@ public struct SimulatorPaneReducer {
 				return .run { [simulatorClient] send in
 					do {
 						try await simulatorClient.pressButton(device.id, button)
+					}
+					catch {
+						await send(.transitionFinished(errorMessage: error.localizedDescription))
+					}
+				}
+
+			case let .rotateButtonTapped(clockwise):
+				guard let device = state.selectedDevice, device.isBooted else {
+					return .none
+				}
+				// Reloads the devices when done, so the pane takes the rotated width without
+				// waiting for the next poll.
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.rotate(device.id, clockwise)
+						let devices = try await simulatorClient.devices()
+						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId()))
 					}
 					catch {
 						await send(.transitionFinished(errorMessage: error.localizedDescription))

@@ -16,6 +16,8 @@ protocol SimulatorToolActions: Sendable {
 	func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode
 	func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode?
 	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws
+	/// Turns the device and returns it as it then is, its `rotation` the interface's.
+	func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.

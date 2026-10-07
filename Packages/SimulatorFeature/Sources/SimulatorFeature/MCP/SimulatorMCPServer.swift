@@ -281,4 +281,8 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
 		try await host.twoFingerGesture(device: device, from: from, to: to, duration: duration)
 	}
+
+	func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
+		try await host.rotate(device: device, to: orientation)
+	}
 }

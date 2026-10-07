@@ -51,6 +51,13 @@ struct SimulatorMCPHandlerTests {
 		func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
 			record("two \(from.first.x),\(from.second.x) -> \(to.first.x),\(to.second.x)")
 		}
+		/// The interface follows every orientation but upside down, as on a Face ID iPhone.
+		func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
+			record("rotate \(orientation.rawValue)")
+			var rotated = device
+			rotated.rotation = orientation == .portraitUpsideDown ? device.rotation : orientation.screenRotation
+			return rotated
+		}
 
 		private func record(_ call: String) {
 			calls.withLock { $0.append(call) }
@@ -121,7 +128,7 @@ struct SimulatorMCPHandlerTests {
 		let names = tools.compactMap { $0["name"]?.stringValue }
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
-			"type_text", "press_key", "press_button",
+			"type_text", "press_key", "press_button", "rotate",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -216,5 +223,45 @@ struct SimulatorMCPHandlerTests {
 			"params": ["name": "two_finger_drag", "arguments": ["from_x": 100, "from_y": 500, "to_x": 100, "to_y": 300]],
 		]))
 		#expect(actions.calls.withLock { $0 } == ["two 170.0,230.0 -> 140.0,260.0", "two 80.0,120.0 -> 80.0,120.0"])
+	}
+
+	private func callText(_ actions: FakeActions, _ name: String, _ arguments: JSONValue) async throws -> (text: String?, isError: JSONValue?) {
+		let response = await handler(actions).response(to: try post([
+			"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": ["name": .string(name), "arguments": arguments],
+		]))
+		let result = try decode(response)["result"]
+		guard case let .array(content)? = result?["content"] else {
+			return (nil, result?["isError"])
+		}
+		return (content.last?["text"]?.stringValue, result?["isError"])
+	}
+
+	@Test
+	func rotateReportsTheTurnedScreen() async throws {
+		let actions = FakeActions()
+		let turned = try await callText(actions, "rotate", ["orientation": "landscape_left"])
+		#expect(turned.isError == false)
+		#expect(turned.text == "Rotated to landscape left. The screen is now 874×402 points; take a new screenshot before using coordinates.")
+
+		let refused = try await callText(actions, "rotate", ["orientation": "portrait_upside_down"])
+		#expect(refused.text?.hasPrefix("Turned the device to portrait upside down, but the interface stayed portrait") == true)
+		#expect(refused.text?.hasSuffix("The screen is 402×874 points.") == true)
+		#expect(actions.calls.withLock { $0 } == ["rotate landscape_left", "rotate portrait_upside_down"])
+
+		let unknown = try await callText(actions, "rotate", ["orientation": "sideways"])
+		#expect(unknown.isError == true)
+	}
+
+	@Test
+	func aRotatedDeviceIsListedAndShotInLandscape() async throws {
+		let actions = FakeActions()
+		var rotated = Self.phone
+		rotated.rotation = .clockwise
+		actions.devicesResult = [rotated]
+
+		let list = try await callText(actions, "list_devices", [:])
+		#expect(list.text == "iPhone (iOS 27.0) AAAA — Booted, 874×402 pt landscape [shown]")
+		let shot = try await callText(actions, "screenshot", [:])
+		#expect(shot.text == "iPhone, 874×402 points (landscape).")
 	}
 }

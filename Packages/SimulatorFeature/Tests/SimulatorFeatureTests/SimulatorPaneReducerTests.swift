@@ -92,4 +92,37 @@ struct SimulatorPaneReducerTests {
 			$0.errorMessage = "Unable to boot"
 		}
 	}
+
+	@Test
+	func rotatingReloadsTheDevicesSoThePaneTakesTheNewShape() async {
+		let booted = Self.device("A", state: .booted)
+		let rotated = SimulatorDevice(
+			id: "A",
+			name: booted.name,
+			runtimeName: booted.runtimeName,
+			state: .booted,
+			screenPixelSize: booted.screenPixelSize,
+			screenScale: booted.screenScale,
+			rotation: .counterclockwise
+		)
+		let turns = LockIsolated<[Bool]>([])
+
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [booted]
+		initial.selectedDeviceId = "A"
+		initial.hasLoadedDevices = true
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].rotate = { _, clockwise in turns.withValue { $0.append(clockwise) } }
+			$0[SimulatorClient.self].devices = { [rotated] }
+			$0[SimulatorClient.self].selectedDeviceId = { "A" }
+		}
+
+		await store.send(.rotateButtonTapped(clockwise: false))
+		await store.receive(.devicesLoaded([rotated], storedSelection: "A")) {
+			$0.devices = [rotated]
+		}
+		#expect(turns.value == [false])
+	}
 }
