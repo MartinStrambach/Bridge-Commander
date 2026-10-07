@@ -24,3 +24,7 @@ let package = Package(
 		.testTarget(name: "TerminalFeatureTests", dependencies: ["TerminalFeature"]),
 	]
 )
+
+for target in package.targets {
+    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+}

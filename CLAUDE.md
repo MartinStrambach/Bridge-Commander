@@ -231,6 +231,8 @@ Packages/
 **Test:**
 - Unit tests live in per-package `Tests/` targets and use Swift Testing (`import Testing`, `@Test`/`#expect`).
 - Run a single package's tests: `swift test --package-path Packages/<Name>` (e.g. `swift test --package-path Packages/GitCore`).
+- Warnings are errors: the app target sets `SWIFT_TREAT_WARNINGS_AS_ERRORS`, and every `Package.swift` ends with a loop adding `.treatAllWarnings(as: .error)` to all its targets, tests included (a new package needs the same loop). Test targets are compiled only by `swift test`, not by the app build, so run them after touching tests or bumping a dependency that deprecates something.
+- In `TestStore` assertions, mutate `@Shared` state as `$0.$x.withLock { $0 = … }`; the plain setter is deprecated.
 - When adding tests to a package that has none, add a `.testTarget(name: "<Name>Tests", dependencies: ["<Name>"])` to that package's `Package.swift`.
 - Prefer pure, dependency-free logic (helpers, models) for unit tests; code that shells out to git is verified by build + manual run.
 

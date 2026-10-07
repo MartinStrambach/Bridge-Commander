@@ -94,19 +94,19 @@ struct GitLogHelperTests {
 
 	@Test("message, author and content searches are literal and case-insensitive")
 	func argumentsForTextSearches() throws {
-		let message = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .message, query: "fix(")))
+		let message = GitLogHelper.logArguments(limit: 10, search: try search(.message, "fix("))
 		#expect(message.suffix(3) == ["--regexp-ignore-case", "--fixed-strings", "--grep=fix("])
 
-		let author = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .author, query: "Alice")))
+		let author = GitLogHelper.logArguments(limit: 10, search: try search(.author, "Alice"))
 		#expect(author.suffix(3) == ["--regexp-ignore-case", "--fixed-strings", "--author=Alice"])
 
-		let content = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .content, query: "runGit")))
+		let content = GitLogHelper.logArguments(limit: 10, search: try search(.content, "runGit"))
 		#expect(content.suffix(2) == ["--regexp-ignore-case", "-SrunGit"])
 	}
 
 	@Test("a path search rewrites parents and ends with its pathspecs")
 	func argumentsForPathSearch() throws {
-		let arguments = GitLogHelper.logArguments(limit: 10, search: try #require(GitLogSearch(field: .path, query: "GitCore")))
+		let arguments = GitLogHelper.logArguments(limit: 10, search: try search(.path, "GitCore"))
 		let separator = try #require(arguments.firstIndex(of: "--"))
 
 		#expect(arguments[..<separator].contains("--parents"))
@@ -147,5 +147,11 @@ struct GitLogHelperTests {
 	func graphParentsDefault() {
 		let commit = GitLogCommit(hash: "aaa", parents: ["bbb"], author: "A", date: .distantPast, refs: [], subject: "x")
 		#expect(commit.graphParents == ["bbb"])
+	}
+
+	/// A non-optional return type, so `#require` unwraps the search rather than wrapping it again for
+	/// `logArguments`'s optional parameter (which made it unable to fail).
+	private func search(_ field: GitLogSearch.Field, _ query: String) throws -> GitLogSearch {
+		try #require(GitLogSearch(field: field, query: query))
 	}
 }

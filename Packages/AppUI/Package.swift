@@ -31,3 +31,7 @@ let package = Package(
         .testTarget(name: "AppUITests", dependencies: ["AppUI"]),
     ]
 )
+
+for target in package.targets {
+    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+}
