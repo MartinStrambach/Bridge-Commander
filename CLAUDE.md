@@ -39,7 +39,7 @@ Packages/
 
 ### Package READMEs
 
-Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the app target's in `BridgeCommander/README.md`); ActionButtons, GitActionsMenu and ProcessExecution have none yet — create one when there is a decision to record there. **Read the README of every package you are about to change before editing it**, and record new non-obvious decisions there, not in this file. Only project-wide information belongs here.
+Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the app target's in `BridgeCommander/README.md`); ActionButtons and GitActionsMenu have none yet — create one when there is a decision to record there. **Read the README of every package you are about to change before editing it**, and record new non-obvious decisions there, not in this file. Only project-wide information belongs here.
 
 ## Architecture
 
