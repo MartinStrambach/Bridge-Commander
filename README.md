@@ -36,8 +36,8 @@ A macOS application for managing Git repositories and worktrees, built with Swif
 
 ## Requirements
 
-- macOS 13.0 or later
-- Xcode 26.0 or later (for building)
+- macOS 26.0 or later
+- Xcode 26.2 or later (for building)
 - Git installed and available in PATH
 
 ## Building and Running

@@ -1,14 +1,13 @@
 import SwiftUI
 
 /// Draws each hunk as a rounded, bordered card even though its header, lines and footer are
-/// separate items of `DiffViewer`'s single `LazyVStack`.
+/// separate rows of `DiffViewer`'s single `List`.
 ///
-/// The card must not be a container view: wrapping a hunk's lines in their own stack, lazy or
-/// not, means the outer lazy stack has to size the whole hunk to place it. A nested `LazyVStack`
-/// then re-measures every line on each lazy phase change and a whole-file hunk (an untracked
-/// file is one hunk) can pin the main thread for minutes. Keeping every line a direct lazy item
-/// bounds the work to the visible rows, so the card is assembled from a top cap (header), a side
-/// border on each row and a bottom cap (footer).
+/// The card must not be a container view: wrapping a hunk's lines in their own stack means the
+/// list has to size the whole hunk as one row, and a whole-file hunk (an untracked file is one
+/// hunk) is then measured in full however little of it is on screen. Keeping every line its own
+/// row bounds the work to the visible rows, so the card is assembled from a top cap (header), a
+/// side border on each row and a bottom cap (footer).
 enum HunkCard {
 	static let cornerRadius: CGFloat = 6
 	static let borderWidth: CGFloat = 1

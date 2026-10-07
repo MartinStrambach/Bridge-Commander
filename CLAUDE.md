@@ -3,7 +3,7 @@
 macOS app for managing Git repositories and worktrees. Built with SwiftUI + TCA (Composable Architecture).
 
 ## Tech Stack
-- Swift 6.0+
+- Swift 6.2+ toolchain (every package declares `swift-tools-version: 6.2`; Swift 6 language mode)
 - SwiftUI
 - Composable Architecture (TCA)
 - macOS 26.0+
@@ -39,51 +39,50 @@ Packages/
 
 ### Package READMEs
 
-Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the app target's in `BridgeCommander/README.md`). **Read the README of every package you are about to change before editing it**, and record new non-obvious decisions there, not in this file. Only project-wide information belongs here.
+Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the app target's in `BridgeCommander/README.md`); ActionButtons, GitActionsMenu and ProcessExecution have none yet — create one when there is a decision to record there. **Read the README of every package you are about to change before editing it**, and record new non-obvious decisions there, not in this file. Only project-wide information belongs here.
 
 ## Architecture
 
 **TCA Pattern:**
 - Reducers handle state + side effects
-- States are immutable
+- State is mutated only inside reducers
 - Actions trigger changes
 - Effects wrap async work
 
-**Services (protocol-based, DI via `@Dependency`):**
-- `GitClient` (git ops, defined in GitCore)
-- `XcodeService`, `YouTrackService`, `LastOpenedDirectoryService` (in ToolsIntegration)
+**Dependencies (`@DependencyClient` structs of closures, conforming to `DependencyKey` + `TestDependencyKey`, injected as `@Dependency(XxxClient.self)`):**
+- `GitClient` (GitCore, in `GitService.swift`) plus feature-specific git clients (`GitStagingClient`, `GitLogClient`, `GitCommitActionClient`, …)
+- `XcodeClient`, `YouTrackClient`, `LastOpenedDirectoryClient` (ToolsIntegration)
 
 ## Common Tasks
 
 **New Button:**
 - Create `XxxButtonReducer.swift` + `XxxButtonView.swift` in `Packages/RepositoryFeature/Sources/RepositoryFeature/`
 - Follow TCA pattern (Reducer + View pair)
-- Add to `RepositoryRowView`
+- If it goes in the row's action bar: add a `RepositoryRowItem` case (`Settings/RepositoryRowLayout.swift`), render it in `RepositoryRowView`'s item switch and in `RepositoryRowMoreMenu.swift` (see `Packages/RepositoryFeature/README.md`)
 - Handle async with `Effect { send in ... }`
 
 **New Git Operation:**
-- Add helper in `Packages/GitCore/Sources/GitCore/` (shell out via `ProcessRunner.runGit()`)
-- Expose via `GitService` / `GitClient`
-- Update `ScannedRepository` model if new state needed
+- Add helper in `Packages/GitCore/Sources/GitCore/` (shell out via `ProcessRunner.runGit(arguments:at:)`)
+- Expose it through `GitClient` (`GitService.swift`) or the feature-specific client it belongs to (`GitStagingClient`, `GitLogClient`, …)
+- New row status goes on `GitPorcelainStatus` and `RepositoryRowReducer.State`, not `ScannedRepository` (which holds only what a scan finds)
 
 **New Service:**
-- Define protocol in `ToolsIntegration/ServiceProtocols.swift`
-- Implement in `Packages/ToolsIntegration/Sources/ToolsIntegration/`
-- Register as `@Dependency` in the appropriate package
-- Use via `@Dependency` in reducers
+- Add a `@DependencyClient public struct XxxClient: Sendable` of `@Sendable` closures, with `extension XxxClient: DependencyKey { liveValue }` and `TestDependencyKey { testValue }` (see `XcodeService.swift`)
+- Implement the live value with a helper in `Packages/ToolsIntegration/Sources/ToolsIntegration/` (or the package it belongs to)
+- Use via `@Dependency(XxxClient.self)` in reducers
 
 **Key Files:**
 - `BridgeCommander/BridgeCommanderApp.swift` — app entry point
-- `GitCore/ScannedRepository.swift` — core data model
+- `GitCore/ScannedRepository.swift` — what a repository scan finds
 - `GitCore/GitStatusDetector.swift` — single source of truth for branch status
-- `GitCore/GitService.swift` — git client implementation
+- `GitCore/GitService.swift` — `GitClient`, the row's git dependency
 - `RepositoryFeature/RepositoryListReducer.swift` — main app state
 - `RepositoryFeature/RepositoryRowReducer.swift` — per-row actions
 
 ## Patterns
 
 **Shell Commands:**
-- Use `ProcessRunner.runGit()` for git operations (in GitCore)
+- Use `ProcessRunner.runGit(arguments:at:)` (ProcessExecution package) for git operations; git helpers live in GitCore
 
 **Async:**
 - Wrap in TCA `Effect { send in ... }`
@@ -118,10 +117,12 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 ## Dependencies
 
 **External:**
-- ComposableArchitecture (used across packages)
-- SwiftUI
+- swift-composable-architecture, swift-dependencies, swift-sharing (used across packages)
+- SwiftTerm (TerminalFeature)
+- Sparkle (app target)
 
 **System:**
+- SwiftUI, AppKit
 - Foundation
 - ProcessInfo
 - FileManager
@@ -133,6 +134,6 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 - Git must be in PATH
 - Worktree detection: looks for `.git` files with gitdir pointers
 - Large directory scans may be slow
-- Git operations use `ProcessRunner.runGit()` to shell out to git
+- Git operations use `ProcessRunner.runGit(arguments:at:)` (ProcessExecution) to shell out to git
 - Each package has its own `Package.swift` under `Packages/<Name>/`
 - macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `GitActionsMenuView`, `TuistButtonView`). A nested `Menu`'s content does not inherit it and needs its own

@@ -6,9 +6,9 @@ Design notes and gotchas for this package. Project-wide conventions are in the r
 
 ## Notes
 
-- `ServiceProtocols` — protocol definitions
-- `XcodeService`, `YouTrackService`, `LastOpenedDirectoryService`
-- `TerminalLauncher`, `ClaudeCodeLauncher`, `AndroidStudioLauncher`
+- `@DependencyClient`s: `XcodeClient` (`XcodeService.swift`), `YouTrackClient` (`YouTrackServiceImpl.swift`, over the static `YouTrackService` namespace), `LastOpenedDirectoryClient` (`LastOpenedDirectoryService.swift`)
+- `YouTrackIssueModels.swift` — `IssueDetails`, `TicketState`, `TicketStateTransition`, `CodeReviewState`
+- `TerminalLauncher` (`TerminalApp`: Terminal.app, iTerm2, Ghostty, Warp; also starts Claude Code, with `command: "claude"`), `AndroidStudioLauncher` / `AndroidStudioDetector`
 - `XcodeProjectDetector`, `XcodeProjectGenerator`, `XcodeDerivedDataHelper`
 - `TuistCommandHelper`, `BranchNameFormatter`, `FileOpener`, `PermissionChecker`
 - `BranchNameFormatter` goes both ways: `format` turns a branch into the row's display text, `branchName(ticketId:summary:template:)` names a branch after a YouTrack ticket. The template (`ticketBranchNameTemplate`, `{ticket}`/`{summary}` placeholders) defaults to `{summary}_{ticket}`, the shape `format` reads back as the bare summary; the summary becomes a lowercase ASCII slug with diacritics folded (Czech summaries stay readable), cut at a word boundary at 50 characters
