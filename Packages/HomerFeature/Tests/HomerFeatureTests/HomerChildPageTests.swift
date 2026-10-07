@@ -21,20 +21,30 @@ struct HomerChildPageTests {
 		let initialState = activeState(user: HomerUser(username: "admin", role: "admin"))
 		let store = TestStore(initialState: initialState) {
 			HomerInstanceReducer()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0[HomerContinuationsClient.self].continuations = { _, _ in [] }
 		}
 
 		await store.send(.pageChanged(.continuations)) {
 			$0.page = .continuations
 			$0.shownChildPage = .continuations
 		}
-		await store.receive(\.continuations.shown)
+		await store.receive(\.continuations.shown) {
+			$0.continuations.isShown = true
+		}
+		await store.receive(\.continuations.loaded.success) {
+			$0.continuations.hasLoaded = true
+		}
 
 		// Agents and Schedules are one reducer: moving between them changes nothing.
 		await store.send(.pageChanged(.agents)) {
 			$0.page = .agents
 			$0.shownChildPage = .agents
 		}
-		await store.receive(\.continuations.hidden)
+		await store.receive(\.continuations.hidden) {
+			$0.continuations.isShown = false
+		}
 		await store.receive(\.agents.shown)
 		await store.send(.pageChanged(.schedules)) {
 			$0.page = .schedules
