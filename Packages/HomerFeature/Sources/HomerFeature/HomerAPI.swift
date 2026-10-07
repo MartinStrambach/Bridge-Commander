@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Why a Homer call failed, classified the way the web console tells its user (`auth-context.tsx`,
 /// `question-item.tsx`): a 401 is a missing or expired session (or, from the login call, a wrong
@@ -44,14 +45,26 @@ nonisolated enum HomerAPI {
 
 	private static let jar = HomerCookieJar.shared
 
-	/// Leaves cookies to `jar`: `URLSession` neither stores nor sends any of its own.
-	private static let session: URLSession = {
-		let configuration = URLSessionConfiguration.default
-		configuration.httpCookieStorage = nil
-		configuration.httpCookieAcceptPolicy = .never
-		configuration.httpShouldSetCookies = false
-		return URLSession(configuration: configuration)
-	}()
+	private static let sessions = Mutex<[String: URLSession]>([:])
+
+	/// One session per instance. Instances on one ingress share its IP and wildcard certificate,
+	/// and a single session would coalesce their HTTP/2 connections — one instance's requests
+	/// riding another's, which the ingress refuses with 421 Misdirected Request. Sessions never
+	/// share connections. Leaves cookies to `jar`: it neither stores nor sends any of its own.
+	private static func session(for baseURL: String) -> URLSession {
+		sessions.withLock { sessions in
+			if let session = sessions[baseURL] {
+				return session
+			}
+			let configuration = URLSessionConfiguration.default
+			configuration.httpCookieStorage = nil
+			configuration.httpCookieAcceptPolicy = .never
+			configuration.httpShouldSetCookies = false
+			let session = URLSession(configuration: configuration)
+			sessions[baseURL] = session
+			return session
+		}
+	}
 
 	static func me(baseURL: String) async throws -> HomerUser {
 		try await decode(HomerUser.self, from: send("GET", "/api/v1/auth/me", baseURL: baseURL))
@@ -186,7 +199,7 @@ nonisolated enum HomerAPI {
 		let data: Data
 		let response: URLResponse
 		do {
-			(data, response) = try await session.data(for: request)
+			(data, response) = try await session(for: baseURL).data(for: request)
 		}
 		catch {
 			throw HomerAPIError.unreachable(error.localizedDescription)
@@ -224,7 +237,7 @@ nonisolated enum HomerAPI {
 					let bytes: URLSession.AsyncBytes
 					let response: URLResponse
 					do {
-						(bytes, response) = try await session.bytes(for: request)
+						(bytes, response) = try await session(for: baseURL).bytes(for: request)
 					}
 					catch {
 						throw HomerAPIError.unreachable(error.localizedDescription)
