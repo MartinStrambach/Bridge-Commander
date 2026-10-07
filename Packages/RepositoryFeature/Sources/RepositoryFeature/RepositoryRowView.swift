@@ -16,7 +16,13 @@ struct RepositoryRowView: View {
 	var store: StoreOf<RepositoryRowReducer>
 
 	@Environment(\.openSettings)
-	private var openSettings
+	var openSettings
+
+	@Environment(\.uiFontScale)
+	private var uiFontScale
+
+	@SharedReader(.repositoryRowLayout)
+	private var rowLayout = RepositoryRowLayout.default
 
 	var terminalSessionStatus: TerminalSessionStatus?
 
@@ -96,6 +102,11 @@ struct RepositoryRowView: View {
 						store.send(.openTerminalForRepo)
 					}
 			)
+			// The lowest priority, so the stack sets this minimum aside and lets the actions
+			// take what is left: `RowActionsLayout` wraps onto a second line when one line no
+			// longer fits, instead of the title shrinking to an ellipsis.
+			.frame(minWidth: 260 * uiFontScale, alignment: .leading)
+			.layoutPriority(-1)
 			repositoryActions
 				.padding(.vertical, 12)
 		}
@@ -155,9 +166,11 @@ struct RepositoryRowView: View {
 			HStack(spacing: 12) {
 				VStack(alignment: .leading, spacing: 2) {
 					HStack(spacing: 8) {
+						// Two lines rather than one: a ticket summary is often longer than the
+						// space a narrow window leaves, and its end is what tells tickets apart.
 						Text(isGroupCollapsed != nil ? store.name : store.formattedBranchName)
 							.scaledFont(.headline)
-							.lineLimit(1)
+							.lineLimit(2)
 						if let worktreeCount, worktreeCount > 0 {
 							worktreeCountBadge(worktreeCount)
 						}
@@ -260,6 +273,9 @@ struct RepositoryRowView: View {
 			.background(Color.blue.opacity(0.2))
 			.cornerRadius(4)
 			.lineLimit(1)
+			// Never truncated: a bare "…" badge says nothing, and the code review states beside
+			// it can give up their width instead.
+			.fixedSize()
 			.contentShape(Rectangle())
 	}
 
@@ -382,134 +398,28 @@ struct RepositoryRowView: View {
 
 	private var repositoryActions: some View {
 		HStack(spacing: 8) {
-			// Git actions dropdown menu
-			GitActionsMenuView(store: store.scope(
-				\.gitActionsMenu,
-				action: \.gitActionsMenu
-			))
-
-			if store.supportsIOS, store.supportsTuist {
-				TuistButtonView(store: store.scope(
-					\.tuistButton,
-					action: \.tuistButton
-				))
-			}
-
-			// Grouped with the other dropdowns rather than next to the ticket icon, so the
-			// text-label menus stay together on the left of the icon buttons.
-			if let youtrackButtonStore = store.scope(\.youtrackButton, action: \.youtrackButton) {
-				YouTrackButtonView(store: youtrackButtonStore)
-			}
-
-			// Copy path button
-			ActionButton(
-				icon: .systemImage("doc.on.doc"),
-				tooltip: "Copy path to clipboard",
-				action: { copyToClipboard(store.path) }
-			)
-
-			// Open in Finder button
-			ActionButton(
-				icon: .systemImage("folder"),
-				tooltip: "Open in Finder",
-				action: { openInFinder(store.path) }
-			)
-
-			// PR/MR fetch failure (conditional) — sits where the PR badge would, so a
-			// missing or stale badge and its cause are read in the same place.
-			if let prFetchError = store.prFetchError {
-				Image(systemName: "exclamationmark.triangle.fill")
-					.resizable()
-					.scaledToFit()
-					.padding(4)
-					.frame(width: 25, height: 25)
-					.foregroundColor(.orange)
-					.help(prFetchError)
-			}
-
-			// Open PR button (conditional), with unresolved discussions stacked below
-			if let prUrl = store.prUrl, let url = URL(string: prUrl) {
-				VStack(alignment: .center, spacing: 2) {
-					PullRequestButton(
-						url: url,
-						provider: store.prProvider,
-						state: store.prState
-					)
-
-					// Unresolved review discussions (conditional)
-					if let count = store.prUnresolvedDiscussions, count > 0 {
-						UnresolvedDiscussionsBadge(
-							count: count,
-							url: url,
-							provider: store.prProvider
-						)
+			RowActionsLayout {
+				ForEach(rowLayout.rowSlots) { slot in
+					switch slot {
+					case let .item(item):
+						smallAction(item)
+					case let .menuStack(menus):
+						VStack(alignment: .leading, spacing: 4) {
+							ForEach(menus) { menu in
+								smallAction(menu)
+							}
+						}
 					}
 				}
-				// The action bar can be narrower than its ideal width (narrow sidebar
-				// pane); without this the HStack compresses the badge, deleting the
-				// count text and leaving an off-center bubble icon.
-				.fixedSize(horizontal: true, vertical: false)
+				if rowLayout.showsMoreMenu {
+					moreActionsMenu(items: rowLayout.moreMenuItems)
+				}
 			}
 
-			// GitLab pipeline status (conditional)
-			if let pipelineUrl = store.pipelineUrl,
-			   let url = URL(string: pipelineUrl),
-			   let pipelineState = store.pipelineState {
-				PipelineStatusButton(url: url, state: pipelineState, hasConflicts: store.prHasConflicts)
+			ForEach(rowLayout.items(in: .toolButtons, placedIn: .row)) { item in
+				toolButton(item)
 			}
-
-			// Review sign-off, or a draft marker (conditional)
-			if let slot = store.approvalSlot,
-			   let prUrl = store.prUrl,
-			   let url = URL(string: prUrl) {
-				ApprovalSlotView(slot: slot, url: url, provider: store.prProvider)
-			}
-
-			ShareButtonView(store: store.scope(
-				\.shareButton,
-				action: \.shareButton
-			))
-
-			if let ticketButtonStore = store.scope(\.ticketButton, action: \.ticketButton) {
-				TicketButtonView(store: ticketButtonStore)
-			}
-			else if store.showsMissingYouTrackURLWarning {
-				ActionButton(
-					icon: .systemImage("exclamationmark.triangle.fill"),
-					tooltip: "Ticket \(store.ticketId ?? "") detected, but this repository has no YouTrack URL. "
-						+ "Set it in Settings to enable ticket integration.",
-					color: .orange,
-					action: { openSettings() }
-				)
-			}
-
-			if let webButtonStore = store.scope(\.webButton, action: \.webButton) {
-				WebButtonView(store: webButtonStore)
-			}
-
-			TerminalButtonView(store: store.scope(
-				\.terminalButton,
-				action: \.terminalButton
-			))
-
-			if store.supportsAndroid {
-				AndroidStudioButtonView(store: store.scope(
-					\.androidStudioButton,
-					action: \.androidStudioButton
-				))
-			}
-
-			if store.supportsIOS {
-				XcodeProjectButtonView(store: store.scope(
-					\.xcodeButton,
-					action: \.xcodeButton
-				))
-			}
-
-			ClaudeCodeButtonView(store: store.scope(
-				\.claudeCodeButton,
-				action: \.claudeCodeButton
-			))
+			.environment(\.toolButtonSize, rowLayout.toolButtonSize)
 
 			Group {
 				if store.isWorktree {
@@ -535,18 +445,170 @@ struct RepositoryRowView: View {
 				)
 			}
 		}
+		// The alerts and dialogs of the items moved into the "⋯" menu, which cannot present them
+		// from inside it. Only for those items: one in the row presents its own, and a second
+		// presenter of the same state would fight it.
+		.background {
+			ForEach(rowLayout.moreMenuItems) { item in
+				moreMenuPresenter(item)
+			}
+		}
 	}
 
-	// MARK: - Helper Methods
+	/// One of the menus and icon buttons left of the tool buttons. Which ones show, and in what
+	/// order, is the user's `RepositoryRowLayout`; `RowActionsLayout` wraps them onto a second
+	/// line in a narrow row. An item that does not apply to this repository draws nothing.
+	@ViewBuilder
+	private func smallAction(_ item: RepositoryRowItem) -> some View {
+		switch item {
+		case .gitActions:
+			GitActionsMenuView(store: store.scope(
+				\.gitActionsMenu,
+				action: \.gitActionsMenu
+			))
 
-	private func copyToClipboard(_ text: String) {
-		let pasteboard = NSPasteboard.general
-		pasteboard.clearContents()
-		pasteboard.setString(text, forType: .string)
+		case .tuist:
+			if store.supportsIOS, store.supportsTuist {
+				TuistButtonView(store: store.scope(
+					\.tuistButton,
+					action: \.tuistButton
+				))
+			}
+
+		case .youTrackMenu:
+			if let youtrackButtonStore = store.scope(\.youtrackButton, action: \.youtrackButton) {
+				YouTrackButtonView(store: youtrackButtonStore)
+			}
+
+		case .pullRequest:
+			// PR/MR fetch failure — sits where the PR badge would, so a missing or stale badge
+			// and its cause are read in the same place.
+			if let prFetchError = store.prFetchError {
+				Image(systemName: "exclamationmark.triangle.fill")
+					.resizable()
+					.scaledToFit()
+					.padding(4)
+					.frame(width: 25, height: 25)
+					.foregroundColor(.orange)
+					.help(prFetchError)
+			}
+
+			// Open PR button, with unresolved discussions stacked below
+			if let prUrl = store.prUrl, let url = URL(string: prUrl) {
+				VStack(alignment: .center, spacing: 2) {
+					PullRequestButton(
+						url: url,
+						provider: store.prProvider,
+						state: store.prState
+					)
+
+					if let count = store.prUnresolvedDiscussions, count > 0 {
+						UnresolvedDiscussionsBadge(
+							count: count,
+							url: url,
+							provider: store.prProvider
+						)
+					}
+				}
+				// Keeps the badge's count text from being compressed away.
+				.fixedSize(horizontal: true, vertical: false)
+			}
+
+		case .pipeline:
+			if let pipelineUrl = store.pipelineUrl,
+			   let url = URL(string: pipelineUrl),
+			   let pipelineState = store.pipelineState {
+				PipelineStatusButton(url: url, state: pipelineState, hasConflicts: store.prHasConflicts)
+			}
+
+		case .approval:
+			// Review sign-off, or a draft marker
+			if let slot = store.approvalSlot,
+			   let prUrl = store.prUrl,
+			   let url = URL(string: prUrl) {
+				ApprovalSlotView(slot: slot, url: url, provider: store.prProvider)
+			}
+
+		case .ticket:
+			if let ticketButtonStore = store.scope(\.ticketButton, action: \.ticketButton) {
+				TicketButtonView(store: ticketButtonStore)
+			}
+			else if store.showsMissingYouTrackURLWarning {
+				ActionButton(
+					icon: .systemImage("exclamationmark.triangle.fill"),
+					tooltip: "Ticket \(store.ticketId ?? "") detected, but this repository has no YouTrack URL. "
+						+ "Set it in Settings to enable ticket integration.",
+					color: .orange,
+					action: { openSettings() }
+				)
+			}
+
+		case .web:
+			if let webButtonStore = store.scope(\.webButton, action: \.webButton) {
+				WebButtonView(store: webButtonStore)
+			}
+
+		case .terminal:
+			TerminalButtonView(store: store.scope(
+				\.terminalButton,
+				action: \.terminalButton
+			))
+
+		case .copyPath:
+			ActionButton(
+				icon: .systemImage("doc.on.doc"),
+				tooltip: "Copy path to clipboard",
+				action: { copyToClipboard(store.path) }
+			)
+
+		case .showInFinder:
+			ActionButton(
+				icon: .systemImage("folder"),
+				tooltip: "Open in Finder",
+				action: { openInFinder(store.path) }
+			)
+
+		case .share:
+			ShareButtonView(store: store.scope(
+				\.shareButton,
+				action: \.shareButton
+			))
+
+		case .androidStudio, .xcode, .claudeCode:
+			EmptyView()
+		}
 	}
 
-	private func openInFinder(_ path: String) {
-		NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+	/// One of the large buttons at the end of the row, drawn at the size `RepositoryRowLayout`
+	/// picks (applied by the caller through the `toolButtonSize` environment value).
+	@ViewBuilder
+	private func toolButton(_ item: RepositoryRowItem) -> some View {
+		switch item {
+		case .androidStudio:
+			if store.supportsAndroid {
+				AndroidStudioButtonView(store: store.scope(
+					\.androidStudioButton,
+					action: \.androidStudioButton
+				))
+			}
+
+		case .xcode:
+			if store.supportsIOS {
+				XcodeProjectButtonView(store: store.scope(
+					\.xcodeButton,
+					action: \.xcodeButton
+				))
+			}
+
+		case .claudeCode:
+			ClaudeCodeButtonView(store: store.scope(
+				\.claudeCodeButton,
+				action: \.claudeCodeButton
+			))
+
+		default:
+			EmptyView()
+		}
 	}
 }
 

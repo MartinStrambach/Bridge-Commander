@@ -1,5 +1,47 @@
 import SwiftUI
 
+/// How large the repository row's tool buttons (Android Studio, Xcode, Claude Code) are drawn.
+/// Set through the `toolButtonSize` environment value; the raw values are what Settings stores.
+public enum ToolButtonSize: String, CaseIterable, Sendable {
+	/// Icon only, the label left to the tooltip.
+	case small
+	case medium
+	case large
+
+	public var displayName: String {
+		switch self {
+		case .small: "Small"
+		case .medium: "Medium"
+		case .large: "Large"
+		}
+	}
+
+	var buttonSize: CGFloat {
+		switch self {
+		case .small: 32
+		case .medium: 56
+		case .large: 65
+		}
+	}
+
+	var iconSize: CGFloat {
+		switch self {
+		case .small: 18
+		case .medium: 20
+		case .large: 25
+		}
+	}
+
+	var showsLabel: Bool {
+		self != .small
+	}
+}
+
+public extension EnvironmentValues {
+	@Entry
+	var toolButtonSize: ToolButtonSize = .medium
+}
+
 /// Reusable tool button component for repository row tool actions
 public struct ToolButton: View {
 	public enum ButtonIcon {
@@ -14,8 +56,11 @@ public struct ToolButton: View {
 	private let tint: Color?
 	private let action: () -> Void
 
-	private let buttonSize: CGFloat = 65
-	private let iconSize: CGFloat = 25
+	@Environment(\.toolButtonSize)
+	private var size
+
+	private var buttonSize: CGFloat { size.buttonSize }
+	private var iconSize: CGFloat { size.iconSize }
 
 	public var body: some View {
 		Button(action: action) {
@@ -44,15 +89,19 @@ public struct ToolButton: View {
 					.foregroundStyle(tint ?? .primary)
 				}
 
-				Spacer(minLength: 0)
+				if size.showsLabel {
+					Spacer(minLength: 0)
 
-				Text(label)
-					.scaledFont(.caption2)
-					.lineLimit(2)
-					.multilineTextAlignment(.center)
-					.fixedSize(horizontal: false, vertical: true)
+					Text(label)
+						.scaledFont(.caption2)
+						.lineLimit(2)
+						// "Install & Generate" barely fits two lines at the medium width.
+						.minimumScaleFactor(0.8)
+						.multilineTextAlignment(.center)
+						.fixedSize(horizontal: false, vertical: true)
+				}
 			}
-			.padding(4)
+			.padding(size.showsLabel ? 4 : 0)
 			.frame(width: buttonSize, height: buttonSize)
 		}
 		.buttonStyle(.scaledBordered)

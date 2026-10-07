@@ -1,3 +1,4 @@
+import AppUI
 import ComposableArchitecture
 import Foundation
 import GitHosting
@@ -106,6 +107,9 @@ public struct SettingsReducer {
 		@Shared(.uiFontSize)
 		public var uiFontSize = UIFontSize.default
 
+		@Shared(.repositoryRowLayout)
+		public var repositoryRowLayout = RepositoryRowLayout.default
+
 		public var youtrackTokenTest = TokenTestState.idle
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
@@ -166,6 +170,11 @@ public struct SettingsReducer {
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
 		case setUIFontSize(Double)
+		case setRowToolButtonSize(ToolButtonSize)
+		case setRowStacksMenus(Bool)
+		case setRowItemPlacement(RepositoryRowItem, RepositoryRowItemPlacement)
+		case moveRowItems(RepositoryRowItem.Zone, fromOffsets: IndexSet, toOffset: Int)
+		case resetRowLayoutButtonTapped
 		case importFromTerminalAppButtonTapped
 		case profileFilesSelected([URL])
 		case profilesImported([TerminalProfile])
@@ -639,6 +648,28 @@ public struct SettingsReducer {
 
 			case let .setUIFontSize(size):
 				state.$uiFontSize.withLock { $0 = UIFontSize.clamped(size) }
+				return .none
+
+			case let .setRowToolButtonSize(size):
+				state.$repositoryRowLayout.withLock { $0.toolButtonSize = size }
+				return .none
+
+			case let .setRowStacksMenus(stacksMenus):
+				state.$repositoryRowLayout.withLock { $0.stacksMenus = stacksMenus }
+				return .none
+
+			case let .setRowItemPlacement(item, placement):
+				state.$repositoryRowLayout.withLock { $0.setPlacement(placement, for: item) }
+				return .none
+
+			case let .moveRowItems(zone, source, destination):
+				state.$repositoryRowLayout.withLock {
+					$0.move(in: zone, fromOffsets: source, toOffset: destination)
+				}
+				return .none
+
+			case .resetRowLayoutButtonTapped:
+				state.$repositoryRowLayout.withLock { $0 = .default }
 				return .none
 
 			case .importFromTerminalAppButtonTapped:

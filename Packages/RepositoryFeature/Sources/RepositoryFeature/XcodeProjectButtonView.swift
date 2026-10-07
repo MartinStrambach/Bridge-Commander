@@ -16,9 +16,6 @@ struct XcodeProjectButtonView: View {
 
 	var style: Style = .tool
 
-	@Environment(\.presentsButtonAlerts)
-	private var presentsAlerts
-
 	private var isNotFound: Bool {
 		store.projectState == .idle && store.projectPath == nil && !store.usesTuist
 	}
@@ -112,10 +109,69 @@ struct XcodeProjectButtonView: View {
 			}
 		}
 		.disabled(isNotFound)
-		.alert(presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil))
-		.sheet(item: presentsAlerts ? $store.scope(\.$errorAlert, action: \.errorAlert) : .constant(nil)) { alertStore in
-			ScrollableAlertView(store: alertStore)
+		.xcodeProjectPresentations(store: store)
+	}
+}
+
+/// The Xcode button as an entry of another menu (the repository row's "⋯" menu).
+///
+/// A menu entry cannot present anything, so whoever shows this must also apply
+/// `xcodeProjectPresentations(store:)` to a view outside the menu.
+struct XcodeProjectMenuItem: View {
+	let store: StoreOf<XcodeProjectButtonReducer>
+
+	private var title: String {
+		switch store.projectState {
+		case .idle, .error:
+			if store.projectPath != nil {
+				"Open in Xcode"
+			}
+			else if store.usesTuist {
+				"Install & Generate Xcode Project"
+			}
+			else {
+				"Xcode Project Not Found"
+			}
+
+		default:
+			store.projectState.displayMessage
 		}
+	}
+
+	var body: some View {
+		Button {
+			store.send(.openProject)
+		} label: {
+			Label(title, systemImage: store.projectPath == nil ? "exclamationmark.triangle" : "hammer.fill")
+		}
+		.disabled(
+			store.projectState.isProcessing
+				|| (store.projectState == .idle && store.projectPath == nil && !store.usesTuist)
+		)
+	}
+}
+
+extension View {
+	/// The Xcode button's alerts. Applied by `XcodeProjectButtonView` itself; an
+	/// `XcodeProjectMenuItem` needs it on a view outside the menu it sits in.
+	func xcodeProjectPresentations(store: StoreOf<XcodeProjectButtonReducer>) -> some View {
+		modifier(XcodeProjectPresentations(store: store))
+	}
+}
+
+private struct XcodeProjectPresentations: ViewModifier {
+	@Bindable
+	var store: StoreOf<XcodeProjectButtonReducer>
+
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
+	func body(content: Content) -> some View {
+		content
+			.alert(presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil))
+			.sheet(item: presentsAlerts ? $store.scope(\.$errorAlert, action: \.errorAlert) : .constant(nil)) { alertStore in
+				ScrollableAlertView(store: alertStore)
+			}
 	}
 }
 

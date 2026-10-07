@@ -54,7 +54,7 @@ struct ApprovalStatusButton: View {
 		return "\(headline) — open \(noun)" + namesSuffix(names)
 	}
 
-	private var headline: String {
+	var headline: String {
 		switch status.decision {
 		// Deliberately no fraction here even when a count is available: the provider
 		// already says every rule is satisfied, and a partial-looking "6 of 8" next

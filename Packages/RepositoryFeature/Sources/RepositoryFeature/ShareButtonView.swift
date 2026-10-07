@@ -4,15 +4,27 @@ import SwiftUI
 struct ShareButtonView: View {
 	let store: StoreOf<ShareButtonReducer>
 
+	enum Style { case button, menuItem }
+
+	var style: Style = .button
+
 	var body: some View {
-		ShareLink(item: store.shareText) {
-			Image(systemName: "square.and.arrow.up")
-				.resizable()
-				.scaledToFit()
-				.frame(width: 20, height: 20)
+		switch style {
+		case .button:
+			ShareLink(item: store.shareText) {
+				Image(systemName: "square.and.arrow.up")
+					.resizable()
+					.scaledToFit()
+					.frame(width: 20, height: 20)
+			}
+			.foregroundColor(.secondary)
+			.help("Share branch, ticket, and PR")
+
+		case .menuItem:
+			ShareLink(item: store.shareText) {
+				Label("Share Branch, Ticket and PR", systemImage: "square.and.arrow.up")
+			}
 		}
-		.foregroundColor(.secondary)
-		.help("Share branch, ticket, and PR")
 	}
 }
 

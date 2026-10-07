@@ -1,6 +1,7 @@
 /// A page of the Settings window, listed in its sidebar.
 enum SettingsCategory: String, CaseIterable, Identifiable {
 	case general
+	case repositoryRows
 	case accounts
 	case repositoryGroups
 	case worktrees
@@ -14,6 +15,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 	var title: String {
 		switch self {
 		case .general: "General"
+		case .repositoryRows: "Repository Rows"
 		case .accounts: "Accounts"
 		case .repositoryGroups: "Repository Groups"
 		case .worktrees: "Branches & Worktrees"
@@ -27,6 +29,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 	var systemImage: String {
 		switch self {
 		case .general: "gearshape"
+		case .repositoryRows: "rectangle.grid.1x2"
 		case .accounts: "person.crop.circle"
 		case .repositoryGroups: "folder"
 		case .worktrees: "arrow.triangle.branch"

@@ -23,7 +23,7 @@ struct PipelineStatusButton: View {
 		}
 	}
 
-	private var tooltip: String {
+	var tooltip: String {
 		let conflicts = hasConflicts ? " · conflicts with target branch" : ""
 		return "Pipeline: \(state.rawValue)\(conflicts) — open in GitLab"
 	}
