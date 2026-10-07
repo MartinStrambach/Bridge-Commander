@@ -97,6 +97,12 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var terminalNotifications: Self {
 		appStorage("terminalNotifications")
 	}
+
+	/// The create-worktree dialog's PR/MR tab lists only the user's own. Remembered from the
+	/// dialog's last use rather than set in Settings.
+	static var worktreeOnlyMyPullRequests: Self {
+		appStorage("worktreeOnlyMyPullRequests")
+	}
 }
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<WorktreeSource> {

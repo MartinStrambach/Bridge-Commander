@@ -176,6 +176,8 @@ struct CreateWorktreeDialogView: View {
 			}
 		}
 
+		Toggle("Only mine", isOn: $store.onlyMyPullRequests.sending(\.onlyMyPullRequestsChanged))
+
 		List(selection: Binding(
 			get: { store.selectedPullRequestNumber },
 			set: { store.send(.pullRequestSelected($0)) }
@@ -191,7 +193,7 @@ struct CreateWorktreeDialogView: View {
 				listPlaceholder(error, isError: true)
 			}
 			else if store.filteredPullRequests.isEmpty, !store.isLoadingPullRequests {
-				listPlaceholder(store.pullRequests.isEmpty ? "No open PRs/MRs" : "No matching PRs/MRs")
+				listPlaceholder(pullRequestPlaceholder)
 			}
 		}
 
@@ -201,6 +203,18 @@ struct CreateWorktreeDialogView: View {
 				.foregroundColor(.secondary)
 				.lineLimit(1)
 				.truncationMode(.middle)
+		}
+	}
+
+	private var pullRequestPlaceholder: String {
+		if store.pullRequests.isEmpty {
+			"No open PRs/MRs"
+		}
+		else if store.onlyMyPullRequests, store.pullRequestFilter.trimmingCharacters(in: .whitespaces).isEmpty {
+			"You have no open PRs/MRs here"
+		}
+		else {
+			"No matching PRs/MRs"
 		}
 	}
 

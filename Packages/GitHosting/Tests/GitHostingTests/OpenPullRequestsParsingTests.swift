@@ -9,7 +9,7 @@ struct OpenPullRequestsParsingTests {
 		let json = Data("""
 		{"data": {"repository": {"pullRequests": {"nodes": [
 		  {"number": 12, "title": "Fix crash", "url": "https://github.com/o/r/pull/12", "isDraft": true,
-		   "headRefName": "fix_crash_MOB-1", "isCrossRepository": false, "author": {"login": "martin"}},
+		   "headRefName": "fix_crash_MOB-1", "isCrossRepository": false, "viewerDidAuthor": true, "author": {"login": "martin"}},
 		  {"number": 13, "title": "From a fork", "url": "https://github.com/o/r/pull/13", "isDraft": false,
 		   "headRefName": "main", "isCrossRepository": true, "headRepositoryOwner": {"login": "someone"},
 		   "author": {"login": "someone"}},
@@ -23,7 +23,7 @@ struct OpenPullRequestsParsingTests {
 		#expect(pullRequests == [
 			OpenPullRequest(
 				number: 12, title: "Fix crash", sourceBranch: "fix_crash_MOB-1", author: "martin",
-				url: "https://github.com/o/r/pull/12", isDraft: true, provider: .github
+				url: "https://github.com/o/r/pull/12", isDraft: true, provider: .github, isAuthoredByViewer: true
 			),
 			OpenPullRequest(
 				number: 13, title: "From a fork", sourceBranch: "main", author: "someone",
@@ -52,27 +52,34 @@ struct OpenPullRequestsParsingTests {
 		#expect(try JSONDecoder().decode(GitHubOpenPullRequestsResponse.self, from: json).pullRequests == nil)
 	}
 
-	@Test("GitLab: maps MRs, reads the string iid and names a fork's namespace")
+	@Test("GitLab: maps MRs, reads the string iid, names a fork's namespace and marks the viewer's own")
 	func gitLab() throws {
 		let json = Data("""
-		{"data": {"project": {"mergeRequests": {"nodes": [
+		{"data": {"currentUser": {"username": "ms"}, "project": {"mergeRequests": {"nodes": [
 		  {"iid": "7", "title": "Login", "webUrl": "https://gitlab.com/g/p/-/merge_requests/7", "draft": false,
 		   "sourceBranch": "login_MOB-2", "sourceProjectId": 5, "targetProjectId": 5, "author": {"username": "ms"}},
 		  {"iid": "8", "title": "Fork", "webUrl": "https://gitlab.com/g/p/-/merge_requests/8", "draft": false,
 		   "sourceBranch": "master", "sourceProjectId": 9, "targetProjectId": 5,
-		   "sourceProject": {"fullPath": "x/sub/p"}, "author": {"username": "x"}}
+		   "sourceProject": {"fullPath": "x/sub/p"}, "author": {"username": "x"}},
+		  {"iid": "9", "title": "Other", "webUrl": "https://gitlab.com/g/p/-/merge_requests/9", "draft": false,
+		   "sourceBranch": "other", "sourceProjectId": 5, "targetProjectId": 5, "author": {"username": "x"}}
 		]}}}}
 		""".utf8)
 		let mergeRequests = try #require(try JSONDecoder().decode(GitLabOpenMergeRequestsResponse.self, from: json).mergeRequests)
 		#expect(mergeRequests == [
 			OpenPullRequest(
 				number: 7, title: "Login", sourceBranch: "login_MOB-2", author: "ms",
-				url: "https://gitlab.com/g/p/-/merge_requests/7", isDraft: false, provider: .gitlab
+				url: "https://gitlab.com/g/p/-/merge_requests/7", isDraft: false, provider: .gitlab,
+				isAuthoredByViewer: true
 			),
 			OpenPullRequest(
 				number: 8, title: "Fork", sourceBranch: "master", author: "x",
 				url: "https://gitlab.com/g/p/-/merge_requests/8", isDraft: false, provider: .gitlab,
 				isFromFork: true, forkOwner: "x/sub"
+			),
+			OpenPullRequest(
+				number: 9, title: "Other", sourceBranch: "other", author: "x",
+				url: "https://gitlab.com/g/p/-/merge_requests/9", isDraft: false, provider: .gitlab
 			),
 		])
 		#expect(mergeRequests[0].reference == "!7")

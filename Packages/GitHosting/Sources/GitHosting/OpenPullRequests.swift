@@ -16,6 +16,8 @@ public nonisolated struct OpenPullRequest: Equatable, Sendable, Identifiable {
 	/// Who owns the fork (GitHub login / GitLab namespace); nil for a deleted fork, whose head
 	/// `origin` still keeps under `headRef`.
 	public let forkOwner: String?
+	/// Opened by the user whose token listed it.
+	public let isAuthoredByViewer: Bool
 
 	public var id: Int { number }
 
@@ -46,7 +48,8 @@ public nonisolated struct OpenPullRequest: Equatable, Sendable, Identifiable {
 		isDraft: Bool,
 		provider: PullRequestProvider,
 		isFromFork: Bool = false,
-		forkOwner: String? = nil
+		forkOwner: String? = nil,
+		isAuthoredByViewer: Bool = false
 	) {
 		self.number = number
 		self.title = title
@@ -57,6 +60,7 @@ public nonisolated struct OpenPullRequest: Equatable, Sendable, Identifiable {
 		self.provider = provider
 		self.isFromFork = isFromFork
 		self.forkOwner = forkOwner
+		self.isAuthoredByViewer = isAuthoredByViewer
 	}
 }
 
@@ -80,6 +84,7 @@ public nonisolated extension GitHubService {
 						headRefName
 						isCrossRepository
 						headRepositoryOwner { login }
+						viewerDidAuthor
 						author { login }
 					}
 				}
@@ -124,6 +129,7 @@ nonisolated struct GitHubOpenPullRequestsResponse: Decodable {
 		let headRefName: String
 		let isCrossRepository: Bool?
 		let headRepositoryOwner: Author?
+		let viewerDidAuthor: Bool?
 		let author: Author?
 	}
 
@@ -150,7 +156,8 @@ nonisolated struct GitHubOpenPullRequestsResponse: Decodable {
 				isDraft: $0.isDraft == true,
 				provider: .github,
 				isFromFork: isFromFork,
-				forkOwner: isFromFork ? $0.headRepositoryOwner?.login : nil
+				forkOwner: isFromFork ? $0.headRepositoryOwner?.login : nil,
+				isAuthoredByViewer: $0.viewerDidAuthor == true
 			)
 		}
 	}
@@ -163,6 +170,7 @@ public nonisolated extension GitLabService {
 	static func fetchOpenMergeRequests(projectPath: String, token: String) async throws -> [OpenPullRequest] {
 		let query = """
 		query($fullPath: ID!, $first: Int!) {
+			currentUser { username }
 			project(fullPath: $fullPath) {
 				mergeRequests(state: opened, sort: UPDATED_DESC, first: $first) {
 					nodes {
@@ -199,6 +207,7 @@ public nonisolated extension GitLabService {
 /// Internal (not private) so the response mapping is unit-testable from fixture JSON.
 nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 	struct DataContainer: Decodable {
+		let currentUser: Author?
 		let project: Project?
 	}
 
@@ -253,6 +262,8 @@ nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 		guard let project = data?.project else {
 			return nil
 		}
+		// GitLab's merge request has no `viewerDidAuthor`; the viewer is asked for in the same query.
+		let viewer = data?.currentUser?.username
 		return (project.mergeRequests?.nodes ?? []).compactMap { node in
 			guard let number = Int(node.iid) else {
 				return nil
@@ -266,7 +277,8 @@ nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 				isDraft: node.draft == true,
 				provider: .gitlab,
 				isFromFork: node.isFromFork,
-				forkOwner: node.forkOwner
+				forkOwner: node.forkOwner,
+				isAuthoredByViewer: viewer != nil && node.author?.username == viewer
 			)
 		}
 	}
