@@ -29,15 +29,8 @@ extension SimulatorMCPTools {
 		return "\(message) \(result.summary)"
 	}
 
-	/// `wait_for_settle`, true unless given as false — models occasionally quote booleans.
+	/// `wait_for_settle`, true unless given as false.
 	static func waitsForSettle(_ arguments: JSONValue) -> Bool {
-		switch arguments["wait_for_settle"] {
-		case let .bool(value)?:
-			value
-		case let .string(value)?:
-			value.lowercased() != "false"
-		default:
-			true
-		}
+		flag(arguments, "wait_for_settle", default: true)
 	}
 }

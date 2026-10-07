@@ -103,6 +103,7 @@ struct SimulatorPaneReducerTests {
 			$0[SimulatorClient.self].selectDevice = { id, path in selections.withValue { $0[path ?? ""] = id } }
 			$0[SimulatorClient.self].isClaudeCodeConnected = { true }
 			$0[SimulatorClient.self].prepareInput = { _ in }
+			$0[SimulatorClient.self].recordingDeviceIds = { .finished }
 			$0.continuousClock = clock
 		}
 
@@ -232,11 +233,11 @@ struct SimulatorPaneReducerTests {
 		}
 		await store.receive(.screenshotSaved(url)) {
 			$0.isSavingScreenshot = false
-			$0.savedScreenshotURL = url
+			$0.notice = .init(icon: "camera.fill", title: "Screenshot saved", subtitle: "Simulator Screenshot.png", fileURL: url)
 		}
 		await clock.advance(by: .seconds(6))
-		await store.receive(.screenshotBannerDismissed) {
-			$0.savedScreenshotURL = nil
+		await store.receive(.noticeDismissed) {
+			$0.notice = nil
 		}
 	}
 
@@ -245,15 +246,15 @@ struct SimulatorPaneReducerTests {
 		let url = URL(fileURLWithPath: "/tmp/Simulator Screenshot.png")
 		let revealed = LockIsolated<[URL]>([])
 		var initial = SimulatorPaneReducer.State()
-		initial.savedScreenshotURL = url
+		initial.notice = .init(icon: "camera.fill", title: "Screenshot saved", fileURL: url)
 		let store = TestStore(initialState: initial) {
 			SimulatorPaneReducer()
 		} withDependencies: {
 			$0[SimulatorClient.self].revealInFinder = { url in revealed.withValue { $0.append(url) } }
 		}
 
-		await store.send(.showScreenshotInFinderTapped) {
-			$0.savedScreenshotURL = nil
+		await store.send(.showNoticeFileInFinderTapped) {
+			$0.notice = nil
 		}
 		#expect(revealed.value == [url])
 	}
@@ -275,6 +276,139 @@ struct SimulatorPaneReducerTests {
 		await store.receive(.screenshotFailed(SimulatorError.noFramebuffer.localizedDescription)) {
 			$0.isSavingScreenshot = false
 			$0.errorMessage = "Could not save the screenshot: \(SimulatorError.noFramebuffer.localizedDescription)"
+		}
+	}
+
+	@Test
+	func theRecordButtonStartsAndThenSavesARecording() async {
+		let clock = TestClock()
+		let url = URL(fileURLWithPath: "/tmp/Simulator Screen Recording.mov")
+		let recording = SimulatorRecording(url: url, duration: .seconds(4))
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].startRecording = { _ in }
+			$0[SimulatorClient.self].stopRecording = { _ in recording }
+			$0.continuousClock = clock
+		}
+
+		await store.send(.recordButtonTapped) {
+			$0.isTogglingRecording = true
+		}
+		await store.receive(.recordingStarted(deviceId: "A")) {
+			$0.isTogglingRecording = false
+			$0.recordingDeviceIds = ["A"]
+		}
+		#expect(store.state.isRecordingSelectedDevice)
+
+		await store.send(.recordButtonTapped) {
+			$0.isTogglingRecording = true
+		}
+		await store.receive(.recordingSaved(recording, deviceId: "A")) {
+			$0.isTogglingRecording = false
+			$0.recordingDeviceIds = []
+			$0.notice = .init(icon: "record.circle", title: "Recording saved", subtitle: "Simulator Screen Recording.mov", fileURL: url)
+		}
+		await clock.advance(by: .seconds(6))
+		await store.receive(.noticeDismissed) {
+			$0.notice = nil
+		}
+	}
+
+	@Test
+	func aRecordingOfADeviceThatShutDownCanStillBeStopped() async {
+		let url = URL(fileURLWithPath: "/tmp/r.mov")
+		let recording = SimulatorRecording(url: url, duration: .seconds(4), endedEarly: "simctl stopped recording")
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .shutdown)]
+		initial.selectedDeviceId = "A"
+		initial.recordingDeviceIds = ["A"]
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].stopRecording = { _ in recording }
+			$0.continuousClock = TestClock()
+		}
+		store.exhaustivity = .off
+
+		await store.send(.recordButtonTapped)
+		await store.receive(.recordingSaved(recording, deviceId: "A")) {
+			$0.notice?.title = "Recording had already stopped"
+		}
+	}
+
+	@Test
+	func aShutDownDeviceCannotStartRecording() async {
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .shutdown)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		}
+		await store.send(.recordButtonTapped)
+	}
+
+	@Test
+	func recordingsStartedElsewhereAreFollowed() async {
+		let store = TestStore(initialState: SimulatorPaneReducer.State()) {
+			SimulatorPaneReducer()
+		}
+		await store.send(.recordingDeviceIdsChanged(["A", "B"])) {
+			$0.recordingDeviceIds = ["A", "B"]
+		}
+	}
+
+	@Test
+	func memoryWarningAndLocationReportWhatTheyDid() async {
+		let clock = TestClock()
+		let locations = LockIsolated<[SimulatorLocationCommand]>([])
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].simulateMemoryWarning = { _ in }
+			$0[SimulatorClient.self].setLocation = { _, command in locations.withValue { $0.append(command) } }
+			$0.continuousClock = clock
+		}
+
+		await store.send(.memoryWarningButtonTapped)
+		await store.receive(.featureFinished(.init(icon: "memorychip", title: "Memory warning sent"), errorMessage: nil)) {
+			$0.notice = .init(icon: "memorychip", title: "Memory warning sent")
+		}
+		await store.send(.locationSelected(.scenario("City Run")))
+		await store.receive(.featureFinished(.init(icon: "location.fill", title: "Location: City Run"), errorMessage: nil)) {
+			$0.notice = .init(icon: "location.fill", title: "Location: City Run")
+		}
+		let prague = SimulatorLocationCommand.places[0].coordinate
+		await store.send(.locationSelected(.set(prague)))
+		await store.receive(.featureFinished(.init(icon: "location.fill", title: "Location: Prague"), errorMessage: nil)) {
+			$0.notice = .init(icon: "location.fill", title: "Location: Prague")
+		}
+		#expect(locations.value == [.scenario("City Run"), .set(prague)])
+		await store.send(.noticeDismissed) {
+			$0.notice = nil
+		}
+	}
+
+	@Test
+	func aFailedFeatureIsReported() async {
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].simulateMemoryWarning = { _ in throw SimulatorError.memoryWarningUnavailable }
+		}
+
+		await store.send(.memoryWarningButtonTapped)
+		await store.receive(.featureFinished(nil, errorMessage: SimulatorError.memoryWarningUnavailable.localizedDescription)) {
+			$0.errorMessage = SimulatorError.memoryWarningUnavailable.localizedDescription
 		}
 	}
 }

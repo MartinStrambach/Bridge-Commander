@@ -49,12 +49,12 @@ public struct SimulatorPaneView: View {
 			content
 				// Over the screen rather than above it, so saving does not shrink the device.
 				.overlay(alignment: .top) {
-					if let url = store.savedScreenshotURL {
-						screenshotBanner(url)
+					if let notice = store.notice {
+						noticeBanner(notice)
 							.transition(.move(edge: .top).combined(with: .opacity))
 					}
 				}
-				.animation(.easeOut(duration: 0.2), value: store.savedScreenshotURL)
+				.animation(.easeOut(duration: 0.2), value: store.notice)
 		}
 		.frame(width: paneWidth)
 		.background(Color(NSColor.underPageBackgroundColor))
@@ -87,11 +87,16 @@ public struct SimulatorPaneView: View {
 					else {
 						iconButton("camera", help: "Save Screenshot") { store.send(.screenshotButtonTapped) }
 					}
+					recordButton
 					iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
 					iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
 					iconButton("house", help: "Home") { store.send(.hardwareButtonTapped(.home)) }
-					iconButton("lock", help: "Lock") { store.send(.hardwareButtonTapped(.lock)) }
+					moreMenu
 					iconButton("power", help: "Shut down \(device.name)") { store.send(.shutdownButtonTapped) }
+				}
+				else if store.isRecordingSelectedDevice {
+					// simctl may still be finishing a recording of a device that shut down.
+					recordButton
 				}
 			}
 
@@ -128,6 +133,93 @@ public struct SimulatorPaneView: View {
 		.disabled(store.devices.isEmpty)
 	}
 
+	@ViewBuilder
+	private var recordButton: some View {
+		if store.isTogglingRecording {
+			ProgressView()
+				.controlSize(.small)
+				.frame(width: 22, height: 22)
+		}
+		else if store.isRecordingSelectedDevice {
+			Button {
+				store.send(.recordButtonTapped)
+			} label: {
+				Image(systemName: "stop.circle.fill")
+					.scaledFont(size: 12)
+					.foregroundStyle(.red)
+					.symbolEffect(.pulse)
+					.frame(width: 22, height: 22)
+					.contentShape(Rectangle())
+			}
+			.buttonStyle(.borderless)
+			.help("Stop Recording")
+		}
+		else {
+			iconButton("record.circle", help: "Record Screen") { store.send(.recordButtonTapped) }
+		}
+	}
+
+	/// Simulator.app's Features and the buttons that have no icon of their own here.
+	private var moreMenu: some View {
+		Menu {
+			Button {
+				store.send(.memoryWarningButtonTapped)
+			} label: {
+				Label("Simulate Memory Warning", systemImage: "memorychip")
+			}
+
+			Menu {
+				Button("None") { store.send(.locationSelected(.clear)) }
+				ForEach(SimulatorLocationCommand.places, id: \.name) { place in
+					Button(place.name) { store.send(.locationSelected(.set(place.coordinate))) }
+				}
+				Divider()
+				ForEach(SimulatorLocationCommand.knownScenarios, id: \.self) { name in
+					Button(name) { store.send(.locationSelected(.scenario(name))) }
+				}
+			} label: {
+				Label("Location", systemImage: "location")
+			}
+
+			Divider()
+
+			ForEach([SimulatorHardwareButton.sideButton, .siri, .volumeUp, .volumeDown, .playPause], id: \.self) { button in
+				Button {
+					store.send(.hardwareButtonTapped(button))
+				} label: {
+					Label(button.title, systemImage: Self.icon(for: button))
+				}
+			}
+		} label: {
+			Image(systemName: "ellipsis.circle")
+				.scaledFont(size: 12)
+				.frame(width: 22, height: 22)
+				.contentShape(Rectangle())
+		}
+		.menuStyle(.borderlessButton)
+		.menuIndicator(.hidden)
+		.fixedSize()
+		.labelStyle(.titleAndIcon)
+		.help("More")
+	}
+
+	private static func icon(for button: SimulatorHardwareButton) -> String {
+		switch button {
+		case .home:
+			"house"
+		case .lock, .sideButton:
+			"lock"
+		case .siri:
+			"mic"
+		case .volumeUp:
+			"speaker.plus"
+		case .volumeDown:
+			"speaker.minus"
+		case .playPause:
+			"playpause"
+		}
+	}
+
 	private func menuTitle(for device: SimulatorDevice) -> String {
 		let booted = device.isBooted ? " — Booted" : ""
 		return "\(device.name) (\(device.runtimeName))\(booted)"
@@ -158,15 +250,15 @@ public struct SimulatorPaneView: View {
 		)
 	}
 
-	private func screenshotBanner(_ url: URL) -> some View {
+	private func noticeBanner(_ notice: SimulatorPaneReducer.Notice) -> some View {
 		BannerView(
-			icon: "camera.fill",
-			title: "Screenshot saved",
-			subtitle: url.lastPathComponent,
+			icon: notice.icon,
+			title: notice.title,
+			subtitle: notice.subtitle,
 			color: .green,
-			actionLabel: "Show in Finder",
-			onAction: { store.send(.showScreenshotInFinderTapped) },
-			onDismiss: { store.send(.screenshotBannerDismissed) }
+			actionLabel: notice.fileURL == nil ? nil : "Show in Finder",
+			onAction: notice.fileURL == nil ? nil : { store.send(.showNoticeFileInFinderTapped) },
+			onDismiss: { store.send(.noticeDismissed) }
 		)
 		.background(.regularMaterial)
 		.clipShape(RoundedRectangle(cornerRadius: 10))

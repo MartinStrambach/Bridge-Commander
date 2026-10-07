@@ -35,8 +35,12 @@ struct SimulatorMCPHandlerTests {
 			record("swipe \(from.x),\(from.y) \(to.x),\(to.y)")
 		}
 		func type(device: SimulatorDevice, text: String) async throws { record("type \(text)") }
-		func press(device: SimulatorDevice, key: SimulatorKeyStroke) async throws { record("key \(key.usage)") }
-		func press(device: SimulatorDevice, button: SimulatorHardwareButton) async throws { record("button \(button.rawValue)") }
+		func press(device: SimulatorDevice, keys: [SimulatorKeyStroke]) async throws {
+			record("keys \(keys.map { String($0.usage) }.joined(separator: ","))")
+		}
+		func press(device: SimulatorDevice, button: SimulatorHardwareButton, holdFor: Duration) async throws {
+			record("button \(button.rawValue) \(holdFor)")
+		}
 		func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode {
 			SimulatorAccessibilityNode(
 				role: "Application",
@@ -94,6 +98,20 @@ struct SimulatorMCPHandlerTests {
 			var rotated = device
 			rotated.rotation = orientation == .portraitUpsideDown ? device.rotation : orientation.screenRotation
 			return rotated
+		}
+
+		func simulateMemoryWarning(device: SimulatorDevice) async throws { record("memory warning") }
+		func setLocation(device: SimulatorDevice, _ command: SimulatorLocationCommand) async throws {
+			record("location \(command)")
+		}
+		func startRecording(device: SimulatorDevice, path: String?) async throws -> URL {
+			record("start recording \(path ?? "default")")
+			return URL(fileURLWithPath: path ?? "/Users/someone/Desktop/Simulator Screen Recording.mov")
+		}
+		var stoppedRecording = SimulatorRecording(url: URL(fileURLWithPath: "/tmp/demo.mov"), duration: .milliseconds(12_340))
+		func stopRecording(udid: String?) async throws -> SimulatorRecording {
+			record("stop recording \(udid ?? "default")")
+			return stoppedRecording
 		}
 
 		private func record(_ call: String) {
@@ -166,6 +184,7 @@ struct SimulatorMCPHandlerTests {
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
 			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element", "list_crashes", "crash_report", "rotate",
+			"set_location", "simulate_memory_warning", "start_recording", "stop_recording",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -460,7 +479,91 @@ struct SimulatorMCPHandlerTests {
 		let shot = try await callForLastText(actions, "screenshot", [:])
 		#expect(shot.text == "iPhone, 874×402 points (landscape).")
 	}
+	@Test
+	func pressKeyTakesASequenceAndChecksItWhole() async throws {
+		let actions = FakeActions()
+		let pressed = try await callText(actions, "press_key", ["keys": ["cmd+a", "delete"], "wait_for_settle": false])
+		#expect(pressed.text == "Pressed cmd+a, delete.")
+		#expect(actions.calls.withLock { $0 } == ["keys 4,42"])
+
+		let typo = try await callText(actions, "press_key", ["keys": ["cmd+a", "nosuchkey"]])
+		#expect(typo.isError)
+		#expect(typo.text == "Unknown key \"nosuchkey\".")
+		#expect(actions.calls.withLock { $0.count } == 1)
+
+		#expect(try await callText(actions, "press_key", ["keys": []]).isError)
+		#expect(try await callText(actions, "press_key", [:]).isError)
+	}
+
+	@Test
+	func pressButtonHoldsForTheDuration() async throws {
+		let actions = FakeActions()
+		_ = try await callText(actions, "press_button", ["button": "side_button", "duration_ms": 1500, "wait_for_settle": false])
+		_ = try await callText(actions, "press_button", ["button": "play_pause", "wait_for_settle": false])
+		#expect(actions.calls.withLock { $0 } == ["button side_button 1.5 seconds", "button play_pause 0.1 seconds"])
+		#expect(try await callText(actions, "press_button", ["button": "apple_pay"]).isError)
+	}
+
+	@Test
+	func setLocationTakesExactlyOneKindOfLocation() async throws {
+		let actions = FakeActions()
+		let point = try await callText(actions, "set_location", ["latitude": .number(50.0755), "longitude": "14.4378"])
+		#expect(point.text == "iPhone is now at 50.075500, 14.437800.")
+
+		let route = try await callText(actions, "set_location", [
+			"waypoints": [["latitude": 1, "longitude": 2], ["latitude": 3, "longitude": 4]],
+			"speed": 5,
+		])
+		#expect(route.text == "iPhone is moving along 2 waypoints at 5 m/s, with an update every second. set_location with clear stops it.")
+
+		let scenario = try await callText(actions, "set_location", ["scenario": "City Run"])
+		#expect(scenario.text == "iPhone is running the \"City Run\" location scenario. set_location with clear stops it.")
+
+		let cleared = try await callText(actions, "set_location", ["clear": "true"])
+		#expect(cleared.text == "Cleared iPhone's simulated location.")
+		#expect(actions.calls.withLock { $0.count } == 4)
+
+		for arguments: JSONValue in [
+			[:],
+			["latitude": 1],
+			["latitude": 1, "longitude": 2, "scenario": "City Run"],
+			["waypoints": [["latitude": 1]]],
+			["clear": false],
+		] {
+			#expect(try await callText(actions, "set_location", arguments).isError, "\(arguments)")
+		}
+		#expect(actions.calls.withLock { $0.count } == 4)
+	}
+
+	@Test
+	func memoryWarningIsSent() async throws {
+		let actions = FakeActions()
+		let sent = try await callText(actions, "simulate_memory_warning", [:])
+		#expect(sent.text == "Sent a memory warning to the apps on iPhone.")
+		#expect(actions.calls.withLock { $0 } == ["memory warning"])
+	}
+
+	@Test
+	func recordingStartsAndStops() async throws {
+		let actions = FakeActions()
+		let activity = OSAllocatedUnfairLock<[SimulatorActivity]>(initialState: [])
+		let started = try await decode(handler(actions, activity: activity).response(to: post([
+			"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+			"params": ["name": "start_recording", "arguments": ["path": "/tmp/flow.mov"]],
+		])))["result"]?["content"]?.firstText
+		#expect(started == "Recording iPhone to /tmp/flow.mov. Call stop_recording to save it; it stops on its own after 10 minutes.")
+		#expect(activity.withLock { $0.map(\.deviceId) } == ["AAAA"])
+
+		let stopped = try await callText(actions, "stop_recording", [:])
+		#expect(stopped.text == "Saved the recording (12.3 seconds) to /tmp/demo.mov.")
+
+		actions.stoppedRecording.endedEarly = "it reached the 10-minute limit"
+		let ended = try await callText(actions, "stop_recording", ["udid": "aaaa"])
+		#expect(ended.text == "The recording had already stopped — it reached the 10-minute limit — and was saved to /tmp/demo.mov (12.3 seconds).")
+		#expect(actions.calls.withLock { $0 } == ["start recording /tmp/flow.mov", "stop recording default", "stop recording aaaa"])
+	}
 }
+
 
 private extension JSONValue {
 	/// The text of a tool result's first content block.

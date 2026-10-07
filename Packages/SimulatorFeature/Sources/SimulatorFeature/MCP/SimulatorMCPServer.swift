@@ -281,12 +281,12 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 		try await host.type(device: device, text: text)
 	}
 
-	func press(device: SimulatorDevice, key: SimulatorKeyStroke) async throws {
-		try await host.press(device: device, key: key)
+	func press(device: SimulatorDevice, keys: [SimulatorKeyStroke]) async throws {
+		try await host.press(device: device, keys: keys)
 	}
 
-	func press(device: SimulatorDevice, button: SimulatorHardwareButton) async throws {
-		try await host.press(device: device, button: button)
+	func press(device: SimulatorDevice, button: SimulatorHardwareButton, holdFor duration: Duration) async throws {
+		try await host.press(device: device, button: button, holdFor: duration)
 	}
 
 	func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode {
@@ -315,5 +315,37 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 
 	func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
 		try await host.rotate(device: device, to: orientation)
+	}
+
+	func simulateMemoryWarning(device: SimulatorDevice) async throws {
+		try host.simulateMemoryWarning(udid: device.id)
+	}
+
+	func setLocation(device: SimulatorDevice, _ command: SimulatorLocationCommand) async throws {
+		try await host.setLocation(udid: device.id, command)
+	}
+
+	func startRecording(device: SimulatorDevice, path: String?) async throws -> URL {
+		let url = try SimulatorScreenRecorder.destination(
+			requested: path,
+			deviceName: device.name,
+			date: .now,
+			defaultFolder: SimulatorScreenshotFile.defaultFolder(),
+			isDirectory: SimulatorScreenshotFile.isDirectory,
+			exists: { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
+		)
+		return try await SimulatorScreenRecorder.shared.start(udid: device.id, deviceName: device.name, to: url)
+	}
+
+	func stopRecording(udid: String?) async throws -> SimulatorRecording {
+		let recorder = SimulatorScreenRecorder.shared
+		let recording = recorder.recordingDeviceIds
+		// The recorder keys by `uuidString`, which is upper case; a model may pass it lower case.
+		let given = udid.map { udid in recording.first { $0.caseInsensitiveCompare(udid) == .orderedSame } ?? udid.uppercased() }
+		guard let target = given ?? (recording.count == 1 ? recording.first : nil) ?? selectedDeviceId else {
+			throw SimulatorError.notRecording("No simulator")
+		}
+		let name = (try? host.devices().first { $0.id.caseInsensitiveCompare(target) == .orderedSame })?.name ?? target
+		return try await recorder.stop(udid: target, deviceName: name)
 	}
 }

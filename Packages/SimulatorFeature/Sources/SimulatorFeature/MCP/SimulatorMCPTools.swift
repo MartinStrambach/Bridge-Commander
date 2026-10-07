@@ -3,7 +3,9 @@ import Foundation
 
 /// The MCP tools: their schemas, and what a call does.
 enum SimulatorMCPTools {
-	static let definitions: [JSONValue] = [
+	static let definitions: [JSONValue] = inputDefinitions + SimulatorFeatureTools.definitions
+
+	private static let inputDefinitions: [JSONValue] = [
 		tool(
 			"list_devices",
 			"List the iOS simulators, booted first, with their UDIDs and screen sizes in points. The one marked [shown] is in Bridge Commander's pane and is what the other tools act on by default.",
@@ -95,19 +97,24 @@ enum SimulatorMCPTools {
 		),
 		tool(
 			"press_key",
-			"Press a key, optionally with modifiers joined by \"+\": e.g. \"return\", \"delete\", \"escape\", \"tab\", \"up\", \"cmd+a\", \"cmd+v\", \"shift+tab\". Named keys: \(SimulatorKeyboardMap.namedKeyList.joined(separator: ", ")); any single character also works.",
-			properties: ["key": ["type": "string", "description": "The key to press."], "udid": optionalUdid, "wait_for_settle": waitForSettleProperty],
-			required: ["key"]
+			"Press a key, or several one after another, each optionally with modifiers joined by \"+\": e.g. \"return\", \"delete\", \"escape\", \"tab\", \"up\", \"cmd+a\", \"cmd+v\", \"shift+tab\". Named keys: \(SimulatorKeyboardMap.namedKeyList.joined(separator: ", ")); any single character also works. Give key for one, keys for a sequence (e.g. [\"cmd+a\", \"delete\"]).",
+			properties: [
+				"key": ["type": "string", "description": "The key to press."],
+				"keys": ["type": "array", "items": ["type": "string"], "description": "Keys to press in order, instead of key."],
+				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
+			]
 		),
 		tool(
 			"press_button",
-			"Press a hardware button. \"home\" goes to the home screen; \"lock\" locks or wakes the device.",
+			"Press a hardware button. \"home\" goes to the home screen; \"lock\" (the same as \"side_button\") locks or wakes the device; \"play_pause\" toggles media playback. Hold one with duration_ms: about 1500 on the side button brings up Siri. There is no Apple Pay button: the simulator's input service has none.",
 			properties: [
 				"button": [
 					"type": "string",
 					"enum": .array(SimulatorHardwareButton.allCases.map { .string($0.rawValue) }),
 					"description": "The button.",
 				],
+				"duration_ms": number("How long to hold it, in milliseconds. Default 100."),
 				"udid": optionalUdid,
 				"wait_for_settle": waitForSettleProperty,
 			],
@@ -293,12 +300,21 @@ enum SimulatorMCPTools {
 
 			case "press_key":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
-				let key = try string(arguments, "key")
-				guard let stroke = SimulatorKeyboardMap.keyStroke(named: key) else {
-					throw SimulatorError.unknownKey(key)
+				let names = try keyNames(arguments)
+				// All parsed before any is pressed, so a typo does not leave a sequence half done.
+				let strokes = try names.map { name in
+					guard let stroke = SimulatorKeyboardMap.keyStroke(named: name) else {
+						throw SimulatorError.unknownKey(name)
+					}
+					return stroke
 				}
-				return text(try await performWaitingForSettle("Pressed \(key).", device: device, arguments: arguments, actions: actions) {
-					try await actions.press(device: device, key: stroke)
+				return text(try await performWaitingForSettle(
+					"Pressed \(names.joined(separator: ", ")).",
+					device: device,
+					arguments: arguments,
+					actions: actions
+				) {
+					try await actions.press(device: device, keys: strokes)
 				})
 
 			case "press_button":
@@ -307,8 +323,14 @@ enum SimulatorMCPTools {
 				guard let button = SimulatorHardwareButton(rawValue: name) else {
 					throw ToolError("Unknown button \"\(name)\".")
 				}
+				let hold = milliseconds(arguments, "duration_ms", default: 100, range: 20...10000)
 				return text(try await performWaitingForSettle("Pressed \(name).", device: device, arguments: arguments, actions: actions) {
-					try await actions.press(device: device, button: button)
+					try await actions.press(device: device, button: button, holdFor: hold)
+				})
+
+			case _ where SimulatorFeatureTools.names.contains(name):
+				return text(try await SimulatorFeatureTools.call(name: name, arguments: arguments, actions: actions) {
+					try await device(for: arguments, actions: actions, reportActivity: reportActivity)
 				})
 
 			case _ where SimulatorElementTools.names.contains(name):
@@ -397,6 +419,30 @@ enum SimulatorMCPTools {
 		return value
 	}
 
+	/// `keys`, or else `key` as a sequence of one.
+	private static func keyNames(_ arguments: JSONValue) throws -> [String] {
+		if case let .array(values)? = arguments["keys"] {
+			let names = values.compactMap(\.stringValue)
+			guard !names.isEmpty, names.count == values.count else {
+				throw ToolError("\"keys\" must be a non-empty array of key names.")
+			}
+			return names
+		}
+		return [try string(arguments, "key")]
+	}
+
+	/// A boolean argument; models occasionally quote booleans, so "true" and "false" count too.
+	static func flag(_ arguments: JSONValue, _ key: String, default value: Bool = false) -> Bool {
+		switch arguments[key] {
+		case let .bool(flag)?:
+			flag
+		case let .string(text)?:
+			value ? text.lowercased() != "false" : text.lowercased() == "true"
+		default:
+			value
+		}
+	}
+
 	private static func number(_ arguments: JSONValue, _ key: String) throws -> Double {
 		guard let value = arguments[key]?.doubleValue, value.isFinite else {
 			throw ToolError("Missing or non-numeric \"\(key)\".")
@@ -419,17 +465,17 @@ enum SimulatorMCPTools {
 		["content": [["type": "text", "text": .string(message)]], "isError": .bool(isError)]
 	}
 
-	private static let optionalUdid = udidProperty("Which simulator. Defaults to the one shown in Bridge Commander, or else a booted one.")
+	static let optionalUdid = udidProperty("Which simulator. Defaults to the one shown in Bridge Commander, or else a booted one.")
 
-	private static func udidProperty(_ description: String) -> JSONValue {
+	static func udidProperty(_ description: String) -> JSONValue {
 		["type": "string", "description": .string(description)]
 	}
 
-	private static func number(_ description: String) -> JSONValue {
+	static func number(_ description: String) -> JSONValue {
 		["type": "number", "description": .string(description)]
 	}
 
-	private static func tool(
+	static func tool(
 		_ name: String,
 		_ description: String,
 		properties: [String: JSONValue],

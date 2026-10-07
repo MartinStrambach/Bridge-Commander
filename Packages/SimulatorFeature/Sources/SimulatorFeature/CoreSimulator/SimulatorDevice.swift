@@ -136,6 +136,11 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 	case unknownKey(String)
 	case accessibilityUnavailable(String)
 	case commandFailed(String)
+	case invalidLocation(String)
+	case memoryWarningUnavailable
+	case alreadyRecording(device: String, path: String)
+	case notRecording(String)
+	case recordingFailed(String)
 
 	public var errorDescription: String? {
 		switch self {
@@ -163,6 +168,16 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 			"The simulator's accessibility tree could not be read: \(detail)"
 		case let .commandFailed(detail):
 			detail
+		case let .invalidLocation(detail):
+			detail
+		case .memoryWarningUnavailable:
+			"This CoreSimulator cannot simulate a memory warning (SimDevice has no simulateMemoryWarning)."
+		case let .alreadyRecording(device, path):
+			"\(device) is already being recorded, to \(path). Stop that recording first."
+		case let .notRecording(device):
+			"\(device) is not being recorded."
+		case let .recordingFailed(detail):
+			"The recording failed: \(detail)"
 		}
 	}
 }

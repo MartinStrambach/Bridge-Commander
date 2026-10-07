@@ -30,8 +30,13 @@ public struct SimulatorPaneReducer {
 		public var isClaudeCodeConnected = true
 		public var isConnectingClaudeCode = false
 		public var isSavingScreenshot = false
-		/// The screenshot just saved, offered in a banner until it times out or is dismissed.
-		public var savedScreenshotURL: URL?
+		/// The devices whose screen is being recorded — from the pane or by Claude.
+		public var recordingDeviceIds: Set<String> = []
+		/// A recording is being started or saved.
+		public var isTogglingRecording = false
+		/// What just happened — a file saved, a memory warning sent — shown in a banner until it
+		/// times out or is dismissed.
+		public var notice: Notice?
 
 		public init() {}
 
@@ -39,9 +44,29 @@ public struct SimulatorPaneReducer {
 			selectedDeviceId.flatMap { id in devices.first { $0.id == id } }
 		}
 
+		public var isRecordingSelectedDevice: Bool {
+			selectedDeviceId.map(recordingDeviceIds.contains) ?? false
+		}
+
 		/// Whether the pane is open beside `repositoryPath`'s terminal.
 		public func isVisible(in repositoryPath: String?) -> Bool {
 			repositoryPath.map(visibleRepositoryPaths.contains) ?? false
+		}
+	}
+
+	/// A banner over the screen saying what an action did.
+	public struct Notice: Equatable, Sendable {
+		public var icon: String
+		public var title: String
+		public var subtitle: String?
+		/// A saved file the banner offers to show in Finder.
+		public var fileURL: URL?
+
+		public init(icon: String, title: String, subtitle: String? = nil, fileURL: URL? = nil) {
+			self.icon = icon
+			self.title = title
+			self.subtitle = subtitle
+			self.fileURL = fileURL
 		}
 	}
 
@@ -60,8 +85,17 @@ public struct SimulatorPaneReducer {
 		case screenshotButtonTapped
 		case screenshotSaved(URL)
 		case screenshotFailed(String)
-		case showScreenshotInFinderTapped
-		case screenshotBannerDismissed
+		case recordButtonTapped
+		case recordingStarted(deviceId: String)
+		case recordingSaved(SimulatorRecording, deviceId: String)
+		case recordingFailed(String)
+		case recordingDeviceIdsChanged(Set<String>)
+		case memoryWarningButtonTapped
+		case locationSelected(SimulatorLocationCommand)
+		/// A feature (memory warning, location) did its thing, or failed with a message.
+		case featureFinished(Notice?, errorMessage: String?)
+		case showNoticeFileInFinderTapped
+		case noticeDismissed
 		case connectClaudeCodeButtonTapped
 		case claudeCodeStatusChecked(Bool)
 		case connectClaudeCodeFinished(errorMessage: String?)
@@ -74,7 +108,8 @@ public struct SimulatorPaneReducer {
 
 	private enum CancelId {
 		case polling
-		case screenshotBanner
+		case recordings
+		case notice
 	}
 
 	@Dependency(SimulatorClient.self)
@@ -84,6 +119,16 @@ public struct SimulatorPaneReducer {
 	private var clock
 
 	public init() {}
+
+	/// Shows `notice` for six seconds, or until dismissed or replaced.
+	private func show(_ notice: Notice, in state: inout State) -> Effect<Action> {
+		state.notice = notice
+		return .run { [clock] send in
+			try await clock.sleep(for: .seconds(6))
+			await send(.noticeDismissed)
+		}
+		.cancellable(id: CancelId.notice, cancelInFlight: true)
+	}
 
 	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -118,7 +163,13 @@ public struct SimulatorPaneReducer {
 							try await clock.sleep(for: .seconds(1.5))
 						}
 					}
-					.cancellable(id: CancelId.polling, cancelInFlight: true)
+					.cancellable(id: CancelId.polling, cancelInFlight: true),
+					.run { [simulatorClient] send in
+						for await ids in simulatorClient.recordingDeviceIds() {
+							await send(.recordingDeviceIdsChanged(ids))
+						}
+					}
+					.cancellable(id: CancelId.recordings, cancelInFlight: true)
 				)
 
 			case let .devicesLoaded(devices, storedSelection):
@@ -241,31 +292,117 @@ public struct SimulatorPaneReducer {
 
 			case let .screenshotSaved(url):
 				state.isSavingScreenshot = false
-				state.savedScreenshotURL = url
-				return .run { [clock] send in
-					try await clock.sleep(for: .seconds(6))
-					await send(.screenshotBannerDismissed)
-				}
-				.cancellable(id: CancelId.screenshotBanner, cancelInFlight: true)
+				return show(Notice(icon: "camera.fill", title: "Screenshot saved", subtitle: url.lastPathComponent, fileURL: url), in: &state)
 
 			case let .screenshotFailed(message):
 				state.isSavingScreenshot = false
 				state.errorMessage = "Could not save the screenshot: \(message)"
 				return .none
 
-			case .showScreenshotInFinderTapped:
-				guard let url = state.savedScreenshotURL else {
+			case .recordButtonTapped:
+				guard let device = state.selectedDevice, !state.isTogglingRecording else {
 					return .none
 				}
-				state.savedScreenshotURL = nil
+				// Stopping works on a device that shut down meanwhile; starting needs it booted.
+				let isRecording = state.isRecordingSelectedDevice
+				guard isRecording || device.isBooted else {
+					return .none
+				}
+				state.isTogglingRecording = true
+				state.errorMessage = nil
+				return .run { [simulatorClient] send in
+					do {
+						if isRecording {
+							try await send(.recordingSaved(simulatorClient.stopRecording(device), deviceId: device.id))
+						}
+						else {
+							try await simulatorClient.startRecording(device)
+							await send(.recordingStarted(deviceId: device.id))
+						}
+					}
+					catch {
+						await send(.recordingFailed(error.localizedDescription))
+					}
+				}
+
+			case let .recordingStarted(deviceId):
+				state.isTogglingRecording = false
+				state.recordingDeviceIds.insert(deviceId)
+				return .none
+
+			case let .recordingSaved(recording, deviceId):
+				state.isTogglingRecording = false
+				state.recordingDeviceIds.remove(deviceId)
+				let title = recording.endedEarly == nil ? "Recording saved" : "Recording had already stopped"
+				return show(Notice(icon: "record.circle", title: title, subtitle: recording.url.lastPathComponent, fileURL: recording.url), in: &state)
+
+			case let .recordingFailed(message):
+				state.isTogglingRecording = false
+				state.errorMessage = message
+				return .none
+
+			case let .recordingDeviceIdsChanged(ids):
+				state.recordingDeviceIds = ids
+				return .none
+
+			case .memoryWarningButtonTapped:
+				guard let device = state.selectedDevice, device.isBooted else {
+					return .none
+				}
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.simulateMemoryWarning(device.id)
+						await send(.featureFinished(Notice(icon: "memorychip", title: "Memory warning sent"), errorMessage: nil))
+					}
+					catch {
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
+					}
+				}
+
+			case let .locationSelected(command):
+				guard let device = state.selectedDevice, device.isBooted else {
+					return .none
+				}
+				let title = switch command {
+				case .clear:
+					"Simulated location cleared"
+				case let .scenario(name):
+					"Location: \(name)"
+				case let .set(coordinate):
+					SimulatorLocationCommand.places.first { $0.coordinate == coordinate }.map { "Location: \($0.name)" } ?? "Location set"
+				case .route:
+					"Location set"
+				}
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.setLocation(device.id, command)
+						await send(.featureFinished(Notice(icon: "location.fill", title: title), errorMessage: nil))
+					}
+					catch {
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
+					}
+				}
+
+			case let .featureFinished(notice, errorMessage):
+				state.errorMessage = errorMessage
+				guard let notice else {
+					return .none
+				}
+				return show(notice, in: &state)
+
+			case .showNoticeFileInFinderTapped:
+				guard let url = state.notice?.fileURL else {
+					return .none
+				}
+				state.notice = nil
 				return .merge(
-					.cancel(id: CancelId.screenshotBanner),
+					.cancel(id: CancelId.notice),
 					.run { [simulatorClient] _ in await simulatorClient.revealInFinder(url) }
 				)
 
-			case .screenshotBannerDismissed:
-				state.savedScreenshotURL = nil
-				return .cancel(id: CancelId.screenshotBanner)
+			case .noticeDismissed:
+				state.notice = nil
+				return .cancel(id: CancelId.notice)
 
 			case .connectClaudeCodeButtonTapped:
 				state.isConnectingClaudeCode = true
