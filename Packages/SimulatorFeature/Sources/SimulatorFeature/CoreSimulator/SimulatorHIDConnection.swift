@@ -155,13 +155,20 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 
 	// MARK: - Sending
 
-	/// A single-finger contact. `point` is normalized, top-left origin.
-	func touch(_ point: CGPoint, phase: SimulatorTouchPhase) {
+	/// A single-finger contact, or two fingers when `second` is given (a pinch, a rotation, a
+	/// two-finger drag): `dtuhidd` takes the second contact as `pointTwo` of the same event. Points
+	/// are normalized, top-left origin. A gesture keeps one finger count from began to ended.
+	func touch(_ point: CGPoint, _ second: CGPoint? = nil, phase: SimulatorTouchPhase) {
 		let payload = xpc_dictionary_create(nil, nil, 0)
-		let contact = xpc_dictionary_create(nil, nil, 0)
-		xpc_dictionary_set_double(contact, "x", point.x)
-		xpc_dictionary_set_double(contact, "y", point.y)
-		xpc_dictionary_set_value(payload, "pointOne", contact)
+		for (key, contactPoint) in [("pointOne", point), ("pointTwo", second)] {
+			guard let contactPoint else {
+				continue
+			}
+			let contact = xpc_dictionary_create(nil, nil, 0)
+			xpc_dictionary_set_double(contact, "x", contactPoint.x)
+			xpc_dictionary_set_double(contact, "y", contactPoint.y)
+			xpc_dictionary_set_value(payload, key, contact)
+		}
 		xpc_dictionary_set_uint64(payload, "eventType", phase.rawValue)
 		xpc_dictionary_set_uint64(payload, "edge", 0)
 		xpc_dictionary_set_uint64(payload, "target", 0)

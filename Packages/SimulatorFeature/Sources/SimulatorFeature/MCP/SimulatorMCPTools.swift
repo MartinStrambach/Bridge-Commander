@@ -23,6 +23,16 @@ enum SimulatorMCPTools {
 			readOnly: true
 		),
 		tool(
+			"describe_ui",
+			"List the frontmost app's accessibility elements — role, label, value, identifier and frame in points — as an indented tree. Faster and more exact than reading a screenshot for finding what to tap: tap the centre of an element's frame. With x and y, describes just the element at that point.",
+			properties: [
+				"x": number("Optional: describe only the element at this x, in points."),
+				"y": number("Optional: describe only the element at this y, in points."),
+				"udid": optionalUdid,
+			],
+			readOnly: true
+		),
+		tool(
 			"tap",
 			"Tap the screen at (x, y) in points, origin top left. Give duration_ms for a long press.",
 			properties: [
@@ -42,6 +52,33 @@ enum SimulatorMCPTools {
 				"to_x": number("End x in points."),
 				"to_y": number("End y in points."),
 				"duration_ms": number("How long the drag takes, in milliseconds. Default 300; shorter flings further."),
+				"udid": optionalUdid,
+			],
+			required: ["from_x", "from_y", "to_x", "to_y"]
+		),
+		tool(
+			"pinch",
+			"Two-finger pinch about (x, y) in points: scale above 1 spreads the fingers (zoom in), below 1 closes them (zoom out). rotation_degrees turns the fingers as they move, clockwise, for rotate gestures (use scale 1 to only rotate).",
+			properties: [
+				"x": number("Centre x in points."),
+				"y": number("Centre y in points."),
+				"scale": number("How far the fingers spread: 2 doubles their distance, 0.5 halves it."),
+				"rotation_degrees": number("Optional rotation, clockwise. Default 0."),
+				"duration_ms": number("How long the gesture takes, in milliseconds. Default 400."),
+				"udid": optionalUdid,
+			],
+			required: ["x", "y", "scale"]
+		),
+		tool(
+			"two_finger_drag",
+			"Drag two fingers side by side from one point to another, in points — for gestures that need two fingers, such as tilting a map or two-finger scrolling.",
+			properties: [
+				"from_x": number("Start x in points (midway between the fingers)."),
+				"from_y": number("Start y in points."),
+				"to_x": number("End x in points."),
+				"to_y": number("End y in points."),
+				"spacing": number("Distance between the fingers in points. Default 40."),
+				"duration_ms": number("How long the drag takes, in milliseconds. Default 400."),
 				"udid": optionalUdid,
 			],
 			required: ["from_x", "from_y", "to_x", "to_y"]
@@ -106,6 +143,43 @@ enum SimulatorMCPTools {
 						["type": "text", "text": .string("\(device.name), \(Int(size.width))×\(Int(size.height)) points.")],
 					],
 				]
+
+			case "describe_ui":
+				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				if let x = arguments["x"]?.doubleValue, let y = arguments["y"]?.doubleValue {
+					guard let element = try await actions.accessibilityElement(device: device, at: CGPoint(x: x, y: y)) else {
+						return text("No accessibility element at (\(format(x)), \(format(y))).")
+					}
+					return text(SimulatorAccessibilityFormatter.describe(element: element))
+				}
+				return text(SimulatorAccessibilityFormatter.describe(tree: try await actions.accessibilityTree(device: device)))
+
+			case "pinch":
+				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				let center = try CGPoint(x: number(arguments, "x"), y: number(arguments, "y"))
+				let scale = try number(arguments, "scale")
+				guard scale > 0 else {
+					throw ToolError("\"scale\" must be greater than 0.")
+				}
+				let rotation = arguments["rotation_degrees"]?.doubleValue ?? 0
+				let fingers = SimulatorHost.pinchFingers(center: center, scale: scale, rotationDegrees: rotation)
+				let duration = milliseconds(arguments, "duration_ms", default: 400, range: 100...5000)
+				try await actions.twoFingerGesture(device: device, from: fingers.start, to: fingers.end, duration: duration)
+				return text("Pinched about (\(format(center.x)), \(format(center.y))) by \(format(scale))×\(rotation == 0 ? "" : ", rotating \(format(rotation))°").")
+
+			case "two_finger_drag":
+				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				let from = try CGPoint(x: number(arguments, "from_x"), y: number(arguments, "from_y"))
+				let to = try CGPoint(x: number(arguments, "to_x"), y: number(arguments, "to_y"))
+				let half = min(max(arguments["spacing"]?.doubleValue ?? 40, 10), 200) / 2
+				let duration = milliseconds(arguments, "duration_ms", default: 400, range: 50...5000)
+				try await actions.twoFingerGesture(
+					device: device,
+					from: FingerPair(CGPoint(x: from.x - half, y: from.y), CGPoint(x: from.x + half, y: from.y)),
+					to: FingerPair(CGPoint(x: to.x - half, y: to.y), CGPoint(x: to.x + half, y: to.y)),
+					duration: duration
+				)
+				return text("Dragged two fingers from (\(format(from.x)), \(format(from.y))) to (\(format(to.x)), \(format(to.y))).")
 
 			case "tap":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)

@@ -37,6 +37,20 @@ struct SimulatorMCPHandlerTests {
 		func type(device: SimulatorDevice, text: String) async throws { record("type \(text)") }
 		func press(device: SimulatorDevice, key: SimulatorKeyStroke) async throws { record("key \(key.usage)") }
 		func press(device: SimulatorDevice, button: SimulatorHardwareButton) async throws { record("button \(button.rawValue)") }
+		func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode {
+			SimulatorAccessibilityNode(
+				role: "Application",
+				label: "Demo",
+				frame: CGRect(x: 0, y: 0, width: 402, height: 874),
+				children: [SimulatorAccessibilityNode(role: "Button", label: "Go", frame: CGRect(x: 10, y: 20, width: 30, height: 40))]
+			)
+		}
+		func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode? {
+			point.x < 50 ? SimulatorAccessibilityNode(role: "Button", label: "Go", frame: CGRect(x: 10, y: 20, width: 30, height: 40)) : nil
+		}
+		func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
+			record("two \(from.first.x),\(from.second.x) -> \(to.first.x),\(to.second.x)")
+		}
 
 		private func record(_ call: String) {
 			calls.withLock { $0.append(call) }
@@ -105,7 +119,10 @@ struct SimulatorMCPHandlerTests {
 			return
 		}
 		let names = tools.compactMap { $0["name"]?.stringValue }
-		#expect(names == ["list_devices", "select_device", "screenshot", "tap", "swipe", "type_text", "press_key", "press_button"])
+		#expect(names == [
+			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
+			"type_text", "press_key", "press_button",
+		])
 		#expect(try decode(response)["id"] == "x")
 	}
 
@@ -168,5 +185,36 @@ struct SimulatorMCPHandlerTests {
 		let request = HTTPRequest(method: "POST", path: "/mcp", headers: [:], body: Data("{nope".utf8))
 		let response = await handler(FakeActions()).response(to: request)
 		#expect(response.status == 400)
+	}
+
+	@Test
+	func describeUIListsTheTreeOrTheElementAtAPoint() async throws {
+		func call(_ arguments: JSONValue) async throws -> String? {
+			let response = await handler(FakeActions()).response(to: try post([
+				"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": ["name": "describe_ui", "arguments": arguments],
+			]))
+			guard case let .array(content)? = try decode(response)["result"]?["content"] else {
+				return nil
+			}
+			return content.first?["text"]?.stringValue
+		}
+
+		let tree = try await call([:])
+		#expect(tree?.contains("  Button \"Go\" frame=(10,20,30,40)") == true)
+		#expect(try await call(["x": 20, "y": 30]) == "Button \"Go\" frame=(10,20,30,40)")
+		#expect(try await call(["x": 300, "y": 30]) == "No accessibility element at (300, 30).")
+	}
+
+	@Test
+	func pinchAndTwoFingerDragDriveTwoFingers() async throws {
+		let actions = FakeActions()
+		_ = await handler(actions).response(to: try post([
+			"jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": ["name": "pinch", "arguments": ["x": 200, "y": 400, "scale": 2]],
+		]))
+		_ = await handler(actions).response(to: try post([
+			"jsonrpc": "2.0", "id": 9, "method": "tools/call",
+			"params": ["name": "two_finger_drag", "arguments": ["from_x": 100, "from_y": 500, "to_x": 100, "to_y": 300]],
+		]))
+		#expect(actions.calls.withLock { $0 } == ["two 170.0,230.0 -> 140.0,260.0", "two 80.0,120.0 -> 80.0,120.0"])
 	}
 }

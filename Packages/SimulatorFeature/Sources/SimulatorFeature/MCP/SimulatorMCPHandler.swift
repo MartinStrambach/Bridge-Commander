@@ -13,6 +13,9 @@ protocol SimulatorToolActions: Sendable {
 	func type(device: SimulatorDevice, text: String) async throws
 	func press(device: SimulatorDevice, key: SimulatorKeyStroke) async throws
 	func press(device: SimulatorDevice, button: SimulatorHardwareButton) async throws
+	func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode
+	func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode?
+	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.
@@ -91,9 +94,10 @@ struct SimulatorMCPHandler: Sendable {
 	Drives the iOS Simulator shown in Bridge Commander, beside the terminal you run in. Build and \
 	install with xcodebuild and `xcrun simctl install`/`launch` as usual; use these tools to look \
 	at the running app and interact with it. Coordinates are in points with the origin at the top \
-	left — the same size as the screenshot image. Take a screenshot before tapping, and again \
-	after an action to check its effect; apps take a moment to respond, so if the screen has not \
-	changed yet, take another.
+	left — the same size as the screenshot image. describe_ui lists the screen's elements with \
+	their frames: prefer it for finding what to tap, and screenshots for how things look. Check \
+	the effect of an action afterwards; apps take a moment to respond, so if the screen has not \
+	changed yet, look again.
 	"""
 
 	private static func result(id: JSONValue, _ result: JSONValue) -> JSONValue {

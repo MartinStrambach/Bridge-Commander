@@ -103,6 +103,7 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 	case pointOutsideScreen(x: Double, y: Double, width: Double, height: Double)
 	case untypeableText(String)
 	case unknownKey(String)
+	case accessibilityUnavailable(String)
 	case commandFailed(String)
 
 	public var errorDescription: String? {
@@ -127,6 +128,8 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 			"These characters cannot be typed on the simulated US keyboard: \(characters). Put the text on the simulator's pasteboard with `xcrun simctl pbcopy <udid>` and press cmd+v instead."
 		case let .unknownKey(key):
 			"Unknown key \"\(key)\"."
+		case let .accessibilityUnavailable(detail):
+			"The simulator's accessibility tree could not be read: \(detail)"
 		case let .commandFailed(detail):
 			detail
 		}

@@ -12,6 +12,11 @@ nonisolated enum ObjCRuntime {
 	/// `RTLD_DEFAULT`, which the Swift overlay does not import.
 	nonisolated(unsafe) static let defaultHandle = UnsafeMutableRawPointer(bitPattern: -2)
 
+	/// `objc_msgSend`, for call shapes too specific to wrap here.
+	static var messageSendFunction: UnsafeMutableRawPointer {
+		messageSend
+	}
+
 	nonisolated(unsafe) private static let messageSend: UnsafeMutableRawPointer = {
 		guard let symbol = dlsym(defaultHandle, "objc_msgSend") else {
 			fatalError("objc_msgSend is missing from the process")
@@ -55,6 +60,18 @@ nonisolated enum ObjCRuntime {
 		typealias Function = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSError?>) -> Unmanaged<AnyObject>?
 		return unsafeBitCast(messageSend, to: Function.self)(target, sel_registerName(selector), &error)?
 			.takeUnretainedValue()
+	}
+
+	/// Sends a message with one object argument that returns nothing. Never use `object(_:_:_:)`
+	/// for a `void` method: Swift would retain whatever happens to be in the return register.
+	static func send(_ target: AnyObject, _ selector: String, _ argument: AnyObject?) {
+		typealias Function = @convention(c) (AnyObject, Selector, AnyObject?) -> Void
+		unsafeBitCast(messageSend, to: Function.self)(target, sel_registerName(selector), argument)
+	}
+
+	static func setBool(_ target: AnyObject, _ selector: String, _ value: Bool) {
+		typealias Function = @convention(c) (AnyObject, Selector, Bool) -> Void
+		unsafeBitCast(messageSend, to: Function.self)(target, sel_registerName(selector), value)
 	}
 
 	static func unsignedInteger(_ target: AnyObject, _ selector: String) -> UInt {

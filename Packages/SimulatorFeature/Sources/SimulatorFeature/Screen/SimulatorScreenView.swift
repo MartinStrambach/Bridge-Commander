@@ -30,7 +30,6 @@ final class SimulatorScreenView: NSView {
 	private var isRefreshScheduled = false
 	/// Touches and keys run one after another, in the order the events came, on this chain.
 	private var inputChain: Task<Void, Never>?
-	private var isTouching = false
 	private var scrollPoint: CGPoint?
 
 	override init(frame frameRect: NSRect) {
@@ -187,28 +186,251 @@ final class SimulatorScreenView: NSView {
 		enqueue { try await host.touch(udid: deviceId, at: point, phase: phase) }
 	}
 
+	private func touch(_ fingers: FingerPair, phase: Int) {
+		guard let deviceId else {
+			return
+		}
+		let host = host
+		enqueue { try await host.twoFingerTouch(udid: deviceId, fingers: fingers, phase: phase) }
+		showIndicators(phase == 2 ? nil : fingers)
+	}
+
+	// MARK: - Mouse
+
+	/// What a mouse press is driving: one finger, or two the way Simulator.app does it — with ⌥ the
+	/// second finger mirrors the pointer across the screen's centre (pinch, rotate), with ⌥⇧ it
+	/// keeps its offset and both move together (two-finger drag).
+	private enum MouseContact {
+		case oneFinger
+		case mirrored
+		case parallel(offset: CGPoint)
+	}
+
+	private var mouseContact: MouseContact?
+
+	private static func mirrored(_ point: CGPoint) -> CGPoint {
+		CGPoint(x: 1 - point.x, y: 1 - point.y)
+	}
+
+	private func fingers(for point: CGPoint, contact: MouseContact) -> FingerPair? {
+		switch contact {
+		case .oneFinger:
+			nil
+		case .mirrored:
+			FingerPair(point, Self.mirrored(point))
+		case let .parallel(offset):
+			FingerPair(point, CGPoint(x: min(max(point.x + offset.x, 0), 1), y: min(max(point.y + offset.y, 0), 1)))
+		}
+	}
+
 	override func mouseDown(with event: NSEvent) {
 		window?.makeFirstResponder(self)
 		guard let point = normalized(convert(event.locationInWindow, from: nil), clamped: false) else {
 			return
 		}
-		isTouching = true
-		touch(point, phase: 0)
+
+		let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+		let contact: MouseContact = if !flags.contains(.option) {
+			.oneFinger
+		}
+		else if flags.contains(.shift) {
+			.parallel(offset: CGPoint(x: Self.mirrored(point).x - point.x, y: Self.mirrored(point).y - point.y))
+		}
+		else {
+			.mirrored
+		}
+		mouseContact = contact
+		if let fingers = fingers(for: point, contact: contact) {
+			touch(fingers, phase: 0)
+		}
+		else {
+			touch(point, phase: 0)
+		}
 	}
 
 	override func mouseDragged(with event: NSEvent) {
-		guard isTouching, let point = normalized(convert(event.locationInWindow, from: nil), clamped: true) else {
+		guard let contact = mouseContact, let point = normalized(convert(event.locationInWindow, from: nil), clamped: true) else {
 			return
 		}
-		touch(point, phase: 1)
+		if let fingers = fingers(for: point, contact: contact) {
+			touch(fingers, phase: 1)
+		}
+		else {
+			touch(point, phase: 1)
+		}
 	}
 
 	override func mouseUp(with event: NSEvent) {
-		guard isTouching, let point = normalized(convert(event.locationInWindow, from: nil), clamped: true) else {
+		guard let contact = mouseContact, let point = normalized(convert(event.locationInWindow, from: nil), clamped: true) else {
 			return
 		}
-		isTouching = false
-		touch(point, phase: 2)
+		mouseContact = nil
+		if let fingers = fingers(for: point, contact: contact) {
+			touch(fingers, phase: 2)
+		}
+		else {
+			touch(point, phase: 2)
+		}
+		updateHoverIndicators(modifierFlags: event.modifierFlags)
+	}
+
+	// MARK: - Trackpad pinch and rotate
+
+	/// A trackpad pinch or rotation becomes the same two-finger gesture on the device, centred on
+	/// the pointer. Both can run at once (pinch while turning), so they share one contact that
+	/// lifts when the last of them ends.
+	private struct TrackpadGesture {
+		var center: CGPoint
+		var scale: CGFloat = 1
+		var rotationDegrees: CGFloat = 0
+		var active: Set<String> = []
+	}
+
+	private var trackpadGesture: TrackpadGesture?
+	/// Half the fingers' spacing at the start of a trackpad gesture, in view points.
+	private static let trackpadFingerRadius: CGFloat = 40
+
+	private func trackpadFingers(_ gesture: TrackpadGesture) -> FingerPair? {
+		let rect = imageRect
+		guard rect.width > 0, rect.height > 0 else {
+			return nil
+		}
+		// The view is flipped, so the trackpad's counter-clockwise turn is a negative angle here.
+		let angle = -gesture.rotationDegrees * .pi / 180
+		let radius = Self.trackpadFingerRadius * max(gesture.scale, 0.1)
+		let dx = radius * cos(angle) / rect.width
+		let dy = radius * sin(angle) / rect.height
+		func clamp(_ point: CGPoint) -> CGPoint {
+			CGPoint(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1))
+		}
+		return FingerPair(
+			clamp(CGPoint(x: gesture.center.x - dx, y: gesture.center.y - dy)),
+			clamp(CGPoint(x: gesture.center.x + dx, y: gesture.center.y + dy))
+		)
+	}
+
+	private func trackpadGesture(_ name: String, event: NSEvent, update: (inout TrackpadGesture) -> Void) {
+		switch event.phase {
+		case .began:
+			if trackpadGesture == nil {
+				guard let center = normalized(convert(event.locationInWindow, from: nil), clamped: false) else {
+					return
+				}
+				let gesture = TrackpadGesture(center: center)
+				trackpadGesture = gesture
+				if let fingers = trackpadFingers(gesture) {
+					touch(fingers, phase: 0)
+				}
+			}
+			trackpadGesture?.active.insert(name)
+		case .changed:
+			guard var gesture = trackpadGesture else {
+				return
+			}
+			update(&gesture)
+			trackpadGesture = gesture
+			if let fingers = trackpadFingers(gesture) {
+				touch(fingers, phase: 1)
+			}
+		case .ended, .cancelled:
+			guard var gesture = trackpadGesture else {
+				return
+			}
+			gesture.active.remove(name)
+			if gesture.active.isEmpty {
+				trackpadGesture = nil
+				if let fingers = trackpadFingers(gesture) {
+					touch(fingers, phase: 2)
+				}
+			}
+			else {
+				trackpadGesture = gesture
+			}
+		default:
+			break
+		}
+	}
+
+	override func magnify(with event: NSEvent) {
+		trackpadGesture("magnify", event: event) { $0.scale = max($0.scale * (1 + event.magnification), 0.1) }
+	}
+
+	override func rotate(with event: NSEvent) {
+		trackpadGesture("rotate", event: event) { $0.rotationDegrees += CGFloat(event.rotation) }
+	}
+
+	// MARK: - Finger indicators
+
+	/// Two dots where the fingers are — while ⌥ is held over the screen, before and during a
+	/// two-finger gesture — as Simulator.app draws them.
+	private lazy var indicatorLayers: [CAShapeLayer] = (0..<2).map { _ in
+		let layer = CAShapeLayer()
+		let diameter: CGFloat = 22
+		layer.path = CGPath(ellipseIn: CGRect(x: -diameter / 2, y: -diameter / 2, width: diameter, height: diameter), transform: nil)
+		layer.fillColor = NSColor.white.withAlphaComponent(0.45).cgColor
+		layer.strokeColor = NSColor.black.withAlphaComponent(0.35).cgColor
+		layer.lineWidth = 1
+		layer.isHidden = true
+		self.layer?.addSublayer(layer)
+		return layer
+	}
+
+	private func showIndicators(_ fingers: FingerPair?) {
+		let rect = imageRect
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		for (layer, point) in zip(indicatorLayers, [fingers?.first, fingers?.second]) {
+			if let point {
+				layer.position = CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height)
+				layer.isHidden = false
+			}
+			else {
+				layer.isHidden = true
+			}
+		}
+		CATransaction.commit()
+	}
+
+	private func updateHoverIndicators(modifierFlags: NSEvent.ModifierFlags) {
+		guard mouseContact == nil, trackpadGesture == nil else {
+			return
+		}
+		guard
+			modifierFlags.contains(.option),
+			let window,
+			let point = normalized(convert(window.mouseLocationOutsideOfEventStream, from: nil), clamped: false)
+		else {
+			showIndicators(nil)
+			return
+		}
+		showIndicators(FingerPair(point, Self.mirrored(point)))
+	}
+
+	override func updateTrackingAreas() {
+		super.updateTrackingAreas()
+		for area in trackingAreas {
+			removeTrackingArea(area)
+		}
+		addTrackingArea(NSTrackingArea(
+			rect: .zero,
+			options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+			owner: self
+		))
+	}
+
+	override func mouseMoved(with event: NSEvent) {
+		updateHoverIndicators(modifierFlags: event.modifierFlags)
+	}
+
+	override func mouseExited(with event: NSEvent) {
+		if mouseContact == nil, trackpadGesture == nil {
+			showIndicators(nil)
+		}
+	}
+
+	override func flagsChanged(with event: NSEvent) {
+		super.flagsChanged(with: event)
+		updateHoverIndicators(modifierFlags: event.modifierFlags)
 	}
 
 	/// A two-finger trackpad scroll drags a finger across the screen, so lists scroll the way they
@@ -335,7 +557,7 @@ private final class ScreenAttachment: @unchecked Sendable {
 			isStopped = true
 			if let screen = screen?.object,
 			   ObjCRuntime.responds(screen, to: "unregisterScreenCallbacksWithUUID:") {
-				_ = ObjCRuntime.object(screen, "unregisterScreenCallbacksWithUUID:", token as NSUUID)
+				ObjCRuntime.send(screen, "unregisterScreenCallbacksWithUUID:", token as NSUUID)
 			}
 			screen = nil
 		}

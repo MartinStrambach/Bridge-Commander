@@ -269,4 +269,16 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	func press(device: SimulatorDevice, button: SimulatorHardwareButton) async throws {
 		try await host.press(device: device, button: button)
 	}
+
+	func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode {
+		try await host.accessibilityTree(device: device)
+	}
+
+	func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode? {
+		try await host.accessibilityElement(device: device, at: point)
+	}
+
+	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
+		try await host.twoFingerGesture(device: device, from: from, to: to, duration: duration)
+	}
 }

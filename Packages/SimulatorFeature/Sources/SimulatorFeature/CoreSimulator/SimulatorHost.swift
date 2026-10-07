@@ -142,7 +142,7 @@ public final class SimulatorHost: @unchecked Sendable {
 		)
 	}
 
-	private func simDevice(udid: String) throws -> AnyObject {
+	func simDevice(udid: String) throws -> AnyObject {
 		let set = try deviceSet()
 		let simDevices = ObjCRuntime.object(set, "devices") as? [AnyObject] ?? []
 		guard
@@ -281,7 +281,7 @@ public final class SimulatorHost: @unchecked Sendable {
 
 	// MARK: - Input
 
-	private func hidConnection(udid: String) async throws -> SimulatorHIDConnection {
+	func hidConnection(udid: String) async throws -> SimulatorHIDConnection {
 		guard let version = Self.coreSimulatorVersion else {
 			try Self.frameworkLoad.get()
 			throw SimulatorError.frameworkUnavailable("unknown CoreSimulator version")
@@ -412,11 +412,11 @@ public final class SimulatorHost: @unchecked Sendable {
 
 	/// Sends are fire-and-forget; give the daemon time to deliver them before reporting done, so a
 	/// screenshot taken right after a tap sees its effect begin.
-	private func drain() async throws {
+	func drain() async throws {
 		try await Task.sleep(for: .milliseconds(100))
 	}
 
-	private func normalized(device: SimulatorDevice, x: Double, y: Double) throws -> CGPoint {
+	func normalized(device: SimulatorDevice, x: Double, y: Double) throws -> CGPoint {
 		guard let point = device.normalizedPoint(x: x, y: y) else {
 			let size = device.screenPointSize
 			throw SimulatorError.pointOutsideScreen(x: x, y: y, width: size.width, height: size.height)
