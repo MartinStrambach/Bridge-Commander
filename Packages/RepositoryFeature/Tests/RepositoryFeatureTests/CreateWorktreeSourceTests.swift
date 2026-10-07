@@ -155,6 +155,27 @@ struct CreateWorktreeSourceTests {
 		))
 	}
 
+	@Test("a PR from a fork is fetched from the ref origin keeps it under")
+	func forkPullRequestFetchesItsHeadRef() {
+		let pullRequest = OpenPullRequest(
+			number: 96, title: "Resizable sidebar", sourceBranch: "feat/sidebar", author: "lm",
+			url: "https://github.com/o/r/pull/96", isDraft: false, provider: .github,
+			isFromFork: true, forkOwner: "lm"
+		)
+		var state = makeState(youtrack: false)
+		state.source = .pullRequest
+		state.pullRequests = [pullRequest]
+		state.selectedPullRequestNumber = 96
+
+		#expect(state.canCreate)
+		#expect(CreateWorktreeButtonReducer().creationRequest(from: state) == .init(
+			branchName: "feat/sidebar",
+			baseBranch: "feat/sidebar",
+			createNewBranch: false,
+			fork: .init(headRef: "refs/pull/96/head", branchCandidates: ["feat/sidebar", "lm/feat/sidebar"])
+		))
+	}
+
 	@Test("a missing token says where to add one")
 	func pullRequestTokenMissing() async {
 		let state = makeState(youtrack: false)

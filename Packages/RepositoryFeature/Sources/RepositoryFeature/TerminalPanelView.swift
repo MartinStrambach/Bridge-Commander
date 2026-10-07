@@ -136,7 +136,7 @@ struct TerminalPanelView: View {
 			if let rowStore = activeRowStore {
 				if let ticketId = rowStore.ticketId {
 					Text(ticketId)
-						.font(.caption)
+						.scaledFont(.caption)
 						.fontWeight(.medium)
 						.foregroundStyle(.secondary)
 						.padding(.horizontal, 5)
@@ -146,7 +146,7 @@ struct TerminalPanelView: View {
 				}
 
 				Text(rowStore.formattedBranchName)
-					.font(.subheadline)
+					.scaledFont(.subheadline)
 					.fontWeight(.semibold)
 					.lineLimit(1)
 
@@ -154,7 +154,7 @@ struct TerminalPanelView: View {
 					.foregroundColor(.secondary)
 
 				Text(rowStore.name)
-					.font(.subheadline)
+					.scaledFont(.subheadline)
 					.foregroundColor(.secondary)
 					.lineLimit(1)
 			}
@@ -188,7 +188,7 @@ struct TerminalPanelView: View {
 						Text("Push (\(rowStore.unpushedCommitCount))")
 					}
 				}
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 				.controlSize(.small)
 				.tint(.orange)
 				.disabled(store.isPushing)
@@ -270,7 +270,7 @@ struct TerminalPanelView: View {
 //						store.send(.stagingButtonTapped(repositoryPath: path))
 //					}
 //				}
-//				.buttonStyle(.bordered)
+//				.buttonStyle(.scaledBordered)
 //				.controlSize(.small)
 //			}
 			
@@ -282,7 +282,7 @@ struct TerminalPanelView: View {
 					))
 				}
 			}
-			.buttonStyle(.bordered)
+			.buttonStyle(.scaledBordered)
 			.controlSize(.small)
 			.help("Show commit graph")
 
@@ -294,13 +294,13 @@ struct TerminalPanelView: View {
 					))
 				}
 			}
-			.buttonStyle(.bordered)
+			.buttonStyle(.scaledBordered)
 			.controlSize(.small)
 
 			Button("← Hide") {
 				store.send(.hideTerminalMode)
 			}
-			.buttonStyle(.bordered)
+			.buttonStyle(.scaledBordered)
 			.controlSize(.small)
 		}
 		.padding(.horizontal, 12)
@@ -344,7 +344,7 @@ struct TerminalPanelView: View {
 
 				Button(action: onNewTab) {
 					Image(systemName: "plus")
-						.font(.system(size: 11))
+						.scaledFont(size: 11)
 						.padding(.horizontal, 6)
 						.padding(.vertical, 4)
 						.contentShape(Rectangle())
@@ -533,13 +533,13 @@ struct TerminalPanelView: View {
 		let isActive = session.id == activeSessionId
 		return HStack(spacing: 4) {
 			Text("Terminal \(session.tabIndex)")
-				.font(.caption)
+				.scaledFont(.caption)
 				.fontWeight(isActive ? .semibold : .regular)
 
 			if totalCount > 1 {
 				Button(action: { onKillTab(session.id) }) {
 					Image(systemName: "xmark")
-						.font(.system(size: 8))
+						.scaledFont(size: 8)
 						.padding(4)
 						.contentShape(Rectangle())
 				}
@@ -569,17 +569,17 @@ struct TerminalPanelView: View {
 	private func terminalErrorView(message: String, sessionId: UUID) -> some View {
 		VStack(spacing: 16) {
 			Image(systemName: "exclamationmark.triangle.fill")
-				.font(.largeTitle)
+				.scaledFont(.largeTitle)
 				.foregroundColor(.red)
 			Text("Terminal failed to start")
-				.font(.headline)
+				.scaledFont(.headline)
 			Text(message)
-				.font(.caption)
+				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 			Button("Retry") {
 				onRetry(sessionId)
 			}
-			.buttonStyle(.borderedProminent)
+			.buttonStyle(.scaledBorderedProminent)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(NSColor.textBackgroundColor))

@@ -12,7 +12,7 @@ public struct HunkActionButton: View {
 	public var body: some View {
 		Button(action: action) {
 			Text(title)
-				.font(.caption)
+				.scaledFont(.caption)
 				.padding(.horizontal, 10)
 				.padding(.vertical, 5)
 				.background(Color(nsColor: .controlBackgroundColor))

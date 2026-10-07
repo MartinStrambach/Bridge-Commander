@@ -4,16 +4,19 @@ import Testing
 
 @Suite("Open PR/MR listing responses")
 struct OpenPullRequestsParsingTests {
-	@Test("GitHub: maps PRs and leaves out those from forks")
+	@Test("GitHub: maps PRs, those from forks with their fork's owner")
 	func gitHub() throws {
 		let json = Data("""
 		{"data": {"repository": {"pullRequests": {"nodes": [
 		  {"number": 12, "title": "Fix crash", "url": "https://github.com/o/r/pull/12", "isDraft": true,
 		   "headRefName": "fix_crash_MOB-1", "isCrossRepository": false, "author": {"login": "martin"}},
 		  {"number": 13, "title": "From a fork", "url": "https://github.com/o/r/pull/13", "isDraft": false,
-		   "headRefName": "main", "isCrossRepository": true, "author": {"login": "someone"}},
+		   "headRefName": "main", "isCrossRepository": true, "headRepositoryOwner": {"login": "someone"},
+		   "author": {"login": "someone"}},
 		  {"number": 14, "title": "Ghost author", "url": "https://github.com/o/r/pull/14",
-		   "headRefName": "cleanup", "isCrossRepository": false, "author": null}
+		   "headRefName": "cleanup", "isCrossRepository": false, "headRepositoryOwner": {"login": "o"}, "author": null},
+		  {"number": 15, "title": "Deleted fork", "url": "https://github.com/o/r/pull/15", "isDraft": false,
+		   "headRefName": "patch-1", "isCrossRepository": true, "headRepositoryOwner": null, "author": null}
 		]}}}}
 		""".utf8)
 		let pullRequests = try #require(try JSONDecoder().decode(GitHubOpenPullRequestsResponse.self, from: json).pullRequests)
@@ -23,11 +26,24 @@ struct OpenPullRequestsParsingTests {
 				url: "https://github.com/o/r/pull/12", isDraft: true, provider: .github
 			),
 			OpenPullRequest(
+				number: 13, title: "From a fork", sourceBranch: "main", author: "someone",
+				url: "https://github.com/o/r/pull/13", isDraft: false, provider: .github,
+				isFromFork: true, forkOwner: "someone"
+			),
+			OpenPullRequest(
 				number: 14, title: "Ghost author", sourceBranch: "cleanup", author: nil,
 				url: "https://github.com/o/r/pull/14", isDraft: false, provider: .github
 			),
+			OpenPullRequest(
+				number: 15, title: "Deleted fork", sourceBranch: "patch-1", author: nil,
+				url: "https://github.com/o/r/pull/15", isDraft: false, provider: .github,
+				isFromFork: true, forkOwner: nil
+			),
 		])
 		#expect(pullRequests[0].reference == "#12")
+		#expect(pullRequests[1].headRef == "refs/pull/13/head")
+		#expect(pullRequests[1].forkBranchCandidates == ["main", "someone/main"])
+		#expect(pullRequests[3].forkBranchCandidates == ["patch-1", "pr-15/patch-1"])
 	}
 
 	@Test("GitHub: a repository the token cannot see is not an empty list")
@@ -36,14 +52,15 @@ struct OpenPullRequestsParsingTests {
 		#expect(try JSONDecoder().decode(GitHubOpenPullRequestsResponse.self, from: json).pullRequests == nil)
 	}
 
-	@Test("GitLab: maps MRs, reads the string iid and leaves out those from forks")
+	@Test("GitLab: maps MRs, reads the string iid and names a fork's namespace")
 	func gitLab() throws {
 		let json = Data("""
 		{"data": {"project": {"mergeRequests": {"nodes": [
 		  {"iid": "7", "title": "Login", "webUrl": "https://gitlab.com/g/p/-/merge_requests/7", "draft": false,
 		   "sourceBranch": "login_MOB-2", "sourceProjectId": 5, "targetProjectId": 5, "author": {"username": "ms"}},
 		  {"iid": "8", "title": "Fork", "webUrl": "https://gitlab.com/g/p/-/merge_requests/8", "draft": false,
-		   "sourceBranch": "master", "sourceProjectId": 9, "targetProjectId": 5, "author": {"username": "x"}}
+		   "sourceBranch": "master", "sourceProjectId": 9, "targetProjectId": 5,
+		   "sourceProject": {"fullPath": "x/sub/p"}, "author": {"username": "x"}}
 		]}}}}
 		""".utf8)
 		let mergeRequests = try #require(try JSONDecoder().decode(GitLabOpenMergeRequestsResponse.self, from: json).mergeRequests)
@@ -52,8 +69,14 @@ struct OpenPullRequestsParsingTests {
 				number: 7, title: "Login", sourceBranch: "login_MOB-2", author: "ms",
 				url: "https://gitlab.com/g/p/-/merge_requests/7", isDraft: false, provider: .gitlab
 			),
+			OpenPullRequest(
+				number: 8, title: "Fork", sourceBranch: "master", author: "x",
+				url: "https://gitlab.com/g/p/-/merge_requests/8", isDraft: false, provider: .gitlab,
+				isFromFork: true, forkOwner: "x/sub"
+			),
 		])
 		#expect(mergeRequests[0].reference == "!7")
+		#expect(mergeRequests[1].headRef == "refs/merge-requests/8/head")
 	}
 
 	@Test("GitLab: a project the token cannot see is not an empty list")

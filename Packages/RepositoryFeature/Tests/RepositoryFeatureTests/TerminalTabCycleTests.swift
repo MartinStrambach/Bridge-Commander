@@ -20,6 +20,7 @@ struct TerminalTabCycleTests {
 			activeSessionId: active.id
 		)
 		layout.lastActiveSessionByRepo[active.repositoryPath] = active.id
+		layout.recentSessionIds = [active.id]
 		state.terminalLayout = layout
 		return TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -35,10 +36,12 @@ struct TerminalTabCycleTests {
 		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
 			$0.terminalLayout?.activeSessionId = two.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = two.id
+			$0.terminalLayout?.recentSessionIds = [one.id, two.id]
 		}
 		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
 			$0.terminalLayout?.activeSessionId = one.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = one.id
+			$0.terminalLayout?.recentSessionIds = [two.id, one.id]
 		}
 	}
 
@@ -52,10 +55,12 @@ struct TerminalTabCycleTests {
 		await store.send(.terminalLayout(.cycleTabRequested(forward: false))) {
 			$0.terminalLayout?.activeSessionId = three.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = three.id
+			$0.terminalLayout?.recentSessionIds = [one.id, three.id]
 		}
 		await store.send(.terminalLayout(.cycleTabRequested(forward: false))) {
 			$0.terminalLayout?.activeSessionId = two.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = two.id
+			$0.terminalLayout?.recentSessionIds = [one.id, three.id, two.id]
 		}
 	}
 
@@ -70,10 +75,12 @@ struct TerminalTabCycleTests {
 		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
 			$0.terminalLayout?.activeSessionId = alphaOne.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = alphaOne.id
+			$0.terminalLayout?.recentSessionIds = [alphaTwo.id, alphaOne.id]
 		}
 		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
 			$0.terminalLayout?.activeSessionId = alphaTwo.id
 			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = alphaTwo.id
+			$0.terminalLayout?.recentSessionIds = [alphaOne.id, alphaTwo.id]
 		}
 	}
 

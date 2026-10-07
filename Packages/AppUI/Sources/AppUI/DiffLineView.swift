@@ -72,7 +72,7 @@ public struct DiffLineView: View {
 			Text(oldLineNumber.map { String($0) } ?? "")
 				.frame(width: 35, alignment: .trailing)
 				.foregroundStyle(.secondary.opacity(0.6))
-				.font(.system(.caption, design: .monospaced))
+				.scaledFont(.caption, design: .monospaced)
 				.padding(.vertical, 1)
 				.padding(.leading, 8)
 
@@ -80,7 +80,7 @@ public struct DiffLineView: View {
 			Text(newLineNumber.map { String($0) } ?? "")
 				.frame(width: 35, alignment: .trailing)
 				.foregroundStyle(.secondary.opacity(0.6))
-				.font(.system(.caption, design: .monospaced))
+				.scaledFont(.caption, design: .monospaced)
 				.padding(.vertical, 1)
 				.padding(.trailing, 8)
 
@@ -94,13 +94,13 @@ public struct DiffLineView: View {
 				// Line content
 				if line.inlineChanges.isEmpty {
 					Text(line.content)
-						.font(.system(.body, design: .monospaced))
+						.scaledFont(.body, design: .monospaced)
 						.foregroundStyle(lineColor)
 						.frame(maxWidth: .infinity, alignment: .leading)
 				}
 				else {
 					Text(attributedContent)
-						.font(.system(.body, design: .monospaced))
+						.scaledFont(.body, design: .monospaced)
 						.frame(maxWidth: .infinity, alignment: .leading)
 				}
 			}

@@ -1,3 +1,4 @@
+import AppUI
 import GitHosting
 import SwiftUI
 
@@ -17,9 +18,9 @@ struct UnresolvedDiscussionsBadge: View {
 		} label: {
 			HStack(spacing: 3) {
 				Image(systemName: "bubble.left.and.bubble.right.fill")
-					.font(.caption2)
+					.scaledFont(.caption2)
 				Text("\(count)")
-					.font(.caption)
+					.scaledFont(.caption)
 					.lineLimit(1)
 			}
 			.foregroundColor(.orange)

@@ -20,6 +20,17 @@ struct TerminalLayoutView: View {
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 
 	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
+	/// Set by dragging the sidebar's trailing edge. Clamped where it is read as well as where it is
+	/// written, since it comes back from user defaults.
+	@AppStorage("terminalSidebar.width") private var sidebarWidth = Self.defaultSidebarWidth
+	/// The width when the current drag began: the drag's translation is measured from its start,
+	/// so it applies to that width rather than accumulating onto every intermediate one.
+	@State private var sidebarDragStartWidth: Double?
+
+	private static let defaultSidebarWidth: Double = 200
+	/// The upper bound leaves the terminal 320 pt in the narrowest window the panel allows (800 pt,
+	/// `RepositoryListView`'s `windowMinSize`).
+	private static let sidebarWidthRange: ClosedRange<Double> = 160 ... 480
 
 	var body: some View {
 		// Build a path → status map once so each sidebar row, the home row and the terminal
@@ -31,7 +42,7 @@ struct TerminalLayoutView: View {
 		)
 		return HStack(spacing: 0) {
 			sidebar(statusByPath: statusByPath)
-				.frame(width: 200)
+				.frame(width: Self.clampedSidebarWidth(sidebarWidth))
 
 			Divider()
 
@@ -59,6 +70,41 @@ struct TerminalLayoutView: View {
 				}
 			)
 		}
+		// Over the whole row rather than on the divider, so the panel beside it cannot cover the
+		// part of the handle that reaches past the divider.
+		.overlay(alignment: .leading) {
+			sidebarResizeHandle
+				.offset(x: Self.clampedSidebarWidth(sidebarWidth) - Self.sidebarResizeHandleWidth / 2)
+		}
+	}
+
+	// MARK: - Sidebar Resizing
+
+	/// Wider than the 1 pt divider it sits on, so the edge is easy to grab.
+	private static let sidebarResizeHandleWidth: Double = 8
+
+	private static func clampedSidebarWidth(_ width: Double) -> Double {
+		min(max(width, sidebarWidthRange.lowerBound), sidebarWidthRange.upperBound)
+	}
+
+	private var sidebarResizeHandle: some View {
+		Color.clear
+			.frame(width: Self.sidebarResizeHandleWidth)
+			.contentShape(Rectangle())
+			.pointerStyle(.frameResize(position: .trailing))
+			.gesture(
+				// Global space: the handle moves with the width, so a translation measured in its
+				// own space would shift under the pointer as it is dragged.
+				DragGesture(minimumDistance: 1, coordinateSpace: .global)
+					.onChanged { value in
+						let start = sidebarDragStartWidth ?? Self.clampedSidebarWidth(sidebarWidth)
+						sidebarDragStartWidth = start
+						sidebarWidth = Self.clampedSidebarWidth(start + value.translation.width)
+					}
+					.onEnded { _ in
+						sidebarDragStartWidth = nil
+					}
+			)
 	}
 
 	// MARK: - Sidebar
@@ -67,7 +113,7 @@ struct TerminalLayoutView: View {
 		VStack(spacing: 0) {
 			HStack {
 				Text("REPOSITORIES")
-					.font(.caption2)
+					.scaledFont(.caption2)
 					.fontWeight(.semibold)
 					.foregroundColor(.secondary)
 				Spacer()
@@ -75,7 +121,7 @@ struct TerminalLayoutView: View {
 					showOnlyWithTerminals.toggle()
 				} label: {
 					Image(systemName: showOnlyWithTerminals ? "terminal.fill" : "terminal")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundColor(showOnlyWithTerminals ? .green : .secondary)
 						.padding(8)
 						.background(Color.secondary.opacity(showOnlyWithTerminals ? 0.2 : 0.1), in: RoundedRectangle(cornerRadius: 6))
@@ -112,7 +158,7 @@ struct TerminalLayoutView: View {
 				store.send(.hideTerminalMode)
 			}
 			.buttonStyle(.plain)
-			.font(.caption)
+			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 			.padding(12)
 			.frame(maxWidth: .infinity, alignment: .leading)
@@ -152,7 +198,7 @@ struct TerminalLayoutView: View {
 
 	private func sidebarGroupLabel(rootPath: String) -> some View {
 		Text(URL(fileURLWithPath: rootPath).lastPathComponent.uppercased())
-			.font(.caption2)
+			.scaledFont(.caption2)
 			.fontWeight(.semibold)
 			.foregroundColor(.secondary)
 			.frame(maxWidth: .infinity, alignment: .leading)
@@ -170,12 +216,12 @@ struct TerminalLayoutView: View {
 				TerminalStatusDotView(status: status, size: 12)
 				VStack(alignment: .leading, spacing: 2) {
 					Text("Home Directory")
-						.font(.caption)
+						.scaledFont(.caption)
 						.fontWeight(isActive ? .semibold : .regular)
 						.foregroundColor(isActive ? .primary : .secondary)
 						.lineLimit(1)
 					Text("~")
-						.font(.caption2)
+						.scaledFont(.caption2)
 						.foregroundColor(.secondary)
 						.lineLimit(1)
 				}

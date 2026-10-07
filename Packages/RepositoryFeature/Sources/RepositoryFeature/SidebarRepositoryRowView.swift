@@ -29,7 +29,7 @@ struct SidebarRepositoryRowView: View {
 					HStack(spacing: 4) {
 						if let ticketId = store.ticketId {
 							Text(ticketId)
-								.font(.caption2)
+								.scaledFont(.caption2)
 								.fontWeight(.medium)
 								.foregroundStyle(.secondary)
 								.lineLimit(1)
@@ -38,14 +38,14 @@ struct SidebarRepositoryRowView: View {
 								.background(.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
 						}
 						Text(store.formattedBranchName)
-							.font(.caption)
+							.scaledFont(.caption)
 							.fontWeight(isActive ? .semibold : .regular)
 							.lineLimit(1)
 							.foregroundColor(isActive ? .primary : .secondary)
 					}
 
 					Text(store.name)
-						.font(.caption2)
+						.scaledFont(.caption2)
 						.foregroundColor(.secondary)
 						.lineLimit(1)
 				}
@@ -56,17 +56,17 @@ struct SidebarRepositoryRowView: View {
 				HStack(spacing: 4) {
 					if store.stagedChangesCount > 0 {
 						Text("\(store.stagedChangesCount)")
-							.font(.caption2)
+							.scaledFont(.caption2)
 							.foregroundColor(.green)
 					}
 					if store.unstagedChangesCount > 0 {
 						Text("\(store.unstagedChangesCount)")
-							.font(.caption2)
+							.scaledFont(.caption2)
 							.foregroundColor(.orange)
 					}
 					if store.unpushedCommitCount > 0 {
 						Text("\(store.unpushedCommitCount)")
-							.font(.caption2)
+							.scaledFont(.caption2)
 							.foregroundColor(.red)
 					}
 				}

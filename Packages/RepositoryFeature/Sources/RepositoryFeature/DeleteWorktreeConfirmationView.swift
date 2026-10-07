@@ -1,3 +1,4 @@
+import AppUI
 import ComposableArchitecture
 import SwiftUI
 
@@ -8,18 +9,18 @@ struct DeleteWorktreeConfirmationView: View {
 	var body: some View {
 		VStack(spacing: 20) {
 			Image(systemName: "exclamationmark.triangle.fill")
-				.font(.system(size: 48))
+				.scaledFont(size: 48)
 				.foregroundStyle(.orange)
 
 			Text("Remove Worktree")
-				.font(.title2)
+				.scaledFont(.title2)
 				.bold()
 
 			Text("Are you sure you want to remove this worktree?")
 				.multilineTextAlignment(.center)
 
 			Text(store.name)
-				.font(.system(.body, design: .monospaced))
+				.scaledFont(.body, design: .monospaced)
 				.multilineTextAlignment(.center)
 				.padding(.horizontal)
 				.padding(.vertical, 8)
@@ -30,9 +31,9 @@ struct DeleteWorktreeConfirmationView: View {
 			Toggle(isOn: $store.forceRemoval) {
 				VStack(alignment: .leading, spacing: 4) {
 					Text("Force removal")
-						.font(.body)
+						.scaledFont(.body)
 					Text("Remove even if there are uncommitted changes")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
 				}
 			}
@@ -43,9 +44,9 @@ struct DeleteWorktreeConfirmationView: View {
 			Toggle(isOn: $store.deleteLocalBranch) {
 				VStack(alignment: .leading, spacing: 4) {
 					Text("Delete local branch")
-						.font(.body)
+						.scaledFont(.body)
 					Text("Also delete the checked-out branch, even if it is unmerged; the default branch is never deleted")
-						.font(.caption)
+						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
 				}
 			}
@@ -58,7 +59,7 @@ struct DeleteWorktreeConfirmationView: View {
 					store.send(.cancelTapped)
 				}
 				.keyboardShortcut(.cancelAction)
-				.buttonStyle(.bordered)
+				.buttonStyle(.scaledBordered)
 
 				Button("Remove", role: .destructive) {
 					store.send(.confirmTapped(
@@ -67,7 +68,7 @@ struct DeleteWorktreeConfirmationView: View {
 					))
 				}
 				.keyboardShortcut(.defaultAction)
-				.buttonStyle(.borderedProminent)
+				.buttonStyle(.scaledBorderedProminent)
 				.tint(.red)
 			}
 		}
