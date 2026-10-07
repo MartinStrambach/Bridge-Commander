@@ -397,6 +397,29 @@ struct RepositoryRowView: View {
 	// MARK: - Repository Actions
 
 	private var repositoryActions: some View {
+		ZStack {
+			toolButtonHeightStrut
+			repositoryActionsBar
+		}
+	}
+
+	/// An invisible tool button, zero wide, so every row is as tall as one that shows a tool
+	/// button — a repository with no Android Studio or Xcode project (or with Claude Code moved
+	/// into the "⋯" menu) would otherwise be shorter than its neighbours. A real `ToolButton`
+	/// rather than a height constant, so the bezel and the size setting are matched exactly.
+	/// Omitted when no tool button is placed in the row: then no row is that tall.
+	@ViewBuilder
+	private var toolButtonHeightStrut: some View {
+		if !rowLayout.items(in: .toolButtons, placedIn: .row).isEmpty {
+			ToolButton(label: " ", icon: .systemImage("sparkles"), tooltip: "", action: {})
+				.environment(\.toolButtonSize, rowLayout.toolButtonSize)
+				.hidden()
+				.accessibilityHidden(true)
+				.frame(width: 0)
+		}
+	}
+
+	private var repositoryActionsBar: some View {
 		HStack(spacing: 8) {
 			RowActionsLayout {
 				ForEach(rowLayout.rowSlots) { slot in
