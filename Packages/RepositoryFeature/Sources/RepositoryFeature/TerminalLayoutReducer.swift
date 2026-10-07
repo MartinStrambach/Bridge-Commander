@@ -6,6 +6,7 @@ import GitActionsMenu
 import GitCore
 import GitGraphFeature
 import Settings
+import SimulatorFeature
 import StagingFeature
 
 @Reducer
@@ -84,6 +85,10 @@ struct TerminalLayoutReducer {
 		var ticketButton: TicketButtonReducer.State?
 		var gitActionsMenu: GitActionsMenuReducer.State?
 
+		/// The iOS simulator beside the terminal. Which repositories show it is a stored setting, so it survives
+		/// this state being dropped when the panel hides.
+		var simulatorPane = SimulatorPaneReducer.State()
+
 		@Presents
 		var stagingDetail: RepositoryDetail.State?
 
@@ -120,9 +125,13 @@ struct TerminalLayoutReducer {
 		case webButton(WebButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
 		case gitActionsMenu(GitActionsMenuReducer.Action)
+		case simulatorPane(SimulatorPaneReducer.Action)
 	}
 
 	var body: some Reducer<State, Action> {
+		Scope(\.simulatorPane, action: \.simulatorPane) {
+			SimulatorPaneReducer()
+		}
 		// The core and its children are split into separate properties because
 		// one long .ifLet chain exceeds the type-checker's expression budget.
 		core
@@ -278,6 +287,9 @@ struct TerminalLayoutReducer {
 
 			case .gitActionsMenu:
 				// Completions are routed to a row refresh by RepositoryListReducer
+				return .none
+
+			case .simulatorPane:
 				return .none
 			}
 		}

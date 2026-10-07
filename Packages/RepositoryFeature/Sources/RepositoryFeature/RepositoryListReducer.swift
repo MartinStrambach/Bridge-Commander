@@ -4,6 +4,7 @@ import Foundation
 import GitCore
 internal import OrderedCollections
 import Settings
+import SimulatorFeature
 import SwiftUI
 import TerminalFeature
 import ToolsIntegration
@@ -99,6 +100,8 @@ struct RepositoryListReducer {
 		case checkSystemEventsPermission
 		/// A terminal tab's notification was clicked.
 		case terminalNotificationTapped(sessionId: UUID)
+		/// A simulator MCP tool call touched a device.
+		case simulatorActivityReported(SimulatorActivity)
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
 		case refreshRepositories
@@ -178,6 +181,7 @@ struct RepositoryListReducer {
 
 	private nonisolated enum CancellableId: Hashable {
 		case terminalNotificationTaps
+		case simulatorActivity
 		case periodicRefresh
 		case repositoryWatch
 		case scan
@@ -195,6 +199,9 @@ struct RepositoryListReducer {
 
 	@Dependency(GitRepositoryWatcherClient.self)
 	private var gitRepositoryWatcherClient
+
+	@Dependency(SimulatorClient.self)
+	private var simulatorClient
 
 	var body: some Reducer<State, Action> {
 		Reduce { state, action in
@@ -253,8 +260,37 @@ struct RepositoryListReducer {
 							await send(.terminalNotificationTapped(sessionId: sessionId))
 						}
 					}
-					.cancellable(id: CancellableId.terminalNotificationTaps, cancelInFlight: true)
+					.cancellable(id: CancellableId.terminalNotificationTaps, cancelInFlight: true),
+					.run { [simulatorClient] send in
+						for await activity in simulatorClient.activity() {
+							await send(.simulatorActivityReported(activity))
+						}
+					}
+					.cancellable(id: CancellableId.simulatorActivity, cancelInFlight: true)
 				)
+
+			case let .simulatorActivityReported(activity):
+				// The pane comes up beside the terminal Claude is working in — the repository of the
+				// calling session, or the one on screen for a `claude` outside the app. A call from a
+				// repository the user is not looking at opens that repository's pane without pulling
+				// the panel over to it; it is there when the user switches.
+				guard let layout = state.terminalLayout else {
+					return .none
+				}
+				let repositoryPath: String?
+				if let sessionId = activity.terminalSessionId {
+					repositoryPath = state.terminalSessions[id: sessionId]?.repositoryPath
+				}
+				else {
+					repositoryPath = layout.activeRepositoryPath
+				}
+				guard let repositoryPath else {
+					return .none
+				}
+				return .send(.terminalLayout(.simulatorPane(.activityReported(
+					deviceId: activity.deviceId,
+					repositoryPath: repositoryPath
+				))))
 
 			case let .terminalNotificationTapped(sessionId):
 				// The tab may have been closed since the notification went out; the app still
