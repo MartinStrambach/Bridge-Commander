@@ -342,13 +342,23 @@ struct CreateWorktreeButtonReducer {
 					launch
 				] send in
 					do {
-						let worktreeURL = try await GitWorktreeCreator.createWorktree(
-							branchName: request.branchName,
-							baseBranch: request.baseBranch,
-							repositoryPath: path,
-							createNewBranch: request.createNewBranch,
-							worktreeBasePath: worktreeBasePath
-						)
+						let worktreeURL = if let fork = request.fork {
+							try await GitWorktreeCreator.createWorktree(
+								fetching: fork.headRef,
+								branchCandidates: fork.branchCandidates,
+								repositoryPath: path,
+								worktreeBasePath: worktreeBasePath
+							)
+						}
+						else {
+							try await GitWorktreeCreator.createWorktree(
+								branchName: request.branchName,
+								baseBranch: request.baseBranch,
+								repositoryPath: path,
+								createNewBranch: request.createNewBranch,
+								worktreeBasePath: worktreeBasePath
+							)
+						}
 						let copyResult: WorktreeFileCopier.Result? = copyPaths.isEmpty
 							? nil
 							: WorktreeFileCopier.copy(
@@ -420,9 +430,17 @@ struct CreateWorktreeButtonReducer {
 
 	/// The arguments `GitWorktreeCreator` gets for the dialog's current source.
 	struct CreationRequest: Equatable, Sendable {
+		/// A PR/MR from a fork: its branch is not on `origin`, so its head is fetched from the ref
+		/// `origin` keeps it under, onto a local branch of the first free candidate name.
+		struct ForkCheckout: Equatable, Sendable {
+			let headRef: String
+			let branchCandidates: [String]
+		}
+
 		let branchName: String
 		let baseBranch: String
 		let createNewBranch: Bool
+		var fork: ForkCheckout?
 	}
 
 	func creationRequest(from state: State) -> CreationRequest? {
@@ -451,7 +469,10 @@ struct CreateWorktreeButtonReducer {
 			return CreationRequest(
 				branchName: pullRequest.sourceBranch,
 				baseBranch: pullRequest.sourceBranch,
-				createNewBranch: false
+				createNewBranch: false,
+				fork: pullRequest.isFromFork
+					? .init(headRef: pullRequest.headRef, branchCandidates: pullRequest.forkBranchCandidates)
+					: nil
 			)
 		}
 	}

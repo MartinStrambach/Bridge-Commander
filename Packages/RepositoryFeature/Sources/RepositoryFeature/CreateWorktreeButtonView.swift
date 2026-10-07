@@ -196,7 +196,7 @@ struct CreateWorktreeDialogView: View {
 		}
 
 		if let pullRequest = store.selectedPullRequest {
-			Text("Checks out \(pullRequest.sourceBranch)")
+			Text("Checks out \(pullRequest.headBranchLabel)\(pullRequest.isFromFork ? " from a fork" : "")")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 				.lineLimit(1)
@@ -279,7 +279,7 @@ private struct PullRequestRow: View {
 						.background(Color.secondary.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
 				}
 			}
-			Text([pullRequest.sourceBranch, pullRequest.author].compactMap(\.self).joined(separator: " · "))
+			Text([pullRequest.headBranchLabel, pullRequest.author].compactMap(\.self).joined(separator: " · "))
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 				.lineLimit(1)
@@ -326,4 +326,14 @@ struct CreateWorktreeButtonView: View {
 			}
 		)
 	)
+}
+
+private extension OpenPullRequest {
+	/// `owner:branch` for a fork's head, as GitHub writes it; the bare branch otherwise.
+	var headBranchLabel: String {
+		guard isFromFork else {
+			return sourceBranch
+		}
+		return "\(forkOwner ?? "deleted fork"):\(sourceBranch)"
+	}
 }

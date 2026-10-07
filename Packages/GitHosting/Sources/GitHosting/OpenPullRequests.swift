@@ -5,14 +5,32 @@ public nonisolated struct OpenPullRequest: Equatable, Sendable, Identifiable {
 	/// GitHub's PR number / GitLab's project-scoped `iid`.
 	public let number: Int
 	public let title: String
-	/// The head branch, on `origin` — PRs from forks are left out, their branch is elsewhere.
+	/// The head branch — on `origin`, or in the fork when `isFromFork`.
 	public let sourceBranch: String
 	public let author: String?
 	public let url: String
 	public let isDraft: Bool
 	public let provider: PullRequestProvider
+	/// The head branch lives in a fork, so `origin` has it only under `headRef`.
+	public let isFromFork: Bool
+	/// Who owns the fork (GitHub login / GitLab namespace); nil for a deleted fork, whose head
+	/// `origin` still keeps under `headRef`.
+	public let forkOwner: String?
 
 	public var id: Int { number }
+
+	/// Where `origin` keeps the head of every PR/MR, a fork's included.
+	public var headRef: String {
+		provider == .gitlab ? "refs/merge-requests/\(number)/head" : "refs/pull/\(number)/head"
+	}
+
+	/// Local branch names for checking out a fork's head, best first: its own name (which the
+	/// row's PR lookup finds it by), then one prefixed with the fork's owner, for when the first
+	/// is taken — a fork's PR often comes from its `main`.
+	public var forkBranchCandidates: [String] {
+		let prefix = forkOwner ?? (provider == .gitlab ? "mr-\(number)" : "pr-\(number)")
+		return [sourceBranch, "\(prefix)/\(sourceBranch)"]
+	}
 
 	/// `#12` on GitHub, `!12` on GitLab — what each provider's own UI calls it.
 	public var reference: String {
@@ -26,7 +44,9 @@ public nonisolated struct OpenPullRequest: Equatable, Sendable, Identifiable {
 		author: String?,
 		url: String,
 		isDraft: Bool,
-		provider: PullRequestProvider
+		provider: PullRequestProvider,
+		isFromFork: Bool = false,
+		forkOwner: String? = nil
 	) {
 		self.number = number
 		self.title = title
@@ -35,6 +55,8 @@ public nonisolated struct OpenPullRequest: Equatable, Sendable, Identifiable {
 		self.url = url
 		self.isDraft = isDraft
 		self.provider = provider
+		self.isFromFork = isFromFork
+		self.forkOwner = forkOwner
 	}
 }
 
@@ -44,7 +66,7 @@ nonisolated let openPullRequestLimit = 50
 // MARK: - GitHub
 
 public nonisolated extension GitHubService {
-	/// Lists the repository's open PRs whose head branch lives in the repository itself.
+	/// Lists the repository's open PRs, those from forks included.
 	static func fetchOpenPullRequests(owner: String, repo: String, token: String) async throws -> [OpenPullRequest] {
 		let query = """
 		query($owner: String!, $name: String!, $first: Int!) {
@@ -57,6 +79,7 @@ public nonisolated extension GitHubService {
 						isDraft
 						headRefName
 						isCrossRepository
+						headRepositoryOwner { login }
 						author { login }
 					}
 				}
@@ -100,6 +123,7 @@ nonisolated struct GitHubOpenPullRequestsResponse: Decodable {
 		let isDraft: Bool?
 		let headRefName: String
 		let isCrossRepository: Bool?
+		let headRepositoryOwner: Author?
 		let author: Author?
 	}
 
@@ -115,26 +139,27 @@ nonisolated struct GitHubOpenPullRequestsResponse: Decodable {
 		guard let repository = data?.repository else {
 			return nil
 		}
-		return (repository.pullRequests?.nodes ?? [])
-			.filter { $0.isCrossRepository != true }
-			.map {
-				OpenPullRequest(
-					number: $0.number,
-					title: $0.title,
-					sourceBranch: $0.headRefName,
-					author: $0.author?.login,
-					url: $0.url,
-					isDraft: $0.isDraft == true,
-					provider: .github
-				)
-			}
+		return (repository.pullRequests?.nodes ?? []).map {
+			let isFromFork = $0.isCrossRepository == true
+			return OpenPullRequest(
+				number: $0.number,
+				title: $0.title,
+				sourceBranch: $0.headRefName,
+				author: $0.author?.login,
+				url: $0.url,
+				isDraft: $0.isDraft == true,
+				provider: .github,
+				isFromFork: isFromFork,
+				forkOwner: isFromFork ? $0.headRepositoryOwner?.login : nil
+			)
+		}
 	}
 }
 
 // MARK: - GitLab
 
 public nonisolated extension GitLabService {
-	/// Lists the project's open MRs whose source branch lives in the project itself.
+	/// Lists the project's open MRs, those from forks included.
 	static func fetchOpenMergeRequests(projectPath: String, token: String) async throws -> [OpenPullRequest] {
 		let query = """
 		query($fullPath: ID!, $first: Int!) {
@@ -148,6 +173,7 @@ public nonisolated extension GitLabService {
 						sourceBranch
 						sourceProjectId
 						targetProjectId
+						sourceProject { fullPath }
 						author { username }
 					}
 				}
@@ -193,7 +219,27 @@ nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 		let sourceBranch: String
 		let sourceProjectId: Int?
 		let targetProjectId: Int?
+		let sourceProject: SourceProject?
 		let author: Author?
+
+		var isFromFork: Bool {
+			guard let sourceProjectId, let targetProjectId else {
+				return false
+			}
+			return sourceProjectId != targetProjectId
+		}
+
+		/// The fork's namespace: `someone/project` → `someone`.
+		var forkOwner: String? {
+			guard isFromFork, let path = sourceProject?.fullPath, let slash = path.lastIndex(of: "/") else {
+				return nil
+			}
+			return String(path[..<slash])
+		}
+	}
+
+	struct SourceProject: Decodable {
+		let fullPath: String
 	}
 
 	struct Author: Decodable {
@@ -208,10 +254,6 @@ nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 			return nil
 		}
 		return (project.mergeRequests?.nodes ?? []).compactMap { node in
-			// A fork's MR has its source branch in the fork, which `origin` does not have.
-			if let source = node.sourceProjectId, let target = node.targetProjectId, source != target {
-				return nil
-			}
 			guard let number = Int(node.iid) else {
 				return nil
 			}
@@ -222,7 +264,9 @@ nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 				author: node.author?.username,
 				url: node.webUrl,
 				isDraft: node.draft == true,
-				provider: .gitlab
+				provider: .gitlab,
+				isFromFork: node.isFromFork,
+				forkOwner: node.forkOwner
 			)
 		}
 	}
