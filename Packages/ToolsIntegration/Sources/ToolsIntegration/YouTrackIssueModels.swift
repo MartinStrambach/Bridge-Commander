@@ -1,7 +1,7 @@
 import Dependencies
 import Foundation
 
-// MARK: - YouTrack Service Protocol
+// MARK: - YouTrack Issue Models
 
 public nonisolated enum CodeReviewState: String, Equatable, Sendable {
 	case passed = "Passed"
@@ -103,19 +103,4 @@ public nonisolated struct IssueDetails: Equatable, Sendable {
 		self.stateFieldId = stateFieldId
 		self.stateTransitions = stateTransitions
 	}
-}
-
-// MARK: - Xcode Service Protocol
-
-public nonisolated protocol XcodeServiceType: Sendable {
-	func hasXcodeProject(in path: String, iosSubfolderPath: String) -> Bool
-	func findXcodeProject(in repositoryPath: String, iosSubfolderPath: String) -> String?
-}
-
-// MARK: - Last Opened Directory Service Protocol
-
-public protocol LastOpenedDirectoryServiceType: Sendable {
-	func load() -> String?
-	func save(_ directory: String)
-	func clear()
 }
