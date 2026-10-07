@@ -33,6 +33,14 @@ public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 
 	public var id: Self { self }
 
+	/// The text-labelled dropdowns, which `RepositoryRowLayout.stacksMenus` can stack vertically.
+	public var isMenu: Bool {
+		switch self {
+		case .gitActions, .tuist, .youTrackMenu: true
+		default: false
+		}
+	}
+
 	public var zone: Zone {
 		switch self {
 		case .androidStudio, .xcode, .claudeCode: .toolButtons
@@ -99,6 +107,15 @@ public enum RepositoryRowItemPlacement: String, CaseIterable, Identifiable, Send
 	}
 }
 
+/// One position in the row's menus and icons: a single item, or the menus stacked on top of each
+/// other.
+public enum RepositoryRowSlot: Hashable, Identifiable, Sendable {
+	case item(RepositoryRowItem)
+	case menuStack([RepositoryRowItem])
+
+	public var id: Self { self }
+}
+
 /// Which action bar items a repository row shows, where (in the row or its "⋯" menu), in what
 /// order, and how large its tool buttons are. Settings ▸ Repository Rows edits it; the default is
 /// the row as it was before the setting, with everything in the row and no "⋯" menu.
@@ -113,6 +130,9 @@ public struct RepositoryRowLayout: Equatable, Sendable {
 	public private(set) var hidden: Set<RepositoryRowItem>
 	public private(set) var inMoreMenu: Set<RepositoryRowItem>
 	public var toolButtonSize: ToolButtonSize
+	/// Draws the menus placed in the row (`RepositoryRowItem.isMenu`) as one vertical stack, at
+	/// the position of the first of them, instead of side by side.
+	public var stacksMenus: Bool
 
 	/// Spelled out: as a `RawRepresentable` the type would otherwise pick up the standard
 	/// library's `==` that compares raw values, i.e. JSON strings.
@@ -121,20 +141,23 @@ public struct RepositoryRowLayout: Equatable, Sendable {
 			&& lhs.hidden == rhs.hidden
 			&& lhs.inMoreMenu == rhs.inMoreMenu
 			&& lhs.toolButtonSize == rhs.toolButtonSize
+			&& lhs.stacksMenus == rhs.stacksMenus
 	}
 
 	public static let `default` = RepositoryRowLayout(
 		order: RepositoryRowItem.allCases,
 		hidden: [],
 		inMoreMenu: [],
-		toolButtonSize: .medium
+		toolButtonSize: .medium,
+		stacksMenus: false
 	)
 
 	public init(
 		order: [RepositoryRowItem],
 		hidden: Set<RepositoryRowItem>,
 		inMoreMenu: Set<RepositoryRowItem> = [],
-		toolButtonSize: ToolButtonSize
+		toolButtonSize: ToolButtonSize,
+		stacksMenus: Bool = false
 	) {
 		var seen = Set<RepositoryRowItem>()
 		self.order = (order + RepositoryRowItem.allCases).filter { seen.insert($0).inserted }
@@ -142,6 +165,7 @@ public struct RepositoryRowLayout: Equatable, Sendable {
 		// Hidden wins over a contradictory stored value.
 		self.inMoreMenu = inMoreMenu.subtracting(hidden)
 		self.toolButtonSize = toolButtonSize
+		self.stacksMenus = stacksMenus
 	}
 
 	/// The zone's items in order, whatever their placement — what the Settings list shows.
@@ -152,6 +176,27 @@ public struct RepositoryRowLayout: Equatable, Sendable {
 	/// The zone's items placed in `placement`, in order.
 	public func items(in zone: RepositoryRowItem.Zone, placedIn placement: RepositoryRowItemPlacement) -> [RepositoryRowItem] {
 		items(in: zone).filter { self.placement(of: $0) == placement }
+	}
+
+	/// The menus and icons the row draws, in order, with the menus gathered into one stack when
+	/// `stacksMenus` is on and more than one of them is in the row.
+	public var rowSlots: [RepositoryRowSlot] {
+		let rowItems = items(in: .actions, placedIn: .row)
+		let menus = rowItems.filter(\.isMenu)
+		guard stacksMenus, menus.count > 1 else {
+			return rowItems.map(RepositoryRowSlot.item)
+		}
+		return rowItems.compactMap { item in
+			if !item.isMenu {
+				.item(item)
+			}
+			else if item == menus.first {
+				.menuStack(menus)
+			}
+			else {
+				nil
+			}
+		}
 	}
 
 	/// The items in the "⋯" menu, in order: the menus and icons first, then the tool buttons.
@@ -202,6 +247,7 @@ extension RepositoryRowLayout: Codable {
 		case hidden
 		case inMoreMenu
 		case toolButtonSize
+		case stacksMenus
 	}
 
 	public init(from decoder: Decoder) throws {
@@ -210,11 +256,13 @@ extension RepositoryRowLayout: Codable {
 		let hidden = try container.decodeIfPresent([String].self, forKey: .hidden) ?? []
 		let inMoreMenu = try container.decodeIfPresent([String].self, forKey: .inMoreMenu) ?? []
 		let size = try container.decodeIfPresent(String.self, forKey: .toolButtonSize)
+		let stacksMenus = try container.decodeIfPresent(Bool.self, forKey: .stacksMenus) ?? false
 		self.init(
 			order: order.compactMap(RepositoryRowItem.init(rawValue:)),
 			hidden: Set(hidden.compactMap(RepositoryRowItem.init(rawValue:))),
 			inMoreMenu: Set(inMoreMenu.compactMap(RepositoryRowItem.init(rawValue:))),
-			toolButtonSize: size.flatMap(ToolButtonSize.init(rawValue:)) ?? Self.default.toolButtonSize
+			toolButtonSize: size.flatMap(ToolButtonSize.init(rawValue:)) ?? Self.default.toolButtonSize,
+			stacksMenus: stacksMenus
 		)
 	}
 
@@ -225,6 +273,7 @@ extension RepositoryRowLayout: Codable {
 		try container.encode(hidden.map(\.rawValue).sorted(), forKey: .hidden)
 		try container.encode(inMoreMenu.map(\.rawValue).sorted(), forKey: .inMoreMenu)
 		try container.encode(toolButtonSize.rawValue, forKey: .toolButtonSize)
+		try container.encode(stacksMenus, forKey: .stacksMenus)
 	}
 }
 extension RepositoryRowLayout: RawRepresentable {

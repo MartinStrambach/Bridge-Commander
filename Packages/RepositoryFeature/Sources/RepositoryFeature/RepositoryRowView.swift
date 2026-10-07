@@ -399,8 +399,17 @@ struct RepositoryRowView: View {
 	private var repositoryActions: some View {
 		HStack(spacing: 8) {
 			RowActionsLayout {
-				ForEach(rowLayout.items(in: .actions, placedIn: .row)) { item in
-					smallAction(item)
+				ForEach(rowLayout.rowSlots) { slot in
+					switch slot {
+					case let .item(item):
+						smallAction(item)
+					case let .menuStack(menus):
+						VStack(alignment: .leading, spacing: 4) {
+							ForEach(menus) { menu in
+								smallAction(menu)
+							}
+						}
+					}
 				}
 				if rowLayout.showsMoreMenu {
 					moreActionsMenu(items: rowLayout.moreMenuItems)

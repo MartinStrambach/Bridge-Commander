@@ -120,7 +120,9 @@ public struct SettingsView<Updates: View>: View {
 				"Menus & Icons",
 				zone: .actions,
 				caption: "Shown left of the tool buttons, on one line when the row has room and on two when it does not."
-			)
+			) {
+				rowStacksMenusToggle
+			}
 			rowItemsSection(
 				"Tool Buttons",
 				zone: .toolButtons,
@@ -195,6 +197,23 @@ public struct SettingsView<Updates: View>: View {
 	}
 
 	// MARK: - Repository Rows
+
+	private var rowStacksMenusToggle: some View {
+		VStack(alignment: .leading, spacing: 4) {
+			Toggle(
+				"Stack Git Actions, Tuist and YouTrack menus vertically",
+				isOn: Binding(
+					get: { store.repositoryRowLayout.stacksMenus },
+					set: { store.send(.setRowStacksMenus($0)) }
+				)
+			)
+
+			Text("The menus shown in the row sit on top of each other where the first of them is, leaving more room for the title.")
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
+		}
+		.padding(.top, 4)
+	}
 
 	private var rowToolButtonSizePicker: some View {
 		VStack(alignment: .leading, spacing: 4) {

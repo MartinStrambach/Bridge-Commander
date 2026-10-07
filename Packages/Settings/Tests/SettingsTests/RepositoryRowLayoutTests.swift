@@ -55,6 +55,40 @@ struct RepositoryRowLayoutTests {
 	}
 
 	@Test
+	func menusSitSideBySideUnlessStacked() {
+		var layout = RepositoryRowLayout.default
+		#expect(layout.rowSlots == layout.items(in: .actions).map(RepositoryRowSlot.item))
+
+		layout.stacksMenus = true
+		#expect(layout.rowSlots.first == .menuStack([.gitActions, .tuist, .youTrackMenu]))
+		#expect(layout.rowSlots.count == layout.items(in: .actions).count - 2)
+	}
+
+	@Test
+	func menuStackSitsAtTheFirstMenuAndSkipsMenusOutOfTheRow() {
+		var layout = RepositoryRowLayout.default
+		layout.stacksMenus = true
+		layout.setPlacement(.moreMenu, for: .tuist)
+		// Git Actions to the end: the stack takes YouTrack's slot, now the first menu, and keeps
+		// the configured order inside.
+		let items = layout.items(in: .actions)
+		layout.move(in: .actions, fromOffsets: [items.firstIndex(of: .gitActions)!], toOffset: items.count)
+		let slots = layout.rowSlots
+		#expect(slots.first == .menuStack([.youTrackMenu, .gitActions]))
+		#expect(!slots.contains(.item(.gitActions)))
+		#expect(!slots.contains(.item(.tuist)))
+	}
+
+	@Test
+	func aSingleMenuInTheRowIsNotStacked() {
+		var layout = RepositoryRowLayout.default
+		layout.stacksMenus = true
+		layout.setPlacement(.hidden, for: .tuist)
+		layout.setPlacement(.hidden, for: .youTrackMenu)
+		#expect(layout.rowSlots.first == .item(.gitActions))
+	}
+
+	@Test
 	func movingStaysWithinItsZone() {
 		var layout = RepositoryRowLayout.default
 		// Claude Code to the front of the tool buttons.
@@ -76,6 +110,7 @@ struct RepositoryRowLayoutTests {
 		layout.setPlacement(.hidden, for: .share)
 		layout.setPlacement(.moreMenu, for: .xcode)
 		layout.toolButtonSize = .small
+		layout.stacksMenus = true
 		layout.move(in: .toolButtons, fromOffsets: [0], toOffset: 3)
 		#expect(RepositoryRowLayout(rawValue: layout.rawValue) == layout)
 	}

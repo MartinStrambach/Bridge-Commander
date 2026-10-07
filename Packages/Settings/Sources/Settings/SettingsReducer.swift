@@ -171,6 +171,7 @@ public struct SettingsReducer {
 		case setTerminalFontName(String)
 		case setUIFontSize(Double)
 		case setRowToolButtonSize(ToolButtonSize)
+		case setRowStacksMenus(Bool)
 		case setRowItemPlacement(RepositoryRowItem, RepositoryRowItemPlacement)
 		case moveRowItems(RepositoryRowItem.Zone, fromOffsets: IndexSet, toOffset: Int)
 		case resetRowLayoutButtonTapped
@@ -651,6 +652,10 @@ public struct SettingsReducer {
 
 			case let .setRowToolButtonSize(size):
 				state.$repositoryRowLayout.withLock { $0.toolButtonSize = size }
+				return .none
+
+			case let .setRowStacksMenus(stacksMenus):
+				state.$repositoryRowLayout.withLock { $0.stacksMenus = stacksMenus }
 				return .none
 
 			case let .setRowItemPlacement(item, placement):
