@@ -11,9 +11,42 @@ public struct HomerConsoleReducer: Sendable {
 	/// Instances past the ninth are in the menu, without a ⌘-digit shortcut.
 	public static let shortcutInstanceLimit = 9
 
-	public enum Tab: Equatable, Sendable {
+	/// The console's pages, in its sidebar's order.
+	public enum Tab: CaseIterable, Equatable, Sendable {
 		case processes
 		case questions
+		case continuations
+		case schedules
+		case agents
+		case costs
+
+		/// The console shows these to admins only (`sidebar.tsx`).
+		public var isAdminOnly: Bool {
+			self == .schedules || self == .costs
+		}
+
+		/// The page's route in the web console, which is also its title there.
+		var webConsolePath: String {
+			switch self {
+			case .processes: "processes"
+			case .questions: "questions"
+			case .continuations: "continuations"
+			case .schedules: "schedules"
+			case .agents: "agents"
+			case .costs: "costs"
+			}
+		}
+
+		public var title: String {
+			switch self {
+			case .processes: "Processes"
+			case .questions: "Questions"
+			case .continuations: "Continuations"
+			case .schedules: "Schedules"
+			case .agents: "Agents"
+			case .costs: "Costs"
+			}
+		}
 	}
 
 	@ObservableState
@@ -80,10 +113,10 @@ public struct HomerConsoleReducer: Sendable {
 		Reduce { state, action in
 			switch action {
 			case .binding(\.tab):
-				guard state.tab == .questions, let id = state.selectedInstance?.id else {
+				guard let id = state.selectedInstance?.id else {
 					return .none
 				}
-				return send(.questionsShown, to: id)
+				return send(.pageChanged(state.tab), to: id)
 
 			case .binding:
 				return .none
@@ -105,12 +138,12 @@ public struct HomerConsoleReducer: Sendable {
 				}
 				return .merge(
 					.merge(state.instances.ids.map { send(.start, to: $0) }),
-					activateSelected(state)
+					activateSelected(&state)
 				)
 
 			case .appeared:
 				state.isVisible = true
-				return activateSelected(state)
+				return activateSelected(&state)
 
 			case .disappeared:
 				state.isVisible = false
@@ -163,7 +196,7 @@ public struct HomerConsoleReducer: Sendable {
 					return signOut
 				}
 				state.$selectedInstanceID.withLock { [first = state.instances.first?.id] in $0 = first ?? "" }
-				return .merge(signOut, activateSelected(state))
+				return .merge(signOut, activateSelected(&state))
 
 			case .refreshTapped:
 				return state.selectedInstance.map { send(.refreshTapped, to: $0.id) } ?? .none
@@ -189,9 +222,11 @@ public struct HomerConsoleReducer: Sendable {
 	private func select(_ id: HomerInstanceReducer.State.ID, _ state: inout State) -> Effect<Action> {
 		let previousID = state.selectedInstanceID
 		guard id != previousID else {
-			return activateSelected(state)
+			return activateSelected(&state)
 		}
 		state.$selectedInstanceID.withLock { $0 = id }
+		let tab = state.tab
+		state.instances[id: id]?.page = tab
 		guard state.isVisible else {
 			return .none
 		}
@@ -201,10 +236,14 @@ public struct HomerConsoleReducer: Sendable {
 		)
 	}
 
-	private func activateSelected(_ state: State) -> Effect<Action> {
+	/// The page is set directly rather than sent: `activated` reads it, so the instance comes on
+	/// screen showing the console's page.
+	private func activateSelected(_ state: inout State) -> Effect<Action> {
 		guard state.isVisible, let id = state.selectedInstance?.id else {
 			return .none
 		}
+		let tab = state.tab
+		state.instances[id: id]?.page = tab
 		return send(.activated, to: id)
 	}
 

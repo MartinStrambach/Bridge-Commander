@@ -78,6 +78,15 @@ public struct HomerInstanceReducer: Sendable {
 		public internal(set) var answeringQuestionIDs: Set<HomerQuestion.ID> = []
 		public internal(set) var answerErrors: [HomerQuestion.ID: String] = [:]
 
+		// The other pages
+		/// The console's page, whichever instance is on screen (the console keeps it current).
+		public internal(set) var page: HomerConsoleReducer.Tab = .processes
+		public var continuations: HomerContinuationsReducer.State
+		public var agents: HomerAgentsReducer.State
+		public var costs: HomerCostsReducer.State
+		/// The page reducer told it is on screen, so it polls.
+		var shownChildPage: HomerChildPage?
+
 		public var webPage: HomerWebPage?
 
 		/// Whether this instance is the one on screen. Its processes are polled only then; the
@@ -87,6 +96,9 @@ public struct HomerInstanceReducer: Sendable {
 		public init(baseURL: String) {
 			self.baseURL = baseURL
 			self.signIn = HomerSignInReducer.State(baseURL: baseURL)
+			self.continuations = HomerContinuationsReducer.State(baseURL: baseURL)
+			self.agents = HomerAgentsReducer.State(baseURL: baseURL)
+			self.costs = HomerCostsReducer.State(baseURL: baseURL)
 		}
 
 		public var id: String {
@@ -151,9 +163,9 @@ public struct HomerInstanceReducer: Sendable {
 		case signOutTapped
 
 		case refreshTapped
-		/// The questions page came on screen: it shows the server's answer of now, not of up to
-		/// 30 s ago.
-		case questionsShown
+		/// The console's page changed. The questions page coming on screen shows the server's
+		/// answer of now, not of up to 30 s ago.
+		case pageChanged(HomerConsoleReducer.Tab)
 		case statusFilterToggled(HomerProcessStatus)
 		case agentFilterChanged(String?)
 		case tagTapped(String)
@@ -179,6 +191,10 @@ public struct HomerInstanceReducer: Sendable {
 
 		/// A page of the web console, e.g. `processes` or `processes/42`.
 		case openWebConsoleTapped(path: String, title: String)
+
+		case continuations(HomerContinuationsReducer.Action)
+		case agents(HomerAgentsReducer.Action)
+		case costs(HomerCostsReducer.Action)
 
 		public enum ProcessAction: Equatable, Sendable {
 			case kill
@@ -210,6 +226,15 @@ public struct HomerInstanceReducer: Sendable {
 		Scope(\.signIn, action: \.signIn) {
 			HomerSignInReducer()
 		}
+		Scope(\.continuations, action: \.continuations) {
+			HomerContinuationsReducer()
+		}
+		Scope(\.agents, action: \.agents) {
+			HomerAgentsReducer()
+		}
+		Scope(\.costs, action: \.costs) {
+			HomerCostsReducer()
+		}
 		Reduce { state, action in
 			switch action {
 			case .binding(\.rootsOnly):
@@ -232,7 +257,7 @@ public struct HomerInstanceReducer: Sendable {
 
 			case let .sessionChecked(.success(user)):
 				state.session = .signedIn(user)
-				return startPolling(state)
+				return .merge(startPolling(state), syncShownChildPage(&state))
 
 			case let .sessionChecked(.failure(error)):
 				state.session = .signedOut
@@ -251,37 +276,41 @@ public struct HomerInstanceReducer: Sendable {
 				guard state.user != nil else {
 					return .none
 				}
-				return startPolling(state)
+				return .merge(startPolling(state), syncShownChildPage(&state))
 
 			case .deactivated:
 				state.isActive = false
-				return .merge(.cancel(id: CancelID.processPolling), .cancel(id: CancelID.flowSummaryPolling))
+				return .merge(
+					.cancel(id: CancelID.processPolling),
+					.cancel(id: CancelID.flowSummaryPolling),
+					syncShownChildPage(&state)
+				)
 
 			case let .signIn(.delegate(.signedIn(_, user))), let .signedIn(user):
 				// Someone else's data (the add form signed in to this instance as another user)
 				// is not this user's to see.
-				if state.user?.username != user.username {
-					clearData(&state)
-				}
+				let cleared = state.user?.username != user.username ? clearData(&state) : .none
 				state.session = .signedIn(user)
 				state.signIn.username = user.username
 				state.signIn.password = ""
 				state.signIn.loginError = nil
 				state.signIn.sessionExpired = false
-				return startPolling(state)
+				return .concatenate(cleared, .merge(startPolling(state), syncShownChildPage(&state)))
 
 			case .signIn:
 				return .none
 
-			case .questionsShown:
-				return state.user == nil ? .none : pollQuestions(state)
+			case let .pageChanged(page):
+				state.page = page
+				let questions = page == .questions && state.user != nil ? pollQuestions(state) : .none
+				return .merge(questions, syncShownChildPage(&state))
 
 			case .signOutTapped:
 				let baseURL = state.baseURL
 				state.session = .signedOut
 				state.signIn.sessionExpired = false
-				clearData(&state)
 				return .merge(
+					clearData(&state),
 					stopPolling(),
 					.run { _ in
 						// Signing out locally does not wait on the server: the call also drops
@@ -517,6 +546,22 @@ public struct HomerInstanceReducer: Sendable {
 					dataStoreID: HomerEndpoint.webDataStoreID(baseURL: state.baseURL)
 				)
 				return .none
+
+			case .continuations(.delegate(let delegate)),
+			     .agents(.delegate(let delegate)),
+			     .costs(.delegate(let delegate)):
+				switch delegate {
+				case .unauthorized:
+					guard state.user != nil else {
+						return .none
+					}
+					return expireSession(&state)
+				case let .openWebConsole(path, title):
+					return .send(.openWebConsoleTapped(path: path, title: title))
+				}
+
+			case .continuations, .agents, .costs:
+				return .none
 			}
 		}
 		.ifLet(\.$alert, action: \.alert)
@@ -619,11 +664,64 @@ public struct HomerInstanceReducer: Sendable {
 	private func expireSession(_ state: inout State) -> Effect<Action> {
 		state.session = .signedOut
 		state.signIn.sessionExpired = true
-		clearData(&state)
-		return stopPolling()
+		return .merge(clearData(&state), stopPolling())
 	}
 
-	private func clearData(_ state: inout State) {
+	// MARK: - Page reducers
+
+	/// Tells the page reducers which of them is on screen: the one the console's page names,
+	/// while this instance is on screen and signed in. The admin-only pages stay hidden for
+	/// anyone else — the console offers them only to admins.
+	private func syncShownChildPage(_ state: inout State) -> Effect<Action> {
+		let page: HomerChildPage? = if let user = state.user, state.isActive,
+			!state.page.isAdminOnly || user.isAdmin
+		{
+			HomerChildPage(state.page)
+		}
+		else {
+			nil
+		}
+		guard page != state.shownChildPage else {
+			return .none
+		}
+		let previous = state.shownChildPage
+		state.shownChildPage = page
+		return .concatenate(
+			previous.map { send(.hidden, to: $0) } ?? .none,
+			page.map { send(.shown, to: $0) } ?? .none
+		)
+	}
+
+	private enum ChildPageEvent {
+		case shown
+		case hidden
+	}
+
+	private func send(_ event: ChildPageEvent, to page: HomerChildPage) -> Effect<Action> {
+		switch (page, event) {
+		case (.continuations, .shown):
+			.send(.continuations(.shown))
+		case (.continuations, .hidden):
+			.send(.continuations(.hidden))
+		case (.agents, .shown):
+			.send(.agents(.shown))
+		case (.agents, .hidden):
+			.send(.agents(.hidden))
+		case (.costs, .shown):
+			.send(.costs(.shown))
+		case (.costs, .hidden):
+			.send(.costs(.hidden))
+		}
+	}
+
+	/// Drops everything the signed-in user saw. The page reducer on screen is hidden first, so
+	/// its poll stops before its state is replaced.
+	private func clearData(_ state: inout State) -> Effect<Action> {
+		let hideShownPage = state.shownChildPage.map { send(.hidden, to: $0) } ?? .none
+		state.shownChildPage = nil
+		state.continuations = HomerContinuationsReducer.State(baseURL: state.baseURL)
+		state.agents = HomerAgentsReducer.State(baseURL: state.baseURL)
+		state.costs = HomerCostsReducer.State(baseURL: state.baseURL)
 		state.processes = []
 		state.processTotal = 0
 		state.processLimit = Self.pageSize
@@ -644,5 +742,6 @@ public struct HomerInstanceReducer: Sendable {
 		state.answeringQuestionIDs = []
 		state.answerErrors = [:]
 		state.webPage = nil
+		return hideShownPage
 	}
 }

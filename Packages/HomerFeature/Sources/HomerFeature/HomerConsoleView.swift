@@ -56,8 +56,9 @@ public struct HomerConsoleView: View {
 
 				if showsConsole {
 					Picker("Homer page", selection: $store.tab) {
-						Text("Processes").tag(HomerConsoleReducer.Tab.processes)
-						Text(questionsTabTitle).tag(HomerConsoleReducer.Tab.questions)
+						ForEach(availableTabs, id: \.self) { tab in
+							Text(tab == .questions ? questionsTabTitle : tab.title).tag(tab)
+						}
 					}
 					.pickerStyle(.segmented)
 					.labelsHidden()
@@ -99,6 +100,14 @@ public struct HomerConsoleView: View {
 		.padding()
 		.windowTitleBarArea()
 		.background { instanceShortcuts }
+	}
+
+	/// The pages the signed-in user may see: the admin-only ones only for an admin, as in the
+	/// console's sidebar. The page on screen stays listed, so the picker never loses its
+	/// selection — the page itself says it is not available.
+	private var availableTabs: [HomerConsoleReducer.Tab] {
+		let isAdmin = store.selectedInstance?.user?.isAdmin == true
+		return HomerConsoleReducer.Tab.allCases.filter { !$0.isAdminOnly || isAdmin || $0 == store.tab }
 	}
 
 	private var questionsTabTitle: String {
@@ -215,12 +224,7 @@ public struct HomerConsoleView: View {
 	}
 
 	private func openCurrentPageInWebConsole() {
-		switch store.tab {
-		case .processes:
-			store.send(.openWebConsoleTapped(path: "processes", title: "Processes"))
-		case .questions:
-			store.send(.openWebConsoleTapped(path: "questions", title: "Questions"))
-		}
+		store.send(.openWebConsoleTapped(path: store.tab.webConsolePath, title: store.tab.title))
 	}
 }
 
@@ -241,12 +245,29 @@ struct HomerInstanceView: View {
 			case .signedOut:
 				HomerLoginView(store: store.scope(\.signIn, action: \.signIn))
 
-			case .signedIn:
-				switch tab {
-				case .processes:
-					HomerProcessListView(store: store)
-				case .questions:
-					HomerQuestionListView(store: store)
+			case let .signedIn(user):
+				if tab.isAdminOnly, !user.isAdmin {
+					ContentUnavailableView(
+						"Admins Only",
+						systemImage: "lock",
+						description: Text("You don’t have access to this page.")
+					)
+				}
+				else {
+					switch tab {
+					case .processes:
+						HomerProcessListView(store: store)
+					case .questions:
+						HomerQuestionListView(store: store)
+					case .continuations:
+						HomerContinuationsView(store: store.scope(\.continuations, action: \.continuations))
+					case .schedules:
+						HomerSchedulesView(store: store.scope(\.agents, action: \.agents))
+					case .agents:
+						HomerAgentsView(store: store.scope(\.agents, action: \.agents), user: user)
+					case .costs:
+						HomerCostsView(store: store.scope(\.costs, action: \.costs))
+					}
 				}
 			}
 		}

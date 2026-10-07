@@ -133,7 +133,7 @@ nonisolated enum HomerAPI {
 
 	// MARK: - Transport
 
-	private static func send(
+	static func send(
 		_ method: String,
 		_ path: String,
 		baseURL: String,
@@ -191,7 +191,7 @@ nonisolated enum HomerAPI {
 		}
 	}
 
-	private static func decode<Value: Decodable>(_ type: Value.Type, from data: Data) throws -> Value {
+	static func decode<Value: Decodable>(_ type: Value.Type, from data: Data) throws -> Value {
 		do {
 			return try JSONDecoder().decode(type, from: data)
 		}
