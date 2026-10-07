@@ -122,6 +122,13 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<Worktre
 	}
 }
 
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<RepositoryRowLayout> {
+	/// Which action bar items a repository row shows, their order and the tool buttons' size.
+	static var repositoryRowLayout: Self {
+		appStorage("repositoryRowLayout")
+	}
+}
+
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<ClaudeStatusDetection> {
 	/// How built-in terminal tabs judge whether Claude is working or waiting. Read when a tab is
 	/// opened; tabs already open keep what they started with.

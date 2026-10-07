@@ -47,7 +47,7 @@ struct PullRequestButton: View {
 		}
 	}
 
-	private var tooltip: String {
+	var tooltip: String {
 		let providerName = provider == .gitlab ? "GitLab" : "GitHub"
 		let noun = provider == .gitlab ? "merge request" : "pull request"
 		switch state {

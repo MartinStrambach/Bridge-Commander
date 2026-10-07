@@ -54,6 +54,46 @@ public struct AndroidStudioButtonView: View {
 
 }
 
+/// The Android Studio button as an entry of another menu (the repository row's "⋯" menu).
+///
+/// A menu entry cannot present anything, so whoever shows this must also apply
+/// `androidStudioPresentations(store:)` to a view outside the menu.
+public struct AndroidStudioMenuItem: View {
+	let store: StoreOf<AndroidStudioButtonReducer>
+
+	public init(store: StoreOf<AndroidStudioButtonReducer>) {
+		self.store = store
+	}
+
+	public var body: some View {
+		Button {
+			store.send(.openAndroidStudioButtonTapped)
+		} label: {
+			Label(
+				store.isOpening ? "Opening Android Studio..." : "Open in Android Studio",
+				systemImage: "apps.iphone"
+			)
+		}
+		.disabled(store.isOpening)
+	}
+}
+
+public extension View {
+	/// The Android Studio button's error alert, for an `AndroidStudioMenuItem`.
+	func androidStudioPresentations(store: StoreOf<AndroidStudioButtonReducer>) -> some View {
+		modifier(AndroidStudioPresentations(store: store))
+	}
+}
+
+private struct AndroidStudioPresentations: ViewModifier {
+	@Bindable
+	var store: StoreOf<AndroidStudioButtonReducer>
+
+	func body(content: Content) -> some View {
+		content.alert($store.scope(\.$alert, action: \.alert))
+	}
+}
+
 #Preview {
 	AndroidStudioButtonView(
 		store: Store(

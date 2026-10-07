@@ -30,15 +30,7 @@ public struct YouTrackButtonView: View {
 			}
 			else {
 				Menu {
-					Section(currentStateTitle) {
-						ForEach(store.transitions) { transition in
-							Button {
-								store.send(.transitionTapped(transition))
-							} label: {
-								Text(transition.presentation)
-							}
-						}
-					}
+					YouTrackMenuItems(store: store)
 				} label: {
 					Text("YouTrack")
 						.font(.system(size: 12 * uiFontScale))
@@ -48,8 +40,72 @@ public struct YouTrackButtonView: View {
 			}
 		}
 		.fixedSize()
-		.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
-			ScrollableAlertView(store: alertStore)
+		.youTrackMenuPresentations(store: store)
+	}
+}
+
+/// The YouTrack menu as a submenu of another menu (the repository row's "⋯" menu). While a move
+/// is being applied it is a disabled entry saying so instead.
+///
+/// A menu entry cannot present anything, so whoever shows this must also apply
+/// `youTrackMenuPresentations(store:)` to a view outside the menu.
+public struct YouTrackSubmenu: View {
+	let store: StoreOf<YouTrackButtonReducer>
+
+	public init(store: StoreOf<YouTrackButtonReducer>) {
+		self.store = store
+	}
+
+	public var body: some View {
+		if store.isApplying {
+			Button {} label: {
+				Label("Updating \(store.ticketId)...", systemImage: "list.bullet.rectangle")
+			}
+			.disabled(true)
+		}
+		else {
+			Menu {
+				YouTrackMenuItems(store: store)
+			} label: {
+				Label("YouTrack", systemImage: "list.bullet.rectangle")
+			}
+		}
+	}
+}
+
+public extension View {
+	/// The YouTrack menu's error alert. Applied by `YouTrackButtonView` itself; a
+	/// `YouTrackSubmenu` needs it on a view outside the menu it sits in.
+	func youTrackMenuPresentations(store: StoreOf<YouTrackButtonReducer>) -> some View {
+		modifier(YouTrackMenuPresentations(store: store))
+	}
+}
+
+private struct YouTrackMenuPresentations: ViewModifier {
+	@Bindable
+	var store: StoreOf<YouTrackButtonReducer>
+
+	func body(content: Content) -> some View {
+		content
+			.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
+				ScrollableAlertView(store: alertStore)
+			}
+	}
+}
+
+/// The menu's entries, shared by `YouTrackButtonView` and `YouTrackSubmenu`.
+private struct YouTrackMenuItems: View {
+	let store: StoreOf<YouTrackButtonReducer>
+
+	var body: some View {
+		Section(currentStateTitle) {
+			ForEach(store.transitions) { transition in
+				Button {
+					store.send(.transitionTapped(transition))
+				} label: {
+					Text(transition.presentation)
+				}
+			}
 		}
 	}
 

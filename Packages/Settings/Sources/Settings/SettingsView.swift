@@ -115,6 +115,21 @@ public struct SettingsView<Updates: View>: View {
 			appearanceSection
 			repositoryRefreshSection
 
+		case .repositoryRows:
+			rowItemsSection(
+				"Menus & Icons",
+				zone: .actions,
+				caption: "Shown left of the tool buttons, on one line when the row has room and on two when it does not."
+			)
+			rowItemsSection(
+				"Tool Buttons",
+				zone: .toolButtons,
+				caption: "The large buttons at the end of the row."
+			) {
+				rowToolButtonSizePicker
+			}
+			rowLayoutResetSection
+
 		case .accounts:
 			youtrackAuthenticationSection
 			gitHubAuthenticationSection
@@ -177,6 +192,99 @@ public struct SettingsView<Updates: View>: View {
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 		}
+	}
+
+	// MARK: - Repository Rows
+
+	private var rowToolButtonSizePicker: some View {
+		VStack(alignment: .leading, spacing: 4) {
+			Picker(
+				"Size",
+				selection: Binding(
+					get: { store.repositoryRowLayout.toolButtonSize },
+					set: { store.send(.setRowToolButtonSize($0)) }
+				)
+			) {
+				ForEach(ToolButtonSize.allCases, id: \.self) { size in
+					Text(size.displayName).tag(size)
+				}
+			}
+			.pickerStyle(.segmented)
+			.fixedSize()
+
+			Text("Small shows only the icon, with the name in its tooltip.")
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
+		}
+		.padding(.top, 4)
+	}
+
+	/// A `List` for its native drag-to-reorder (`onMove`). It sits inside the page's scroll view,
+	/// so it does not scroll itself and is sized to its rows: each row is pinned to `rowHeight`
+	/// with no vertical row insets (the default insets come on top of the content's height, and
+	/// an estimate that left them out cut the last rows off), plus `listPadding` for the border.
+	private func rowItemsSection(
+		_ title: String,
+		zone: RepositoryRowItem.Zone,
+		caption: String,
+		@ViewBuilder footer: () -> some View = { EmptyView() }
+	) -> some View {
+		let items = store.repositoryRowLayout.items(in: zone)
+		let rowHeight = (24 * uiFontScale).rounded()
+		let listPadding: CGFloat = 12
+		return SettingsSection(title) {
+			Text("\(caption) Drag to reorder. Items placed in the More menu become entries of a “⋯” menu at the end of the menus and icons, which a row shows only while it holds one. Items that do not apply to a repository stay out of its row and menu either way.")
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
+
+			List {
+				ForEach(items) { item in
+					HStack(spacing: 8) {
+						Image(systemName: "line.3.horizontal")
+							.foregroundStyle(.tertiary)
+							.help("Drag to reorder")
+						let placement = store.repositoryRowLayout.placement(of: item)
+						Label(item.title, systemImage: item.systemImage)
+							.foregroundStyle(placement == .hidden ? .secondary : .primary)
+						Spacer(minLength: 0)
+						Picker(
+							item.title,
+							selection: Binding(
+								get: { placement },
+								set: { store.send(.setRowItemPlacement(item, $0)) }
+							)
+						) {
+							ForEach(RepositoryRowItemPlacement.allCases) { placement in
+								Text(placement.title).tag(placement)
+							}
+						}
+						.pickerStyle(.menu)
+						.labelsHidden()
+						.controlSize(.small)
+						.fixedSize()
+					}
+					.frame(height: rowHeight)
+					.listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+				}
+				.onMove { source, destination in
+					store.send(.moveRowItems(zone, fromOffsets: source, toOffset: destination))
+				}
+			}
+			.listStyle(.bordered(alternatesRowBackgrounds: true))
+			.scrollDisabled(true)
+			.environment(\.defaultMinListRowHeight, rowHeight)
+			.frame(height: CGFloat(items.count) * rowHeight + listPadding)
+
+			footer()
+		}
+	}
+
+	private var rowLayoutResetSection: some View {
+		Button("Reset to Default") {
+			store.send(.resetRowLayoutButtonTapped)
+		}
+		.buttonStyle(.scaledAutomatic)
+		.disabled(store.repositoryRowLayout == .default)
 	}
 
 	private var repositoryRefreshSection: some View {
