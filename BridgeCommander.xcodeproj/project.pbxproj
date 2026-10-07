@@ -314,7 +314,7 @@
 		93351BC02ECD3F1B006D4609 /* Debug configuration for PBXNativeTarget "BridgeCommander" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIconDebug;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = "";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -328,7 +328,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = BridgeCommander/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Bridge Commander";
+				INFOPLIST_KEY_CFBundleDisplayName = "Bridge Commander Debug";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -337,7 +337,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 0.8.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.bridgecommander.BridgeCommander;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bridgecommander.BridgeCommander.debug;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
