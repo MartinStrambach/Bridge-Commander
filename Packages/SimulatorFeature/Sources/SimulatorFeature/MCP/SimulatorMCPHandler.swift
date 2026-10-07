@@ -16,6 +16,9 @@ protocol SimulatorToolActions: Sendable {
 	func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode
 	func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode?
 	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws
+	/// The screen before an action, for `waitForScreenToSettle` to compare against.
+	func screenFingerprint(device: SimulatorDevice) async -> ScreenFingerprint?
+	func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.
@@ -95,9 +98,12 @@ struct SimulatorMCPHandler: Sendable {
 	install with xcodebuild and `xcrun simctl install`/`launch` as usual; use these tools to look \
 	at the running app and interact with it. Coordinates are in points with the origin at the top \
 	left — the same size as the screenshot image. describe_ui lists the screen's elements with \
-	their frames: prefer it for finding what to tap, and screenshots for how things look. Check \
-	the effect of an action afterwards; apps take a moment to respond, so if the screen has not \
-	changed yet, look again.
+	their frames: prefer it for finding what to tap, and screenshots for how things look. The \
+	actions (tap, swipe, pinch, two_finger_drag, type_text, press_key, press_button) return once \
+	the screen has stopped changing, up to 3 s, and say whether it settled, did not change or is \
+	still changing — so look at the result right away instead of waiting or taking extra \
+	screenshots to catch up. Only when it is still changing (loading, a long animation) may a \
+	later look differ.
 	"""
 
 	private static func result(id: JSONValue, _ result: JSONValue) -> JSONValue {
