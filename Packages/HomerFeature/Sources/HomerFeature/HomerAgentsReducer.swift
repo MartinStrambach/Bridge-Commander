@@ -58,6 +58,8 @@ public struct HomerAgentsReducer: Sendable {
 		/// The page came on screen; it polls until `hidden`.
 		case shown
 		case hidden
+		/// The header's Refresh: fetches right away, without waiting for the next poll.
+		case refreshTapped
 		case agentsLoaded(Result<[HomerAgent], any Error>)
 
 		case reloadTapped
@@ -103,6 +105,9 @@ public struct HomerAgentsReducer: Sendable {
 			case .shown:
 				state.isShown = true
 				return poll(state)
+
+			case .refreshTapped:
+				return state.isShown ? poll(state) : .none
 
 			case .hidden:
 				state.isShown = false

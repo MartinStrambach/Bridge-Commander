@@ -78,6 +78,8 @@ public struct HomerCostsReducer: Sendable {
 		/// The page came on screen; it polls until `hidden`.
 		case shown
 		case hidden
+		/// The header's Refresh: fetches right away, without waiting for the next poll.
+		case refreshTapped
 		case monthSelected(String)
 		case snapshotLoaded(Result<HomerCostSnapshot, any Error>)
 		/// `month` is the one asked for (nil: the current one).
@@ -109,6 +111,9 @@ public struct HomerCostsReducer: Sendable {
 				}
 				state.isShown = true
 				return .merge(pollSnapshot(state), pollMonthly(state), pollTotals(state))
+
+			case .refreshTapped:
+				return state.isShown ? .merge(pollSnapshot(state), pollMonthly(state), pollTotals(state)) : .none
 
 			case .hidden:
 				state.isShown = false

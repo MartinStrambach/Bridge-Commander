@@ -67,6 +67,35 @@ struct HomerChildPageTests {
 		}
 	}
 
+	@Test("the header's Refresh reaches the page on screen")
+	func refreshReachesPage() async {
+		var initialState = activeState(user: HomerUser(username: "admin", role: "admin"))
+		initialState.page = .continuations
+		initialState.shownChildPage = .continuations
+		initialState.continuations.isShown = true
+		let fetches = LockIsolated(0)
+		let store = TestStore(initialState: initialState) {
+			HomerInstanceReducer()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0[HomerClient.self].processes = { _, _ in HomerProcessPage(processes: [], total: 0) }
+			$0[HomerClient.self].openQuestions = { _ in [] }
+			$0[HomerContinuationsClient.self].continuations = { _, _ in
+				fetches.withValue { $0 += 1 }
+				return []
+			}
+		}
+
+		// The processes and questions are refreshed too; this test is about the page.
+		store.exhaustivity = .off(showSkippedAssertions: false)
+		await store.send(.refreshTapped)
+		await store.receive(\.continuations.refreshTapped)
+		await store.receive(\.continuations.loaded.success)
+		// Both lists, pending and failed.
+		#expect(fetches.value == 2)
+		await store.skipInFlightEffects()
+	}
+
 	@Test("an admin-only page stays hidden for anyone else")
 	func adminOnly() async {
 		let initialState = activeState(user: HomerUser(username: "dev"))

@@ -133,18 +133,32 @@ nonisolated enum HomerAPI {
 
 	// MARK: - Transport
 
+	/// - Parameters:
+	///   - percentEncodedQueryItems: Query items already percent-encoded, sent as they are —
+	///     `queryItems` leaves a `+` alone, which the server reads as a space.
+	///   - headers: Request headers of the caller's own. They go on first, so none of them can
+	///     replace what the API needs.
+	///   - refusalsInServerWords: Every refusal but 401 and 403 that carries the server's `msg`
+	///     throws it as `.server`, instead of the meaning a 409 or 429 has for questions and
+	///     the login limiter.
 	static func send(
 		_ method: String,
 		_ path: String,
 		baseURL: String,
 		queryItems: [URLQueryItem] = [],
-		body: Data? = nil
+		percentEncodedQueryItems: [URLQueryItem] = [],
+		headers: [(name: String, value: String)] = [],
+		body: Data? = nil,
+		refusalsInServerWords: Bool = false
 	) async throws -> Data {
 		guard var components = URLComponents(string: baseURL + path) else {
 			throw HomerAPIError.unexpectedResponse
 		}
 		if !queryItems.isEmpty {
 			components.queryItems = queryItems
+		}
+		if !percentEncodedQueryItems.isEmpty {
+			components.percentEncodedQueryItems = (components.percentEncodedQueryItems ?? []) + percentEncodedQueryItems
 		}
 		guard let url = components.url else {
 			throw HomerAPIError.unexpectedResponse
@@ -153,6 +167,9 @@ nonisolated enum HomerAPI {
 		var request = URLRequest(url: url, timeoutInterval: timeout)
 		request.httpMethod = method
 		request.httpBody = body
+		for header in headers {
+			request.setValue(header.value, forHTTPHeaderField: header.name)
+		}
 		request.setValue("application/json", forHTTPHeaderField: "Accept")
 		request.setValue("1", forHTTPHeaderField: csrfHeader)
 		if body != nil {
@@ -182,6 +199,8 @@ nonisolated enum HomerAPI {
 			throw HomerAPIError.unauthorized
 		case 403:
 			throw HomerAPIError.forbidden
+		case _ where refusalsInServerWords && errorMessage(in: data) != nil:
+			throw HomerAPIError.server(status: http.statusCode, message: errorMessage(in: data))
 		case 409:
 			throw HomerAPIError.conflict
 		case 429:

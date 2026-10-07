@@ -323,7 +323,11 @@ public struct HomerInstanceReducer: Sendable {
 				guard state.user != nil else {
 					return .none
 				}
-				return .merge(pollProcesses(state), pollQuestions(state))
+				return .merge(
+					pollProcesses(state),
+					pollQuestions(state),
+					send(state.shownChildPage.map { [ChildPageEvent(page: $0, kind: .refresh)] } ?? [])
+				)
 
 			case let .statusFilterToggled(status):
 				if state.statusFilter.contains(status) {
@@ -685,26 +689,32 @@ public struct HomerInstanceReducer: Sendable {
 		else {
 			nil
 		}
-		var events = hiddenPage.map { [ChildPageEvent(page: $0, isShown: false)] } ?? []
+		var events = hiddenPage.map { [ChildPageEvent(page: $0, kind: .hidden)] } ?? []
 		if page != state.shownChildPage {
 			if let previous = state.shownChildPage {
-				events.append(ChildPageEvent(page: previous, isShown: false))
+				events.append(ChildPageEvent(page: previous, kind: .hidden))
 			}
 			state.shownChildPage = page
 			if let page {
-				events.append(ChildPageEvent(page: page, isShown: true))
+				events.append(ChildPageEvent(page: page, kind: .shown))
 			}
 		}
 		return send(events)
 	}
 
 	private func hide(_ page: HomerChildPage?) -> Effect<Action> {
-		send(page.map { [ChildPageEvent(page: $0, isShown: false)] } ?? [])
+		send(page.map { [ChildPageEvent(page: $0, kind: .hidden)] } ?? [])
 	}
 
 	private struct ChildPageEvent: Sendable {
+		enum Kind: Sendable {
+			case shown
+			case hidden
+			case refresh
+		}
+
 		let page: HomerChildPage
-		let isShown: Bool
+		let kind: Kind
 	}
 
 	/// In order, from one effect: a page hidden and shown again (another user signed in) must
@@ -715,19 +725,25 @@ public struct HomerInstanceReducer: Sendable {
 		}
 		return .run { send in
 			for event in events {
-				switch (event.page, event.isShown) {
-				case (.continuations, true):
+				switch (event.page, event.kind) {
+				case (.continuations, .shown):
 					await send(.continuations(.shown))
-				case (.continuations, false):
+				case (.continuations, .hidden):
 					await send(.continuations(.hidden))
-				case (.agents, true):
+				case (.continuations, .refresh):
+					await send(.continuations(.refreshTapped))
+				case (.agents, .shown):
 					await send(.agents(.shown))
-				case (.agents, false):
+				case (.agents, .hidden):
 					await send(.agents(.hidden))
-				case (.costs, true):
+				case (.agents, .refresh):
+					await send(.agents(.refreshTapped))
+				case (.costs, .shown):
 					await send(.costs(.shown))
-				case (.costs, false):
+				case (.costs, .hidden):
 					await send(.costs(.hidden))
+				case (.costs, .refresh):
+					await send(.costs(.refreshTapped))
 				}
 			}
 		}

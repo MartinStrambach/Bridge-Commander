@@ -34,95 +34,18 @@ extension HomerAPI {
 		try await decode(HomerAgentReloadResult.self, from: send("POST", "/api/v1/agents/reload", baseURL: baseURL))
 	}
 
-	/// Starts a run through `sendRun`, not `send`: the inputs may include request headers,
-	/// which `send` cannot carry, and the run's refusals (409 another run still active, 429 a
-	/// cost cap, cooldown or parallel-run limit) need the server's own words, which `send` maps
-	/// to the question and login-limiter messages.
+	/// The inputs may include request headers, and the run's refusals (409 another run still
+	/// active, 429 a cost cap, cooldown or parallel-run limit) are told in the server's words.
 	static func runAgent(baseURL: String, name: String, request: HomerAgentRunRequest) async throws -> Int {
-		let data = try await sendRun(
+		let data = try await send(
+			"POST",
 			HomerAgentRunRequest.path(agentName: name),
 			baseURL: baseURL,
 			percentEncodedQueryItems: request.percentEncodedQueryItems,
+			headers: request.headers.map { (name: $0.name, value: $0.value) },
 			body: request.bodyJSON,
-			headers: request.headers
+			refusalsInServerWords: true
 		)
 		return try decode(HomerAgentRunResponse.self, from: data).processId
-	}
-
-	// MARK: - Transport of a run
-
-	/// `URLSession` for `sendRun`, configured as `send`'s: cookies are the jar's alone.
-	private static let runSession: URLSession = {
-		let configuration = URLSessionConfiguration.default
-		configuration.httpCookieStorage = nil
-		configuration.httpCookieAcceptPolicy = .never
-		configuration.httpShouldSetCookies = false
-		return URLSession(configuration: configuration)
-	}()
-
-	/// A `POST` as `send` makes it (the same cookie jar and CSRF header) plus request headers,
-	/// with every refusal but 401 and 403 reported in the server's words.
-	private static func sendRun(
-		_ path: String,
-		baseURL: String,
-		percentEncodedQueryItems: [URLQueryItem],
-		body: Data?,
-		headers: [HomerAgentRunRequest.Field]
-	) async throws -> Data {
-		guard var components = URLComponents(string: baseURL + path) else {
-			throw HomerAPIError.unexpectedResponse
-		}
-		if !percentEncodedQueryItems.isEmpty {
-			components.percentEncodedQueryItems = percentEncodedQueryItems
-		}
-		guard let url = components.url else {
-			throw HomerAPIError.unexpectedResponse
-		}
-
-		var request = URLRequest(url: url, timeoutInterval: 30)
-		request.httpMethod = "POST"
-		request.httpBody = body
-		// The inputs first, so none of them can replace what the API needs.
-		for header in headers {
-			request.setValue(header.value, forHTTPHeaderField: header.name)
-		}
-		request.setValue("application/json", forHTTPHeaderField: "Accept")
-		request.setValue("1", forHTTPHeaderField: "X-Homer-CSRF")
-		if body != nil {
-			request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-		}
-		let jar = HomerCookieJar.shared
-		for (field, value) in HTTPCookie.requestHeaderFields(with: jar.cookies(for: baseURL)) {
-			request.setValue(value, forHTTPHeaderField: field)
-		}
-
-		let data: Data
-		let response: URLResponse
-		do {
-			(data, response) = try await runSession.data(for: request)
-		}
-		catch {
-			throw HomerAPIError.unreachable(error.localizedDescription)
-		}
-		guard let http = response as? HTTPURLResponse else {
-			throw HomerAPIError.unexpectedResponse
-		}
-		jar.update(for: baseURL, from: http)
-		switch http.statusCode {
-		case 200 ..< 300:
-			return data
-		case 401:
-			throw HomerAPIError.unauthorized
-		case 403:
-			throw HomerAPIError.forbidden
-		default:
-			struct ErrorBody: Decodable {
-				var msg: String?
-			}
-			guard let message = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.msg else {
-				throw http.statusCode == 429 ? HomerAPIError.rateLimited : HomerAPIError.server(status: http.statusCode, message: nil)
-			}
-			throw HomerAPIError.server(status: http.statusCode, message: message)
-		}
 	}
 }
