@@ -9,7 +9,7 @@ public struct PullRequestClient: Sendable {
 	/// `nil` means the provider confirmed there is no PR/MR for the branch;
 	/// a thrown error means the answer is unknown (network/token/HTTP failure).
 	public var fetchDetails: @Sendable (_ remote: GitRemote, _ branch: String) async throws -> PullRequestDetails?
-	/// The remote's open PRs/MRs whose branch is on the remote itself, most recently updated
+	/// The remote's open PRs/MRs, those from forks included, most recently updated
 	/// first. Empty for a host that is neither github.com nor gitlab.com.
 	public var listOpen: @Sendable (_ remote: GitRemote) async throws -> [OpenPullRequest]
 }

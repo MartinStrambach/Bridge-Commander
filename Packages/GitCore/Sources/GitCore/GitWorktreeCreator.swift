@@ -136,6 +136,124 @@ public nonisolated enum GitWorktreeCreator {
 		return folder
 	}
 
+	/// Adds a worktree for a ref `origin` keeps but does not publish as a branch — a PR/MR from a
+	/// fork, whose head GitHub serves as `refs/pull/<n>/head` and GitLab as
+	/// `refs/merge-requests/<iid>/head`. The ref is fetched by itself (`origin`'s own branches are
+	/// left alone) and checked out on the first of `branchCandidates` that is free, or that an
+	/// earlier call made for the same ref: that one is fast-forwarded when behind and kept as is
+	/// when it has commits of its own. Any other existing branch is skipped — the PR's base is an
+	/// ancestor of its head too, so ancestry alone would let a fork's `main` move the local one.
+	///
+	/// The branch gets no upstream: the head lives in the fork, not on `origin`. Returns the folder.
+	public static func createWorktree(
+		fetching remoteRef: String,
+		branchCandidates: [String],
+		repositoryPath: String,
+		worktreeBasePath: String = "../worktrees"
+	) async throws -> URL {
+		let fetch = await ProcessRunner.runGit(arguments: ["fetch", "origin", remoteRef], at: repositoryPath)
+		guard fetch.success else {
+			throw GitError.worktreeCreationFailed(fetch.trimmedError.isEmpty ? "Could not fetch \(remoteRef)." : fetch.trimmedError)
+		}
+		guard let head = await revision("FETCH_HEAD^{commit}", at: repositoryPath) else {
+			throw GitError.worktreeCreationFailed("Could not read \(remoteRef) after fetching it.")
+		}
+
+		for branch in branchCandidates where !branch.hasPrefix("-") {
+			guard let existing = await revision("refs/heads/\(branch)", at: repositoryPath) else {
+				let folder = try await addWorktree(
+					arguments: ["-b", branch],
+					branch: branch,
+					startPoint: head,
+					repositoryPath: repositoryPath,
+					worktreeBasePath: worktreeBasePath
+				)
+				_ = await ProcessRunner.runGit(
+					arguments: ["config", "branch.\(branch).\(pullRequestRefKey)", remoteRef],
+					at: repositoryPath
+				)
+				return folder
+			}
+			if existing == head {
+				return try await addWorktree(
+					arguments: [],
+					branch: branch,
+					startPoint: branch,
+					repositoryPath: repositoryPath,
+					worktreeBasePath: worktreeBasePath
+				)
+			}
+			let marker = await ProcessRunner.runGit(
+				arguments: ["config", "--get", "branch.\(branch).\(pullRequestRefKey)"],
+				at: repositoryPath
+			)
+			guard marker.outputString.trimmingCharacters(in: .whitespacesAndNewlines) == remoteRef else {
+				continue
+			}
+			if await isAncestor(head, of: existing, at: repositoryPath) {
+				return try await addWorktree(
+					arguments: [],
+					branch: branch,
+					startPoint: branch,
+					repositoryPath: repositoryPath,
+					worktreeBasePath: worktreeBasePath
+				)
+			}
+			if await isAncestor(existing, of: head, at: repositoryPath) {
+				// -B moves the branch, and refuses one checked out in another worktree.
+				return try await addWorktree(
+					arguments: ["-B", branch],
+					branch: branch,
+					startPoint: head,
+					repositoryPath: repositoryPath,
+					worktreeBasePath: worktreeBasePath
+				)
+			}
+			// Diverged (the PR was force-pushed): the next candidate gets a fresh copy.
+		}
+
+		let names = branchCandidates.map { "'\($0)'" }.joined(separator: ", ")
+		throw GitError.worktreeCreationFailed("Local branches \(names) already exist with other commits.")
+	}
+
+	/// Marks a branch `createWorktree(fetching:…)` made with the ref it came from, under the
+	/// branch's own config section — `git branch -d/-m` drop or move it with the branch.
+	static let pullRequestRefKey = "bridgeCommanderPullRequest"
+
+	private static func addWorktree(
+		arguments: [String],
+		branch: String,
+		startPoint: String,
+		repositoryPath: String,
+		worktreeBasePath: String
+	) async throws -> URL {
+		let folder = worktreeFolder(
+			repositoryPath: repositoryPath,
+			branchName: branch,
+			baseBranch: "",
+			createNewBranch: true,
+			worktreeBasePath: worktreeBasePath
+		)
+		let result = await ProcessRunner.runGit(
+			arguments: ["worktree", "add"] + arguments + [folder.path, startPoint],
+			at: repositoryPath
+		)
+		guard result.success else {
+			throw GitError.worktreeCreationFailed(result.trimmedError.isEmpty ? "Unknown error" : result.trimmedError)
+		}
+		return folder
+	}
+
+	private static func revision(_ name: String, at repositoryPath: String) async -> String? {
+		let result = await ProcessRunner.runGit(arguments: ["rev-parse", "--verify", "--quiet", name], at: repositoryPath)
+		let hash = result.outputString.trimmingCharacters(in: .whitespacesAndNewlines)
+		return result.success && !hash.isEmpty ? hash : nil
+	}
+
+	private static func isAncestor(_ ancestor: String, of descendant: String, at repositoryPath: String) async -> Bool {
+		await ProcessRunner.runGit(arguments: ["merge-base", "--is-ancestor", ancestor, descendant], at: repositoryPath).success
+	}
+
 	/// Adds a worktree on a new branch `branchName` that starts at `startPoint` (any revision —
 	/// the graph passes a commit hash). Nothing is fetched: the start point is already local.
 	///
