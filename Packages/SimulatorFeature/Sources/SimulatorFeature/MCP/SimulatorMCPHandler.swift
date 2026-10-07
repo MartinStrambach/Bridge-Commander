@@ -11,8 +11,9 @@ protocol SimulatorToolActions: Sendable {
 	func tap(device: SimulatorDevice, x: Double, y: Double, holdFor: Duration) async throws
 	func swipe(device: SimulatorDevice, from: CGPoint, to: CGPoint, duration: Duration) async throws
 	func type(device: SimulatorDevice, text: String) async throws
-	func press(device: SimulatorDevice, key: SimulatorKeyStroke) async throws
-	func press(device: SimulatorDevice, button: SimulatorHardwareButton) async throws
+	/// Presses the keys one after another.
+	func press(device: SimulatorDevice, keys: [SimulatorKeyStroke]) async throws
+	func press(device: SimulatorDevice, button: SimulatorHardwareButton, holdFor: Duration) async throws
 	func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode
 	func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode?
 	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws
@@ -23,6 +24,14 @@ protocol SimulatorToolActions: Sendable {
 	var crashReports: any SimulatorCrashReportSource { get }
 	/// Turns the device and returns it as it then is, its `rotation` the interface's.
 	func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice
+	func simulateMemoryWarning(device: SimulatorDevice) async throws
+	func setLocation(device: SimulatorDevice, _ command: SimulatorLocationCommand) async throws
+	/// Starts recording the screen to `path` (a file or a folder; Simulator.app's folder when
+	/// `nil`) and returns the file it is going to.
+	func startRecording(device: SimulatorDevice, path: String?) async throws -> URL
+	/// Stops the recording of `udid` — with none given, the only recording running, else the
+	/// repository's device's.
+	func stopRecording(udid: String?) async throws -> SimulatorRecording
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.
@@ -113,7 +122,9 @@ struct SimulatorMCPHandler: Sendable {
 	still changing — so look at the result right away instead of waiting or taking extra \
 	screenshots to catch up. Only when it is still changing (loading, a long animation) may a \
 	later look differ. When the app crashes or vanishes, list_crashes and crash_report give the \
-	crash's reason and backtrace.
+	crash's reason and backtrace. set_location and simulate_memory_warning exercise location and \
+	low-memory handling; start_recording and stop_recording capture a video of the screen, to \
+	show a flow or a bug to the user.
 	"""
 
 	private static func result(id: JSONValue, _ result: JSONValue) -> JSONValue {

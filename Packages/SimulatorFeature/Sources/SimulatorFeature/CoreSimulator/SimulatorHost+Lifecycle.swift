@@ -12,7 +12,8 @@ extension SimulatorHost {
 		try await simctl(["shutdown", udid])
 	}
 
-	private func simctl(_ arguments: [String]) async throws {
+	/// Runs `xcrun simctl` with `arguments`; a failure throws what it printed to stderr.
+	func simctl(_ arguments: [String]) async throws {
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/usr/bin/xcrun"),
 			arguments: ["simctl"] + arguments,

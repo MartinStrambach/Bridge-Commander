@@ -443,9 +443,12 @@ public final class SimulatorHost: @unchecked Sendable {
 		try await drain()
 	}
 
-	public func press(device: SimulatorDevice, key: SimulatorKeyStroke) async throws {
+	/// Presses `keys` one after another, each released before the next, and drains once at the end.
+	public func press(device: SimulatorDevice, keys: [SimulatorKeyStroke]) async throws {
 		let connection = try await hidConnection(udid: device.id)
-		try await press(key, on: connection)
+		for key in keys {
+			try await press(key, on: connection)
+		}
 		try await drain()
 	}
 

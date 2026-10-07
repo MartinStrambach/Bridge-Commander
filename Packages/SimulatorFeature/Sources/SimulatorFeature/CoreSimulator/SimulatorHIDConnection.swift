@@ -3,18 +3,26 @@ import os
 import XPC
 
 /// A hardware button, by its HID Consumer-page usage.
+///
+/// There is no Apple Pay button: `dtuhidd` has no usage for it, and two side-button presses lock
+/// and wake the device rather than bringing up Wallet (idb, `SimulatorHIDButtonIdentity`). Only the
+/// legacy Indigo path, which these runtimes ignore, had a source for it.
 public enum SimulatorHardwareButton: String, CaseIterable, Sendable {
 	case home
 	case lock
+	/// The same physical button as `lock`, so the same usage; named for the models and people who
+	/// look for it by this name on Face ID iPhones.
+	case sideButton = "side_button"
 	case siri
 	case volumeUp = "volume_up"
 	case volumeDown = "volume_down"
+	case playPause = "play_pause"
 
 	var consumerUsage: UInt64 {
 		switch self {
 		case .home:
 			0x40 // Menu
-		case .lock:
+		case .lock, .sideButton:
 			0x30 // Power
 		case .siri:
 			0xCF // Voice Command
@@ -22,6 +30,28 @@ public enum SimulatorHardwareButton: String, CaseIterable, Sendable {
 			0xE9
 		case .volumeDown:
 			0xEA
+		case .playPause:
+			0xCD
+		}
+	}
+
+	/// The name the pane's menu shows.
+	public var title: String {
+		switch self {
+		case .home:
+			"Home"
+		case .lock:
+			"Lock"
+		case .sideButton:
+			"Side Button"
+		case .siri:
+			"Siri"
+		case .volumeUp:
+			"Volume Up"
+		case .volumeDown:
+			"Volume Down"
+		case .playPause:
+			"Play/Pause"
 		}
 	}
 }

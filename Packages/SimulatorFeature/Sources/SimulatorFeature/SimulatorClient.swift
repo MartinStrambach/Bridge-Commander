@@ -2,7 +2,8 @@ import AppKit
 import ComposableArchitecture
 import Foundation
 
-/// The simulator pane's dependency: devices, booting, buttons, and the MCP server's activity.
+/// The simulator pane's dependency: devices, booting, buttons, Simulator.app's features, screen
+/// recording, and the MCP server's activity.
 @DependencyClient
 public struct SimulatorClient: Sendable {
 	public var devices: @Sendable () async throws -> [SimulatorDevice]
@@ -17,6 +18,14 @@ public struct SimulatorClient: Sendable {
 	/// Saves the device's screen as a PNG where Simulator.app would, and returns the file.
 	public var saveScreenshot: @Sendable (_ device: SimulatorDevice) async throws -> URL
 	public var revealInFinder: @Sendable (_ url: URL) async -> Void
+	public var simulateMemoryWarning: @Sendable (_ id: String) async throws -> Void
+	public var setLocation: @Sendable (_ id: String, _ command: SimulatorLocationCommand) async throws -> Void
+	/// Starts recording the device's screen into the folder screenshots go to.
+	public var startRecording: @Sendable (_ device: SimulatorDevice) async throws -> Void
+	public var stopRecording: @Sendable (_ device: SimulatorDevice) async throws -> SimulatorRecording
+	/// The devices being recorded, now and whenever that changes — Claude starts and stops
+	/// recordings too.
+	public var recordingDeviceIds: @Sendable () -> AsyncStream<Set<String>> = { .finished }
 	/// Connects to the device's input service ahead of the first click.
 	public var prepareInput: @Sendable (_ id: String) async -> Void
 	/// Tool calls that touched a device. Starts the MCP server if it is not running.
@@ -38,6 +47,18 @@ extension SimulatorClient: DependencyKey {
 		revealInFinder: { url in
 			await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([url]) }
 		},
+		simulateMemoryWarning: { try SimulatorHost.shared.simulateMemoryWarning(udid: $0) },
+		setLocation: { try await SimulatorHost.shared.setLocation(udid: $0, $1) },
+		startRecording: { device in
+			let url = SimulatorScreenshotFile.unusedURL(
+				in: SimulatorScreenshotFile.defaultFolder(),
+				name: SimulatorScreenshotFile.recordingName(deviceName: device.name, date: .now),
+				exists: { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
+			)
+			_ = try await SimulatorScreenRecorder.shared.start(udid: device.id, deviceName: device.name, to: url)
+		},
+		stopRecording: { try await SimulatorScreenRecorder.shared.stop(udid: $0.id, deviceName: $0.name) },
+		recordingDeviceIds: { SimulatorScreenRecorder.shared.recordingDeviceIdChanges() },
 		prepareInput: { await SimulatorHost.shared.prepareInput(udid: $0) },
 		activity: { SimulatorMCPServer.shared.activity() },
 		isClaudeCodeConnected: { ClaudeCodeRegistration.isRegistered() },
