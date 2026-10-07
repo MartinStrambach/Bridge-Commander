@@ -108,6 +108,25 @@ enum SimulatorMCPTools {
 			],
 			required: ["button"]
 		),
+		tool(
+			"press_element",
+			"Press an element found by identifier or label rather than by position: the accessibility press (AXPress), or a tap on its centre if it has none. Lists the candidates when nothing or several match. Check the result afterwards — AXPress reports success even on elements that ignore it.",
+			properties: SimulatorElementTools.queryProperties.merging(["udid": optionalUdid]) { $1 }
+		),
+		tool(
+			"set_value",
+			"Set a text field's contents through accessibility, replacing what is there, without tapping or typing. With no identifier, label or role it looks among the text fields. If the element does not take a value, tap it and use type_text instead.",
+			properties: SimulatorElementTools.queryProperties.merging([
+				"value": ["type": "string", "description": "The new text."],
+				"udid": optionalUdid,
+			]) { $1 },
+			required: ["value"]
+		),
+		tool(
+			"scroll_to_element",
+			"Scroll the enclosing lists until an element found by identifier or label is fully on screen (AXScrollToVisible) — for one that is cut off or under a toolbar. Only elements describe_ui lists can be found; to reach rows further down, swipe.",
+			properties: SimulatorElementTools.queryProperties.merging(["udid": optionalUdid]) { $1 }
+		),
 	]
 
 	/// Runs a tool and returns its `CallToolResult`. Failures are reported in the result
@@ -220,6 +239,10 @@ enum SimulatorMCPTools {
 				}
 				try await actions.press(device: device, button: button)
 				return text("Pressed \(name).")
+
+			case _ where SimulatorElementTools.names.contains(name):
+				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				return text(try await SimulatorElementTools.call(name: name, arguments: arguments, device: device, actions: actions))
 
 			default:
 				return text("Unknown tool \(name).", isError: true)

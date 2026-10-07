@@ -69,6 +69,12 @@ nonisolated enum ObjCRuntime {
 		unsafeBitCast(messageSend, to: Function.self)(target, sel_registerName(selector), argument)
 	}
 
+	/// Sends a message with no arguments that returns nothing.
+	static func send(_ target: AnyObject, _ selector: String) {
+		typealias Function = @convention(c) (AnyObject, Selector) -> Void
+		unsafeBitCast(messageSend, to: Function.self)(target, sel_registerName(selector))
+	}
+
 	static func setBool(_ target: AnyObject, _ selector: String, _ value: Bool) {
 		typealias Function = @convention(c) (AnyObject, Selector, Bool) -> Void
 		unsafeBitCast(messageSend, to: Function.self)(target, sel_registerName(selector), value)

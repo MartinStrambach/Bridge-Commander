@@ -281,4 +281,8 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
 		try await host.twoFingerGesture(device: device, from: from, to: to, duration: duration)
 	}
+
+	func elementAction(_ action: SimulatorElementAction, on query: SimulatorElementQuery, device: SimulatorDevice) async throws -> SimulatorElementOutcome {
+		try await host.performElementAction(action, on: query, device: device)
+	}
 }
