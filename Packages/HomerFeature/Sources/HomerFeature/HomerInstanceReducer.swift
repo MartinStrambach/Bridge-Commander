@@ -289,13 +289,13 @@ public struct HomerInstanceReducer: Sendable {
 			case let .signIn(.delegate(.signedIn(_, user))), let .signedIn(user):
 				// Someone else's data (the add form signed in to this instance as another user)
 				// is not this user's to see.
-				let cleared = state.user?.username != user.username ? clearData(&state) : .none
+				let cleared = state.user?.username != user.username ? clearData(&state) : nil
 				state.session = .signedIn(user)
 				state.signIn.username = user.username
 				state.signIn.password = ""
 				state.signIn.loginError = nil
 				state.signIn.sessionExpired = false
-				return .concatenate(cleared, .merge(startPolling(state), syncShownChildPage(&state)))
+				return .merge(startPolling(state), syncShownChildPage(&state, hidingFirst: cleared))
 
 			case .signIn:
 				return .none
@@ -310,7 +310,7 @@ public struct HomerInstanceReducer: Sendable {
 				state.session = .signedOut
 				state.signIn.sessionExpired = false
 				return .merge(
-					clearData(&state),
+					hide(clearData(&state)),
 					stopPolling(),
 					.run { _ in
 						// Signing out locally does not wait on the server: the call also drops
@@ -664,15 +664,19 @@ public struct HomerInstanceReducer: Sendable {
 	private func expireSession(_ state: inout State) -> Effect<Action> {
 		state.session = .signedOut
 		state.signIn.sessionExpired = true
-		return .merge(clearData(&state), stopPolling())
+		return .merge(hide(clearData(&state)), stopPolling())
 	}
 
 	// MARK: - Page reducers
 
 	/// Tells the page reducers which of them is on screen: the one the console's page names,
 	/// while this instance is on screen and signed in. The admin-only pages stay hidden for
-	/// anyone else — the console offers them only to admins.
-	private func syncShownChildPage(_ state: inout State) -> Effect<Action> {
+	/// anyone else — the console offers them only to admins. `hidingFirst` is a page whose
+	/// state was just replaced and whose poll must stop before anything is shown again.
+	private func syncShownChildPage(
+		_ state: inout State,
+		hidingFirst hiddenPage: HomerChildPage? = nil
+	) -> Effect<Action> {
 		let page: HomerChildPage? = if let user = state.user, state.isActive,
 			!state.page.isAdminOnly || user.isAdmin
 		{
@@ -681,43 +685,58 @@ public struct HomerInstanceReducer: Sendable {
 		else {
 			nil
 		}
-		guard page != state.shownChildPage else {
+		var events = hiddenPage.map { [ChildPageEvent(page: $0, isShown: false)] } ?? []
+		if page != state.shownChildPage {
+			if let previous = state.shownChildPage {
+				events.append(ChildPageEvent(page: previous, isShown: false))
+			}
+			state.shownChildPage = page
+			if let page {
+				events.append(ChildPageEvent(page: page, isShown: true))
+			}
+		}
+		return send(events)
+	}
+
+	private func hide(_ page: HomerChildPage?) -> Effect<Action> {
+		send(page.map { [ChildPageEvent(page: $0, isShown: false)] } ?? [])
+	}
+
+	private struct ChildPageEvent: Sendable {
+		let page: HomerChildPage
+		let isShown: Bool
+	}
+
+	/// In order, from one effect: a page hidden and shown again (another user signed in) must
+	/// stop its old poll before it starts the new one.
+	private func send(_ events: [ChildPageEvent]) -> Effect<Action> {
+		guard !events.isEmpty else {
 			return .none
 		}
-		let previous = state.shownChildPage
-		state.shownChildPage = page
-		return .concatenate(
-			previous.map { send(.hidden, to: $0) } ?? .none,
-			page.map { send(.shown, to: $0) } ?? .none
-		)
-	}
-
-	private enum ChildPageEvent {
-		case shown
-		case hidden
-	}
-
-	private func send(_ event: ChildPageEvent, to page: HomerChildPage) -> Effect<Action> {
-		switch (page, event) {
-		case (.continuations, .shown):
-			.send(.continuations(.shown))
-		case (.continuations, .hidden):
-			.send(.continuations(.hidden))
-		case (.agents, .shown):
-			.send(.agents(.shown))
-		case (.agents, .hidden):
-			.send(.agents(.hidden))
-		case (.costs, .shown):
-			.send(.costs(.shown))
-		case (.costs, .hidden):
-			.send(.costs(.hidden))
+		return .run { send in
+			for event in events {
+				switch (event.page, event.isShown) {
+				case (.continuations, true):
+					await send(.continuations(.shown))
+				case (.continuations, false):
+					await send(.continuations(.hidden))
+				case (.agents, true):
+					await send(.agents(.shown))
+				case (.agents, false):
+					await send(.agents(.hidden))
+				case (.costs, true):
+					await send(.costs(.shown))
+				case (.costs, false):
+					await send(.costs(.hidden))
+				}
+			}
 		}
 	}
 
-	/// Drops everything the signed-in user saw. The page reducer on screen is hidden first, so
-	/// its poll stops before its state is replaced.
-	private func clearData(_ state: inout State) -> Effect<Action> {
-		let hideShownPage = state.shownChildPage.map { send(.hidden, to: $0) } ?? .none
+	/// Drops everything the signed-in user saw, and returns the page reducer that was on
+	/// screen: its poll is still running, and the caller hides it.
+	private func clearData(_ state: inout State) -> HomerChildPage? {
+		let shownChildPage = state.shownChildPage
 		state.shownChildPage = nil
 		state.continuations = HomerContinuationsReducer.State(baseURL: state.baseURL)
 		state.agents = HomerAgentsReducer.State(baseURL: state.baseURL)
@@ -742,6 +761,6 @@ public struct HomerInstanceReducer: Sendable {
 		state.answeringQuestionIDs = []
 		state.answerErrors = [:]
 		state.webPage = nil
-		return hideShownPage
+		return shownChildPage
 	}
 }
