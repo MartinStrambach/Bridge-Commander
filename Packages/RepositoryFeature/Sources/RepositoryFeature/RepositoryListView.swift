@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppUI
 import Settings
+import SimulatorFeature
 import TerminalFeature
 
 // MARK: - Public entry point
@@ -30,8 +31,12 @@ struct RepositoryListView: View {
 	@Bindable
 	var store: StoreOf<RepositoryListReducer>
 
+	/// Every pane's shell is told where the simulator MCP server listens and which session it is,
+	/// so a `claude` started in it reaches the pane beside it (`ClaudeCodeRegistration`).
 	@State
-	private var terminalViewStore = TerminalViewStore()
+	private var terminalViewStore = TerminalViewStore(additionalEnvironment: { sessionId in
+		SimulatorMCPServer.shared.terminalEnvironment(sessionId: sessionId)
+	})
 	@FocusState
 	private var isSearchFocused: Bool
 

@@ -1,0 +1,203 @@
+import Foundation
+import os
+import XPC
+
+/// A hardware button, by its HID Consumer-page usage.
+public enum SimulatorHardwareButton: String, CaseIterable, Sendable {
+	case home
+	case lock
+	case siri
+	case volumeUp = "volume_up"
+	case volumeDown = "volume_down"
+
+	var consumerUsage: UInt64 {
+		switch self {
+		case .home:
+			0x40 // Menu
+		case .lock:
+			0x30 // Power
+		case .siri:
+			0xCF // Voice Command
+		case .volumeUp:
+			0xE9
+		case .volumeDown:
+			0xEA
+		}
+	}
+}
+
+/// The phase of a digitizer contact, as `dtuhidd` numbers it.
+enum SimulatorTouchPhase: UInt64 {
+	case began = 0
+	case moved = 1
+	case ended = 2
+}
+
+/// One XPC connection to `dtuhidd`'s digitizer service inside a booted simulator.
+///
+/// From CoreSimulator 1155.4 (Xcode 27) the guest drops the legacy Indigo HID messages that
+/// `SimDeviceLegacyHIDClient` sends — they are delivered and silently discarded — so touches,
+/// buttons and keys go to `dtuhidd` instead, as plain XPC dictionaries. The service is looked up in
+/// the simulator's bootstrap namespace (`-[SimDevice lookup:error:]`), wrapped by the private
+/// `xpc_endpoint_create_mach_port_4sim`, and the connection marked simulator-to-host, without which
+/// the daemon sees the peer but never a payload. Wire format and the liveness dance follow Meta's
+/// idb (`SimulatorDTUHIDConnection`, MIT).
+final class SimulatorHIDConnection: @unchecked Sendable {
+	static let digitizerService = "com.apple.coredevice.feature.remote.hid.digitizer"
+
+	private let connection: xpc_connection_t
+	private let isInvalidated = OSAllocatedUnfairLock(initialState: false)
+
+	var isUsable: Bool {
+		!isInvalidated.withLock { $0 }
+	}
+
+	private init(connection: xpc_connection_t) {
+		self.connection = connection
+		xpc_connection_set_target_queue(connection, DispatchQueue(label: "com.bridgecommander.simulator.hid"))
+		xpc_connection_set_event_handler(connection) { [isInvalidated] event in
+			if xpc_get_type(event) == XPC_TYPE_ERROR, event === XPC_ERROR_CONNECTION_INVALID {
+				isInvalidated.withLock { $0 = true }
+			}
+		}
+		xpc_connection_resume(connection)
+	}
+
+	deinit {
+		xpc_connection_cancel(connection)
+	}
+
+	/// Connects to `dtuhidd` in `device` and waits until the daemon answers.
+	///
+	/// The lookup succeeds whether or not the demand-launched daemon can run — early in a boot it
+	/// aborts until a display is up, and launchd then throttles its respawn — and a send to a dead
+	/// daemon reports no error. So a barrier is round-tripped, and retried with a back-off the way
+	/// idb does, before the connection is handed out.
+	static func connect(to device: AnyObject) async throws -> SimulatorHIDConnection {
+		var lastError: Error?
+		for attempt in 1...4 {
+			do {
+				let connection = try SimulatorHIDConnection(connection: makeConnection(device: device))
+				try await connection.confirmLiveness()
+				return connection
+			}
+			catch {
+				lastError = error
+				if attempt < 4 {
+					try await Task.sleep(for: .seconds(2))
+				}
+			}
+		}
+		throw SimulatorError.inputUnavailable(lastError?.localizedDescription ?? "no answer")
+	}
+
+	private static func makeConnection(device: AnyObject) throws -> xpc_connection_t {
+		typealias EndpointFromPort = @convention(c) (mach_port_t, UInt64, UInt64) -> Unmanaged<AnyObject>?
+		typealias ConnectionFromEndpoint = @convention(c) (xpc_object_t) -> Unmanaged<AnyObject>?
+		typealias EnableSimToHost = @convention(c) (xpc_connection_t) -> Void
+
+		guard
+			let endpointSymbol = dlsym(ObjCRuntime.defaultHandle, "xpc_endpoint_create_mach_port_4sim"),
+			let connectionSymbol = dlsym(ObjCRuntime.defaultHandle, "xpc_connection_create_from_endpoint"),
+			let simToHostSymbol = dlsym(ObjCRuntime.defaultHandle, "xpc_connection_enable_sim2host_4sim")
+		else {
+			throw SimulatorError.inputUnavailable("libxpc has no simulator endpoint support")
+		}
+
+		var error: NSError?
+		let port = ObjCRuntime.machPort(device, "lookup:error:", digitizerService as NSString, error: &error)
+		guard port != MACH_PORT_NULL else {
+			throw SimulatorError.inputUnavailable(error?.localizedDescription ?? "\(digitizerService) not found")
+		}
+
+		// Both create functions return +1; the endpoint takes over the lookup's send right.
+		guard
+			let endpoint = unsafeBitCast(endpointSymbol, to: EndpointFromPort.self)(port, 0, 0)?
+			.takeRetainedValue() as? xpc_object_t,
+			let connection = unsafeBitCast(connectionSymbol, to: ConnectionFromEndpoint.self)(endpoint)?
+			.takeRetainedValue() as? xpc_connection_t
+		else {
+			throw SimulatorError.inputUnavailable("could not connect to \(digitizerService)")
+		}
+		unsafeBitCast(simToHostSymbol, to: EnableSimToHost.self)(connection)
+		return connection
+	}
+
+	/// A barrier carrying keyboard usage 0 ("no event"), so the daemon answers without the guest
+	/// seeing a key.
+	private func confirmLiveness() async throws {
+		let message = Self.message(type: "IndigoKeyboardButtonEvent", payload: Self.keyPayload(usage: 0, isDown: false), isBarrier: true)
+		let answered: Bool = await withCheckedContinuation { continuation in
+			let once = OSAllocatedUnfairLock(initialState: false)
+			let resume: @Sendable (Bool) -> Void = { value in
+				let first = once.withLock { done in
+					defer { done = true }
+					return !done
+				}
+				if first {
+					continuation.resume(returning: value)
+				}
+			}
+			xpc_connection_send_message_with_reply(connection, message, nil) { reply in
+				resume(xpc_get_type(reply) == XPC_TYPE_DICTIONARY)
+			}
+			DispatchQueue.global().asyncAfter(deadline: .now() + 4) {
+				resume(false)
+			}
+		}
+		guard answered else {
+			xpc_connection_cancel(connection)
+			throw SimulatorError.inputUnavailable("dtuhidd did not answer")
+		}
+		// The first reply means the daemon is up; it still needs a moment to open its devices.
+		try await Task.sleep(for: .milliseconds(200))
+	}
+
+	// MARK: - Sending
+
+	/// A single-finger contact. `point` is normalized, top-left origin.
+	func touch(_ point: CGPoint, phase: SimulatorTouchPhase) {
+		let payload = xpc_dictionary_create(nil, nil, 0)
+		let contact = xpc_dictionary_create(nil, nil, 0)
+		xpc_dictionary_set_double(contact, "x", point.x)
+		xpc_dictionary_set_double(contact, "y", point.y)
+		xpc_dictionary_set_value(payload, "pointOne", contact)
+		xpc_dictionary_set_uint64(payload, "eventType", phase.rawValue)
+		xpc_dictionary_set_uint64(payload, "edge", 0)
+		xpc_dictionary_set_uint64(payload, "target", 0)
+		send(type: "IndigoDigitizerEvent", payload: payload)
+	}
+
+	func key(usage: UInt64, isDown: Bool) {
+		send(type: "IndigoKeyboardButtonEvent", payload: Self.keyPayload(usage: usage, isDown: isDown))
+	}
+
+	func button(_ button: SimulatorHardwareButton, isDown: Bool) {
+		let payload = xpc_dictionary_create(nil, nil, 0)
+		xpc_dictionary_set_uint64(payload, "usagePage", 0x0C)
+		xpc_dictionary_set_uint64(payload, "usageCode", button.consumerUsage)
+		xpc_dictionary_set_uint64(payload, "state", isDown ? 1 : 2)
+		send(type: "IndigoButtonEvent", payload: payload)
+	}
+
+	private func send(type: String, payload: xpc_object_t) {
+		xpc_connection_send_message(connection, Self.message(type: type, payload: payload, isBarrier: false))
+	}
+
+	/// `HIDButtonState` is 1-based: down is 1, up is 2 (0 is rejected by the daemon's decoder).
+	private static func keyPayload(usage: UInt64, isDown: Bool) -> xpc_object_t {
+		let payload = xpc_dictionary_create(nil, nil, 0)
+		xpc_dictionary_set_uint64(payload, "usageCode", usage)
+		xpc_dictionary_set_uint64(payload, "state", isDown ? 1 : 2)
+		return payload
+	}
+
+	private static func message(type: String, payload: xpc_object_t, isBarrier: Bool) -> xpc_object_t {
+		let message = xpc_dictionary_create(nil, nil, 0)
+		xpc_dictionary_set_string(message, "messageType", type)
+		xpc_dictionary_set_bool(message, "isBarrier", isBarrier)
+		xpc_dictionary_set_string(message, "featureIdentifier", digitizerService)
+		xpc_dictionary_set_value(message, "payload", payload)
+		return message
+	}
+}

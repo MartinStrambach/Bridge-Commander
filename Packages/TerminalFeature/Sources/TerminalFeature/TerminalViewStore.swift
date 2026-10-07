@@ -9,14 +9,23 @@ public final class TerminalViewStore {
 
 	private let shellExecutable: String
 	private let shellArguments: [String]
+	private let additionalEnvironment: @MainActor (UUID) -> [String]
 
 	/// - Parameters:
 	///   - shellExecutable: What each pane runs. The app runs the user's login shell; tests run
 	///     something cheaper.
 	///   - shellArguments: Arguments for `shellExecutable`.
-	public init(shellExecutable: String = "/bin/zsh", shellArguments: [String] = ["-l"]) {
+	///   - additionalEnvironment: Extra `NAME=value` variables for a session's shell, beyond
+	///     `TerminalEnvironment`'s — the simulator MCP server's address and the session's id, which
+	///     come from a package this one does not depend on.
+	public init(
+		shellExecutable: String = "/bin/zsh",
+		shellArguments: [String] = ["-l"],
+		additionalEnvironment: @escaping @MainActor (UUID) -> [String] = { _ in [] }
+	) {
 		self.shellExecutable = shellExecutable
 		self.shellArguments = shellArguments
+		self.additionalEnvironment = additionalEnvironment
 	}
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one.
@@ -85,7 +94,8 @@ public final class TerminalViewStore {
 		terminalView.startProcess(
 			executable: shellExecutable,
 			args: shellArguments,
-			environment: TerminalEnvironment.variables(requestingProgress: statusSource.requestsProgress),
+			environment: TerminalEnvironment.variables(requestingProgress: statusSource.requestsProgress)
+				+ additionalEnvironment(session.id),
 			execName: nil,
 			currentDirectory: session.startingDirectory
 		)

@@ -28,6 +28,7 @@ Packages/
   YouTrackMenu/           # YouTrack ticket menu (move to a reachable state)
   GitGraphFeature/        # Commit graph view + selected commit's diff
   StagingFeature/         # File staging panel (detail view, diff, commit)
+  SimulatorFeature/       # iOS simulator pane beside the terminal + MCP server for Claude Code
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature)
 ```
 

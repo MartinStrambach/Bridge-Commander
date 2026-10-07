@@ -8,6 +8,7 @@ import StagingFeature
 import SwiftTerm
 import SwiftUI
 import Settings
+import SimulatorFeature
 import TerminalFeature
 import ToolsIntegration
 import YouTrackMenu
@@ -282,6 +283,19 @@ struct TerminalPanelView: View {
 //				.controlSize(.small)
 //			}
 			
+			if activeRowStore?.supportsIOS == true || store.simulatorPane.isVisible {
+				Button {
+					store.send(.simulatorPane(.toggleVisibility))
+				} label: {
+					Label("Simulator", systemImage: "iphone")
+						.labelStyle(.titleAndIcon)
+				}
+				.buttonStyle(.scaledBordered)
+				.controlSize(.small)
+				.tint(store.simulatorPane.isVisible ? .accentColor : nil)
+				.help(store.simulatorPane.isVisible ? "Hide the iOS simulator" : "Show the iOS simulator beside the terminal")
+			}
+
 			Button("Graph") {
 				if let path = store.activeRepositoryPath {
 					store.send(.gitGraphButtonTapped(
@@ -388,7 +402,27 @@ struct TerminalPanelView: View {
 	/// in a stable position in the view hierarchy across repo switches and
 	/// hide/show cycles, preventing the zero-frame setFrameSize that would
 	/// send a spurious SIGWINCH and cause zsh to clear visible terminal output.
+	///
+	/// The simulator pane sits to the right of that container, as a sibling in an `HStack` whose
+	/// first child is always the container — showing or hiding the pane changes the terminal's
+	/// width (one deliberate SIGWINCH), never its place in the hierarchy.
 	private var terminalContent: some View {
+		GeometryReader { proxy in
+			HStack(spacing: 0) {
+				terminalStack
+
+				if store.simulatorPane.isVisible {
+					Divider()
+					SimulatorPaneView(
+						store: store.scope(\.simulatorPane, action: \.simulatorPane),
+						availableSize: proxy.size
+					)
+				}
+			}
+		}
+	}
+
+	private var terminalStack: some View {
 		ZStack {
 			TerminalContainerRepresentable(
 				terminalViewStore: terminalViewStore,
