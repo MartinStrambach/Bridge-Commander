@@ -23,6 +23,11 @@ public struct HomerConsoleReducer: Sendable {
 	/// The console's own refresh cadences (`polling.processListInterval`, `useQuestions`).
 	static let processPollInterval: Duration = .seconds(5)
 	static let questionPollInterval: Duration = .seconds(30)
+	/// The console's Flow cells refresh on this cadence too (`useFlowSummary`).
+	static let flowSummaryPollInterval: Duration = .seconds(30)
+	/// Root rows whose Flow cell is summarized, in list order. Each cell is one request, so the
+	/// count is bounded rather than growing with "Load more" — the console caps it the same.
+	static let flowSummaryRowLimit = 20
 	/// How long the sign-in button stays off after the login limiter answers 429, as in the
 	/// console: retrying sooner only drains the bucket and prolongs the lockout.
 	static let loginCooldownSeconds = 60
@@ -69,8 +74,24 @@ public struct HomerConsoleReducer: Sendable {
 		public internal(set) var processLimit = HomerConsoleReducer.pageSize
 		public internal(set) var statusFilter: Set<HomerProcessStatus> = []
 		public var rootsOnly = false
+		public internal(set) var agentFilter: String?
+		/// Runs must carry every tag listed; a tag chip in a row adds itself.
+		public internal(set) var tagFilter: [String] = []
+		/// The direct children of one run. Overrides `rootsOnly`, as in the console: a run's
+		/// children are never roots.
+		public internal(set) var parentFilter: Int?
+		public internal(set) var oldestFirst = false
+		/// The agent filter's choices.
+		public internal(set) var agentNames: [String] = []
 		public internal(set) var hasLoadedProcesses = false
 		public internal(set) var processesError: String?
+		public internal(set) var flowSummaries: [HomerProcess.ID: HomerFlowSummary] = [:]
+		/// The roots `flowSummaries` covers: the first rows of the root view.
+		var flowSummaryRootIDs: [HomerProcess.ID] = []
+		/// Kill or retry requests still waiting on the server.
+		public internal(set) var processActionsInFlight: Set<HomerProcess.ID> = []
+		@Presents
+		public var alert: AlertState<Action.Alert>?
 
 		// Questions
 		public internal(set) var questions: IdentifiedArrayOf<HomerQuestion> = []
@@ -103,8 +124,31 @@ public struct HomerConsoleReducer: Sendable {
 			processes.count < processTotal
 		}
 
+		/// The root view shows a Flow column; a parent filter turns it back into a plain list.
+		public var showsFlowColumn: Bool {
+			rootsOnly && parentFilter == nil
+		}
+
+		public var hasActiveFilters: Bool {
+			!statusFilter.isEmpty || agentFilter != nil || !tagFilter.isEmpty || parentFilter != nil
+		}
+
+		/// What the listed runs cost together — the rows shown, not every match, as in the
+		/// console's "Total cost".
+		public var listedCostUsd: Double {
+			processes.reduce(0) { $0 + ($1.costUsd ?? 0) }
+		}
+
 		var processQuery: HomerProcessQuery {
-			HomerProcessQuery(statuses: statusFilter, rootsOnly: rootsOnly, limit: processLimit)
+			HomerProcessQuery(
+				statuses: statusFilter,
+				rootsOnly: showsFlowColumn,
+				agentName: agentFilter,
+				tags: tagFilter,
+				parentProcessId: parentFilter,
+				oldestFirst: oldestFirst,
+				limit: processLimit
+			)
 		}
 	}
 
@@ -126,10 +170,22 @@ public struct HomerConsoleReducer: Sendable {
 
 		case refreshTapped
 		case statusFilterToggled(HomerProcessStatus)
-		case statusFilterCleared
+		case agentFilterChanged(String?)
+		case tagTapped(String)
+		case tagFilterRemoved(String)
+		case showChildRunsTapped(processId: Int)
+		case parentFilterCleared
+		case filtersCleared
+		case sortOrderToggled
 		case loadMoreProcessesTapped
 		case processesLoaded(Result<HomerProcessPage, any Error>)
+		case agentNamesLoaded(Result<[String], any Error>)
+		case flowSummariesLoaded([HomerProcess.ID: HomerFlowSummary])
 		case processTapped(processId: Int)
+		case killTapped(processId: Int)
+		case retryTapped(processId: Int)
+		case processActionFinished(processId: Int, ProcessAction, Result<Int?, any Error>)
+		case alert(PresentationAction<Alert>)
 
 		case questionsLoaded(Result<[HomerQuestion], any Error>)
 		case answerDraftChanged(questionId: HomerQuestion.ID, text: String)
@@ -138,6 +194,15 @@ public struct HomerConsoleReducer: Sendable {
 
 		/// A page of the web console, e.g. `processes` or `processes/42`.
 		case openWebConsoleTapped(path: String, title: String)
+
+		public enum ProcessAction: Equatable, Sendable {
+			case kill
+			case retry
+		}
+
+		public enum Alert: Equatable, Sendable {
+			case killConfirmed(processId: Int)
+		}
 	}
 
 	private nonisolated enum CancelID: Hashable {
@@ -146,6 +211,7 @@ public struct HomerConsoleReducer: Sendable {
 		case loginCooldown
 		case processPolling
 		case questionPolling
+		case flowSummaryPolling
 	}
 
 	@Dependency(HomerClient.self)
@@ -161,8 +227,12 @@ public struct HomerConsoleReducer: Sendable {
 		Reduce { state, action in
 			switch action {
 			case .binding(\.rootsOnly):
-				state.processLimit = Self.pageSize
-				return pollProcesses(state)
+				// Switching views changes what a row means; a parent filter would override the
+				// root view, so going there drops it, as the console does.
+				if state.rootsOnly {
+					state.parentFilter = nil
+				}
+				return refilter(&state)
 
 			case .binding(\.tab):
 				// Switching to the questions shows the server's answer of now, not of up to
@@ -207,7 +277,7 @@ public struct HomerConsoleReducer: Sendable {
 
 			case .disappeared:
 				state.isVisible = false
-				return .cancel(id: CancelID.processPolling)
+				return .merge(.cancel(id: CancelID.processPolling), .cancel(id: CancelID.flowSummaryPolling))
 
 			case .editEndpointTapped:
 				state.isEditingEndpoint = true
@@ -327,16 +397,47 @@ public struct HomerConsoleReducer: Sendable {
 				else {
 					state.statusFilter.insert(status)
 				}
-				state.processLimit = Self.pageSize
-				return pollProcesses(state)
+				return refilter(&state)
 
-			case .statusFilterCleared:
-				guard !state.statusFilter.isEmpty else {
+			case let .agentFilterChanged(agentName):
+				guard agentName != state.agentFilter else {
+					return .none
+				}
+				state.agentFilter = agentName
+				return refilter(&state)
+
+			case let .tagTapped(tag):
+				guard !state.tagFilter.contains(tag) else {
+					return .none
+				}
+				state.tagFilter.append(tag)
+				return refilter(&state)
+
+			case let .tagFilterRemoved(tag):
+				state.tagFilter.removeAll { $0 == tag }
+				return refilter(&state)
+
+			case let .showChildRunsTapped(processId):
+				state.parentFilter = processId
+				return refilter(&state)
+
+			case .parentFilterCleared:
+				state.parentFilter = nil
+				return refilter(&state)
+
+			case .filtersCleared:
+				guard state.hasActiveFilters else {
 					return .none
 				}
 				state.statusFilter = []
-				state.processLimit = Self.pageSize
-				return pollProcesses(state)
+				state.agentFilter = nil
+				state.tagFilter = []
+				state.parentFilter = nil
+				return refilter(&state)
+
+			case .sortOrderToggled:
+				state.oldestFirst.toggle()
+				return refilter(&state)
 
 			case .loadMoreProcessesTapped:
 				state.processLimit += Self.pageSize
@@ -350,7 +451,7 @@ public struct HomerConsoleReducer: Sendable {
 				state.processTotal = page.total
 				state.hasLoadedProcesses = true
 				state.processesError = nil
-				return .none
+				return syncFlowSummaries(&state)
 
 			case let .processesLoaded(.failure(error)):
 				guard state.user != nil else {
@@ -360,6 +461,83 @@ public struct HomerConsoleReducer: Sendable {
 					return expireSession(&state)
 				}
 				state.processesError = error.localizedDescription
+				return .none
+
+			case let .agentNamesLoaded(.success(names)):
+				state.agentNames = names
+				return .none
+
+			case .agentNamesLoaded(.failure):
+				// The filter just offers no choices; the list itself still loads.
+				return .none
+
+			case let .flowSummariesLoaded(summaries):
+				let shown = Set(state.flowSummaryRootIDs)
+				state.flowSummaries.merge(summaries.filter { shown.contains($0.key) }) { _, new in new }
+				return .none
+
+			case let .killTapped(processId):
+				state.alert = AlertState {
+					TextState("Kill process #\(processId)?")
+				} actions: {
+					ButtonState(role: .destructive, action: .killConfirmed(processId: processId)) {
+						TextState("Kill Process")
+					}
+					ButtonState(role: .cancel) {
+						TextState("Cancel")
+					}
+				} message: {
+					TextState("This cannot be undone.")
+				}
+				return .none
+
+			case let .alert(.presented(.killConfirmed(processId))):
+				guard state.processActionsInFlight.insert(processId).inserted else {
+					return .none
+				}
+				return .run { [baseURL = state.baseURL] send in
+					await send(.processActionFinished(processId: processId, .kill, Result {
+						try await homerClient.killProcess(baseURL, processId)
+						return nil
+					}))
+				}
+
+			case .alert:
+				return .none
+
+			case let .retryTapped(processId):
+				guard state.processActionsInFlight.insert(processId).inserted else {
+					return .none
+				}
+				return .run { [baseURL = state.baseURL] send in
+					await send(.processActionFinished(processId: processId, .retry, Result {
+						try await homerClient.retryProcess(baseURL, processId)
+					}))
+				}
+
+			case let .processActionFinished(processId, _, .success(newProcessId)):
+				state.processActionsInFlight.remove(processId)
+				let refresh = state.isVisible ? pollProcesses(state) : .none
+				guard let newProcessId else {
+					return refresh
+				}
+				// The console takes you to the new run after a retry.
+				return .merge(refresh, .send(.processTapped(processId: newProcessId)))
+
+			case let .processActionFinished(processId, action, .failure(error)):
+				state.processActionsInFlight.remove(processId)
+				if error as? HomerAPIError == .unauthorized {
+					return expireSession(&state)
+				}
+				state.alert = AlertState {
+					TextState(action == .kill ? "Could Not Kill #\(processId)" : "Could Not Retry #\(processId)")
+				} actions: {
+					ButtonState(role: .cancel) {
+						TextState("OK")
+					}
+				} message: {
+					TextState(error.localizedDescription)
+				}
 				return .none
 
 			case let .processTapped(processId):
@@ -430,6 +608,7 @@ public struct HomerConsoleReducer: Sendable {
 				return .none
 			}
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 
 	// MARK: - Polling
@@ -437,12 +616,68 @@ public struct HomerConsoleReducer: Sendable {
 	private func startPolling(_ state: State) -> Effect<Action> {
 		.merge(
 			pollQuestions(state),
-			state.isVisible ? pollProcesses(state) : .none
+			state.isVisible ? pollProcesses(state) : .none,
+			state.isVisible && state.agentNames.isEmpty ? loadAgentNames(state) : .none
 		)
 	}
 
 	private func stopPolling() -> Effect<Action> {
-		.merge(.cancel(id: CancelID.processPolling), .cancel(id: CancelID.questionPolling))
+		.merge(
+			.cancel(id: CancelID.processPolling),
+			.cancel(id: CancelID.questionPolling),
+			.cancel(id: CancelID.flowSummaryPolling)
+		)
+	}
+
+	/// A filter changed: the list restarts from its first page.
+	private func refilter(_ state: inout State) -> Effect<Action> {
+		state.processLimit = Self.pageSize
+		return pollProcesses(state)
+	}
+
+	private func loadAgentNames(_ state: State) -> Effect<Action> {
+		.run { [baseURL = state.baseURL] send in
+			await send(.agentNamesLoaded(Result { try await homerClient.agentNames(baseURL) }))
+		}
+	}
+
+	/// Keeps the Flow cells' summaries in step with the rows on screen: a new set of top roots
+	/// restarts their poll, leaving the root view stops it.
+	private func syncFlowSummaries(_ state: inout State) -> Effect<Action> {
+		let rootIDs = state.showsFlowColumn
+			? Array(state.processes.ids.prefix(Self.flowSummaryRowLimit))
+			: []
+		guard rootIDs != state.flowSummaryRootIDs else {
+			return .none
+		}
+		state.flowSummaryRootIDs = rootIDs
+		let shown = Set(rootIDs)
+		state.flowSummaries = state.flowSummaries.filter { shown.contains($0.key) }
+		guard !rootIDs.isEmpty else {
+			return .cancel(id: CancelID.flowSummaryPolling)
+		}
+		return .run { [baseURL = state.baseURL] send in
+			while true {
+				let summaries = await withTaskGroup(of: (Int, HomerFlowSummary?).self) { group in
+					for rootID in rootIDs {
+						group.addTask {
+							let query = HomerProcessQuery(rootProcessId: rootID, limit: HomerFlowSummary.fetchLimit)
+							// A cell whose summary fails keeps its last one, or a dash.
+							let page = try? await homerClient.processes(baseURL, query)
+							return (rootID, page.map(HomerFlowSummary.init(page:)))
+						}
+					}
+					var summaries: [Int: HomerFlowSummary] = [:]
+					for await (rootID, summary) in group {
+						summaries[rootID] = summary
+					}
+					return summaries
+				}
+				await send(.flowSummariesLoaded(summaries))
+				try await clock.sleep(for: Self.flowSummaryPollInterval)
+			}
+		}
+		.cancellable(id: CancelID.flowSummaryPolling, cancelInFlight: true)
 	}
 
 	/// Fetches right away, then on the console's cadence. Restarting it (a filter change, "Load
@@ -485,6 +720,14 @@ public struct HomerConsoleReducer: Sendable {
 		state.processLimit = Self.pageSize
 		state.hasLoadedProcesses = false
 		state.processesError = nil
+		state.flowSummaries = [:]
+		state.flowSummaryRootIDs = []
+		state.processActionsInFlight = []
+		state.agentNames = []
+		state.agentFilter = nil
+		state.tagFilter = []
+		state.parentFilter = nil
+		state.alert = nil
 		state.questions = []
 		state.hasLoadedQuestions = false
 		state.questionsError = nil

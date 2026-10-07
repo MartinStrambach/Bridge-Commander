@@ -289,5 +289,154 @@ struct HomerConsoleReducerTests {
 			)
 		}
 	}
-}
 
+	@Test("a tag chip filters the list and re-reads it from the top")
+	func tagFilter() async {
+		let clock = TestClock()
+		let queries = LockIsolated<[HomerProcessQuery]>([])
+		var initialState = signedInState()
+		initialState.isVisible = true
+		initialState.processLimit = 100
+		let store = TestStore(initialState: initialState) {
+			HomerConsoleReducer()
+		} withDependencies: {
+			$0.continuousClock = clock
+			$0[HomerClient.self].processes = { _, query in
+				queries.withValue { $0.append(query) }
+				return HomerProcessPage(processes: [], total: 0)
+			}
+		}
+
+		await store.send(.tagTapped("ticket:MOB-1")) {
+			$0.tagFilter = ["ticket:MOB-1"]
+			$0.processLimit = 50
+		}
+		await store.receive(\.processesLoaded) {
+			$0.hasLoadedProcesses = true
+		}
+		// The same tag twice adds nothing.
+		await store.send(.tagTapped("ticket:MOB-1"))
+
+		#expect(queries.value == [HomerProcessQuery(tags: ["ticket:MOB-1"], limit: 50)])
+		await store.skipInFlightEffects()
+	}
+
+	@Test("a parent filter turns the root view back into a plain list")
+	func parentFilterOverridesRoots() {
+		var state = signedInState()
+		state.rootsOnly = true
+		#expect(state.showsFlowColumn)
+
+		state.parentFilter = 7
+		#expect(!state.showsFlowColumn)
+		#expect(state.processQuery == HomerProcessQuery(parentProcessId: 7, limit: 50))
+	}
+
+	@Test("the root view summarizes each listed root's flow")
+	func flowSummaries() async {
+		let clock = TestClock()
+		let root = HomerProcess(id: 1, status: .working, agentName: "factory")
+		let child = HomerProcess(id: 2, status: .working, agentName: "factory-developer", openQuestions: 1, costUsd: 0.5)
+		var initialState = signedInState()
+		initialState.isVisible = true
+		initialState.rootsOnly = true
+		let store = TestStore(initialState: initialState) {
+			HomerConsoleReducer()
+		} withDependencies: {
+			$0.continuousClock = clock
+			$0[HomerClient.self].processes = { _, query in
+				query.rootProcessId == 1
+					? HomerProcessPage(processes: [child], total: 1)
+					: HomerProcessPage(processes: [root], total: 1)
+			}
+			$0[HomerClient.self].openQuestions = { _ in [] }
+		}
+
+		await store.send(.refreshTapped)
+		store.exhaustivity = .off(showSkippedAssertions: false)
+		await store.receive(\.processesLoaded) {
+			$0.processes = [root]
+			$0.flowSummaryRootIDs = [1]
+		}
+		await store.receive(\.flowSummariesLoaded) {
+			$0.flowSummaries = [1: HomerFlowSummary(runCount: 1, costUsd: 0.5, state: .question, isPartial: false)]
+		}
+		await store.skipInFlightEffects()
+	}
+
+	@Test("killing asks first, then refreshes the list")
+	func killConfirms() async {
+		let clock = TestClock()
+		let killed = LockIsolated<[Int]>([])
+		var initialState = signedInState()
+		initialState.isVisible = true
+		let store = TestStore(initialState: initialState) {
+			HomerConsoleReducer()
+		} withDependencies: {
+			$0.continuousClock = clock
+			$0[HomerClient.self].killProcess = { _, id in killed.withValue { $0.append(id) } }
+			$0[HomerClient.self].processes = { _, _ in HomerProcessPage(processes: [], total: 0) }
+		}
+
+		store.exhaustivity = .off(showSkippedAssertions: false)
+		await store.send(.killTapped(processId: 5))
+		#expect(store.state.alert != nil)
+		#expect(killed.value.isEmpty)
+
+		await store.send(.alert(.presented(.killConfirmed(processId: 5)))) {
+			$0.alert = nil
+			$0.processActionsInFlight = [5]
+		}
+		await store.receive(\.processActionFinished) {
+			$0.processActionsInFlight = []
+		}
+		await store.receive(\.processesLoaded)
+
+		#expect(killed.value == [5])
+		await store.skipInFlightEffects()
+	}
+
+	@Test("a retry opens the new run, as the console does")
+	func retryOpensNewRun() async {
+		let initialState = signedInState()
+		let store = TestStore(initialState: initialState) {
+			HomerConsoleReducer()
+		} withDependencies: {
+			$0[HomerClient.self].retryProcess = { _, _ in 43 }
+			$0[HomerClient.self].sessionCookies = { _ in [] }
+		}
+
+		await store.send(.retryTapped(processId: 42)) {
+			$0.processActionsInFlight = [42]
+		}
+		await store.receive(\.processActionFinished) {
+			$0.processActionsInFlight = []
+		}
+		await store.receive(\.processTapped)
+		await store.receive(\.openWebConsoleTapped) {
+			$0.webPage = HomerWebPage(
+				url: URL(string: "https://homer.example.com/processes/43")!,
+				title: "Process #43",
+				cookies: []
+			)
+		}
+	}
+
+	@Test("a refused kill says why")
+	func killFails() async {
+		let initialState = signedInState()
+		let store = TestStore(initialState: initialState) {
+			HomerConsoleReducer()
+		} withDependencies: {
+			$0[HomerClient.self].killProcess = { _, _ in throw HomerAPIError.forbidden }
+		}
+
+		store.exhaustivity = .off(showSkippedAssertions: false)
+		await store.send(.killTapped(processId: 5))
+		await store.send(.alert(.presented(.killConfirmed(processId: 5))))
+		await store.receive(\.processActionFinished)
+
+		#expect(store.state.processActionsInFlight.isEmpty)
+		#expect(store.state.alert?.title == TextState("Could Not Kill #5"))
+	}
+}

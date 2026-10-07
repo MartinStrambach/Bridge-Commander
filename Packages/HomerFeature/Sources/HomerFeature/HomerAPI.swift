@@ -75,6 +75,24 @@ nonisolated enum HomerAPI {
 		)
 	}
 
+	/// The names of the agents the user can see, sorted — the agent filter's choices.
+	static func agentNames(baseURL: String) async throws -> [String] {
+		let list = try await decode(HomerAgentList.self, from: send("GET", "/api/v1/agents", baseURL: baseURL))
+		return list.agents.map(\.name).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+	}
+
+	static func killProcess(baseURL: String, id: Int) async throws {
+		_ = try await send("DELETE", "/api/v1/kill/\(id)", baseURL: baseURL)
+	}
+
+	/// Starts the run again with its inputs and returns the new run's id.
+	static func retryProcess(baseURL: String, id: Int) async throws -> Int {
+		try await decode(
+			HomerRetryResponse.self,
+			from: send("POST", "/api/v1/processes/\(id)/retry", baseURL: baseURL)
+		).processId
+	}
+
 	static func openQuestions(baseURL: String) async throws -> [HomerQuestion] {
 		let data = try await send(
 			"GET",
