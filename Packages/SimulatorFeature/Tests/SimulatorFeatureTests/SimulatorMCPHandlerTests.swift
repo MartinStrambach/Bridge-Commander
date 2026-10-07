@@ -55,6 +55,8 @@ struct SimulatorMCPHandlerTests {
 		func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
 			record("two \(from.first.x),\(from.second.x) -> \(to.first.x),\(to.second.x)")
 		}
+		var crashReports: any SimulatorCrashReportSource { crashSource }
+		let crashSource = SimulatorCrashReportsTests.source()
 
 		static let baseline = ScreenFingerprint(columns: 1, rows: 1, cells: [7])
 		func screenFingerprint(device: SimulatorDevice) async -> ScreenFingerprint? {
@@ -155,7 +157,7 @@ struct SimulatorMCPHandlerTests {
 		let names = tools.compactMap { $0["name"]?.stringValue }
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
-			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element",
+			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element", "list_crashes", "crash_report",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -360,6 +362,33 @@ struct SimulatorMCPHandlerTests {
 	func scrollToElementReportsTheNewFrame() async throws {
 		let scrolled = try await callText(FakeActions(), "scroll_to_element", ["identifier": "email", "index": 0, "wait_for_settle": false])
 		#expect(scrolled.text == "Scrolled TextField id=email frame=(10,120,300,40) into view; its frame is now (10,70,300,40).")
+	}
+
+	@Test
+	func crashToolsListAndSummariseReports() async throws {
+		func call(_ name: String, _ arguments: JSONValue) async throws -> JSONValue? {
+			let response = await handler(FakeActions()).response(to: try post([
+				"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": ["name": .string(name), "arguments": arguments],
+			]))
+			return try decode(response)["result"]
+		}
+
+		let list = try await call("list_crashes", ["udid": .string(CrashFixtures.udid), "since_minutes": 100_000])
+		guard case let .array(listContent)? = list?["content"] else {
+			Issue.record("expected content")
+			return
+		}
+		#expect(list?["isError"] == false)
+		#expect(listContent.first?["text"]?.stringValue?.contains("CrashDemo-2026-10-07-193128.ips") == true)
+
+		let report = try await call("crash_report", ["name": "CrashDemo-2026-10-07-193214.ips"])
+		guard case let .array(reportContent)? = report?["content"] else {
+			Issue.record("expected content")
+			return
+		}
+		#expect(reportContent.first?["text"]?.stringValue?.contains("0  CrashDemo  crash(_:) + 780 (main.swift:31)") == true)
+
+		#expect(try await call("crash_report", ["name": "../../.ssh/id_rsa"])?["isError"] == true)
 	}
 }
 

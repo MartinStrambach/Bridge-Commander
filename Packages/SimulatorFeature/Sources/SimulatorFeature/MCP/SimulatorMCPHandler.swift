@@ -20,6 +20,7 @@ protocol SimulatorToolActions: Sendable {
 	func screenFingerprint(device: SimulatorDevice) async -> ScreenFingerprint?
 	func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult
 	func elementAction(_ action: SimulatorElementAction, on query: SimulatorElementQuery, device: SimulatorDevice) async throws -> SimulatorElementOutcome
+	var crashReports: any SimulatorCrashReportSource { get }
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.
@@ -106,7 +107,8 @@ struct SimulatorMCPHandler: Sendable {
 	the screen has stopped changing, up to 3 s, and say whether it settled, did not change or is \
 	still changing — so look at the result right away instead of waiting or taking extra \
 	screenshots to catch up. Only when it is still changing (loading, a long animation) may a \
-	later look differ.
+	later look differ. When the app crashes or vanishes, list_crashes and crash_report give the \
+	crash's reason and backtrace.
 	"""
 
 	private static func result(id: JSONValue, _ result: JSONValue) -> JSONValue {
