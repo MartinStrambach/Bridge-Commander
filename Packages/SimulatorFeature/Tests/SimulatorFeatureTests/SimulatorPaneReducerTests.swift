@@ -125,4 +125,69 @@ struct SimulatorPaneReducerTests {
 		}
 		#expect(turns.value == [false])
 	}
+
+	@Test
+	func aSavedScreenshotIsOfferedUntilTheBannerTimesOut() async {
+		let clock = TestClock()
+		let url = URL(fileURLWithPath: "/tmp/Simulator Screenshot.png")
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].saveScreenshot = { _ in url }
+			$0.continuousClock = clock
+		}
+
+		await store.send(.screenshotButtonTapped) {
+			$0.isSavingScreenshot = true
+		}
+		await store.receive(.screenshotSaved(url)) {
+			$0.isSavingScreenshot = false
+			$0.savedScreenshotURL = url
+		}
+		await clock.advance(by: .seconds(6))
+		await store.receive(.screenshotBannerDismissed) {
+			$0.savedScreenshotURL = nil
+		}
+	}
+
+	@Test
+	func showingTheScreenshotInFinderClosesTheBanner() async {
+		let url = URL(fileURLWithPath: "/tmp/Simulator Screenshot.png")
+		let revealed = LockIsolated<[URL]>([])
+		var initial = SimulatorPaneReducer.State()
+		initial.savedScreenshotURL = url
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].revealInFinder = { url in revealed.withValue { $0.append(url) } }
+		}
+
+		await store.send(.showScreenshotInFinderTapped) {
+			$0.savedScreenshotURL = nil
+		}
+		#expect(revealed.value == [url])
+	}
+
+	@Test
+	func aFailedScreenshotIsReported() async {
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].saveScreenshot = { _ in throw SimulatorError.noFramebuffer }
+		}
+
+		await store.send(.screenshotButtonTapped) {
+			$0.isSavingScreenshot = true
+		}
+		await store.receive(.screenshotFailed(SimulatorError.noFramebuffer.localizedDescription)) {
+			$0.isSavingScreenshot = false
+			$0.errorMessage = "Could not save the screenshot: \(SimulatorError.noFramebuffer.localizedDescription)"
+		}
+	}
 }

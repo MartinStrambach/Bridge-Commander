@@ -44,6 +44,14 @@ public struct SimulatorPaneView: View {
 				Divider()
 			}
 			content
+				// Over the screen rather than above it, so saving does not shrink the device.
+				.overlay(alignment: .top) {
+					if let url = store.savedScreenshotURL {
+						screenshotBanner(url)
+							.transition(.move(edge: .top).combined(with: .opacity))
+					}
+				}
+				.animation(.easeOut(duration: 0.2), value: store.savedScreenshotURL)
 		}
 		.frame(width: paneWidth)
 		.background(Color(NSColor.underPageBackgroundColor))
@@ -65,6 +73,14 @@ public struct SimulatorPaneView: View {
 						.controlSize(.small)
 				}
 				else if device.isBooted {
+					if store.isSavingScreenshot {
+						ProgressView()
+							.controlSize(.small)
+							.frame(width: 22, height: 22)
+					}
+					else {
+						iconButton("camera", help: "Save Screenshot") { store.send(.screenshotButtonTapped) }
+					}
 					iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
 					iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
 					iconButton("house", help: "Home") { store.send(.hardwareButtonTapped(.home)) }
@@ -132,6 +148,22 @@ public struct SimulatorPaneView: View {
 			isLoading: store.isConnectingClaudeCode,
 			onAction: { store.send(.connectClaudeCodeButtonTapped) }
 		)
+	}
+
+	private func screenshotBanner(_ url: URL) -> some View {
+		BannerView(
+			icon: "camera.fill",
+			title: "Screenshot saved",
+			subtitle: url.lastPathComponent,
+			color: .green,
+			actionLabel: "Show in Finder",
+			onAction: { store.send(.showScreenshotInFinderTapped) },
+			onDismiss: { store.send(.screenshotBannerDismissed) }
+		)
+		.background(.regularMaterial)
+		.clipShape(RoundedRectangle(cornerRadius: 10))
+		.shadow(color: .black.opacity(0.2), radius: 8, y: 2)
+		.padding(8)
 	}
 
 	private func errorBanner(_ message: String) -> some View {

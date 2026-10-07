@@ -23,6 +23,9 @@ public struct SimulatorPaneReducer {
 		/// Assumed until checked, so the "connect" banner does not flash on every appearance.
 		public var isClaudeCodeConnected = true
 		public var isConnectingClaudeCode = false
+		public var isSavingScreenshot = false
+		/// The screenshot just saved, offered in a banner until it times out or is dismissed.
+		public var savedScreenshotURL: URL?
 
 		public init() {}
 
@@ -42,6 +45,11 @@ public struct SimulatorPaneReducer {
 		case transitionFinished(errorMessage: String?)
 		case hardwareButtonTapped(SimulatorHardwareButton)
 		case rotateButtonTapped(clockwise: Bool)
+		case screenshotButtonTapped
+		case screenshotSaved(URL)
+		case screenshotFailed(String)
+		case showScreenshotInFinderTapped
+		case screenshotBannerDismissed
 		case connectClaudeCodeButtonTapped
 		case claudeCodeStatusChecked(Bool)
 		case connectClaudeCodeFinished(errorMessage: String?)
@@ -54,6 +62,7 @@ public struct SimulatorPaneReducer {
 
 	private enum CancelId {
 		case polling
+		case screenshotBanner
 	}
 
 	@Dependency(SimulatorClient.self)
@@ -193,6 +202,49 @@ public struct SimulatorPaneReducer {
 						await send(.transitionFinished(errorMessage: error.localizedDescription))
 					}
 				}
+
+			case .screenshotButtonTapped:
+				guard let device = state.selectedDevice, device.isBooted, !state.isSavingScreenshot else {
+					return .none
+				}
+				state.isSavingScreenshot = true
+				state.errorMessage = nil
+				return .run { [simulatorClient] send in
+					do {
+						try await send(.screenshotSaved(simulatorClient.saveScreenshot(device)))
+					}
+					catch {
+						await send(.screenshotFailed(error.localizedDescription))
+					}
+				}
+
+			case let .screenshotSaved(url):
+				state.isSavingScreenshot = false
+				state.savedScreenshotURL = url
+				return .run { [clock] send in
+					try await clock.sleep(for: .seconds(6))
+					await send(.screenshotBannerDismissed)
+				}
+				.cancellable(id: CancelId.screenshotBanner, cancelInFlight: true)
+
+			case let .screenshotFailed(message):
+				state.isSavingScreenshot = false
+				state.errorMessage = "Could not save the screenshot: \(message)"
+				return .none
+
+			case .showScreenshotInFinderTapped:
+				guard let url = state.savedScreenshotURL else {
+					return .none
+				}
+				state.savedScreenshotURL = nil
+				return .merge(
+					.cancel(id: CancelId.screenshotBanner),
+					.run { [simulatorClient] _ in await simulatorClient.revealInFinder(url) }
+				)
+
+			case .screenshotBannerDismissed:
+				state.savedScreenshotURL = nil
+				return .cancel(id: CancelId.screenshotBanner)
 
 			case .connectClaudeCodeButtonTapped:
 				state.isConnectingClaudeCode = true

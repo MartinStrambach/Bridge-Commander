@@ -269,6 +269,23 @@ public final class SimulatorHost: @unchecked Sendable {
 		return data as Data
 	}
 
+	/// A PNG of the screen at its native pixel size, turned the way the interface is — what
+	/// Simulator.app's File ▸ Save Screen saves.
+	public func screenshotPNG(udid: String) throws -> Data {
+		let screen = try mainScreen(udid: udid)
+		let image = try framebufferImage(screen: screen, orientation: Self.screenRotation(of: screen).framebufferImageOrientation)
+
+		let data = NSMutableData()
+		guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
+			throw SimulatorError.noFramebuffer
+		}
+		CGImageDestinationAddImage(destination, image, nil)
+		guard CGImageDestinationFinalize(destination) else {
+			throw SimulatorError.noFramebuffer
+		}
+		return data as Data
+	}
+
 	private static func scaled(_ image: CGImage, to size: CGSize) -> CGImage? {
 		let width = Int(size.width.rounded())
 		let height = Int(size.height.rounded())
