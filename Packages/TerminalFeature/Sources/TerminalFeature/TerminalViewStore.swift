@@ -9,7 +9,7 @@ public final class TerminalViewStore {
 
 	private let shellExecutable: String
 	private let shellArguments: [String]
-	private let additionalEnvironment: @MainActor (UUID) -> [String]
+	private let additionalEnvironment: @MainActor (TerminalSession) -> [String]
 
 	/// - Parameters:
 	///   - shellExecutable: What each pane runs. The app runs the user's login shell; tests run
@@ -17,11 +17,12 @@ public final class TerminalViewStore {
 	///   - shellArguments: Arguments for `shellExecutable`.
 	///   - additionalEnvironment: Extra `NAME=value` variables for a session's shell, beyond
 	///     `TerminalEnvironment`'s — the simulator MCP server's address and the session's id, which
-	///     come from a package this one does not depend on.
+	///     come from a package this one does not depend on. Given the whole session, so the server
+	///     can also note which repository the session belongs to.
 	public init(
 		shellExecutable: String = "/bin/zsh",
 		shellArguments: [String] = ["-l"],
-		additionalEnvironment: @escaping @MainActor (UUID) -> [String] = { _ in [] }
+		additionalEnvironment: @escaping @MainActor (TerminalSession) -> [String] = { _ in [] }
 	) {
 		self.shellExecutable = shellExecutable
 		self.shellArguments = shellArguments
@@ -95,7 +96,7 @@ public final class TerminalViewStore {
 			executable: shellExecutable,
 			args: shellArguments,
 			environment: TerminalEnvironment.variables(requestingProgress: statusSource.requestsProgress)
-				+ additionalEnvironment(session.id),
+				+ additionalEnvironment(session),
 			execName: nil,
 			currentDirectory: session.startingDirectory
 		)

@@ -43,7 +43,9 @@ struct SimulatorMCPHandler: Sendable {
 	/// The header the registration fills from `BC_TERMINAL_SESSION_ID`.
 	static let sessionHeader = "x-bridge-commander-session"
 
-	let actions: any SimulatorToolActions
+	/// The actions for a call from a terminal session (`nil` from outside the app), whose default
+	/// device is that session's repository's.
+	let actions: @Sendable (_ sessionId: UUID?) -> any SimulatorToolActions
 	let onActivity: @Sendable (SimulatorActivity) -> Void
 
 	func response(to request: HTTPRequest) async -> HTTPResponse {
@@ -88,7 +90,7 @@ struct SimulatorMCPHandler: Sendable {
 		case "tools/call":
 			let name = params?["name"]?.stringValue ?? ""
 			let arguments = params?["arguments"] ?? [:]
-			let result = await SimulatorMCPTools.call(name: name, arguments: arguments, actions: actions) { deviceId in
+			let result = await SimulatorMCPTools.call(name: name, arguments: arguments, actions: actions(sessionId)) { deviceId in
 				onActivity(SimulatorActivity(terminalSessionId: sessionId, deviceId: deviceId))
 			}
 			return Self.result(id: id, result)

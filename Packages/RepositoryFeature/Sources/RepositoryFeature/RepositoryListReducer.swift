@@ -270,21 +270,27 @@ struct RepositoryListReducer {
 				)
 
 			case let .simulatorActivityReported(activity):
-				// The pane comes up beside the terminal Claude is working in — only when that
-				// repository's terminal is on screen. A call from a tab the user is not looking at
-				// still acts on the simulator; it does not pull the panel over to that tab.
+				// The pane comes up beside the terminal Claude is working in — the repository of the
+				// calling session, or the one on screen for a `claude` outside the app. A call from a
+				// repository the user is not looking at opens that repository's pane without pulling
+				// the panel over to it; it is there when the user switches.
 				guard let layout = state.terminalLayout else {
 					return .none
 				}
+				let repositoryPath: String?
 				if let sessionId = activity.terminalSessionId {
-					guard
-						let session = state.terminalSessions[id: sessionId],
-						session.repositoryPath == layout.activeRepositoryPath
-					else {
-						return .none
-					}
+					repositoryPath = state.terminalSessions[id: sessionId]?.repositoryPath
 				}
-				return .send(.terminalLayout(.simulatorPane(.activityReported(deviceId: activity.deviceId))))
+				else {
+					repositoryPath = layout.activeRepositoryPath
+				}
+				guard let repositoryPath else {
+					return .none
+				}
+				return .send(.terminalLayout(.simulatorPane(.activityReported(
+					deviceId: activity.deviceId,
+					repositoryPath: repositoryPath
+				))))
 
 			case let .terminalNotificationTapped(sessionId):
 				// The tab may have been closed since the notification went out; the app still

@@ -15,8 +15,12 @@ import UniformTypeIdentifiers
 public final class SimulatorHost: @unchecked Sendable {
 	public static let shared = SimulatorHost()
 
-	/// The device the pane shows and the MCP tools act on when not told otherwise.
+	/// The device chosen last, anywhere: what a repository with no choice of its own starts on,
+	/// and what a `claude` outside the app acts on when not told otherwise.
 	private static let selectedDeviceKey = "simulatorSelectedDeviceUDID"
+	/// Each repository's (worktree's) own device, so one terminal can work on an iPhone while
+	/// another works on an iPad.
+	private static let repositorySelectionsKey = "simulatorSelectedDeviceUDIDByRepository"
 
 	private struct State {
 		var deviceSet: ObjectBox?
@@ -157,15 +161,42 @@ public final class SimulatorHost: @unchecked Sendable {
 		return device
 	}
 
-	public var selectedDeviceId: String? {
-		get { UserDefaults.standard.string(forKey: Self.selectedDeviceKey) }
-		set { UserDefaults.standard.set(newValue, forKey: Self.selectedDeviceKey) }
+	private var lastSelectedDeviceId: String? {
+		UserDefaults.standard.string(forKey: Self.selectedDeviceKey)
 	}
 
-	/// The device a command addresses: `udid` when given, otherwise the selected device if it is
-	/// booted, otherwise a booted one — which then becomes the selection, so the pane follows the
-	/// simulator Claude booted.
-	public func resolveDevice(udid: String?) throws -> SimulatorDevice {
+	private var repositorySelections: [String: String] {
+		UserDefaults.standard.dictionary(forKey: Self.repositorySelectionsKey) as? [String: String] ?? [:]
+	}
+
+	/// The device `repositoryPath`'s pane shows and its terminal's tools act on: its own choice,
+	/// else the last one made anywhere. `nil` (a `claude` outside the app) gets the last one.
+	public func selectedDeviceId(repositoryPath: String?) -> String? {
+		state.withLock { _ in
+			repositoryPath.flatMap { repositorySelections[$0] } ?? lastSelectedDeviceId
+		}
+	}
+
+	/// Makes `deviceId` `repositoryPath`'s device, and the last one chosen.
+	public func select(deviceId: String, repositoryPath: String?) {
+		// Under the lock so the pane and a tool call choosing at once do not drop each other's
+		// entry from the dictionary.
+		state.withLock { _ in
+			if let repositoryPath {
+				var selections = repositorySelections
+				selections[repositoryPath] = deviceId
+				UserDefaults.standard.set(selections, forKey: Self.repositorySelectionsKey)
+			}
+			UserDefaults.standard.set(deviceId, forKey: Self.selectedDeviceKey)
+		}
+	}
+
+	/// The device a command from `repositoryPath`'s terminal addresses: `udid` when given,
+	/// otherwise the repository's device if it is booted, otherwise a booted one — preferably one
+	/// no other repository has chosen, so a worktree whose iPad is shut down does not take over
+	/// another worktree's iPhone. That one then becomes the repository's device, so the pane
+	/// follows the simulator Claude booted.
+	public func resolveDevice(udid: String?, repositoryPath: String?) throws -> SimulatorDevice {
 		let all = try devices()
 		if let udid {
 			guard let device = all.first(where: { $0.id.caseInsensitiveCompare(udid) == .orderedSame }) else {
@@ -177,13 +208,21 @@ public final class SimulatorHost: @unchecked Sendable {
 			return device
 		}
 
-		if let selected = selectedDeviceId, let device = all.first(where: { $0.id == selected }), device.isBooted {
+		if
+			let selected = selectedDeviceId(repositoryPath: repositoryPath),
+			let device = all.first(where: { $0.id == selected }),
+			device.isBooted
+		{
 			return device
 		}
-		guard let booted = all.first(where: \.isBooted) else {
+		let takenByOthers = Set(repositorySelections.filter { $0.key != repositoryPath }.values)
+		guard
+			let booted = all.first(where: { $0.isBooted && !takenByOthers.contains($0.id) })
+				?? all.first(where: \.isBooted)
+		else {
 			throw SimulatorError.noBootedDevice
 		}
-		selectedDeviceId = booted.id
+		select(deviceId: booted.id, repositoryPath: repositoryPath)
 		return booted
 	}
 

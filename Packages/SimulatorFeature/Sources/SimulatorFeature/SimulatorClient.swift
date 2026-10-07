@@ -6,8 +6,9 @@ import Foundation
 @DependencyClient
 public struct SimulatorClient: Sendable {
 	public var devices: @Sendable () async throws -> [SimulatorDevice]
-	public var selectedDeviceId: @Sendable () -> String? = { nil }
-	public var selectDevice: @Sendable (_ id: String) -> Void
+	/// The device chosen for a repository's pane (`SimulatorHost.selectedDeviceId(repositoryPath:)`).
+	public var selectedDeviceId: @Sendable (_ repositoryPath: String?) -> String? = { _ in nil }
+	public var selectDevice: @Sendable (_ id: String, _ repositoryPath: String?) -> Void
 	public var boot: @Sendable (_ id: String) async throws -> Void
 	public var shutdown: @Sendable (_ id: String) async throws -> Void
 	public var pressButton: @Sendable (_ id: String, _ button: SimulatorHardwareButton) async throws -> Void
@@ -27,8 +28,8 @@ public struct SimulatorClient: Sendable {
 extension SimulatorClient: DependencyKey {
 	public static let liveValue = SimulatorClient(
 		devices: { try SimulatorHost.shared.devices() },
-		selectedDeviceId: { SimulatorHost.shared.selectedDeviceId },
-		selectDevice: { SimulatorHost.shared.selectedDeviceId = $0 },
+		selectedDeviceId: { SimulatorHost.shared.selectedDeviceId(repositoryPath: $0) },
+		selectDevice: { SimulatorHost.shared.select(deviceId: $0, repositoryPath: $1) },
 		boot: { try await SimulatorHost.shared.boot(udid: $0) },
 		shutdown: { try await SimulatorHost.shared.shutdown(udid: $0) },
 		pressButton: { try await SimulatorHost.shared.press(udid: $0, button: $1) },

@@ -6,7 +6,6 @@ extension SimulatorHost {
 	/// pane is the window.
 	public func boot(udid: String) async throws {
 		try await simctl(["boot", udid])
-		selectedDeviceId = udid
 	}
 
 	public func shutdown(udid: String) async throws {

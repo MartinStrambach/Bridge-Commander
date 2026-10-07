@@ -5,11 +5,17 @@ import Foundation
 public struct SimulatorPaneReducer {
 	@ObservableState
 	public struct State: Equatable {
-		/// Remembered across launches and across the terminal panel being hidden, like the rest of
-		/// the panel's layout.
-		@Shared(.appStorage("simulatorPaneVisible"))
-		public var isVisible = false
+		/// The repositories (worktrees included) whose terminal shows the pane: each one's is
+		/// opened and closed on its own, so a worktree running the app keeps the simulator beside
+		/// its terminal while another's has the full width. Remembered across launches and across
+		/// the terminal panel being hidden, like the rest of the panel's layout.
+		@Shared(.appStorage("simulatorPaneRepositoryPaths"))
+		public var visibleRepositoryPaths: [String] = []
 
+		/// The repository whose terminal the pane is showing beside. Each has its own device
+		/// (`SimulatorClient.selectedDeviceId`), so this is what the selection is read and
+		/// written for.
+		public var repositoryPath: String?
 		public var devices: [SimulatorDevice] = []
 		public var selectedDeviceId: String?
 		public var hasLoadedDevices = false
@@ -32,11 +38,17 @@ public struct SimulatorPaneReducer {
 		public var selectedDevice: SimulatorDevice? {
 			selectedDeviceId.flatMap { id in devices.first { $0.id == id } }
 		}
+
+		/// Whether the pane is open beside `repositoryPath`'s terminal.
+		public func isVisible(in repositoryPath: String?) -> Bool {
+			repositoryPath.map(visibleRepositoryPaths.contains) ?? false
+		}
 	}
 
 	public enum Action: Equatable {
-		case onAppear
-		case onDisappear
+		/// The pane is on screen beside `repositoryPath`'s terminal; runs until it leaves or shows
+		/// another repository.
+		case task(repositoryPath: String)
 		case devicesLoaded([SimulatorDevice], storedSelection: String?)
 		case devicesFailed(String)
 		case deviceSelected(String)
@@ -54,10 +66,10 @@ public struct SimulatorPaneReducer {
 		case claudeCodeStatusChecked(Bool)
 		case connectClaudeCodeFinished(errorMessage: String?)
 		case errorDismissed
-		case toggleVisibility
-		case closeButtonTapped
-		/// An MCP tool call touched `deviceId`: show it.
-		case activityReported(deviceId: String)
+		case toggleVisibility(repositoryPath: String)
+		case closeButtonTapped(repositoryPath: String)
+		/// An MCP tool call touched `deviceId`: show it beside `repositoryPath`'s terminal.
+		case activityReported(deviceId: String, repositoryPath: String)
 	}
 
 	private enum CancelId {
@@ -76,7 +88,14 @@ public struct SimulatorPaneReducer {
 	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
-			case .onAppear:
+			case let .task(repositoryPath):
+				if state.repositoryPath != repositoryPath {
+					// Another repository's device: shown once the first poll reads it, rather than
+					// the previous repository's for a moment.
+					state.repositoryPath = repositoryPath
+					state.selectedDeviceId = nil
+					state.errorMessage = nil
+				}
 				// Device state changes outside the pane too — `simctl boot` in a terminal, Claude
 				// booting one — so the list is polled while the pane is on screen. CoreSimulator
 				// answers from its in-process cache; this is cheap.
@@ -88,7 +107,10 @@ public struct SimulatorPaneReducer {
 						while !Task.isCancelled {
 							do {
 								let devices = try await simulatorClient.devices()
-								await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId()))
+								await send(.devicesLoaded(
+									devices,
+									storedSelection: simulatorClient.selectedDeviceId(repositoryPath)
+								))
 							}
 							catch {
 								await send(.devicesFailed(error.localizedDescription))
@@ -99,17 +121,14 @@ public struct SimulatorPaneReducer {
 					.cancellable(id: CancelId.polling, cancelInFlight: true)
 				)
 
-			case .onDisappear:
-				return .cancel(id: CancelId.polling)
-
 			case let .devicesLoaded(devices, storedSelection):
 				let previouslyBooted = state.selectedDevice?.isBooted ?? false
 				state.devices = devices
 				state.hasLoadedDevices = true
 				state.loadErrorMessage = nil
 
-				// The stored selection is the shared one: the MCP tools move it to the device they
-				// act on, and the pane follows.
+				// The stored selection is the repository's, shared with the MCP tools its terminal's
+				// `claude` calls: they move it to the device they act on, and the pane follows.
 				let selection = storedSelection.flatMap { id in devices.first { $0.id == id } }
 					?? devices.first(where: \.isBooted)
 					?? devices.first
@@ -117,7 +136,9 @@ public struct SimulatorPaneReducer {
 
 				var effects: [Effect<Action>] = []
 				if let selection, selection.id != storedSelection {
-					effects.append(.run { [simulatorClient] _ in simulatorClient.selectDevice(selection.id) })
+					effects.append(.run { [simulatorClient, repositoryPath = state.repositoryPath] _ in
+						simulatorClient.selectDevice(selection.id, repositoryPath)
+					})
 				}
 				if let selection, selection.isBooted, !previouslyBooted {
 					effects.append(.run { [simulatorClient] _ in await simulatorClient.prepareInput(selection.id) })
@@ -132,8 +153,8 @@ public struct SimulatorPaneReducer {
 			case let .deviceSelected(id):
 				state.selectedDeviceId = id
 				state.errorMessage = nil
-				return .run { [simulatorClient] _ in
-					simulatorClient.selectDevice(id)
+				return .run { [simulatorClient, repositoryPath = state.repositoryPath] _ in
+					simulatorClient.selectDevice(id, repositoryPath)
 				}
 
 			case .bootButtonTapped:
@@ -192,11 +213,11 @@ public struct SimulatorPaneReducer {
 				}
 				// Reloads the devices when done, so the pane takes the rotated width without
 				// waiting for the next poll.
-				return .run { [simulatorClient] send in
+				return .run { [simulatorClient, repositoryPath = state.repositoryPath] send in
 					do {
 						try await simulatorClient.rotate(device.id, clockwise)
 						let devices = try await simulatorClient.devices()
-						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId()))
+						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
 					}
 					catch {
 						await send(.transitionFinished(errorMessage: error.localizedDescription))
@@ -274,17 +295,27 @@ public struct SimulatorPaneReducer {
 				state.errorMessage = nil
 				return .none
 
-			case .toggleVisibility:
-				state.$isVisible.withLock { $0.toggle() }
+			case let .toggleVisibility(repositoryPath):
+				state.$visibleRepositoryPaths.withLock { paths in
+					if paths.contains(repositoryPath) {
+						paths.removeAll { $0 == repositoryPath }
+					}
+					else {
+						paths.append(repositoryPath)
+					}
+				}
 				return .none
 
-			case .closeButtonTapped:
-				state.$isVisible.withLock { $0 = false }
+			case let .closeButtonTapped(repositoryPath):
+				state.$visibleRepositoryPaths.withLock { $0.removeAll { $0 == repositoryPath } }
 				return .none
 
-			case let .activityReported(deviceId):
-				state.$isVisible.withLock { $0 = true }
-				if state.devices.contains(where: { $0.id == deviceId }) {
+			case let .activityReported(deviceId, repositoryPath):
+				if !state.isVisible(in: repositoryPath) {
+					state.$visibleRepositoryPaths.withLock { $0.append(repositoryPath) }
+				}
+				// Another repository's call moved that repository's device, not the one on screen.
+				if repositoryPath == state.repositoryPath, state.devices.contains(where: { $0.id == deviceId }) {
 					state.selectedDeviceId = deviceId
 				}
 				return .none

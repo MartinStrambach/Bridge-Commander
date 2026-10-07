@@ -30,6 +30,10 @@ public final class SimulatorMCPServer: @unchecked Sendable {
 		var listener: NWListener?
 		var port: UInt16?
 		var subscribers: [UUID: AsyncStream<SimulatorActivity>.Continuation] = [:]
+		/// The repository each terminal session was started in, from `terminalEnvironment`, so a
+		/// call from that session acts on the repository's own device. Never pruned: an entry is a
+		/// few bytes, and a closed session's id never comes back.
+		var sessionRepositories: [UUID: String] = [:]
 	}
 
 	private let state = OSAllocatedUnfairLock<State>(uncheckedState: State())
@@ -44,9 +48,11 @@ public final class SimulatorMCPServer: @unchecked Sendable {
 		"http://127.0.0.1:\(state.withLock { $0.port } ?? Self.preferredPort)\(SimulatorMCPHandler.path)"
 	}
 
-	/// The variables a terminal pane is started with, `NAME=value`.
-	public func terminalEnvironment(sessionId: UUID) -> [String] {
+	/// The variables a terminal pane is started with, `NAME=value`. Also notes the session's
+	/// repository: every shell, restored tabs' included, is started through here.
+	public func terminalEnvironment(sessionId: UUID, repositoryPath: String) -> [String] {
 		startIfNeeded()
+		state.withLock { $0.sessionRepositories[sessionId] = repositoryPath }
 		return [
 			"\(Self.urlEnvironmentVariable)=\(endpointURL)",
 			"\(Self.sessionEnvironmentVariable)=\(sessionId.uuidString)",
@@ -129,9 +135,15 @@ public final class SimulatorMCPServer: @unchecked Sendable {
 	// MARK: - Connections
 
 	private func accept(_ connection: NWConnection) {
-		let handler = SimulatorMCPHandler(actions: LiveSimulatorToolActions()) { [weak self] activity in
-			self?.publish(activity)
-		}
+		let handler = SimulatorMCPHandler(
+			actions: { [weak self] sessionId in
+				let repositoryPath = sessionId.flatMap { id in self?.state.withLock { $0.sessionRepositories[id] } }
+				return LiveSimulatorToolActions(repositoryPath: repositoryPath)
+			},
+			onActivity: { [weak self] activity in
+				self?.publish(activity)
+			}
+		)
 		let session = HTTPConnectionSession(connection: connection, handler: handler, port: { [weak self] in
 			self?.state.withLock { $0.port } ?? Self.preferredPort
 		})
@@ -224,8 +236,11 @@ private final class HTTPConnectionSession: @unchecked Sendable {
 	}
 }
 
-/// The tool actions against the real simulators.
+/// The tool actions against the real simulators, for a call from `repositoryPath`'s terminal (`nil`
+/// for a `claude` outside the app): the device it uses by default is that repository's.
 private struct LiveSimulatorToolActions: SimulatorToolActions {
+	let repositoryPath: String?
+
 	private var host: SimulatorHost {
 		.shared
 	}
@@ -235,11 +250,11 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	}
 
 	var selectedDeviceId: String? {
-		host.selectedDeviceId
+		host.selectedDeviceId(repositoryPath: repositoryPath)
 	}
 
 	func resolveDevice(udid: String?) async throws -> SimulatorDevice {
-		try host.resolveDevice(udid: udid)
+		try host.resolveDevice(udid: udid, repositoryPath: repositoryPath)
 	}
 
 	var crashReports: any SimulatorCrashReportSource {
@@ -247,7 +262,7 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	}
 
 	func select(_ device: SimulatorDevice) async {
-		host.selectedDeviceId = device.id
+		host.select(deviceId: device.id, repositoryPath: repositoryPath)
 	}
 
 	func screenshotJPEG(device: SimulatorDevice) async throws -> Data {

@@ -85,7 +85,7 @@ struct TerminalLayoutReducer {
 		var ticketButton: TicketButtonReducer.State?
 		var gitActionsMenu: GitActionsMenuReducer.State?
 
-		/// The iOS simulator beside the terminal. Its visibility is a stored setting, so it survives
+		/// The iOS simulator beside the terminal. Which repositories show it is a stored setting, so it survives
 		/// this state being dropped when the panel hides.
 		var simulatorPane = SimulatorPaneReducer.State()
 

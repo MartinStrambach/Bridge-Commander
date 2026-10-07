@@ -8,10 +8,13 @@ public struct SimulatorPaneView: View {
 	/// The space the panel offers, from which the pane takes a width that fits the device's
 	/// screen at the available height.
 	let availableSize: CGSize
+	/// The repository whose terminal the pane is beside, which its close button hides it for.
+	let repositoryPath: String
 
-	public init(store: StoreOf<SimulatorPaneReducer>, availableSize: CGSize) {
+	public init(store: StoreOf<SimulatorPaneReducer>, availableSize: CGSize, repositoryPath: String) {
 		self.store = store
 		self.availableSize = availableSize
+		self.repositoryPath = repositoryPath
 	}
 
 	private static let headerHeight: CGFloat = 36
@@ -55,8 +58,11 @@ public struct SimulatorPaneView: View {
 		}
 		.frame(width: paneWidth)
 		.background(Color(NSColor.underPageBackgroundColor))
-		.onAppear { store.send(.onAppear) }
-		.onDisappear { store.send(.onDisappear) }
+		// Restarted with the repository, so switching between two repositories that both show the
+		// pane switches to the other's device.
+		.task(id: repositoryPath) {
+			await store.send(.task(repositoryPath: repositoryPath)).finish()
+		}
 	}
 
 	// MARK: - Header
@@ -89,7 +95,9 @@ public struct SimulatorPaneView: View {
 				}
 			}
 
-			iconButton("xmark", help: "Hide Simulator") { store.send(.closeButtonTapped) }
+			iconButton("xmark", help: "Hide Simulator") {
+				store.send(.closeButtonTapped(repositoryPath: repositoryPath))
+			}
 		}
 		.padding(.horizontal, 10)
 		.frame(height: Self.headerHeight)

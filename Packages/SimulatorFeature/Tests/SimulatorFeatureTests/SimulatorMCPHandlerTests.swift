@@ -113,7 +113,7 @@ struct SimulatorMCPHandlerTests {
 		_ actions: FakeActions,
 		activity: OSAllocatedUnfairLock<[SimulatorActivity]> = .init(initialState: [])
 	) -> SimulatorMCPHandler {
-		SimulatorMCPHandler(actions: actions) { reported in
+		SimulatorMCPHandler(actions: { _ in actions }) { reported in
 			activity.withLock { $0.append(reported) }
 		}
 	}
@@ -188,6 +188,28 @@ struct SimulatorMCPHandlerTests {
 		#expect(result?["content"] == [["type": "text", "text": "Tapped (100, 200.5). Screen settled after 640 ms."]])
 		#expect(actions.calls.withLock { $0 } == ["fingerprint", "tap 100.0 200.5 0.06 seconds", "settle from baseline"])
 		#expect(activity.withLock { $0 } == [SimulatorActivity(terminalSessionId: session, deviceId: "AAAA")])
+	}
+
+	@Test
+	func actionsAreTakenForTheCallingSession() async throws {
+		let actions = FakeActions()
+		let sessions = OSAllocatedUnfairLock<[UUID?]>(initialState: [])
+		let handler = SimulatorMCPHandler(
+			actions: { sessionId in
+				sessions.withLock { $0.append(sessionId) }
+				return actions
+			},
+			onActivity: { _ in }
+		)
+		let session = UUID()
+		let call: JSONValue = [
+			"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+			"params": ["name": "list_devices", "arguments": [:]],
+		]
+		_ = await handler.response(to: try post(call, headers: ["x-bridge-commander-session": session.uuidString]))
+		_ = await handler.response(to: try post(call))
+
+		#expect(sessions.withLock { $0 } == [session, nil])
 	}
 
 	@Test

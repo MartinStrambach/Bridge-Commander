@@ -15,8 +15,8 @@ struct TerminalAdditionalEnvironmentTests {
 		let store = TerminalViewStore(
 			shellExecutable: "/bin/sh",
 			shellArguments: ["-c", #"printf 'id=%s url=%s\n' "$BC_TEST_SESSION" "$BC_TEST_URL"; exec /bin/cat"#],
-			additionalEnvironment: { sessionId in
-				["BC_TEST_SESSION=\(sessionId.uuidString)", "BC_TEST_URL=http://127.0.0.1:1/mcp"]
+			additionalEnvironment: { session in
+				["BC_TEST_SESSION=\(session.id.uuidString)", "BC_TEST_URL=http://127.0.0.1:1/mcp"]
 			}
 		)
 		let session = TerminalSession(repositoryPath: "/")

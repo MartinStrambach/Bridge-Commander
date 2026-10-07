@@ -283,17 +283,18 @@ struct TerminalPanelView: View {
 //				.controlSize(.small)
 //			}
 			
-			if activeRowStore?.supportsIOS == true || store.simulatorPane.isVisible {
+			if let path = store.activeRepositoryPath,
+			   activeRowStore?.supportsIOS == true || isSimulatorPaneVisible {
 				Button {
-					store.send(.simulatorPane(.toggleVisibility))
+					store.send(.simulatorPane(.toggleVisibility(repositoryPath: path)))
 				} label: {
 					Label("Simulator", systemImage: "iphone")
 						.labelStyle(.titleAndIcon)
 				}
 				.buttonStyle(.scaledBordered)
 				.controlSize(.small)
-				.tint(store.simulatorPane.isVisible ? .accentColor : nil)
-				.help(store.simulatorPane.isVisible ? "Hide the iOS simulator" : "Show the iOS simulator beside the terminal")
+				.tint(isSimulatorPaneVisible ? .accentColor : nil)
+				.help(isSimulatorPaneVisible ? "Hide the iOS simulator" : "Show the iOS simulator beside the terminal")
 			}
 
 			Button("Graph") {
@@ -406,16 +407,23 @@ struct TerminalPanelView: View {
 	/// The simulator pane sits to the right of that container, as a sibling in an `HStack` whose
 	/// first child is always the container — showing or hiding the pane changes the terminal's
 	/// width (one deliberate SIGWINCH), never its place in the hierarchy.
+	/// Whether the repository on screen has the simulator open beside its terminal — each
+	/// repository's is shown or hidden on its own.
+	private var isSimulatorPaneVisible: Bool {
+		store.simulatorPane.isVisible(in: store.activeRepositoryPath)
+	}
+
 	private var terminalContent: some View {
 		GeometryReader { proxy in
 			HStack(spacing: 0) {
 				terminalStack
 
-				if store.simulatorPane.isVisible {
+				if let path = store.activeRepositoryPath, isSimulatorPaneVisible {
 					Divider()
 					SimulatorPaneView(
 						store: store.scope(\.simulatorPane, action: \.simulatorPane),
-						availableSize: proxy.size
+						availableSize: proxy.size,
+						repositoryPath: path
 					)
 				}
 			}
