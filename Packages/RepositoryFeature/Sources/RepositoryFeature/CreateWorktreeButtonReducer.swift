@@ -55,6 +55,8 @@ struct CreateWorktreeButtonReducer {
 
 		var pullRequests: [OpenPullRequest] = []
 		var pullRequestFilter: String = ""
+		@Shared(.worktreeOnlyMyPullRequests)
+		var onlyMyPullRequests = false
 		var isLoadingPullRequests = false
 		var pullRequestError: String?
 		var selectedPullRequestNumber: Int?
@@ -89,6 +91,7 @@ struct CreateWorktreeButtonReducer {
 		}
 
 		var filteredPullRequests: [OpenPullRequest] {
+			let pullRequests = onlyMyPullRequests ? pullRequests.filter(\.isAuthoredByViewer) : pullRequests
 			let filter = pullRequestFilter.trimmingCharacters(in: .whitespaces)
 			guard !filter.isEmpty else { return pullRequests }
 			return pullRequests.filter {
@@ -143,6 +146,7 @@ struct CreateWorktreeButtonReducer {
 		case pullRequestsLoaded([OpenPullRequest])
 		case pullRequestsFailed(String)
 		case pullRequestSelected(Int?)
+		case onlyMyPullRequestsChanged(Bool)
 
 		enum ErrorAlert: Equatable {}
 	}
@@ -318,6 +322,15 @@ struct CreateWorktreeButtonReducer {
 				}
 				state.selectedPullRequestNumber = number
 				state.claudePrompt = state.selectedPullRequest.map(Self.claudePrompt(for:)) ?? ""
+				return .none
+
+			case let .onlyMyPullRequestsChanged(onlyMine):
+				state.$onlyMyPullRequests.withLock { $0 = onlyMine }
+				// A pick the checkbox hides would still be what Create checks out.
+				if onlyMine, let selected = state.selectedPullRequest, !selected.isAuthoredByViewer {
+					state.selectedPullRequestNumber = nil
+					state.claudePrompt = ""
+				}
 				return .none
 
 			case .cancelCreation:

@@ -176,6 +176,38 @@ struct CreateWorktreeSourceTests {
 		))
 	}
 
+	@Test("only mine narrows the list to the viewer's PRs/MRs and drops a pick it hides")
+	func onlyMyPullRequests() async {
+		let mine = OpenPullRequest(
+			number: 7, title: "Login", sourceBranch: "login_MOB-2", author: "ms",
+			url: "https://gitlab.com/g/p/-/merge_requests/7", isDraft: false, provider: .gitlab,
+			isAuthoredByViewer: true
+		)
+		let theirs = OpenPullRequest(
+			number: 8, title: "Logout", sourceBranch: "logout_MOB-3", author: "x",
+			url: "https://gitlab.com/g/p/-/merge_requests/8", isDraft: false, provider: .gitlab
+		)
+		var state = makeState(youtrack: false)
+		state.source = .pullRequest
+		state.pullRequests = [mine, theirs]
+		state.selectedPullRequestNumber = 8
+		state.claudePrompt = "Continue work on MR !8"
+		let store = TestStore(initialState: state) { CreateWorktreeButtonReducer() }
+		#expect(store.state.filteredPullRequests == [mine, theirs])
+
+		await store.send(.onlyMyPullRequestsChanged(true)) {
+			$0.$onlyMyPullRequests.withLock { $0 = true }
+			$0.selectedPullRequestNumber = nil
+			$0.claudePrompt = ""
+		}
+		#expect(store.state.filteredPullRequests == [mine])
+
+		await store.send(.onlyMyPullRequestsChanged(false)) {
+			$0.$onlyMyPullRequests.withLock { $0 = false }
+		}
+		#expect(store.state.filteredPullRequests == [mine, theirs])
+	}
+
 	@Test("a missing token says where to add one")
 	func pullRequestTokenMissing() async {
 		let state = makeState(youtrack: false)
