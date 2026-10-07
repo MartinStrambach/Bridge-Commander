@@ -52,6 +52,16 @@ struct SimulatorMCPHandlerTests {
 			record("two \(from.first.x),\(from.second.x) -> \(to.first.x),\(to.second.x)")
 		}
 
+		static let baseline = ScreenFingerprint(columns: 1, rows: 1, cells: [7])
+		func screenFingerprint(device: SimulatorDevice) async -> ScreenFingerprint? {
+			record("fingerprint")
+			return Self.baseline
+		}
+		func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult {
+			record(baseline == Self.baseline ? "settle from baseline" : "settle")
+			return .settled(after: .milliseconds(640))
+		}
+
 		private func record(_ call: String) {
 			calls.withLock { $0.append(call) }
 		}
@@ -139,8 +149,10 @@ struct SimulatorMCPHandlerTests {
 			headers: ["x-bridge-commander-session": session.uuidString]
 		))
 
-		#expect(try decode(response)["result"]?["isError"] == false)
-		#expect(actions.calls.withLock { $0 } == ["tap 100.0 200.5 0.06 seconds"])
+		let result = try decode(response)["result"]
+		#expect(result?["isError"] == false)
+		#expect(result?["content"] == [["type": "text", "text": "Tapped (100, 200.5). Screen settled after 640 ms."]])
+		#expect(actions.calls.withLock { $0 } == ["fingerprint", "tap 100.0 200.5 0.06 seconds", "settle from baseline"])
 		#expect(activity.withLock { $0 } == [SimulatorActivity(terminalSessionId: session, deviceId: "AAAA")])
 	}
 
@@ -215,6 +227,64 @@ struct SimulatorMCPHandlerTests {
 			"jsonrpc": "2.0", "id": 9, "method": "tools/call",
 			"params": ["name": "two_finger_drag", "arguments": ["from_x": 100, "from_y": 500, "to_x": 100, "to_y": 300]],
 		]))
-		#expect(actions.calls.withLock { $0 } == ["two 170.0,230.0 -> 140.0,260.0", "two 80.0,120.0 -> 80.0,120.0"])
+		#expect(actions.calls.withLock { $0 }.filter { $0.hasPrefix("two") } == ["two 170.0,230.0 -> 140.0,260.0", "two 80.0,120.0 -> 80.0,120.0"])
+	}
+
+	@Test
+	func everyActionWaitsForTheScreenToSettleUnlessToldNotTo() async throws {
+		let calls: [(String, JSONValue)] = [
+			("tap", ["x": 1, "y": 1]),
+			("swipe", ["from_x": 1, "from_y": 1, "to_x": 2, "to_y": 2]),
+			("pinch", ["x": 100, "y": 100, "scale": 2]),
+			("two_finger_drag", ["from_x": 100, "from_y": 100, "to_x": 100, "to_y": 200]),
+			("type_text", ["text": "hi"]),
+			("press_key", ["key": "return"]),
+			("press_button", ["button": "home"]),
+		]
+		for (name, arguments) in calls {
+			let waiting = FakeActions()
+			let response = await handler(waiting).response(to: try post([
+				"jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": ["name": .string(name), "arguments": arguments],
+			]))
+			let text = try decode(response)["result"]?["content"]?.firstText
+			#expect(text?.hasSuffix(" Screen settled after 640 ms.") == true, "\(name): \(text ?? "nil")")
+			#expect(waiting.calls.withLock { $0.first == "fingerprint" && $0.last == "settle from baseline" }, "\(name)")
+
+			guard case var .object(noWait) = arguments else {
+				continue
+			}
+			for value: JSONValue in [false, "false"] {
+				noWait["wait_for_settle"] = value
+				let immediate = FakeActions()
+				let quick = await handler(immediate).response(to: try post([
+					"jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": ["name": .string(name), "arguments": .object(noWait)],
+				]))
+				#expect(try decode(quick)["result"]?["content"]?.firstText?.contains("Screen") == false, "\(name)")
+				#expect(immediate.calls.withLock { $0.count } == 1, "\(name)")
+			}
+		}
+	}
+
+	@Test
+	func actionToolsOfferWaitForSettle() async throws {
+		let response = await handler(FakeActions()).response(to: try post(["jsonrpc": "2.0", "id": "x", "method": "tools/list"]))
+		guard case let .array(tools)? = try decode(response)["result"]?["tools"] else {
+			Issue.record("expected a tool list")
+			return
+		}
+		let offering = tools.filter { $0["inputSchema"]?["properties"]?["wait_for_settle"]?["type"] == "boolean" }
+		#expect(offering.compactMap { $0["name"]?.stringValue } == [
+			"tap", "swipe", "pinch", "two_finger_drag", "type_text", "press_key", "press_button",
+		])
+	}
+}
+
+private extension JSONValue {
+	/// The text of a tool result's first content block.
+	var firstText: String? {
+		guard case let .array(blocks) = self else {
+			return nil
+		}
+		return blocks.first?["text"]?.stringValue
 	}
 }

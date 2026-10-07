@@ -40,6 +40,7 @@ enum SimulatorMCPTools {
 				"y": number("Vertical position in points."),
 				"duration_ms": number("How long to hold, in milliseconds. Default 60; 600 or more for a long press."),
 				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
 			],
 			required: ["x", "y"]
 		),
@@ -53,6 +54,7 @@ enum SimulatorMCPTools {
 				"to_y": number("End y in points."),
 				"duration_ms": number("How long the drag takes, in milliseconds. Default 300; shorter flings further."),
 				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
 			],
 			required: ["from_x", "from_y", "to_x", "to_y"]
 		),
@@ -66,6 +68,7 @@ enum SimulatorMCPTools {
 				"rotation_degrees": number("Optional rotation, clockwise. Default 0."),
 				"duration_ms": number("How long the gesture takes, in milliseconds. Default 400."),
 				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
 			],
 			required: ["x", "y", "scale"]
 		),
@@ -80,19 +83,20 @@ enum SimulatorMCPTools {
 				"spacing": number("Distance between the fingers in points. Default 40."),
 				"duration_ms": number("How long the drag takes, in milliseconds. Default 400."),
 				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
 			],
 			required: ["from_x", "from_y", "to_x", "to_y"]
 		),
 		tool(
 			"type_text",
 			"Type text into the focused field with the hardware keyboard (US layout, ASCII only). Tap the field first. \"\\n\" presses return.",
-			properties: ["text": ["type": "string", "description": "The text to type."], "udid": optionalUdid],
+			properties: ["text": ["type": "string", "description": "The text to type."], "udid": optionalUdid, "wait_for_settle": waitForSettleProperty],
 			required: ["text"]
 		),
 		tool(
 			"press_key",
 			"Press a key, optionally with modifiers joined by \"+\": e.g. \"return\", \"delete\", \"escape\", \"tab\", \"up\", \"cmd+a\", \"cmd+v\", \"shift+tab\". Named keys: \(SimulatorKeyboardMap.namedKeyList.joined(separator: ", ")); any single character also works.",
-			properties: ["key": ["type": "string", "description": "The key to press."], "udid": optionalUdid],
+			properties: ["key": ["type": "string", "description": "The key to press."], "udid": optionalUdid, "wait_for_settle": waitForSettleProperty],
 			required: ["key"]
 		),
 		tool(
@@ -105,6 +109,7 @@ enum SimulatorMCPTools {
 					"description": "The button.",
 				],
 				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
 			],
 			required: ["button"]
 		),
@@ -164,8 +169,14 @@ enum SimulatorMCPTools {
 				let rotation = arguments["rotation_degrees"]?.doubleValue ?? 0
 				let fingers = SimulatorHost.pinchFingers(center: center, scale: scale, rotationDegrees: rotation)
 				let duration = milliseconds(arguments, "duration_ms", default: 400, range: 100...5000)
-				try await actions.twoFingerGesture(device: device, from: fingers.start, to: fingers.end, duration: duration)
-				return text("Pinched about (\(format(center.x)), \(format(center.y))) by \(format(scale))×\(rotation == 0 ? "" : ", rotating \(format(rotation))°").")
+				return text(try await performWaitingForSettle(
+					"Pinched about (\(format(center.x)), \(format(center.y))) by \(format(scale))×\(rotation == 0 ? "" : ", rotating \(format(rotation))°").",
+					device: device,
+					arguments: arguments,
+					actions: actions
+				) {
+					try await actions.twoFingerGesture(device: device, from: fingers.start, to: fingers.end, duration: duration)
+				})
 
 			case "two_finger_drag":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
@@ -173,35 +184,59 @@ enum SimulatorMCPTools {
 				let to = try CGPoint(x: number(arguments, "to_x"), y: number(arguments, "to_y"))
 				let half = min(max(arguments["spacing"]?.doubleValue ?? 40, 10), 200) / 2
 				let duration = milliseconds(arguments, "duration_ms", default: 400, range: 50...5000)
-				try await actions.twoFingerGesture(
+				return text(try await performWaitingForSettle(
+					"Dragged two fingers from (\(format(from.x)), \(format(from.y))) to (\(format(to.x)), \(format(to.y))).",
 					device: device,
-					from: FingerPair(CGPoint(x: from.x - half, y: from.y), CGPoint(x: from.x + half, y: from.y)),
-					to: FingerPair(CGPoint(x: to.x - half, y: to.y), CGPoint(x: to.x + half, y: to.y)),
-					duration: duration
-				)
-				return text("Dragged two fingers from (\(format(from.x)), \(format(from.y))) to (\(format(to.x)), \(format(to.y))).")
+					arguments: arguments,
+					actions: actions
+				) {
+					try await actions.twoFingerGesture(
+						device: device,
+						from: FingerPair(CGPoint(x: from.x - half, y: from.y), CGPoint(x: from.x + half, y: from.y)),
+						to: FingerPair(CGPoint(x: to.x - half, y: to.y), CGPoint(x: to.x + half, y: to.y)),
+						duration: duration
+					)
+				})
 
 			case "tap":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
 				let x = try number(arguments, "x")
 				let y = try number(arguments, "y")
 				let hold = milliseconds(arguments, "duration_ms", default: 60, range: 10...10000)
-				try await actions.tap(device: device, x: x, y: y, holdFor: hold)
-				return text("Tapped (\(format(x)), \(format(y))).")
+				return text(try await performWaitingForSettle(
+					"Tapped (\(format(x)), \(format(y))).",
+					device: device,
+					arguments: arguments,
+					actions: actions
+				) {
+					try await actions.tap(device: device, x: x, y: y, holdFor: hold)
+				})
 
 			case "swipe":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
 				let from = try CGPoint(x: number(arguments, "from_x"), y: number(arguments, "from_y"))
 				let to = try CGPoint(x: number(arguments, "to_x"), y: number(arguments, "to_y"))
 				let duration = milliseconds(arguments, "duration_ms", default: 300, range: 50...5000)
-				try await actions.swipe(device: device, from: from, to: to, duration: duration)
-				return text("Swiped from (\(format(from.x)), \(format(from.y))) to (\(format(to.x)), \(format(to.y))).")
+				return text(try await performWaitingForSettle(
+					"Swiped from (\(format(from.x)), \(format(from.y))) to (\(format(to.x)), \(format(to.y))).",
+					device: device,
+					arguments: arguments,
+					actions: actions
+				) {
+					try await actions.swipe(device: device, from: from, to: to, duration: duration)
+				})
 
 			case "type_text":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
 				let value = try string(arguments, "text")
-				try await actions.type(device: device, text: value)
-				return text("Typed \(value.count) characters.")
+				return text(try await performWaitingForSettle(
+					"Typed \(value.count) characters.",
+					device: device,
+					arguments: arguments,
+					actions: actions
+				) {
+					try await actions.type(device: device, text: value)
+				})
 
 			case "press_key":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
@@ -209,8 +244,9 @@ enum SimulatorMCPTools {
 				guard let stroke = SimulatorKeyboardMap.keyStroke(named: key) else {
 					throw SimulatorError.unknownKey(key)
 				}
-				try await actions.press(device: device, key: stroke)
-				return text("Pressed \(key).")
+				return text(try await performWaitingForSettle("Pressed \(key).", device: device, arguments: arguments, actions: actions) {
+					try await actions.press(device: device, key: stroke)
+				})
 
 			case "press_button":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
@@ -218,8 +254,9 @@ enum SimulatorMCPTools {
 				guard let button = SimulatorHardwareButton(rawValue: name) else {
 					throw ToolError("Unknown button \"\(name)\".")
 				}
-				try await actions.press(device: device, button: button)
-				return text("Pressed \(name).")
+				return text(try await performWaitingForSettle("Pressed \(name).", device: device, arguments: arguments, actions: actions) {
+					try await actions.press(device: device, button: button)
+				})
 
 			default:
 				return text("Unknown tool \(name).", isError: true)

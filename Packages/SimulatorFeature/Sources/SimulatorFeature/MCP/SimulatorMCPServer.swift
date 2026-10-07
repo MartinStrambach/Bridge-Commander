@@ -281,4 +281,12 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 	func twoFingerGesture(device: SimulatorDevice, from: FingerPair, to: FingerPair, duration: Duration) async throws {
 		try await host.twoFingerGesture(device: device, from: from, to: to, duration: duration)
 	}
+
+	func screenFingerprint(device: SimulatorDevice) async -> ScreenFingerprint? {
+		host.screenFingerprint(device: device)
+	}
+
+	func waitForScreenToSettle(device: SimulatorDevice, baseline: ScreenFingerprint?) async -> ScreenSettleResult {
+		await host.waitForScreenToSettle(device: device, baseline: baseline)
+	}
 }
