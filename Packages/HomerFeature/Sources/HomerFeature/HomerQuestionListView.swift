@@ -5,7 +5,7 @@ import SwiftUI
 /// The console's questions page: open questions, each answered with one of its options or a
 /// typed answer (`components/questions/question-item.tsx`).
 struct HomerQuestionListView: View {
-	let store: StoreOf<HomerConsoleReducer>
+	let store: StoreOf<HomerInstanceReducer>
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -42,7 +42,7 @@ struct HomerQuestionListView: View {
 }
 
 struct HomerQuestionCard: View {
-	let store: StoreOf<HomerConsoleReducer>
+	let store: StoreOf<HomerInstanceReducer>
 	let question: HomerQuestion
 
 	private var isAnswering: Bool {

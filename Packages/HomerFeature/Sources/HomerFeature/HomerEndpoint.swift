@@ -1,11 +1,20 @@
 import ComposableArchitecture
+import CryptoKit
 import Foundation
 
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<[String]> {
+	/// Base URLs of the Homer instances the console knows, as normalized by
+	/// `HomerEndpoint.normalize`, in the order they were added. An instance joins the list on its
+	/// first successful sign-in and leaves it only when removed.
+	static var homerInstanceURLs: Self {
+		appStorage("homerInstanceURLs")
+	}
+}
+
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<String> {
-	/// Base URL of the Homer instance the console talks to, as normalized by
-	/// `HomerEndpoint.normalize`. Empty until the first sign-in.
-	static var homerBaseURL: Self {
-		appStorage("homerBaseURL")
+	/// Base URL of the instance on screen, one of `homerInstanceURLs`.
+	static var homerSelectedInstance: Self {
+		appStorage("homerSelectedInstance")
 	}
 }
 
@@ -68,9 +77,24 @@ public nonisolated enum HomerEndpoint {
 		return normalized
 	}
 
-	/// The host shown for an instance, e.g. in the console's header.
+	/// How an instance is named, e.g. in the header's instance menu: its host, with the port and
+	/// sub-path when it has them, so two instances on one host stay apart.
 	public static func displayName(of baseURL: String) -> String {
-		URLComponents(string: baseURL)?.host ?? baseURL
+		guard let components = URLComponents(string: baseURL), let host = components.host else {
+			return baseURL
+		}
+		return host + (components.port.map { ":\($0)" } ?? "") + components.path
+	}
+
+	/// The embedded web console's `WKWebsiteDataStore` for an instance, derived from its URL so it
+	/// stays the same across launches: each instance gets its own store, so their cookies stay
+	/// apart there as they do in `HomerCookieJar`.
+	public static func webDataStoreID(baseURL: String) -> UUID {
+		var bytes = Array(SHA256.hash(data: Data(baseURL.utf8)).prefix(16))
+		// A name-based UUID's version and variant bits (RFC 9562).
+		bytes[6] = (bytes[6] & 0x0F) | 0x50
+		bytes[8] = (bytes[8] & 0x3F) | 0x80
+		return bytes.withUnsafeBytes { UUID(uuid: $0.loadUnaligned(as: uuid_t.self)) }
 	}
 
 	/// A page of the web console, e.g. `processes/42`.

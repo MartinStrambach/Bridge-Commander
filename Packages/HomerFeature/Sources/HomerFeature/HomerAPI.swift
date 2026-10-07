@@ -33,16 +33,25 @@ public nonisolated enum HomerAPIError: Error, Equatable, LocalizedError {
 }
 
 /// The live calls behind `HomerClient`. Authentication is the console's cookie mode: the login
-/// call answers with an `HttpOnly` session cookie (`homer_session`, 12 h by default) that
-/// `URLSession` keeps in `HTTPCookieStorage.shared` — persisted to disk, so a session survives a
-/// relaunch exactly as it survives a browser restart — and sends back on every later call.
+/// call answers with an `HttpOnly` session cookie (`homer_session`, 12 h by default), sent back
+/// on every later call. Cookies are kept per instance in `HomerCookieJar`, not by `URLSession`,
+/// so several instances stay signed in side by side.
 nonisolated enum HomerAPI {
 	/// The backend's CSRF guard rejects a cookie-authenticated request without this header
 	/// (Homer ADR-0016); the console sends it on every call, and so does this.
 	private static let csrfHeader = "X-Homer-CSRF"
 	private static let timeout: TimeInterval = 30
 
-	private static let session = URLSession(configuration: .default)
+	private static let jar = HomerCookieJar.shared
+
+	/// Leaves cookies to `jar`: `URLSession` neither stores nor sends any of its own.
+	private static let session: URLSession = {
+		let configuration = URLSessionConfiguration.default
+		configuration.httpCookieStorage = nil
+		configuration.httpCookieAcceptPolicy = .never
+		configuration.httpShouldSetCookies = false
+		return URLSession(configuration: configuration)
+	}()
 
 	static func me(baseURL: String) async throws -> HomerUser {
 		try await decode(HomerUser.self, from: send("GET", "/api/v1/auth/me", baseURL: baseURL))
@@ -56,16 +65,23 @@ nonisolated enum HomerAPI {
 		return try await me(baseURL: baseURL)
 	}
 
-	/// Ends the session on the server, then drops the instance's cookies locally too: the
-	/// logout answer clears the cookie, but a call that never reaches the server must still
-	/// leave the app signed out.
+	/// Ends the session on the server, then drops the instance's cookies locally too — the
+	/// app's and the embedded web console's: the logout answer clears the cookie, but a call that
+	/// never reaches the server must still leave the app signed out.
 	static func logout(baseURL: String) async throws {
-		defer {
-			for cookie in sessionCookies(baseURL: baseURL) {
-				HTTPCookieStorage.shared.deleteCookie(cookie)
-			}
+		do {
+			_ = try await send("POST", "/api/v1/auth/logout", baseURL: baseURL)
 		}
-		_ = try await send("POST", "/api/v1/auth/logout", baseURL: baseURL)
+		catch {
+			await forgetSession(baseURL: baseURL)
+			throw error
+		}
+		await forgetSession(baseURL: baseURL)
+	}
+
+	private static func forgetSession(baseURL: String) async {
+		jar.removeAll(for: baseURL)
+		await HomerWebDataStore.removeCookies(baseURL: baseURL)
 	}
 
 	static func processes(baseURL: String, query: HomerProcessQuery) async throws -> HomerProcessPage {
@@ -109,13 +125,10 @@ nonisolated enum HomerAPI {
 		_ = try await send("POST", "/api/v1/questions/\(escapedId)/answer", baseURL: baseURL, body: body)
 	}
 
-	/// The cookies `URLSession` holds for the instance — handed to the embedded web console so it
-	/// opens signed in instead of on its own login page.
+	/// The cookies held for the instance — handed to the embedded web console so it opens signed
+	/// in instead of on its own login page.
 	static func sessionCookies(baseURL: String) -> [HTTPCookie] {
-		guard let url = URL(string: baseURL) else {
-			return []
-		}
-		return HTTPCookieStorage.shared.cookies(for: url) ?? []
+		jar.cookies(for: baseURL)
 	}
 
 	// MARK: - Transport
@@ -145,6 +158,9 @@ nonisolated enum HomerAPI {
 		if body != nil {
 			request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 		}
+		for (field, value) in HTTPCookie.requestHeaderFields(with: jar.cookies(for: baseURL)) {
+			request.setValue(value, forHTTPHeaderField: field)
+		}
 
 		let data: Data
 		let response: URLResponse
@@ -158,6 +174,7 @@ nonisolated enum HomerAPI {
 		guard let http = response as? HTTPURLResponse else {
 			throw HomerAPIError.unexpectedResponse
 		}
+		jar.update(for: baseURL, from: http)
 		switch http.statusCode {
 		case 200 ..< 300:
 			return data

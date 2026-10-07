@@ -9,7 +9,7 @@ import SwiftUI
 /// the logs, artifacts and workflow graph.
 struct HomerProcessListView: View {
 	@Bindable
-	var store: StoreOf<HomerConsoleReducer>
+	var store: StoreOf<HomerInstanceReducer>
 
 	@State
 	private var selection: Set<HomerProcess.ID> = []

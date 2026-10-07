@@ -2,11 +2,11 @@ import AppUI
 import ComposableArchitecture
 import SwiftUI
 
-/// The console's sign-in card (`app/(auth)/login/page.tsx`): the instance endpoint collapsed to
-/// its host behind "Change", then username and password.
+/// The console's sign-in card (`app/(auth)/login/page.tsx`): the instance — a field when adding
+/// one, its URL otherwise — then username and password.
 struct HomerLoginView: View {
 	@Bindable
-	var store: StoreOf<HomerConsoleReducer>
+	var store: StoreOf<HomerSignInReducer>
 
 	private enum Field: Hashable {
 		case endpoint
@@ -24,10 +24,10 @@ struct HomerLoginView: View {
 					Image(systemName: AppSection.homer.systemImage)
 						.scaledFont(size: 44)
 						.foregroundStyle(.secondary)
-					Text(store.isChangingInstance ? "Change Homer Instance" : "Sign In to Homer")
+					Text(title)
 						.scaledFont(.title2)
 						.fontWeight(.semibold)
-					Text("Choose an instance and sign in with your Homer console username and password.")
+					Text(subtitle)
 						.scaledFont(.body)
 						.foregroundStyle(.secondary)
 						.multilineTextAlignment(.center)
@@ -67,8 +67,8 @@ struct HomerLoginView: View {
 				.onSubmit { store.send(.signInTapped) }
 
 				HStack {
-					if store.isChangingInstance {
-						Button("Cancel") { store.send(.cancelChangeInstanceTapped) }
+					if store.canCancel {
+						Button("Cancel") { store.send(.cancelTapped) }
 							.buttonStyle(.scaledBordered)
 							.keyboardShortcut(.cancelAction)
 					}
@@ -90,8 +90,26 @@ struct HomerLoginView: View {
 			.frame(maxWidth: .infinity)
 		}
 		.onAppear {
-			focusedField = store.isEditingEndpoint && store.endpoint.isEmpty ? .endpoint : .username
+			focusedField = store.isAddingInstance && store.endpoint.isEmpty ? .endpoint : .username
 		}
+	}
+
+	private var title: String {
+		if !store.isAddingInstance {
+			"Sign In to \(HomerEndpoint.displayName(of: store.endpoint))"
+		}
+		else if store.canCancel {
+			"Add a Homer Instance"
+		}
+		else {
+			"Sign In to Homer"
+		}
+	}
+
+	private var subtitle: String {
+		store.isAddingInstance
+			? "Enter an instance and sign in with your Homer console username and password. Every instance you add stays signed in; switch between them from the header."
+			: "Sign in with your Homer console username and password."
 	}
 
 	private var signInTitle: String {
@@ -101,28 +119,24 @@ struct HomerLoginView: View {
 	@ViewBuilder
 	private var endpointField: some View {
 		labeledField("Instance") {
-			if store.isEditingEndpoint {
+			if store.isAddingInstance {
 				TextField("https://homer.example.com", text: $store.endpoint)
 					.textContentType(.URL)
 					.focused($focusedField, equals: .endpoint)
 			}
 			else {
-				HStack {
-					Text(HomerEndpoint.displayName(of: store.endpoint))
-						.foregroundStyle(.secondary)
-						.lineLimit(1)
-						.truncationMode(.middle)
-					Spacer()
-					Button("Change") {
-						store.send(.editEndpointTapped)
-						focusedField = .endpoint
-					}
-					.buttonStyle(.link)
-				}
-				.padding(.horizontal, 8)
-				.padding(.vertical, 5)
-				.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
-				.overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.secondary.opacity(0.3)))
+				// An instance's form is for its own URL; another one is added from the header's
+				// instance menu.
+				Text(store.endpoint)
+					.foregroundStyle(.secondary)
+					.lineLimit(1)
+					.truncationMode(.middle)
+					.textSelection(.enabled)
+					.frame(maxWidth: .infinity, alignment: .leading)
+					.padding(.horizontal, 8)
+					.padding(.vertical, 5)
+					.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
+					.overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.secondary.opacity(0.3)))
 			}
 		}
 	}

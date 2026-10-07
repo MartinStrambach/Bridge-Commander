@@ -36,9 +36,24 @@ struct HomerEndpointTests {
 		}
 	}
 
-	@Test("the header names the instance by its host")
-	func displayName() {
-		#expect(HomerEndpoint.displayName(of: "https://homer.example.com:8443") == "homer.example.com")
+	@Test(
+		"an instance is named by its host, with the port and sub-path that tell it apart",
+		arguments: [
+			("https://homer.example.com", "homer.example.com"),
+			("http://localhost:8080", "localhost:8080"),
+			("https://example.com/homer", "example.com/homer"),
+		]
+	)
+	func displayName(baseURL: String, expected: String) {
+		#expect(HomerEndpoint.displayName(of: baseURL) == expected)
+	}
+
+	@Test("each instance's web data store is its own, and the same across launches")
+	func webDataStoreID() {
+		let id = HomerEndpoint.webDataStoreID(baseURL: "http://localhost:8080")
+
+		#expect(id == HomerEndpoint.webDataStoreID(baseURL: "http://localhost:8080"))
+		#expect(id != HomerEndpoint.webDataStoreID(baseURL: "http://localhost:8081"))
 	}
 }
 

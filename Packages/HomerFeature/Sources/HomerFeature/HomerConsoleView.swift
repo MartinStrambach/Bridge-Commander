@@ -3,7 +3,8 @@ import ComposableArchitecture
 import SwiftUI
 
 /// The Homer section of the main window. `sectionSwitcher` heads it, in the place it holds in
-/// every section's header.
+/// every section's header; the instance menu at the other end switches between the instances
+/// (⌘1…⌘9 too), each of which stays signed in.
 public struct HomerConsoleView: View {
 	@Bindable
 	private var store: StoreOf<HomerConsoleReducer>
@@ -22,37 +23,27 @@ public struct HomerConsoleView: View {
 		}
 		.onAppear { store.send(.appeared) }
 		.onDisappear { store.send(.disappeared) }
-		.sheet(item: $store.webPage) { page in
-			HomerWebPageView(page: page)
-		}
 	}
 
+	private var selectedInstanceStore: StoreOf<HomerInstanceReducer>? {
+		let id = store.selectedInstanceID
+		return store.scope(\.instances[id: id], action: \.instances[id: id])
+	}
+
+	/// The selected instance's lists, as opposed to a sign-in form or a progress spinner.
 	private var showsConsole: Bool {
-		store.user != nil && !store.isChangingInstance
+		store.addInstance == nil && store.selectedInstance?.user != nil
 	}
 
 	@ViewBuilder
 	private var content: some View {
-		switch store.session {
-		case .checking:
-			ProgressView("Connecting to \(HomerEndpoint.displayName(of: store.baseURL))…")
-				.frame(maxWidth: .infinity, maxHeight: .infinity)
-
-		case .signedOut:
-			HomerLoginView(store: store)
-
-		case .signedIn:
-			if store.isChangingInstance {
-				HomerLoginView(store: store)
-			}
-			else {
-				switch store.tab {
-				case .processes:
-					HomerProcessListView(store: store)
-				case .questions:
-					HomerQuestionListView(store: store)
-				}
-			}
+		if let addInstanceStore = store.scope(\.addInstance, action: \.addInstance) {
+			HomerLoginView(store: addInstanceStore)
+		}
+		else if let instanceStore = selectedInstanceStore {
+			HomerInstanceView(store: instanceStore, tab: store.tab)
+				// A fresh view per instance: the table's selection and the form's focus are its own.
+				.id(store.selectedInstanceID)
 		}
 	}
 
@@ -76,14 +67,12 @@ public struct HomerConsoleView: View {
 
 			Spacer()
 
-			if showsConsole, let user = store.user {
-				HStack(spacing: 12) {
-					Text(HomerEndpoint.displayName(of: store.baseURL))
-						.scaledFont(.subheadline)
-						.foregroundStyle(.secondary)
-						.lineLimit(1)
-						.truncationMode(.middle)
+			HStack(spacing: 12) {
+				if !store.instances.isEmpty {
+					instanceMenu
+				}
 
+				if showsConsole, let instance = store.selectedInstance, let user = instance.user {
 					HeaderButton(
 						icon: "arrow.clockwise",
 						tooltip: "Refresh (⌘R)",
@@ -100,7 +89,7 @@ public struct HomerConsoleView: View {
 						action: openCurrentPageInWebConsole
 					)
 
-					accountMenu(user: user)
+					accountMenu(user: user, instanceID: instance.id)
 				}
 			}
 		}
@@ -109,23 +98,107 @@ public struct HomerConsoleView: View {
 		.frame(minHeight: 30)
 		.padding()
 		.windowTitleBarArea()
+		.background { instanceShortcuts }
 	}
 
 	private var questionsTabTitle: String {
-		store.openQuestionCount > 0 ? "Questions (\(store.openQuestionCount))" : "Questions"
+		let count = store.selectedInstance?.openQuestionCount ?? 0
+		return count > 0 ? "Questions (\(count))" : "Questions"
 	}
 
-	private func accountMenu(user: HomerUser) -> some View {
+	// MARK: - Instances
+
+	private var instanceMenu: some View {
+		HStack(spacing: 6) {
+			Menu {
+				ForEach(Array(store.instances.enumerated()), id: \.element.id) { index, instance in
+					Toggle(isOn: Binding(
+						get: { store.addInstance == nil && instance.id == store.selectedInstanceID },
+						set: { _ in store.send(.instanceSelected(instance.id)) }
+					)) {
+						Text(Self.menuTitle(of: instance))
+					}
+					.keyboardShortcut(Self.shortcutKey(index: index).map { KeyboardShortcut($0, modifiers: .command) })
+				}
+				Divider()
+				Button {
+					store.send(.addInstanceTapped)
+				} label: {
+					Label("Add Instance…", systemImage: "plus")
+				}
+				if store.addInstance == nil, let instance = store.selectedInstance {
+					Button(role: .destructive) {
+						store.send(.removeInstanceTapped(instance.id))
+					} label: {
+						Label(
+							"Remove \(HomerEndpoint.displayName(of: instance.baseURL))",
+							systemImage: "minus.circle"
+						)
+					}
+				}
+			} label: {
+				Label(menuLabel, systemImage: "server.rack")
+			}
+			.labelStyle(.titleAndIcon)
+			.menuStyle(.borderlessButton)
+			.fixedSize()
+			.help("Switch Homer instance (⌘1–⌘9), or add one")
+
+			let elsewhere = store.otherInstancesOpenQuestionCount
+			if elsewhere > 0 {
+				HomerQuestionCountBadge(count: elsewhere)
+					.help("\(elsewhere) open \(elsewhere == 1 ? "question" : "questions") on your other instances")
+			}
+		}
+	}
+
+	private var menuLabel: String {
+		guard store.addInstance == nil, let instance = store.selectedInstance else {
+			return "New Instance"
+		}
+		return HomerEndpoint.displayName(of: instance.baseURL)
+	}
+
+	/// ⌘1…⌘9, the menu's order. The menu items carry the same shortcuts, but a closed menu does
+	/// not answer them reliably; selecting the instance on screen again does nothing, so the
+	/// two never fight.
+	private var instanceShortcuts: some View {
+		ForEach(Array(store.instances.ids.prefix(HomerConsoleReducer.shortcutInstanceLimit).enumerated()), id: \.element) { index, id in
+			if let key = Self.shortcutKey(index: index) {
+				Button("") { store.send(.instanceSelected(id)) }
+					.keyboardShortcut(key, modifiers: .command)
+					.hidden()
+			}
+		}
+	}
+
+	private static func shortcutKey(index: Int) -> KeyEquivalent? {
+		index < HomerConsoleReducer.shortcutInstanceLimit ? KeyEquivalent(Character(String(index + 1))) : nil
+	}
+
+	/// An instance as the menu lists it: its name, who is signed in, and its open questions.
+	static func menuTitle(of instance: HomerInstanceReducer.State) -> String {
+		let name = HomerEndpoint.displayName(of: instance.baseURL)
+		switch instance.session {
+		case .checking:
+			return "\(name) — connecting…"
+		case .signedOut:
+			return instance.signIn.sessionExpired ? "\(name) — session expired" : "\(name) — signed out"
+		case let .signedIn(user):
+			let count = instance.openQuestionCount
+			guard count > 0 else {
+				return "\(name) — \(user.username)"
+			}
+			return "\(name) — \(user.username) · \(count) open \(count == 1 ? "question" : "questions")"
+		}
+	}
+
+	private func accountMenu(user: HomerUser, instanceID: HomerInstanceReducer.State.ID) -> some View {
 		Menu {
 			Text("Signed in as \(user.username)")
 			Divider()
 			Button {
-				store.send(.changeInstanceTapped)
-			} label: {
-				Label("Change Instance…", systemImage: "server.rack")
-			}
-			Button {
-				store.send(.signOutTapped)
+				store.send(.instances(.element(id: instanceID, action: .signOutTapped)))
 			} label: {
 				Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
 			}
@@ -147,6 +220,38 @@ public struct HomerConsoleView: View {
 			store.send(.openWebConsoleTapped(path: "processes", title: "Processes"))
 		case .questions:
 			store.send(.openWebConsoleTapped(path: "questions", title: "Questions"))
+		}
+	}
+}
+
+/// The selected instance: its sign-in form while signed out, otherwise the page the header's
+/// picker chose.
+struct HomerInstanceView: View {
+	@Bindable
+	var store: StoreOf<HomerInstanceReducer>
+	let tab: HomerConsoleReducer.Tab
+
+	var body: some View {
+		Group {
+			switch store.session {
+			case .checking:
+				ProgressView("Connecting to \(HomerEndpoint.displayName(of: store.baseURL))…")
+					.frame(maxWidth: .infinity, maxHeight: .infinity)
+
+			case .signedOut:
+				HomerLoginView(store: store.scope(\.signIn, action: \.signIn))
+
+			case .signedIn:
+				switch tab {
+				case .processes:
+					HomerProcessListView(store: store)
+				case .questions:
+					HomerQuestionListView(store: store)
+				}
+			}
+		}
+		.sheet(item: $store.webPage) { page in
+			HomerWebPageView(page: page)
 		}
 	}
 }
