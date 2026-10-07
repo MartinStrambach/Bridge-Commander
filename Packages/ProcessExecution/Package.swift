@@ -13,6 +13,10 @@ let package = Package(
             name: "ProcessExecution",
             dependencies: []
         ),
+        .testTarget(
+            name: "ProcessExecutionTests",
+            dependencies: ["ProcessExecution"]
+        ),
     ]
 )
 

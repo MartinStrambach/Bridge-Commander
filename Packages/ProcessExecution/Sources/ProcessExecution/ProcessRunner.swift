@@ -107,7 +107,18 @@ public nonisolated enum ProcessRunner {
 					try process.run()
 				}
 				catch {
-					// If process fails to start, return a failure result
+					// A launch that fails (e.g. the working directory of a just-deleted worktree is gone)
+					// never reaches the termination handler, and the never-launched process keeps both
+					// pipes alive. Left open, every failed launch leaked six descriptors until the app hit
+					// launchd's limit of 256; from then on `Pipe()` silently hands out fd 0 and every
+					// launch fails with "Bad file descriptor".
+					process.terminationHandler = nil
+					for pipe in [outputPipe, errorPipe] {
+						pipe.fileHandleForReading.readabilityHandler = nil
+						try? pipe.fileHandleForReading.close()
+						try? pipe.fileHandleForWriting.close()
+					}
+
 					let result = ProcessResult(
 						exitCode: -1,
 						output: Data(),
