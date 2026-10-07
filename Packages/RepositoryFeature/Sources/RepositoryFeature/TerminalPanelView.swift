@@ -10,6 +10,7 @@ import SwiftUI
 import Settings
 import TerminalFeature
 import ToolsIntegration
+import YouTrackMenu
 
 struct TerminalPanelView: View {
 	@Bindable
@@ -169,6 +170,13 @@ struct TerminalPanelView: View {
 			// the list and survives the panel being hidden. Gated the same way as in the row.
 			if let rowStore = activeRowStore, rowStore.supportsIOS, rowStore.supportsTuist {
 				TuistButtonView(store: rowStore.scope(\.tuistButton, action: \.tuistButton))
+			}
+
+			// The row's own store too: after a transition the row refetches the ticket, and only
+			// that fetch knows the transitions now reachable — a copy here would keep offering
+			// the old ones.
+			if let youtrackStore = activeRowStore?.scope(\.youtrackButton, action: \.youtrackButton) {
+				YouTrackButtonView(store: youtrackStore)
 			}
 
 			if let rowStore = activeRowStore, rowStore.unpushedCommitCount > 0 || store.isPushing {

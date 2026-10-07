@@ -15,6 +15,9 @@ public struct YouTrackButtonView: View {
 	@Environment(\.uiFontScale)
 	private var uiFontScale
 
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	public init(store: StoreOf<YouTrackButtonReducer>) {
 		self.store = store
 	}
@@ -48,7 +51,7 @@ public struct YouTrackButtonView: View {
 			}
 		}
 		.fixedSize()
-		.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
+		.sheet(item: presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil)) { alertStore in
 			ScrollableAlertView(store: alertStore)
 		}
 	}
