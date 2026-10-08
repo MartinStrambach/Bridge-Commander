@@ -20,7 +20,7 @@ let package = Package(
 		.package(path: "../ActionButtons"),
 		.package(path: "../StagingFeature"),
 		.package(path: "../YouTrackMenu"),
-		.package(path: "../HomerFeature"),
+		.package(url: "https://github.com/MartinStrambach/Homer-console-mac-app", from: "0.1.0"),
 		.package(path: "../SimulatorFeature"),
 	],
 	targets: [
@@ -39,7 +39,7 @@ let package = Package(
 				.product(name: "ActionButtons", package: "ActionButtons"),
 				.product(name: "StagingFeature", package: "StagingFeature"),
 				.product(name: "YouTrackMenu", package: "YouTrackMenu"),
-				.product(name: "HomerFeature", package: "HomerFeature"),
+				.product(name: "HomerFeature", package: "Homer-console-mac-app"),
 				.product(name: "SimulatorFeature", package: "SimulatorFeature"),
 			]
 		),

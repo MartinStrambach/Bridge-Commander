@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppUI
 import HomerFeature
+import HomerUI
 import Settings
 import SimulatorFeature
 import TerminalFeature
@@ -33,6 +34,10 @@ public struct RootRepositoryView: View {
 	@Shared(.selectedAppSection)
 	private var section = AppSection.repositories
 
+	/// Handed to the console, which reads a scale of its own (`homerUIFontScale`).
+	@Environment(\.uiFontScale)
+	private var uiFontScale
+
 	public init() {
 		self.store = Store(
 			initialState: RepositoryListReducer.State(),
@@ -51,7 +56,10 @@ public struct RootRepositoryView: View {
 				.disabled(section != .repositories)
 
 			if section == .homer {
-				HomerConsoleView(store: homerStore, sectionSwitcher: sectionSwitcher)
+				HomerConsoleView(store: homerStore) {
+					sectionSwitcher
+				}
+				.homerUIFontScale(uiFontScale)
 			}
 		}
 		// Not tied to the Homer section being shown: the open-question badge on the switcher

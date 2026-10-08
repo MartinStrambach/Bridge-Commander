@@ -1,5 +1,5 @@
 {
-  "originHash" : "ef1806557b418c8547816600010b16df0157d5c8e99d0c606714a6931e84434b",
+  "originHash" : "cd9aa7d5bcd8bc19dbfd73503a2fddbb13e5962ac171401a68fc60c8a4103d50",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "dcccb979a2183b8df3334237e3dc1ae2b4116a86",
         "version" : "1.2.0"
+      }
+    },
+    {
+      "identity" : "homer-console-mac-app",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MartinStrambach/Homer-console-mac-app",
+      "state" : {
+        "revision" : "33dd9e16be8e89895fd290301021f68acef69a41",
+        "version" : "0.1.0"
       }
     },
     {
