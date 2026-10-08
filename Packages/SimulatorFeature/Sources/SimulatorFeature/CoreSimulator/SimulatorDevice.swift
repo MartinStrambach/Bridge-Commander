@@ -126,6 +126,8 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 	case frameworkUnavailable(String)
 	case unsupportedCoreSimulator(version: String)
+	case coreSimulatorChanged(loaded: String, installed: String)
+	case coreSimulatorException(String)
 	case deviceNotFound(String)
 	case noBootedDevice
 	case deviceNotBooted(String)
@@ -148,6 +150,10 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 			"CoreSimulator could not be loaded (is Xcode installed?): \(detail)"
 		case let .unsupportedCoreSimulator(version):
 			"This CoreSimulator (\(version)) predates the dtuhidd input service; input needs Xcode 27 or later."
+		case let .coreSimulatorChanged(loaded, installed):
+			"CoreSimulator was replaced while Bridge Commander was running (\(loaded) → \(installed)), as switching or updating Xcode does. Restart Bridge Commander to use the simulator again."
+		case let .coreSimulatorException(reason):
+			"CoreSimulator failed: \(reason)"
 		case let .deviceNotFound(udid):
 			"No simulator with UDID \(udid)."
 		case .noBootedDevice:
