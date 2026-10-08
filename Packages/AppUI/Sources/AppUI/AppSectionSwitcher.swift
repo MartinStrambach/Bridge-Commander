@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The main window's top-level sections, switched from the start of each section's header.
@@ -13,15 +14,6 @@ public enum AppSection: String, CaseIterable, Sendable {
 			"Homer"
 		}
 	}
-
-	public var systemImage: String {
-		switch self {
-		case .repositories:
-			"folder"
-		case .homer:
-			"waveform.path.ecg"
-		}
-	}
 }
 
 /// Stands where the window title used to: every section's header starts with it, so it stays in
@@ -30,6 +22,8 @@ public enum AppSection: String, CaseIterable, Sendable {
 public struct AppSectionSwitcher: View {
 	@Binding
 	private var selection: AppSection
+	@Environment(\.uiFontScale)
+	private var uiFontScale
 	private let badges: [AppSection: Int]
 
 	public init(selection: Binding<AppSection>, badges: [AppSection: Int] = [:]) {
@@ -56,7 +50,7 @@ public struct AppSectionSwitcher: View {
 			selection = section
 		} label: {
 			HStack(spacing: 6) {
-				Image(systemName: section.systemImage)
+				icon(section)
 				Text(section.title)
 					.fontWeight(.semibold)
 				if badge > 0 {
@@ -85,6 +79,25 @@ public struct AppSectionSwitcher: View {
 		.buttonStyle(.plain)
 		.help(helpText(section, badge: badge))
 		.accessibilityAddTraits(isSelected ? .isSelected : [])
+	}
+
+	@ViewBuilder
+	private func icon(_ section: AppSection) -> some View {
+		switch section {
+		case .repositories:
+			Image(systemName: "folder")
+		case .homer:
+			// The Homer console app's icon, cropped to its rounded square. A bitmap is not sized by
+			// the font like a symbol, so it is framed to the headline's size times the text scale.
+			if let image = Bundle.module.image(forResource: "HomerIcon") {
+				let side = (UIFontScale.pointSize(of: .headline) + 3) * uiFontScale
+				Image(nsImage: image)
+					.resizable()
+					.interpolation(.high)
+					.frame(width: side, height: side)
+					.accessibilityHidden(true)
+			}
+		}
 	}
 
 	private func helpText(_ section: AppSection, badge: Int) -> String {

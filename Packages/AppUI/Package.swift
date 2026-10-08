@@ -18,7 +18,8 @@ let package = Package(
             name: "AppUI",
             dependencies: [
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-            ]
+            ],
+            resources: [.process("Resources")]
         ),
         // Converts GitCore's diff models into AppUI's, for every feature that renders a diff.
         .target(
