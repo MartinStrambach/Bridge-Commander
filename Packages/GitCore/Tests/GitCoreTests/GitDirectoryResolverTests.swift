@@ -1,8 +1,30 @@
+import Foundation
 import Testing
 @testable import GitCore
 
 @Suite("GitDirectoryResolver")
 struct GitDirectoryResolverTests {
+	// MARK: - resolveGitDirectory
+
+	@Test("a worktree's gitdir pointer resolves whether git wrote it absolute or relative")
+	func gitdirPointer() throws {
+		let root = NSTemporaryDirectory() + "GitDirectoryResolverTests-" + UUID().uuidString
+		let worktree = root + "/feature"
+		let gitDirectory = root + "/app/.git/worktrees/feature"
+		try FileManager.default.createDirectory(atPath: worktree, withIntermediateDirectories: true)
+		try FileManager.default.createDirectory(atPath: gitDirectory, withIntermediateDirectories: true)
+		defer { try? FileManager.default.removeItem(atPath: root) }
+
+		try "gitdir: \(gitDirectory)\n".write(toFile: worktree + "/.git", atomically: true, encoding: .utf8)
+		#expect(GitDirectoryResolver.resolveGitDirectory(at: worktree) == gitDirectory)
+
+		// Git 2.48+ with `worktree.useRelativePaths`.
+		try "gitdir: ../app/.git/worktrees/feature\n".write(toFile: worktree + "/.git", atomically: true, encoding: .utf8)
+		#expect(GitDirectoryResolver.resolveGitDirectory(at: worktree) == gitDirectory)
+		#expect(GitDirectoryResolver.resolveMainRepositoryPath(at: worktree) == root + "/app")
+		#expect(GitDirectoryResolver.isGitRepository(at: URL(fileURLWithPath: worktree)) == (true, true))
+	}
+
 	// MARK: - commonGitDirectory
 
 	@Test("worktree git dir maps to the main repository's .git directory")

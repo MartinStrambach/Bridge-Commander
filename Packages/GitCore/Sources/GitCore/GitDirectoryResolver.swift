@@ -27,8 +27,15 @@ public nonisolated enum GitDirectoryResolver {
 
 		let trimmed = gitFileContent.trimmingCharacters(in: .whitespacesAndNewlines)
 		if trimmed.hasPrefix("gitdir:") {
-			return trimmed.replacingOccurrences(of: "gitdir:", with: "")
+			let gitDirectory = trimmed.replacingOccurrences(of: "gitdir:", with: "")
 				.trimmingCharacters(in: .whitespaces)
+			// Git 2.48+ writes the pointer relative to the worktree with `worktree.useRelativePaths`.
+			guard !(gitDirectory as NSString).isAbsolutePath else {
+				return gitDirectory
+			}
+
+			return URL(fileURLWithPath: gitDirectory, relativeTo: URL(fileURLWithPath: path, isDirectory: true))
+				.standardizedFileURL.path
 		}
 
 		return nil

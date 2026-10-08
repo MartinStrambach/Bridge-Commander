@@ -50,14 +50,10 @@ nonisolated struct GitWatchTarget: Equatable, Sendable {
 	}
 
 	init?(repositoryPath: String) {
-		guard var gitDirectory = GitDirectoryResolver.resolveGitDirectory(at: repositoryPath) else {
+		guard let gitDirectory = GitDirectoryResolver.resolveGitDirectory(at: repositoryPath) else {
 			return nil
 		}
 
-		// `worktree.useRelativePaths` (git 2.48+) writes the `gitdir:` line relative to the worktree.
-		if !gitDirectory.hasPrefix("/") {
-			gitDirectory = (repositoryPath as NSString).appendingPathComponent(gitDirectory)
-		}
 		let canonicalGitDirectory = Self.canonicalPath(gitDirectory)
 		self.init(
 			repositoryPath: repositoryPath,
