@@ -37,7 +37,7 @@ struct RepositoryListRefreshTests {
 		#expect(groups.map { $0.groupId } == ["/repos/alpha", "/repos/beta"])
 		#expect(groups.map { $0.worktreeIds.count } == [2, 1])
 
-		await store.send(.refreshRepositories)
+		await store.send(.refreshRepositories(.user))
 
 		// The scan is kicked off first, then every row is refreshed one at a time.
 		// `receive` consumes the action queue in order, so a header arriving after one of
@@ -58,7 +58,7 @@ struct RepositoryListRefreshTests {
 		let store = makeStore()
 
 		// Exhaustive: an unasserted `startScan` — or any row refresh — fails here.
-		await store.send(.refreshRepositories)
+		await store.send(.refreshRepositories(.user))
 		await store.finish()
 	}
 

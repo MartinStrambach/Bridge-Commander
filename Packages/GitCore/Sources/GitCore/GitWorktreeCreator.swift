@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 import ProcessExecution
 
@@ -113,6 +114,7 @@ public nonisolated enum GitWorktreeCreator {
 		fi
 		"""
 
+		let start = ContinuousClock.now
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/bin/sh"),
 			arguments: [
@@ -126,6 +128,14 @@ public nonisolated enum GitWorktreeCreator {
 			],
 			currentDirectory: URL(fileURLWithPath: repositoryPath),
 			environment: EnvironmentHelper.setupEnvironment()
+		)
+		// The script's git calls bypass `runGit`, so the step is recorded here, with the script's
+		// own account of which base it picked.
+		let branch = createNewBranch ? "new branch \(branchName) from \(baseBranch)" : "branch \(baseBranch)"
+		ActivityLog.shared.record(
+			result.success ? .git : .error,
+			"worktree add \(folder.path) on \(branch) (in \(repositoryPath)) → exit \(result.exitCode) in \((ContinuousClock.now - start).activityLogDescription)",
+			details: result.success ? result.trimmedOutput : result.trimmedError
 		)
 
 		guard result.success else {

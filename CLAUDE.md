@@ -16,6 +16,7 @@ The app is modularized into SPM packages under `Packages/`, with the thin app ta
 ```
 BridgeCommander/          # App entry point (BridgeCommanderApp.swift), Sparkle updater
 Packages/
+  ActivityLog/            # Shareable log of git commands, network requests and errors (Settings ▸ Activity Log)
   ProcessExecution/       # Shelling out to external processes (ProcessRunner)
   GitCore/                # Git operations and models
   GitHosting/             # GitHub/GitLab pull request + pipeline services
@@ -86,6 +87,9 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 
 **Shell Commands:**
 - Use `ProcessRunner.runGit(arguments:at:)` (ProcessExecution package) for git operations; git helpers live in GitCore
+
+**Activity log:**
+- New network calls go through `URLSession.loggedData(for:)` and new git calls through `ProcessRunner.runGit`, so they land in the shareable activity log; a dependency client whose errors matter wraps its live closures in `ActivityLog.shared.recordingErrors` (see `Packages/ActivityLog/README.md`)
 
 **Async:**
 - Wrap in TCA `Effect { send in ... }`

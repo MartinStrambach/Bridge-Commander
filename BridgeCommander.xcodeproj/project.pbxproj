@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		93AC71022FE0000100AE9EB8 /* ActivityLog in Frameworks */ = {isa = PBXBuildFile; productRef = 93AC71032FE0000100AE9EB8 /* ActivityLog */; };
 		93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 93351C4A2ECF9BAE006D4609 /* ComposableArchitecture */; };
 		93B04CFC2F793324008328A2 /* GitCore in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04CFB2F793324008328A2 /* GitCore */; };
 		93B04CFF2F793341008328A2 /* AppUI in Frameworks */ = {isa = PBXBuildFile; productRef = 93B04CFE2F793341008328A2 /* AppUI */; };
@@ -18,6 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		93AC71012FE0000100AE9EB8 /* ActivityLog */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ActivityLog; path = Packages/ActivityLog; sourceTree = "<group>"; };
 		9303DBEA2F7A967A00AE9EB8 /* GitActionsMenu */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = GitActionsMenu; path = Packages/GitActionsMenu; sourceTree = "<group>"; };
 		932CED7A2F793C71004ED67F /* AppUI */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = AppUI; path = Packages/AppUI; sourceTree = "<group>"; };
 		932CED7B2F793C71004ED67F /* GitCore */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = GitCore; path = Packages/GitCore; sourceTree = "<group>"; };
@@ -31,6 +33,7 @@
 		93A44E5A2F92DBBC000EC92E /* GitHosting */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = GitHosting; path = Packages/GitHosting; sourceTree = "<group>"; };
 		93C9515E2F807809002EB9A8 /* ActionButtons */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = ActionButtons; path = Packages/ActionButtons; sourceTree = "<group>"; };
 		93D4B2C12FAB515100AE9EB8 /* StagingFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = StagingFeature; path = Packages/StagingFeature; sourceTree = "<group>"; };
+		93B1A0012FF0000100AE9EB8 /* SimulatorFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = SimulatorFeature; path = Packages/SimulatorFeature; sourceTree = "<group>"; };
 		93E7A1D42FB0000100AE9EB8 /* YouTrackMenu */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = YouTrackMenu; path = Packages/YouTrackMenu; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -68,6 +71,7 @@
 				93351C4B2ECF9BAE006D4609 /* ComposableArchitecture in Frameworks */,
 				93B04D052F7933CA008328A2 /* ToolsIntegration in Frameworks */,
 				93F5A1012FC1000100AE9EB8 /* Sparkle in Frameworks */,
+				93AC71022FE0000100AE9EB8 /* ActivityLog in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -77,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				93C9515E2F807809002EB9A8 /* ActionButtons */,
+				93AC71012FE0000100AE9EB8 /* ActivityLog */,
 				932CED7A2F793C71004ED67F /* AppUI */,
 				9303DBEA2F7A967A00AE9EB8 /* GitActionsMenu */,
 				932CED7B2F793C71004ED67F /* GitCore */,
@@ -85,6 +90,7 @@
 				93761C4E2F7A6D5D0049F6F0 /* ProcessExecution */,
 				932CED7C2F793C71004ED67F /* RepositoryFeature */,
 				932CED7D2F793C71004ED67F /* Settings */,
+				93B1A0012FF0000100AE9EB8 /* SimulatorFeature */,
 				93D4B2C12FAB515100AE9EB8 /* StagingFeature */,
 				932CED7E2F793C71004ED67F /* TerminalFeature */,
 				932CED7F2F793C71004ED67F /* ToolsIntegration */,
@@ -128,6 +134,7 @@
 				93B04D072F7933D7008328A2 /* TerminalFeature */,
 				93B04D0A2F7933E3008328A2 /* RepositoryFeature */,
 				93F5A1022FC1000100AE9EB8 /* Sparkle */,
+				93AC71032FE0000100AE9EB8 /* ActivityLog */,
 			);
 			productName = BridgeCommander;
 			productReference = 93351BB42ECD3F1A006D4609 /* BridgeCommander.app */;
@@ -467,6 +474,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 93F5A1032FC1000100AE9EB8 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		93AC71032FE0000100AE9EB8 /* ActivityLog */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ActivityLog;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

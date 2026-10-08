@@ -1,3 +1,4 @@
+import ActivityLog
 import Dependencies
 import DependenciesMacros
 import Foundation
@@ -33,24 +34,41 @@ public struct YouTrackClient: Sendable {
 extension YouTrackClient: DependencyKey {
 	public static let liveValue = YouTrackClient(
 		fetchIssueDetails: { ticketId, baseURL, authToken in
-			try await YouTrackService.fetchIssueDetails(for: ticketId, baseURL: baseURL, authToken: authToken)
+			try await ActivityLog.shared.recordingErrors("YouTrack issue \(ticketId)", unless: isNotConfigured) {
+				try await YouTrackService.fetchIssueDetails(for: ticketId, baseURL: baseURL, authToken: authToken)
+			}
 		},
 		applyStateEvent: { ticketId, fieldId, eventId, baseURL, authToken in
-			try await YouTrackService.applyStateEvent(
-				for: ticketId,
-				fieldId: fieldId,
-				eventId: eventId,
-				baseURL: baseURL,
-				authToken: authToken
-			)
+			try await ActivityLog.shared.recordingErrors("YouTrack event \(eventId) on \(ticketId)") {
+				try await YouTrackService.applyStateEvent(
+					for: ticketId,
+					fieldId: fieldId,
+					eventId: eventId,
+					baseURL: baseURL,
+					authToken: authToken
+				)
+			}
 		},
 		searchIssues: { query, baseURL, authToken in
-			try await YouTrackService.searchIssues(query: query, baseURL: baseURL, authToken: authToken)
+			try await ActivityLog.shared.recordingErrors("YouTrack search", unless: isNotConfigured) {
+				try await YouTrackService.searchIssues(query: query, baseURL: baseURL, authToken: authToken)
+			}
 		},
 		verifyToken: { baseURL, authToken in
 			try await YouTrackService.verifyToken(baseURL: baseURL, authToken: authToken)
 		}
 	)
+
+	/// Rows ask for their ticket on every refresh, so an instance without a token or URL would
+	/// fill the log.
+	private static func isNotConfigured(_ error: any Error) -> Bool {
+		switch error {
+		case YouTrackServiceError.missingToken, YouTrackServiceError.missingBaseURL:
+			true
+		default:
+			false
+		}
+	}
 }
 
 extension YouTrackClient: TestDependencyKey {

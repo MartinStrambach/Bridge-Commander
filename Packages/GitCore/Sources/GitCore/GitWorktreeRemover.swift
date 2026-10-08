@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 import ProcessExecution
 
@@ -23,11 +24,18 @@ public nonisolated enum GitWorktreeRemover {
 		fi
 		"""
 
+		let start = ContinuousClock.now
 		let result = await ProcessRunner.run(
 			executableURL: URL(filePath: "/bin/sh"),
 			arguments: ["-c", script],
 			currentDirectory: URL(filePath: path),
 			environment: EnvironmentHelper.setupEnvironment()
+		)
+		// The script's git calls bypass `runGit`, so the removal is recorded here.
+		ActivityLog.shared.record(
+			result.success ? .git : .error,
+			"worktree remove \(force ? "--force " : "")\(path) → exit \(result.exitCode) in \((ContinuousClock.now - start).activityLogDescription)",
+			details: result.success ? nil : result.trimmedError
 		)
 
 		guard result.success else {
