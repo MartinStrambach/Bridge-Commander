@@ -271,7 +271,7 @@ struct HomerInstanceView: View {
 					case .continuations:
 						HomerContinuationsView(store: store.scope(\.continuations, action: \.continuations))
 					case .schedules:
-						HomerSchedulesView(store: store.scope(\.agents, action: \.agents))
+						HomerSchedulesView(store: store.scope(\.agents, action: \.agents), user: user)
 					case .agents:
 						HomerAgentsView(store: store.scope(\.agents, action: \.agents), user: user)
 					case .costs:

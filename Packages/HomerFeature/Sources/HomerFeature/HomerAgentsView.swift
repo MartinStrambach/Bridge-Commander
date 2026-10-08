@@ -12,6 +12,20 @@ struct HomerAgentsView: View {
 	let user: HomerUser
 
 	var body: some View {
+		Group {
+			if store.detail?.openedFrom == .agents,
+			   let detailStore = store.scope(\.detail, action: \.detail)
+			{
+				HomerAgentDetailView(store: detailStore, user: user)
+			}
+			else {
+				agents
+			}
+		}
+		.modifier(HomerAgentSheets(store: store))
+	}
+
+	private var agents: some View {
 		VStack(spacing: 0) {
 			toolbar
 			Divider()
@@ -32,15 +46,6 @@ struct HomerAgentsView: View {
 				Divider()
 			}
 			content
-		}
-		.sheet(
-			item: $store.scope(\.$runAgent, action: \.runAgent),
-			onDismiss: { store.send(.runSheetDismissed) }
-		) { runStore in
-			HomerRunAgentView(store: runStore)
-		}
-		.sheet(item: $store.scope(\.$workflowGraph, action: \.workflowGraph)) { graphStore in
-			HomerAgentWorkflowGraphView(store: graphStore)
 		}
 	}
 
@@ -136,11 +141,26 @@ struct HomerAgentsView: View {
 struct HomerSchedulesView: View {
 	@Bindable
 	var store: StoreOf<HomerAgentsReducer>
+	let user: HomerUser
 
 	@State
 	private var selection: Set<HomerAgent.ID> = []
 
 	var body: some View {
+		Group {
+			if store.detail?.openedFrom == .schedules,
+			   let detailStore = store.scope(\.detail, action: \.detail)
+			{
+				HomerAgentDetailView(store: detailStore, user: user)
+			}
+			else {
+				schedules
+			}
+		}
+		.modifier(HomerAgentSheets(store: store))
+	}
+
+	private var schedules: some View {
 		VStack(spacing: 0) {
 			if let error = store.loadError {
 				HomerErrorBanner(message: error)
@@ -299,6 +319,26 @@ struct HomerSchedulesView: View {
 				Label("Copy Cron Expression", systemImage: "doc.on.doc")
 			}
 		}
+	}
+}
+
+/// The sheets of the Agents and Schedules pages, on either one so that an agent's page shown in
+/// place of either can open them: Run, and the workflow graph over the cards.
+private struct HomerAgentSheets: ViewModifier {
+	@Bindable
+	var store: StoreOf<HomerAgentsReducer>
+
+	func body(content: Content) -> some View {
+		content
+			.sheet(
+				item: $store.scope(\.$runAgent, action: \.runAgent),
+				onDismiss: { store.send(.runSheetDismissed) }
+			) { runStore in
+				HomerRunAgentView(store: runStore)
+			}
+			.sheet(item: $store.scope(\.$workflowGraph, action: \.workflowGraph)) { graphStore in
+				HomerAgentWorkflowGraphView(store: graphStore)
+			}
 	}
 }
 

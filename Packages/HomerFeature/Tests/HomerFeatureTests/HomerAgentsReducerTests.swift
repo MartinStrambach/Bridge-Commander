@@ -25,7 +25,7 @@ struct HomerAgentsReducerTests {
 		var state = HomerAgentsReducer.State(baseURL: Self.baseURL)
 		state.agents = [factory, nightly]
 		state.hasLoaded = true
-		state.isShown = true
+		state.shownPage = .agents
 		return state
 	}
 
@@ -44,8 +44,8 @@ struct HomerAgentsReducerTests {
 			}
 		}
 
-		await store.send(.shown) {
-			$0.isShown = true
+		await store.send(.shown(.agents)) {
+			$0.shownPage = .agents
 		}
 		await store.receive(\.agentsLoaded) {
 			$0.agents = [factory, nightly]
@@ -55,7 +55,7 @@ struct HomerAgentsReducerTests {
 		await store.receive(\.agentsLoaded)
 
 		await store.send(.hidden) {
-			$0.isShown = false
+			$0.shownPage = nil
 		}
 		await clock.advance(by: HomerAgentsReducer.pollInterval * 3)
 		#expect(calls.value == 2)
@@ -77,7 +77,7 @@ struct HomerAgentsReducerTests {
 			}
 		}
 
-		await store.send(.shown)
+		await store.send(.shown(.agents))
 		await store.receive(\.agentsLoaded) {
 			$0.loadError = HomerAPIError.unreachable("offline").localizedDescription
 		}
@@ -88,7 +88,7 @@ struct HomerAgentsReducerTests {
 			$0.loadError = nil
 		}
 		await store.send(.hidden) {
-			$0.isShown = false
+			$0.shownPage = nil
 		}
 	}
 
@@ -101,14 +101,14 @@ struct HomerAgentsReducerTests {
 			$0[HomerAgentsClient.self].agents = { _ in throw HomerAPIError.unauthorized }
 		}
 
-		await store.send(.shown) {
-			$0.isShown = true
+		await store.send(.shown(.agents)) {
+			$0.shownPage = .agents
 		}
 		await store.receive(\.agentsLoaded)
 		await store.receive(\.delegate, .unauthorized)
 		// What the instance does on that: hides the page, which stops the poll.
 		await store.send(.hidden) {
-			$0.isShown = false
+			$0.shownPage = nil
 		}
 	}
 
@@ -151,7 +151,7 @@ struct HomerAgentsReducerTests {
 			$0.reloadResult = nil
 		}
 		await store.send(.hidden) {
-			$0.isShown = false
+			$0.shownPage = nil
 		}
 	}
 
@@ -283,14 +283,14 @@ struct HomerAgentsReducerTests {
 		await store.send(.runSheetDismissed)
 	}
 
-	@Test("the agent's page, its editor and New Agent open in the web console")
+	@Test("the agent's editor and New Agent open in the web console")
 	func webConsolePages() async {
 		let store = TestStore(initialState: loadedState()) {
 			HomerAgentsReducer()
 		}
 
-		await store.send(.agentTapped(agentName: "team/a b"))
-		await store.receive(\.delegate, .openWebConsole(path: "agents/team%2Fa%20b", title: "team/a b"))
+		await store.send(.editTapped(agentName: "team/a b"))
+		await store.receive(\.delegate, .openWebConsole(path: "agents/team%2Fa%20b/edit", title: "Edit team/a b"))
 		await store.send(.editTapped(agentName: "factory"))
 		await store.receive(\.delegate, .openWebConsole(path: "agents/factory/edit", title: "Edit factory"))
 		await store.send(.newAgentTapped)
@@ -351,7 +351,7 @@ struct HomerAgentsReducerTests {
 		#expect(fired.value == ["Nightly"])
 
 		await store.send(.hidden) {
-			$0.isShown = false
+			$0.shownPage = nil
 		}
 	}
 

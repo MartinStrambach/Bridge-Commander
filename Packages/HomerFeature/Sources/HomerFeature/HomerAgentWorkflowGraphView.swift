@@ -19,7 +19,7 @@ struct HomerAgentWorkflowGraphView: View {
 					.foregroundStyle(.secondary)
 			}
 
-			content
+			HomerAgentWorkflowGraphContent(store: store)
 				.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
 			HStack {
@@ -55,9 +55,15 @@ struct HomerAgentWorkflowGraphView: View {
 		.presentationSizing(.fitted)
 		.task { store.send(.task) }
 	}
+}
 
-	@ViewBuilder
-	private var content: some View {
+/// The graphs themselves, or why there are none — the sheet's body and the Workflow Graph section
+/// of the agent's page. One graph takes all the space given and scrolls by itself; several
+/// scroll together.
+struct HomerAgentWorkflowGraphContent: View {
+	let store: StoreOf<HomerAgentWorkflowGraphReducer>
+
+	var body: some View {
 		if let error = store.loadError {
 			Label("Could not read the workflow: \(error)", systemImage: "exclamationmark.triangle.fill")
 				.scaledFont(.callout)

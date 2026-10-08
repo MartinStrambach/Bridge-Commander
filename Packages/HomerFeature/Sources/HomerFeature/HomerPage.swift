@@ -18,8 +18,10 @@ public enum HomerPageDelegate: Equatable, Sendable {
 /// (`shown`) and goes off it (`hidden`), and polls only in between.
 enum HomerChildPage: Equatable, Sendable {
 	case continuations
-	/// Agents and Schedules: the schedules are the agents that have a cron.
+	/// Agents and Schedules are one reducer — the schedules are the agents that have a cron —
+	/// told which of the two is on screen, as an agent's page shows in place of either.
 	case agents
+	case schedules
 	case costs
 
 	init?(_ tab: HomerConsoleReducer.Tab) {
@@ -28,8 +30,10 @@ enum HomerChildPage: Equatable, Sendable {
 			return nil
 		case .continuations:
 			self = .continuations
-		case .agents, .schedules:
+		case .agents:
 			self = .agents
+		case .schedules:
+			self = .schedules
 		case .costs:
 			self = .costs
 		}

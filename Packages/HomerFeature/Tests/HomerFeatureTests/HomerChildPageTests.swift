@@ -39,7 +39,6 @@ struct HomerChildPageTests {
 			$0.continuations.hasLoaded = true
 		}
 
-		// Agents and Schedules are one reducer: moving between them changes nothing.
 		await store.send(.pageChanged(.agents)) {
 			$0.page = .agents
 			$0.shownChildPage = .agents
@@ -48,22 +47,32 @@ struct HomerChildPageTests {
 			$0.continuations.isShown = false
 		}
 		await store.receive(\.agents.shown) {
-			$0.agents.isShown = true
+			$0.agents.shownPage = .agents
 		}
 		await store.receive(\.agents.agentsLoaded) {
 			$0.agents.agents = [agent]
 			$0.agents.hasLoaded = true
 		}
+		// Agents and Schedules are one reducer, told which of the two is on screen (an agent's
+		// page shows in place of either).
 		await store.send(.pageChanged(.schedules)) {
 			$0.page = .schedules
+			$0.shownChildPage = .schedules
 		}
+		await store.receive(\.agents.hidden) {
+			$0.agents.shownPage = nil
+		}
+		await store.receive(\.agents.shown) {
+			$0.agents.shownPage = .schedules
+		}
+		await store.receive(\.agents.agentsLoaded)
 
 		await store.send(.deactivated) {
 			$0.isActive = false
 			$0.shownChildPage = nil
 		}
 		await store.receive(\.agents.hidden) {
-			$0.agents.isShown = false
+			$0.agents.shownPage = nil
 		}
 	}
 
