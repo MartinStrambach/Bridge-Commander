@@ -2,6 +2,7 @@ import ActionButtons
 import AppKit
 import ComposableArchitecture
 import GitActionsMenu
+import GitHosting
 import Settings
 import SwiftUI
 import YouTrackMenu

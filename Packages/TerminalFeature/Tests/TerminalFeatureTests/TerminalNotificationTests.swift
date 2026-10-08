@@ -1,3 +1,5 @@
+import AppKit
+import CoreGraphics
 import Foundation
 import SwiftTerm
 import Testing

@@ -33,5 +33,8 @@ let package = Package(
 )
 
 for target in package.targets {
-    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+    target.swiftSettings = (target.swiftSettings ?? []) + [
+        .treatAllWarnings(as: .error),
+        .enableUpcomingFeature("MemberImportVisibility"),
+    ]
 }
