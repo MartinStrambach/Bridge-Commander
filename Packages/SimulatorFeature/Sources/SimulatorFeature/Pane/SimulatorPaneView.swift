@@ -264,6 +264,20 @@ public struct SimulatorPaneView: View {
 	/// Simulator.app's Features and the buttons that have no icon of their own here.
 	private var moreMenu: some View {
 		Menu {
+			if let fold = store.selectedDevice?.fold {
+				Button {
+					store.send(.foldButtonTapped)
+				} label: {
+					if fold == .open {
+						Label("Fold", systemImage: "book.closed")
+					}
+					else {
+						Label("Unfold", systemImage: "book")
+					}
+				}
+				Divider()
+			}
+
 			Button {
 				store.send(.memoryWarningButtonTapped)
 			} label: {
@@ -383,7 +397,7 @@ public struct SimulatorPaneView: View {
 	private var content: some View {
 		if let device = store.selectedDevice {
 			if device.isBooted {
-				SimulatorScreen(deviceId: device.id, screenPixelSize: device.screenPixelSize)
+				SimulatorScreen(deviceId: device.id, screenPixelSize: device.screenPixelSize, screenID: device.screenID)
 					.aspectRatio(device.displayedPixelSize, contentMode: .fit)
 					.padding(Self.screenPadding)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)

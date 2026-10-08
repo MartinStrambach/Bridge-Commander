@@ -172,6 +172,19 @@ enum SimulatorMCPTools {
 			],
 			required: ["orientation"]
 		),
+		tool(
+			"set_fold",
+			"Open (unfold) or close (fold) a device that folds — the iPhone Duo. Closed, it shows its cover screen; open, the larger inner panel. Screenshots, tap/swipe coordinates and describe_ui all follow the panel shown, so take a new screenshot after. list_devices says which devices fold and how they are. Closing may lock the device, as shutting a real one does: if the cover then shows a dim screen that does not change, press_button side_button wakes it and a swipe up unlocks it.",
+			properties: [
+				"state": [
+					"type": "string",
+					"enum": .array(SimulatorFold.allCases.map { .string($0.rawValue) }),
+					"description": "open shows the inner panel, closed the cover screen.",
+				],
+				"udid": optionalUdid,
+			],
+			required: ["state"]
+		),
 	]
 
 	/// Runs a tool and returns its `CallToolResult`. Failures are reported in the result
@@ -202,10 +215,11 @@ enum SimulatorMCPTools {
 				let jpeg = try await actions.screenshotJPEG(device: device)
 				let size = device.screenPointSize
 				let rotation = device.rotation == .upright ? "" : " (\(device.rotation.label))"
+				let fold = device.fold == .open ? " The device is unfolded; this is its inner panel." : ""
 				return [
 					"content": [
 						["type": "image", "data": .string(jpeg.base64EncodedString()), "mimeType": "image/jpeg"],
-						["type": "text", "text": .string("\(device.name), \(Int(size.width))×\(Int(size.height)) points\(rotation).")],
+						["type": "text", "text": .string("\(device.name), \(Int(size.width))×\(Int(size.height)) points\(rotation).\(fold)")],
 					],
 				]
 
@@ -353,6 +367,20 @@ enum SimulatorMCPTools {
 				let rotated = try await actions.rotate(device: device, to: orientation)
 				return text(rotationReport(rotated, orientation: orientation))
 
+			case "set_fold":
+				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				let name = try string(arguments, "state")
+				guard let fold = SimulatorFold(rawValue: name) else {
+					throw ToolError("Unknown state \"\(name)\"; use open or closed.")
+				}
+				guard device.fold != nil else {
+					throw SimulatorError.notFoldable(device.name)
+				}
+				let folded = try await actions.setFold(device: device, to: fold)
+				let size = folded.screenPointSize
+				let panel = fold == .open ? "the inner panel" : "the cover screen"
+				return text("\(fold == .open ? "Unfolded" : "Folded") \(folded.name); it shows \(panel), \(Int(size.width))×\(Int(size.height)) points. Take a new screenshot before using coordinates.")
+
 			default:
 				return text("Unknown tool \(name).", isError: true)
 			}
@@ -372,7 +400,8 @@ enum SimulatorMCPTools {
 			let size = device.screenPointSize
 			let shown = device.id == selected ? " [shown]" : ""
 			let rotation = device.rotation == .upright ? "" : " \(device.rotation.label)"
-			return "\(device.name) (\(device.runtimeName)) \(device.id) — \(device.state.label), \(Int(size.width))×\(Int(size.height)) pt\(rotation)\(shown)"
+			let fold = device.fold.map { $0 == .open ? ", unfolded" : ", folded" } ?? ""
+			return "\(device.name) (\(device.runtimeName)) \(device.id) — \(device.state.label), \(Int(size.width))×\(Int(size.height)) pt\(rotation)\(fold)\(shown)"
 		}
 		.joined(separator: "\n")
 	}
@@ -381,6 +410,11 @@ enum SimulatorMCPTools {
 	private static func rotationReport(_ device: SimulatorDevice, orientation: SimulatorDeviceOrientation) -> String {
 		let size = device.screenPointSize
 		let points = "\(Int(size.width))×\(Int(size.height)) points"
+		if device.fold == .open {
+			// The inner panel's interface stayed put through every orientation, apps' included
+			// (checked live, 2026-10-08).
+			return "Turned the device to \(orientation.label). The open iPhone Duo's inner panel is \(device.rotation.label), \(points); take a new screenshot before using coordinates."
+		}
 		guard device.rotation == orientation.screenRotation else {
 			return "Turned the device to \(orientation.label), but the interface stayed \(device.rotation.label) — the app does not support that orientation. The screen is \(points)."
 		}

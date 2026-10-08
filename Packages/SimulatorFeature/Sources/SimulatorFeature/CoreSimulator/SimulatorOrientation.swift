@@ -183,6 +183,18 @@ public enum SimulatorScreenRotation: String, Equatable, Sendable {
 		}
 	}
 
+	/// A rect on the panel as the rect it covers in the interface's space.
+	public func displayedRect(fromNative rect: CGRect, nativeSize: CGSize) -> CGRect {
+		let corner = displayedPoint(fromNative: rect.origin, nativeSize: nativeSize)
+		let opposite = displayedPoint(fromNative: CGPoint(x: rect.maxX, y: rect.maxY), nativeSize: nativeSize)
+		return CGRect(
+			x: min(corner.x, opposite.x),
+			y: min(corner.y, opposite.y),
+			width: abs(opposite.x - corner.x),
+			height: abs(opposite.y - corner.y)
+		)
+	}
+
 	/// The turn, in radians, that brings the portrait framebuffer upright on screen, in a y-down
 	/// (flipped) coordinate space where a positive angle turns clockwise.
 	var uprightingAngle: CGFloat {

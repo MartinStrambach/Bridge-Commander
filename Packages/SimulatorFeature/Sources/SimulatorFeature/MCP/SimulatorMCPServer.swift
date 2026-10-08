@@ -317,6 +317,10 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 		try await host.rotate(device: device, to: orientation)
 	}
 
+	func setFold(device: SimulatorDevice, to fold: SimulatorFold) async throws -> SimulatorDevice {
+		try await host.setFold(device: device, to: fold)
+	}
+
 	func simulateMemoryWarning(device: SimulatorDevice) async throws {
 		try host.simulateMemoryWarning(udid: device.id)
 	}
@@ -334,7 +338,7 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 			isDirectory: SimulatorScreenshotFile.isDirectory,
 			exists: { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
 		)
-		return try await SimulatorScreenRecorder.shared.start(udid: device.id, deviceName: device.name, to: url)
+		return try await SimulatorScreenRecorder.shared.start(udid: device.id, deviceName: device.name, screenID: device.screenID, to: url)
 	}
 
 	func stopRecording(udid: String?) async throws -> SimulatorRecording {

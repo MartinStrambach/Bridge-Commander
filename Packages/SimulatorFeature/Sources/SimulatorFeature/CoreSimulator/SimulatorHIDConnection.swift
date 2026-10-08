@@ -74,16 +74,20 @@ enum SimulatorTouchPhase: UInt64 {
 /// idb (`SimulatorDTUHIDConnection`, MIT).
 final class SimulatorHIDConnection: @unchecked Sendable {
 	static let digitizerService = "com.apple.coredevice.feature.remote.hid.digitizer"
+	/// Vendor-defined HID reports: what folds an iPhone Duo (`SimulatorFold`).
+	static let vendorDefinedService = "com.apple.coredevice.feature.remote.hid.vendordefined"
 
 	private let connection: xpc_connection_t
+	private let service: String
 	private let isInvalidated = OSAllocatedUnfairLock(initialState: false)
 
 	var isUsable: Bool {
 		!isInvalidated.withLock { $0 }
 	}
 
-	private init(connection: xpc_connection_t) {
+	private init(connection: xpc_connection_t, service: String = digitizerService) {
 		self.connection = connection
+		self.service = service
 		xpc_connection_set_target_queue(connection, DispatchQueue(label: "com.bridgecommander.simulator.hid"))
 		xpc_connection_set_event_handler(connection) { [isInvalidated] event in
 			if xpc_get_type(event) == XPC_TYPE_ERROR, event === XPC_ERROR_CONNECTION_INVALID {
@@ -158,8 +162,19 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 	/// A barrier carrying keyboard usage 0 ("no event"), so the daemon answers without the guest
 	/// seeing a key.
 	private func confirmLiveness() async throws {
-		let message = Self.message(type: "IndigoKeyboardButtonEvent", payload: Self.keyPayload(usage: 0, isDown: false), isBarrier: true)
-		let answered: Bool = await withCheckedContinuation { continuation in
+		let message = message(type: "IndigoKeyboardButtonEvent", payload: Self.keyPayload(usage: 0, isDown: false), isBarrier: true)
+		guard await roundTrip(message) else {
+			xpc_connection_cancel(connection)
+			throw SimulatorError.inputUnavailable("dtuhidd did not answer")
+		}
+		// The first reply means the daemon is up; it still needs a moment to open its devices.
+		try await Task.sleep(for: .milliseconds(200))
+	}
+
+	/// Sends `message`, a barrier, and waits up to 4 s for the daemon's reply. A barrier is
+	/// answered once everything sent before it has been handled, and is not itself dispatched.
+	private func roundTrip(_ message: xpc_object_t) async -> Bool {
+		await withCheckedContinuation { continuation in
 			let once = OSAllocatedUnfairLock(initialState: false)
 			let resume: @Sendable (Bool) -> Void = { value in
 				let first = once.withLock { done in
@@ -177,12 +192,6 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 				resume(false)
 			}
 		}
-		guard answered else {
-			xpc_connection_cancel(connection)
-			throw SimulatorError.inputUnavailable("dtuhidd did not answer")
-		}
-		// The first reply means the daemon is up; it still needs a moment to open its devices.
-		try await Task.sleep(for: .milliseconds(200))
 	}
 
 	// MARK: - Sending
@@ -190,7 +199,9 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 	/// A single-finger contact, or two fingers when `second` is given (a pinch, a rotation, a
 	/// two-finger drag): `dtuhidd` takes the second contact as `pointTwo` of the same event. Points
 	/// are normalized, top-left origin. A gesture keeps one finger count from began to ended.
-	func touch(_ point: CGPoint, _ second: CGPoint? = nil, phase: SimulatorTouchPhase) {
+	/// `target` is the screen touched: 0 for the main one, else a screen ID (an unfolded iPhone
+	/// Duo's inner panel, 3), which the main-screen target does not reach.
+	func touch(_ point: CGPoint, _ second: CGPoint? = nil, phase: SimulatorTouchPhase, target: UInt32 = 0) {
 		let payload = xpc_dictionary_create(nil, nil, 0)
 		for (key, contactPoint) in [("pointOne", point), ("pointTwo", second)] {
 			guard let contactPoint else {
@@ -203,7 +214,7 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 		}
 		xpc_dictionary_set_uint64(payload, "eventType", phase.rawValue)
 		xpc_dictionary_set_uint64(payload, "edge", 0)
-		xpc_dictionary_set_uint64(payload, "target", 0)
+		xpc_dictionary_set_uint64(payload, "target", UInt64(target))
 		send(type: "IndigoDigitizerEvent", payload: payload)
 	}
 
@@ -220,7 +231,45 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 	}
 
 	private func send(type: String, payload: xpc_object_t) {
-		xpc_connection_send_message(connection, Self.message(type: type, payload: payload, isBarrier: false))
+		xpc_connection_send_message(connection, message(type: type, payload: payload, isBarrier: false))
+	}
+
+	/// Sends one vendor-defined HID report to `dtuhidd` in `device` and returns once the daemon has
+	/// handled it. A connection of its own, closed afterwards: the guest keeps what a report set
+	/// (the hinge angle) when the daemon drops the connection's virtual device.
+	///
+	/// The report has to go as a plain message — sent as the barrier itself it is answered but
+	/// never dispatched — and a barrier after it confirms delivery. Like `connect(to:)`, a
+	/// barrier first confirms the daemon is up, so a report sent while it is still starting is
+	/// not lost.
+	static func sendVendorDefinedReport(usagePage: UInt64, usage: UInt64, data: Data, to device: AnyObject) async throws {
+		let payload = xpc_dictionary_create(nil, nil, 0)
+		xpc_dictionary_set_uint64(payload, "usagePage", usagePage)
+		xpc_dictionary_set_uint64(payload, "usage", usage)
+		xpc_dictionary_set_uint64(payload, "version", 0)
+		data.withUnsafeBytes { bytes in
+			xpc_dictionary_set_data(payload, "data", bytes.baseAddress!, bytes.count)
+		}
+		let type = "IndigoVendorDefinedEvent"
+
+		for attempt in 1...4 {
+			let connection = try SimulatorHIDConnection(
+				connection: makeConnection(device: device, service: vendorDefinedService),
+				service: vendorDefinedService
+			)
+			let barrier = connection.message(type: type, payload: payload, isBarrier: true)
+			if await connection.roundTrip(barrier) {
+				try await Task.sleep(for: .milliseconds(200))
+				connection.send(type: type, payload: payload)
+				if await connection.roundTrip(barrier) {
+					return
+				}
+			}
+			if attempt < 4 {
+				try await Task.sleep(for: .seconds(2))
+			}
+		}
+		throw SimulatorError.inputUnavailable("dtuhidd did not answer")
 	}
 
 	/// `HIDButtonState` is 1-based: down is 1, up is 2 (0 is rejected by the daemon's decoder).
@@ -231,11 +280,11 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 		return payload
 	}
 
-	private static func message(type: String, payload: xpc_object_t, isBarrier: Bool) -> xpc_object_t {
+	private func message(type: String, payload: xpc_object_t, isBarrier: Bool) -> xpc_object_t {
 		let message = xpc_dictionary_create(nil, nil, 0)
 		xpc_dictionary_set_string(message, "messageType", type)
 		xpc_dictionary_set_bool(message, "isBarrier", isBarrier)
-		xpc_dictionary_set_string(message, "featureIdentifier", digitizerService)
+		xpc_dictionary_set_string(message, "featureIdentifier", service)
 		xpc_dictionary_set_value(message, "payload", payload)
 		return message
 	}

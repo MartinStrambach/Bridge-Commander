@@ -13,7 +13,8 @@ extension SimulatorHost {
 		let result = try await SimulatorAccessibility.shared.perform(
 			action,
 			on: query,
-			device: ObjectBox(object: simDevice(udid: device.id))
+			device: ObjectBox(object: simDevice(udid: device.id)),
+			display: accessibilityDisplay(device)
 		)
 		switch result {
 		case let .done(outcome):

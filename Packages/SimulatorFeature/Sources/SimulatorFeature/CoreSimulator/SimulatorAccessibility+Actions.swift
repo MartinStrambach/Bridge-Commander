@@ -17,15 +17,20 @@ extension SimulatorAccessibility {
 	func perform(
 		_ action: SimulatorElementAction,
 		on query: SimulatorElementQuery,
-		device: ObjectBox
+		device: ObjectBox,
+		display: SimulatorAccessibilityDisplay = .main
 	) async throws -> SimulatorElementActionResult {
-		try await withFrontmostApplication(device: device) { application in
+		try await withFrontmostApplication(device: device, display: display) { application in
 			var nodes: [SimulatorAccessibilityNode] = []
 			var elements: [NSAccessibilityElement] = []
 			Self.collect(application, depth: 0, nodes: &nodes, elements: &elements)
+			let isSpringBoard = Self.isSpringBoard(application)
+			nodes = nodes.map { display.interfaceFrames($0, isSpringBoard: isSpringBoard) }
 
 			let position = try query.match(in: nodes, preferring: action.preferredRoles)
-			return try Self.act(action, on: elements[position], found: nodes[position])
+			return try Self.act(action, on: elements[position], found: nodes[position]) {
+				display.interfaceRect($0, isSpringBoard: isSpringBoard)
+			}
 		}
 	}
 
@@ -55,7 +60,8 @@ extension SimulatorAccessibility {
 	private static func act(
 		_ action: SimulatorElementAction,
 		on element: NSAccessibilityElement,
-		found node: SimulatorAccessibilityNode
+		found node: SimulatorAccessibilityNode,
+		interfaceRect: (CGRect) -> CGRect
 	) throws -> SimulatorElementActionResult {
 		switch action {
 		case .press:
@@ -85,7 +91,7 @@ extension SimulatorAccessibility {
 			ObjCRuntime.send(element, "performScrollToVisible")
 			// The scroll animates; the frame is worth reporting only once it has settled.
 			Thread.sleep(forTimeInterval: 0.4)
-			return .done(SimulatorElementOutcome(element: node, effect: .scrolled(to: element.accessibilityFrame())))
+			return .done(SimulatorElementOutcome(element: node, effect: .scrolled(to: interfaceRect(element.accessibilityFrame()))))
 		}
 	}
 

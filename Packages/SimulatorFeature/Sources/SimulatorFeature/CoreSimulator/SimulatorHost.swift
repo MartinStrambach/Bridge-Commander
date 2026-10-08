@@ -137,14 +137,25 @@ public final class SimulatorHost: @unchecked Sendable {
 		}
 
 		let state = SimulatorDevice.State(rawValue: ObjCRuntime.unsignedInteger(device, "state"))
+		var fold: SimulatorFold?
+		var panel: SimulatorFoldDisplays.Panel?
+		if let displays = foldDisplays(of: device) {
+			let current = Self.fold(of: device, udid: udid.uuidString, displays: displays, isBooted: state == .booted)
+			fold = current
+			panel = current == .open ? displays.inner : nil
+		}
 		return SimulatorDevice(
 			id: udid.uuidString,
 			name: name,
 			runtimeName: runtimeName,
 			state: state,
-			screenPixelSize: ObjCRuntime.size(deviceType, "mainScreenSize"),
-			screenScale: CGFloat(ObjCRuntime.float(deviceType, "mainScreenScale")),
-			rotation: state == .booted ? (try? mainScreen(of: device)).map(screenRotation(of:)) ?? .upright : .upright
+			screenPixelSize: panel?.pixelSize ?? ObjCRuntime.size(deviceType, "mainScreenSize"),
+			screenScale: panel?.scale ?? CGFloat(ObjCRuntime.float(deviceType, "mainScreenScale")),
+			rotation: state == .booted
+				? (try? screen(of: device, pixelSize: panel?.pixelSize)).map(screenRotation(of:)) ?? .upright
+				: .upright,
+			fold: fold,
+			screenID: panel?.screenID
 		)
 	}
 
@@ -228,13 +239,20 @@ public final class SimulatorHost: @unchecked Sendable {
 
 	// MARK: - Screen
 
-	/// The main display's port descriptor: the `SimScreen` whose size is the device type's main
-	/// screen. A device also lists screens for external displays and CarPlay.
-	func mainScreen(udid: String) throws -> AnyObject {
-		try Self.mainScreen(of: simDevice(udid: udid))
+	/// The port descriptor of the screen the device shows: an open iPhone Duo's inner panel, else
+	/// the main display.
+	func displayedScreen(udid: String) throws -> AnyObject {
+		try Self.screen(of: simDevice(udid: udid), pixelSize: Self.openPanel(udid: udid)?.pixelSize)
 	}
 
-	static func mainScreen(of device: AnyObject) throws -> AnyObject {
+	/// The port descriptor of the screen `device` showed when it was read.
+	func displayedScreen(device: SimulatorDevice) throws -> AnyObject {
+		try Self.screen(of: simDevice(udid: device.id), pixelSize: device.screenID == nil ? nil : device.screenPixelSize)
+	}
+
+	/// The `SimScreen` of `pixelSize`, or of the device type's main screen size when nil. A device
+	/// also lists screens for external displays and CarPlay, and an iPhone Duo two panels.
+	static func screen(of device: AnyObject, pixelSize: CGSize?) throws -> AnyObject {
 		guard
 			let deviceType = ObjCRuntime.object(device, "deviceType"),
 			let io = ObjCRuntime.object(device, "io"),
@@ -243,7 +261,7 @@ public final class SimulatorHost: @unchecked Sendable {
 			throw SimulatorError.noFramebuffer
 		}
 
-		let mainSize = ObjCRuntime.size(deviceType, "mainScreenSize")
+		let mainSize = pixelSize ?? ObjCRuntime.size(deviceType, "mainScreenSize")
 		var largest: (screen: AnyObject, area: CGFloat)?
 		for port in ports {
 			guard
@@ -272,7 +290,7 @@ public final class SimulatorHost: @unchecked Sendable {
 	/// The screen as it is now, at its native pixel size, portrait (the framebuffer is, whatever
 	/// the rotation).
 	public func screenImage(udid: String) throws -> CGImage {
-		try framebufferImage(screen: mainScreen(udid: udid), orientation: .up)
+		try framebufferImage(screen: displayedScreen(udid: udid), orientation: .up)
 	}
 
 	private func framebufferImage(screen: AnyObject, orientation: CGImagePropertyOrientation) throws -> CGImage {
@@ -291,7 +309,7 @@ public final class SimulatorHost: @unchecked Sendable {
 	/// is a point the tools take. The rotation is read with the frame rather than taken from
 	/// `device`, so the image is the right way up even if the device turned since it was read.
 	public func screenshotJPEG(device: SimulatorDevice, quality: Double = 0.8) throws -> Data {
-		let screen = try mainScreen(udid: device.id)
+		let screen = try displayedScreen(device: device)
 		let rotation = Self.screenRotation(of: screen)
 		let image = try framebufferImage(screen: screen, orientation: rotation.framebufferImageOrientation)
 		let target = rotation.displayedSize(native: device.nativePointSize)
@@ -310,8 +328,8 @@ public final class SimulatorHost: @unchecked Sendable {
 
 	/// A PNG of the screen at its native pixel size, turned the way the interface is — what
 	/// Simulator.app's File ▸ Save Screen saves.
-	public func screenshotPNG(udid: String) throws -> Data {
-		let screen = try mainScreen(udid: udid)
+	public func screenshotPNG(device: SimulatorDevice) throws -> Data {
+		let screen = try displayedScreen(device: device)
 		let image = try framebufferImage(screen: screen, orientation: Self.screenRotation(of: screen).framebufferImageOrientation)
 
 		let data = NSMutableData()
@@ -392,20 +410,22 @@ public final class SimulatorHost: @unchecked Sendable {
 		_ = try? await hidConnection(udid: udid)
 	}
 
-	/// One contact phase at a normalized point, for the pane's live mouse tracking.
-	public func touch(udid: String, at point: CGPoint, phase: Int) async throws {
+	/// One contact phase at a normalized point, for the pane's live mouse tracking, on the screen
+	/// the pane shows (`SimulatorDevice.screenID`).
+	public func touch(udid: String, screenID: UInt32?, at point: CGPoint, phase: Int) async throws {
 		guard let phase = SimulatorTouchPhase(rawValue: UInt64(phase)) else {
 			return
 		}
-		try await hidConnection(udid: udid).touch(point, phase: phase)
+		try await hidConnection(udid: udid).touch(point, phase: phase, target: screenID ?? 0)
 	}
 
 	public func tap(device: SimulatorDevice, x: Double, y: Double, holdFor duration: Duration = .milliseconds(60)) async throws {
 		let point = try normalized(device: device, x: x, y: y)
 		let connection = try await hidConnection(udid: device.id)
-		connection.touch(point, phase: .began)
+		let target = device.screenID ?? 0
+		connection.touch(point, phase: .began, target: target)
 		try await Task.sleep(for: duration)
-		connection.touch(point, phase: .ended)
+		connection.touch(point, phase: .ended, target: target)
 		try await drain()
 	}
 
@@ -418,19 +438,21 @@ public final class SimulatorHost: @unchecked Sendable {
 		let from = try normalized(device: device, x: start.x, y: start.y)
 		let to = try normalized(device: device, x: end.x, y: end.y)
 		let connection = try await hidConnection(udid: device.id)
+		let target = device.screenID ?? 0
 
 		let interval = Duration.milliseconds(16)
 		let steps = max(2, Int(duration / interval))
-		connection.touch(from, phase: .began)
+		connection.touch(from, phase: .began, target: target)
 		for step in 1...steps {
 			try await Task.sleep(for: interval)
 			let progress = CGFloat(step) / CGFloat(steps)
 			connection.touch(
 				CGPoint(x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress),
-				phase: .moved
+				phase: .moved,
+				target: target
 			)
 		}
-		connection.touch(to, phase: .ended)
+		connection.touch(to, phase: .ended, target: target)
 		try await drain()
 	}
 

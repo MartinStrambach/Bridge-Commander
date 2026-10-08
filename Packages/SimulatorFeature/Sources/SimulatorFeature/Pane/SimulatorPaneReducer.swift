@@ -98,6 +98,8 @@ public struct SimulatorPaneReducer {
 		case transitionFinished(errorMessage: String?)
 		case hardwareButtonTapped(SimulatorHardwareButton)
 		case rotateButtonTapped(clockwise: Bool)
+		/// Opens a closed iPhone Duo, or closes an open one.
+		case foldButtonTapped
 		case screenshotButtonTapped
 		case screenshotSaved(URL)
 		case screenshotFailed(String)
@@ -296,6 +298,22 @@ public struct SimulatorPaneReducer {
 				return .run { [simulatorClient, repositoryPath = state.repositoryPath] send in
 					do {
 						try await simulatorClient.rotate(device.id, clockwise)
+						let devices = try await simulatorClient.devices()
+						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
+					}
+					catch {
+						await send(.transitionFinished(errorMessage: error.localizedDescription))
+					}
+				}
+
+			case .foldButtonTapped:
+				guard let device = state.selectedDevice, device.isBooted, let fold = device.fold else {
+					return .none
+				}
+				// Reloads the devices when done, so the pane shows the other panel straight away.
+				return .run { [simulatorClient, repositoryPath = state.repositoryPath] send in
+					do {
+						try await simulatorClient.setFold(device, fold.toggled)
 						let devices = try await simulatorClient.devices()
 						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
 					}

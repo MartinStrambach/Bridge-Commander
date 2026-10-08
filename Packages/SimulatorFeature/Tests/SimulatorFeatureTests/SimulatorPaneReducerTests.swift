@@ -215,6 +215,60 @@ struct SimulatorPaneReducerTests {
 	}
 
 	@Test
+	func foldTogglesADuoAndReloadsTheDevices() async {
+		let closed = SimulatorDevice(
+			id: "A",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 1398, height: 2034),
+			screenScale: 3,
+			fold: .closed
+		)
+		let open = SimulatorDevice(
+			id: "A",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 2007, height: 2853),
+			screenScale: 3,
+			rotation: .clockwise,
+			fold: .open,
+			screenID: 3
+		)
+		let folds = LockIsolated<[SimulatorFold]>([])
+
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [closed]
+		initial.selectedDeviceId = "A"
+		initial.hasLoadedDevices = true
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].setFold = { _, fold in folds.withValue { $0.append(fold) } }
+			$0[SimulatorClient.self].devices = { [open] }
+			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+		}
+
+		await store.send(.foldButtonTapped)
+		await store.receive(.devicesLoaded([open], storedSelection: "A")) {
+			$0.devices = [open]
+		}
+		#expect(folds.value == [.open])
+	}
+
+	@Test
+	func foldDoesNothingForADeviceThatDoesNotFold() async {
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		}
+		await store.send(.foldButtonTapped)
+	}
+
+	@Test
 	func aSavedScreenshotIsOfferedUntilTheBannerTimesOut() async {
 		let clock = TestClock()
 		let url = URL(fileURLWithPath: "/tmp/Simulator Screenshot.png")

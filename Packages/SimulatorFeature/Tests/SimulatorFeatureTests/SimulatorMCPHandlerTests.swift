@@ -100,6 +100,24 @@ struct SimulatorMCPHandlerTests {
 			return rotated
 		}
 
+		/// Open shows a 669×951-point inner panel, turned landscape like the iPhone Duo's.
+		func setFold(device: SimulatorDevice, to fold: SimulatorFold) async throws -> SimulatorDevice {
+			record("fold \(fold.rawValue)")
+			return fold == .open
+				? SimulatorDevice(
+					id: device.id,
+					name: device.name,
+					runtimeName: device.runtimeName,
+					state: device.state,
+					screenPixelSize: CGSize(width: 2007, height: 2853),
+					screenScale: 3,
+					rotation: .clockwise,
+					fold: .open,
+					screenID: 3
+				)
+				: device
+		}
+
 		func simulateMemoryWarning(device: SimulatorDevice) async throws { record("memory warning") }
 		func setLocation(device: SimulatorDevice, _ command: SimulatorLocationCommand) async throws {
 			record("location \(command)")
@@ -184,7 +202,7 @@ struct SimulatorMCPHandlerTests {
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
 			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element", "list_crashes", "crash_report", "rotate",
-			"set_location", "simulate_memory_warning", "start_recording", "stop_recording",
+			"set_fold", "set_location", "simulate_memory_warning", "start_recording", "stop_recording",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -464,6 +482,35 @@ struct SimulatorMCPHandlerTests {
 		#expect(actions.calls.withLock { $0 } == ["rotate landscape_left", "rotate portrait_upside_down"])
 
 		let unknown = try await callForLastText(actions, "rotate", ["orientation": "sideways"])
+		#expect(unknown.isError == true)
+	}
+
+	@Test
+	func setFoldOpensADuoAndRefusesAPhone() async throws {
+		let actions = FakeActions()
+		let refused = try await callForLastText(actions, "set_fold", ["state": "open"])
+		#expect(refused.isError == true)
+		#expect(refused.text == "iPhone does not fold; only the iPhone Duo does.")
+
+		let duo = SimulatorDevice(
+			id: "AAAA",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 1398, height: 2034),
+			screenScale: 3,
+			fold: .closed
+		)
+		actions.devicesResult = [duo]
+		let list = try await callForLastText(actions, "list_devices", [:])
+		#expect(list.text == "iPhone Duo (iOS 27.1) AAAA — Booted, 466×678 pt, folded [shown]")
+
+		let opened = try await callForLastText(actions, "set_fold", ["state": "open"])
+		#expect(opened.isError == false)
+		#expect(opened.text == "Unfolded iPhone Duo; it shows the inner panel, 951×669 points. Take a new screenshot before using coordinates.")
+		#expect(actions.calls.withLock { $0 } == ["fold open"])
+
+		let unknown = try await callForLastText(actions, "set_fold", ["state": "ajar"])
 		#expect(unknown.isError == true)
 	}
 

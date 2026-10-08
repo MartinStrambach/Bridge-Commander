@@ -18,7 +18,7 @@ extension SimulatorHost {
 
 	/// How the main screen's interface is turned now.
 	public func screenRotation(udid: String) throws -> SimulatorScreenRotation {
-		try Self.screenRotation(of: mainScreen(udid: udid))
+		try Self.screenRotation(of: displayedScreen(udid: udid))
 	}
 
 	/// `-[SimScreen screenProperties].uiOrientation`, which follows the interface (an app that
