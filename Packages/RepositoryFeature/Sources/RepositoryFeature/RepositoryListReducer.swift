@@ -1,3 +1,4 @@
+import ActivityLog
 import AppKit
 import ComposableArchitecture
 import Foundation
@@ -89,6 +90,23 @@ struct RepositoryListReducer {
 		}
 	}
 
+	/// What started a refresh of every row; the activity log says which.
+	enum RefreshTrigger: Equatable {
+		/// The refresh button or ⌘R.
+		case user
+		/// The periodic refresh, at the interval Settings sets.
+		case periodic(PeriodicRefreshInterval)
+
+		var activityLogDescription: String {
+			switch self {
+			case .user:
+				"requested by the user"
+			case let .periodic(interval):
+				"automatic, every \(interval.displayName)"
+			}
+		}
+	}
+
 	enum Action: ViewAction {
 		case view(ViewAction)
 		case addRepository(String)
@@ -104,7 +122,7 @@ struct RepositoryListReducer {
 		case simulatorActivityReported(SimulatorActivity)
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
-		case refreshRepositories
+		case refreshRepositories(RefreshTrigger)
 		/// Rows' repositories changed on disk; see `GitRepositoryWatcherClient`.
 		case repositoriesChangedOnDisk([GitRepositoryChange])
 		/// Reopens the tabs saved when the window last closed. Once per launch.
@@ -454,7 +472,7 @@ struct RepositoryListReducer {
 				return .none
 
 			case .view(.refreshButtonTapped):
-				return .send(.refreshRepositories)
+				return .send(.refreshRepositories(.user))
 
 			case .view(.openHomeTerminalButtonTapped):
 				return openTerminal(for: NSHomeDirectory(), in: &state)
@@ -671,7 +689,7 @@ struct RepositoryListReducer {
 
 			// MARK: - Refresh
 
-			case .refreshRepositories:
+			case let .refreshRepositories(trigger):
 				guard !state.repositoryGroups.isEmpty else {
 					return .none
 				}
@@ -680,10 +698,15 @@ struct RepositoryListReducer {
 				let refreshTargets = state.repositoryGroups.map { group in
 					(groupId: group.id, worktreeIds: group.worktrees.map(\.id))
 				}
+				let rowCount = refreshTargets.reduce(0) { $0 + 1 + $1.worktreeIds.count }
 				// Send the refreshes sequentially instead of merging to stagger row refreshes.
 				// Merging all effects at once spawns 7×N git processes simultaneously (thundering herd).
 				// Sequencing them means git load ramps up gradually.
 				return .run { send in
+					ActivityLog.shared.record(
+						.refresh,
+						"Refresh of \(rowCount) \(rowCount == 1 ? "repository" : "repositories") (\(trigger.activityLogDescription))"
+					)
 					await send(.startScan)
 					for target in refreshTargets {
 						await send(.repositoryGroups(.element(id: target.groupId, action: .header(.refresh))))
@@ -697,11 +720,11 @@ struct RepositoryListReducer {
 				}
 
 			case .startPeriodicRefresh:
-				let interval = state.periodicRefreshInterval.timeInterval
+				let interval = state.periodicRefreshInterval
 				return .run { send in
 					while true {
-						try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
-						await send(.refreshRepositories)
+						try await Task.sleep(nanoseconds: UInt64(interval.timeInterval * 1_000_000_000))
+						await send(.refreshRepositories(.periodic(interval)))
 					}
 				}
 				.cancellable(id: CancellableId.periodicRefresh, cancelInFlight: true)
@@ -1107,10 +1130,18 @@ struct RepositoryListReducer {
 			case .terminalLayout(.refreshActiveRepoRequested):
 				// ⌘R in terminal mode refreshes just the opened repo. The home-directory
 				// session has no repo row, so refreshRow falls through to .none there.
-				guard let path = state.terminalLayout?.activeRepositoryPath else {
+				guard
+					let path = state.terminalLayout?.activeRepositoryPath,
+					findRowState(for: path, in: state) != nil
+				else {
 					return .none
 				}
-				return refreshRow(for: path, in: state)
+				return .merge(
+					.run { _ in
+						ActivityLog.shared.record(.refresh, "Refresh of \(path) (requested by the user)")
+					},
+					refreshRow(for: path, in: state)
+				)
 
 			case let .terminalLayout(.gitActionsMenu(menuAction)):
 				// Same completion routing as RepositoryRowReducer.gitActionsMenu: a finished

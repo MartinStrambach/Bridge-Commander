@@ -4,6 +4,8 @@ import Synchronization
 /// What an entry is about; the raw value is the tag the entry's line carries.
 public nonisolated enum ActivityLogCategory: String, Sendable {
 	case app
+	/// A refresh of the rows' status, with what started it.
+	case refresh
 	case git
 	case network
 	case error
