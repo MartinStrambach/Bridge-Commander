@@ -93,6 +93,11 @@ public struct HomerInstanceReducer: Sendable {
 		public internal(set) var answeringQuestionIDs: Set<HomerQuestion.ID> = []
 		public internal(set) var answerErrors: [HomerQuestion.ID: String] = [:]
 
+		// Continuations
+		/// The Continuations page's badge: how many continuations wait for their watched run.
+		/// Polled only while the instance is on screen — the page picker is all that shows it.
+		var pendingContinuations: Int?
+
 		// The other pages
 		/// The console's page, whichever instance is on screen (the console keeps it current).
 		public internal(set) var page: HomerConsoleReducer.Tab = .processes
@@ -133,6 +138,10 @@ public struct HomerInstanceReducer: Sendable {
 
 		public var openQuestionCount: Int {
 			user == nil ? 0 : questions.count
+		}
+
+		public var pendingContinuationCount: Int {
+			user == nil ? 0 : pendingContinuations ?? 0
 		}
 
 		public var canLoadMoreProcesses: Bool {
@@ -208,6 +217,8 @@ public struct HomerInstanceReducer: Sendable {
 		case answerTapped(questionId: HomerQuestion.ID, answer: String)
 		case answerFinished(questionId: HomerQuestion.ID, Result<Void, any Error>)
 
+		case pendingContinuationCountLoaded(Int)
+
 		/// A page of the web console, e.g. `processes` or `processes/42`.
 		case openWebConsoleTapped(path: String, title: String)
 
@@ -231,10 +242,14 @@ public struct HomerInstanceReducer: Sendable {
 		case processPolling
 		case questionPolling
 		case flowSummaryPolling
+		case continuationCountPolling
 	}
 
 	@Dependency(HomerClient.self)
 	private var homerClient
+
+	@Dependency(HomerContinuationsClient.self)
+	private var continuationsClient
 
 	@Dependency(\.continuousClock)
 	private var clock
@@ -306,6 +321,7 @@ public struct HomerInstanceReducer: Sendable {
 				return .merge(
 					.cancel(id: CancelID.processPolling),
 					.cancel(id: CancelID.flowSummaryPolling),
+					.cancel(id: CancelID.continuationCountPolling),
 					syncShownChildPage(&state)
 				)
 
@@ -349,6 +365,7 @@ public struct HomerInstanceReducer: Sendable {
 				return .merge(
 					pollProcesses(state),
 					pollQuestions(state),
+					state.isActive ? pollPendingContinuationCount(state) : .none,
 					send(state.shownChildPage.map { [ChildPageEvent(page: $0, kind: .refresh)] } ?? [])
 				)
 
@@ -604,7 +621,17 @@ public struct HomerInstanceReducer: Sendable {
 					return .send(.openWebConsoleTapped(path: path, title: title))
 				case let .openProcess(processId):
 					return .send(.processTapped(processId: processId))
+				case .continuationsChanged:
+					return state.isActive && state.user != nil ? pollPendingContinuationCount(state) : .none
 				}
+
+			case let .pendingContinuationCountLoaded(count):
+				// A count asked for before signing out lands after the data was dropped.
+				guard state.user != nil else {
+					return .none
+				}
+				state.pendingContinuations = count
+				return .none
 
 			case .continuations, .agents, .costs:
 				return .none
@@ -622,6 +649,7 @@ public struct HomerInstanceReducer: Sendable {
 		.merge(
 			pollQuestions(state),
 			state.isActive ? pollProcesses(state) : .none,
+			state.isActive ? pollPendingContinuationCount(state) : .none,
 			state.isActive && state.agentNames.isEmpty ? loadAgentNames(state) : .none
 		)
 	}
@@ -630,7 +658,8 @@ public struct HomerInstanceReducer: Sendable {
 		.merge(
 			.cancel(id: CancelID.processPolling),
 			.cancel(id: CancelID.questionPolling),
-			.cancel(id: CancelID.flowSummaryPolling)
+			.cancel(id: CancelID.flowSummaryPolling),
+			.cancel(id: CancelID.continuationCountPolling)
 		)
 	}
 
@@ -706,6 +735,21 @@ public struct HomerInstanceReducer: Sendable {
 			}
 		}
 		.cancellable(id: CancelID.questionPolling, cancelInFlight: true)
+	}
+
+	/// The console's cadence (`usePendingContinuationsCount`): there is no continuation event to
+	/// listen to. A failure keeps the last count: the badge has nowhere to say why, and the
+	/// other polls report an expired session or an unreachable server.
+	private func pollPendingContinuationCount(_ state: State) -> Effect<Action> {
+		.run { [baseURL = state.baseURL] send in
+			while true {
+				if let count = try? await continuationsClient.pendingCount(baseURL) {
+					await send(.pendingContinuationCountLoaded(count))
+				}
+				try await clock.sleep(for: HomerContinuationsReducer.pollInterval)
+			}
+		}
+		.cancellable(id: CancelID.continuationCountPolling, cancelInFlight: true)
 	}
 
 	/// The form's username for the next sign-in, kept across relaunches.
@@ -828,6 +872,7 @@ public struct HomerInstanceReducer: Sendable {
 		state.answerDrafts = [:]
 		state.answeringQuestionIDs = []
 		state.answerErrors = [:]
+		state.pendingContinuations = nil
 		state.webPage = nil
 		state.processDetail = nil
 		return shownChildPage

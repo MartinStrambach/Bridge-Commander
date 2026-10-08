@@ -57,7 +57,7 @@ public struct HomerConsoleView: View {
 				if showsConsole {
 					Picker("Homer page", selection: $store.tab) {
 						ForEach(availableTabs, id: \.self) { tab in
-							Text(tab == .questions ? questionsTabTitle : tab.title).tag(tab)
+							Text(title(of: tab)).tag(tab)
 						}
 					}
 					.pickerStyle(.segmented)
@@ -110,9 +110,18 @@ public struct HomerConsoleView: View {
 		return HomerConsoleReducer.Tab.allCases.filter { !$0.isAdminOnly || isAdmin || $0 == store.tab }
 	}
 
-	private var questionsTabTitle: String {
-		let count = store.selectedInstance?.openQuestionCount ?? 0
-		return count > 0 ? "Questions (\(count))" : "Questions"
+	/// The questions and pending continuations count themselves, as the console's sidebar
+	/// badges do.
+	private func title(of tab: HomerConsoleReducer.Tab) -> String {
+		let count = switch tab {
+		case .questions:
+			store.selectedInstance?.openQuestionCount ?? 0
+		case .continuations:
+			store.selectedInstance?.pendingContinuationCount ?? 0
+		default:
+			0
+		}
+		return count > 0 ? "\(tab.title) (\(count))" : tab.title
 	}
 
 	// MARK: - Instances

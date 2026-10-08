@@ -173,6 +173,8 @@ struct HomerContinuationsReducerTests {
 			$0.cancellingIDs = []
 			$0.pending = []
 		}
+		// The instance re-reads the badge's count.
+		await store.receive(\.delegate, .continuationsChanged)
 		await store.receive(\.loaded.success)
 		#expect(cancelled.value == [5])
 
@@ -208,6 +210,7 @@ struct HomerContinuationsReducerTests {
 			$0.cancellingIDs = []
 			$0.cancelErrors = [5: HomerContinuationsReducer.notCancellableMessage]
 		}
+		await store.receive(\.delegate, .continuationsChanged)
 		// The continuation fired meanwhile: it and its error leave the page.
 		await store.receive(\.loaded.success) {
 			$0.pending = []

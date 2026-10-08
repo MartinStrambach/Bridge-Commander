@@ -11,13 +11,17 @@ public struct HomerAgentsClient: Sendable {
 	public var reload: @Sendable (_ baseURL: String) async throws -> HomerAgentReloadResult
 	/// Starts a run and returns its process id.
 	public var run: @Sendable (_ baseURL: String, _ agentName: String, _ request: HomerAgentRunRequest) async throws -> Int
+	/// Starts the agent now as its cron would. Admins only. Returns before the run exists, and
+	/// a fire the scheduler refuses starts nothing without failing.
+	public var fireCron: @Sendable (_ baseURL: String, _ agentName: String) async throws -> Void
 }
 
 extension HomerAgentsClient: DependencyKey {
 	public static let liveValue = HomerAgentsClient(
 		agents: { try await HomerAPI.agents(baseURL: $0) },
 		reload: { try await HomerAPI.reloadAgents(baseURL: $0) },
-		run: { try await HomerAPI.runAgent(baseURL: $0, name: $1, request: $2) }
+		run: { try await HomerAPI.runAgent(baseURL: $0, name: $1, request: $2) },
+		fireCron: { try await HomerAPI.fireAgentCron(baseURL: $0, name: $1) }
 	)
 }
 
@@ -47,5 +51,19 @@ extension HomerAPI {
 			refusalsInServerWords: true
 		)
 		return try decode(HomerAgentRunResponse.self, from: data).processId
+	}
+
+	/// `POST /api/v1/agents/{name}/cron-run` (Homer 1.31, ADR-0080): source `cron`, owner
+	/// `system:cron`, no inputs, the cron tick's own preflights. Answers 204 with no body even
+	/// when a preflight (cost cap, cooldown, lock, parallel-run cap) starts nothing — that is
+	/// only logged, as on a tick — and 404 to a non-admin as for an unknown agent. The run's id
+	/// shows up later as the agent's `cron.lastRunProcessId`.
+	static func fireAgentCron(baseURL: String, name: String) async throws {
+		_ = try await send(
+			"POST",
+			"/api/v1/agents/" + HomerAgent.encodeURIComponent(name) + "/cron-run",
+			baseURL: baseURL,
+			refusalsInServerWords: true
+		)
 	}
 }

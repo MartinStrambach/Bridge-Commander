@@ -54,10 +54,44 @@ public nonisolated struct HomerLangGraphStatus: Equatable, Sendable, Decodable {
 		}
 	}
 
+	/// The workflow graph's nodes (`LangGraphTopology`, ADR-0073), in the order the graph added
+	/// them. Its edges are not decoded: the node list has no use for them.
+	public nonisolated struct Topology: Equatable, Sendable, Decodable {
+		public nonisolated struct Node: Equatable, Sendable, Decodable {
+			public var id: String
+
+			public init(id: String) {
+				self.id = id
+			}
+		}
+
+		public var nodes: [Node]
+
+		public init(nodes: [Node]) {
+			self.nodes = nodes
+		}
+	}
+
+	/// An edge of the topology the run has taken (`LangGraphEdgeRef`, ADR-0075).
+	public nonisolated struct Edge: Equatable, Sendable, Decodable {
+		public var source: String
+		public var target: String
+
+		public init(source: String, target: String) {
+			self.source = source
+			self.target = target
+		}
+	}
+
 	/// The command whose run is the workflow — the execution the status belongs to.
 	public var label: String
 	public var module: String?
 	public var threadId: String
+	/// Sent since Homer 1.28 with `graph=true`; absent from an older `homer_langgraph` runtime's
+	/// state.
+	public var topology: Topology?
+	/// Deprecated by `topology` (Homer 1.28) and gone from the console's types; read only to
+	/// order the nodes of a server or runtime that sends no topology.
 	public var mermaid: String?
 	/// Each node's state, by name. JSON objects carry no order a `Dictionary` keeps; `nodes`
 	/// puts them in graph order.
@@ -66,6 +100,9 @@ public nonisolated struct HomerLangGraphStatus: Equatable, Sendable, Decodable {
 	public var subs: [String: [Sub]]?
 	/// Nodes whose interrupt history hit the runtime's cap: their oldest subs are missing.
 	public var subsTruncated: [String]?
+	/// The edges the run has taken (Homer 1.29), or nil when unknown — the console draws them
+	/// green.
+	public var traversed: [Edge]?
 	/// Why the status could not be read. The other fields are then unreliable.
 	public var error: String?
 
@@ -73,44 +110,71 @@ public nonisolated struct HomerLangGraphStatus: Equatable, Sendable, Decodable {
 		label: String,
 		module: String? = nil,
 		threadId: String,
+		topology: Topology? = nil,
 		mermaid: String? = nil,
 		nodeStates: [String: String]? = nil,
 		errors: [String: String]? = nil,
 		subs: [String: [Sub]]? = nil,
 		subsTruncated: [String]? = nil,
+		traversed: [Edge]? = nil,
 		error: String? = nil
 	) {
 		self.label = label
 		self.module = module
 		self.threadId = threadId
+		self.topology = topology
 		self.mermaid = mermaid
 		self.nodeStates = nodeStates
 		self.errors = errors
 		self.subs = subs
 		self.subsTruncated = subsTruncated
+		self.traversed = traversed
 		self.error = error
 	}
 
 	private enum CodingKeys: String, CodingKey {
-		case label, module, threadId, mermaid, errors, subs, subsTruncated, error
+		case label, module, threadId, topology, mermaid, errors, subs, subsTruncated, traversed, error
 		case nodeStates = "nodes"
 	}
 
-	/// The nodes in the order the Mermaid source declares them — LangGraph's `draw_mermaid`
-	/// writes them in the order the graph added them, which is the workflow's own reading
-	/// order. Nodes it does not declare (or every node, with no source) follow by name.
+	/// Whether the web console can draw the workflow's graph.
+	public var hasGraph: Bool {
+		topology != nil || mermaid != nil
+	}
+
+	/// The nodes in the order the graph added them, which is the workflow's own reading order:
+	/// the topology's, else the order the Mermaid source declares them (`draw_mermaid` writes
+	/// them in that order too). Nodes neither lists (or every node, with neither) follow by
+	/// name.
 	public var nodes: [Node] {
 		guard let nodeStates else {
 			return []
 		}
-		let order = mermaid.map(Self.declaredNodeIDs(in:)) ?? [:]
+		let position: (String) -> Int?
+		if let topology {
+			let order = Dictionary(
+				topology.nodes.enumerated().map { ($0.element.id, $0.offset) },
+				uniquingKeysWith: { first, _ in first }
+			)
+			position = { order[$0] }
+		}
+		else {
+			let order = mermaid.map(Self.declaredNodeIDs(in:)) ?? [:]
+			position = { order[Self.mermaidSafeID($0)] }
+		}
 		return nodeStates
 			.map { Node(name: $0.key, state: $0.value) }
 			.sorted { lhs, rhs in
-				let left = order[Self.mermaidSafeID(lhs.name)] ?? .max
-				let right = order[Self.mermaidSafeID(rhs.name)] ?? .max
+				let left = position(lhs.name) ?? .max
+				let right = position(rhs.name) ?? .max
 				return left != right ? left < right : lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
 			}
+	}
+
+	/// Where the run went from a node: the targets of the taken edges leaving it, in the
+	/// server's order.
+	public func takenTargets(from node: String) -> [String] {
+		(traversed ?? []).filter { $0.source == node }.map(\.target)
 	}
 
 	/// Every sub run, node by node in graph order.
