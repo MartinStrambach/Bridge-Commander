@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppUI
 import HomerFeature
+import HomerUI
 import Settings
 import SimulatorFeature
 import TerminalFeature

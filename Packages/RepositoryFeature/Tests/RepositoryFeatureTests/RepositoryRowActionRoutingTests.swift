@@ -1,6 +1,8 @@
 import ComposableArchitecture
+import Foundation
 import GitActionsMenu
 import GitCore
+import GitGraphFeature
 import StagingFeature
 import Testing
 import ToolsIntegration

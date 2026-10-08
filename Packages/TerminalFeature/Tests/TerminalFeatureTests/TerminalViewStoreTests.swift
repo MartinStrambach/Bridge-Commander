@@ -1,6 +1,7 @@
 import AppKit
 import Darwin
 import Foundation
+import SwiftTerm
 import Testing
 
 @testable import TerminalFeature
