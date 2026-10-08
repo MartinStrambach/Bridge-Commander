@@ -54,10 +54,10 @@ public nonisolated struct HomerLangGraphStatus: Equatable, Sendable, Decodable {
 		}
 	}
 
-	/// The workflow graph's nodes (`LangGraphTopology`, ADR-0073), in the order the graph added
-	/// them. Its edges are not decoded: the node list has no use for them.
-	public nonisolated struct Topology: Equatable, Sendable, Decodable {
-		public nonisolated struct Node: Equatable, Sendable, Decodable {
+	/// The workflow's graph (`LangGraphTopology`, ADR-0073): its nodes in the order the graph
+	/// added them, `__start__` and `__end__` included, and its edges.
+	public nonisolated struct Topology: Equatable, Hashable, Sendable, Decodable {
+		public nonisolated struct Node: Equatable, Hashable, Sendable, Decodable {
 			public var id: String
 
 			public init(id: String) {
@@ -65,10 +65,49 @@ public nonisolated struct HomerLangGraphStatus: Equatable, Sendable, Decodable {
 			}
 		}
 
-		public var nodes: [Node]
+		/// `add_edge` (always taken) or, `conditional`, one of a router's targets.
+		public nonisolated struct Edge: Equatable, Hashable, Sendable, Decodable {
+			public var source: String
+			public var target: String
+			public var label: String?
+			public var conditional: Bool
 
-		public init(nodes: [Node]) {
+			public init(source: String, target: String, label: String? = nil, conditional: Bool = false) {
+				self.source = source
+				self.target = target
+				self.label = label
+				self.conditional = conditional
+			}
+
+			public init(from decoder: any Decoder) throws {
+				let container = try decoder.container(keyedBy: CodingKeys.self)
+				source = try container.decode(String.self, forKey: .source)
+				target = try container.decode(String.self, forKey: .target)
+				label = try container.decodeIfPresent(String.self, forKey: .label)
+				conditional = try container.decodeIfPresent(Bool.self, forKey: .conditional) ?? false
+			}
+
+			private enum CodingKeys: String, CodingKey {
+				case source, target, label, conditional
+			}
+		}
+
+		public var nodes: [Node]
+		public var edges: [Edge]
+
+		public init(nodes: [Node], edges: [Edge] = []) {
 			self.nodes = nodes
+			self.edges = edges
+		}
+
+		public init(from decoder: any Decoder) throws {
+			let container = try decoder.container(keyedBy: CodingKeys.self)
+			nodes = try container.decode([Node].self, forKey: .nodes)
+			edges = try container.decodeIfPresent([Edge].self, forKey: .edges) ?? []
+		}
+
+		private enum CodingKeys: String, CodingKey {
+			case nodes, edges
 		}
 	}
 
