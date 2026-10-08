@@ -172,12 +172,20 @@ public nonisolated enum ProcessRunner {
 		arguments: [String],
 		at repositoryPath: String
 	) async -> ProcessResult {
-		await run(
+		let start = ContinuousClock.now
+		let result = await run(
 			executableURL: resolvedGitExecutable.url,
 			arguments: arguments,
 			currentDirectory: URL(filePath: repositoryPath),
 			environment: EnvironmentHelper.setupEnvironment()
 		)
+		GitCommandLog.record(
+			arguments: arguments,
+			repositoryPath: repositoryPath,
+			result: result,
+			duration: ContinuousClock.now - start
+		)
+		return result
 	}
 }
 

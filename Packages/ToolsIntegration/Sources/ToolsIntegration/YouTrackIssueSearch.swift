@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 
 /// One hit of a YouTrack issue search: enough to pick a ticket and name a branch after it.
@@ -43,7 +44,7 @@ public nonisolated extension YouTrackService {
 		}
 
 		print("YouTrackService: Searching issues: \(request.url?.absoluteString ?? "")")
-		let (data, response) = try await URLSession.shared.data(for: request)
+		let (data, response) = try await URLSession.shared.loggedData(for: request)
 		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 			throw YouTrackServiceError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
 		}

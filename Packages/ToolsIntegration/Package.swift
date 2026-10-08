@@ -11,6 +11,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.15.0"),
         .package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.9.1"),
         .package(path: "../ProcessExecution"),
+        .package(path: "../ActivityLog"),
     ],
     targets: [
         .target(
@@ -20,6 +21,7 @@ let package = Package(
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "Sharing", package: "swift-sharing"),
                 .product(name: "ProcessExecution", package: "ProcessExecution"),
+                .product(name: "ActivityLog", package: "ActivityLog"),
             ]
         ),
         .testTarget(

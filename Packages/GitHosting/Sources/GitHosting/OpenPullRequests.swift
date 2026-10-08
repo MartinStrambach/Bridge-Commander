@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 
 /// An open PR/MR that a worktree can be checked out for.
@@ -325,7 +326,7 @@ private nonisolated func postGraphQL(
 	request.setValue("application/json", forHTTPHeaderField: "Accept")
 	request.httpBody = try JSONEncoder().encode(body)
 
-	let (data, response) = try await URLSession.shared.data(for: request)
+	let (data, response) = try await URLSession.shared.loggedData(for: request)
 	guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 		throw GitHostingError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
 	}

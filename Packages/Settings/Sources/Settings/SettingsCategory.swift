@@ -8,6 +8,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 	case terminal
 	case externalApps
 	case tuist
+	case activityLog
 	case updates
 
 	var id: Self { self }
@@ -22,6 +23,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 		case .terminal: "Terminal"
 		case .externalApps: "External Apps"
 		case .tuist: "Tuist"
+		case .activityLog: "Activity Log"
 		case .updates: "Updates"
 		}
 	}
@@ -36,6 +38,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 		case .terminal: "terminal"
 		case .externalApps: "app.badge"
 		case .tuist: "hammer"
+		case .activityLog: "list.bullet.rectangle"
 		case .updates: "arrow.down.circle"
 		}
 	}

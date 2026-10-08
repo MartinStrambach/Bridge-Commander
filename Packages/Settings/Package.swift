@@ -13,6 +13,7 @@ let package = Package(
         .package(path: "../ToolsIntegration"),
         .package(path: "../GitHosting"),
         .package(path: "../AppUI"),
+        .package(path: "../ActivityLog"),
     ],
     targets: [
         .target(
@@ -23,6 +24,7 @@ let package = Package(
                 .product(name: "ToolsIntegration", package: "ToolsIntegration"),
                 .product(name: "GitHosting", package: "GitHosting"),
                 .product(name: "AppUI", package: "AppUI"),
+                .product(name: "ActivityLog", package: "ActivityLog"),
             ]
         ),
         .testTarget(
