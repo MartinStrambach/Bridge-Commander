@@ -32,6 +32,14 @@ public struct SimulatorClient: Sendable {
 	public var activity: @Sendable () -> AsyncStream<SimulatorActivity> = { .finished }
 	public var isClaudeCodeConnected: @Sendable () -> Bool = { false }
 	public var connectClaudeCode: @Sendable () async throws -> Void
+	/// The schemes of a workspace or project that launch an app (`XcodeSchemeScanner`).
+	public var runnableSchemes: @Sendable (_ projectPath: String) async -> [XcodeScheme] = { _ in [] }
+	/// The scheme last run for a workspace or project, by its file name, so every worktree of a
+	/// repository starts on the same one.
+	public var storedSchemeName: @Sendable (_ projectFileName: String) -> String? = { _ in nil }
+	public var storeSchemeName: @Sendable (_ name: String, _ projectFileName: String) -> Void
+	/// Writes the run script and returns the command that builds and launches `scheme` on `device`.
+	public var runCommand: @Sendable (_ projectPath: String, _ scheme: XcodeScheme, _ device: SimulatorDevice) throws -> String
 }
 
 extension SimulatorClient: DependencyKey {
@@ -62,8 +70,25 @@ extension SimulatorClient: DependencyKey {
 		prepareInput: { await SimulatorHost.shared.prepareInput(udid: $0) },
 		activity: { SimulatorMCPServer.shared.activity() },
 		isClaudeCodeConnected: { ClaudeCodeRegistration.isRegistered() },
-		connectClaudeCode: { try await ClaudeCodeRegistration.register() }
+		connectClaudeCode: { try await ClaudeCodeRegistration.register() },
+		runnableSchemes: { path in await XcodeSchemeScanner.schemes(in: path) },
+		storedSchemeName: { UserDefaults.standard.dictionary(forKey: runSchemesKey)?[$0] as? String },
+		storeSchemeName: { name, projectFileName in
+			var schemes = UserDefaults.standard.dictionary(forKey: runSchemesKey) ?? [:]
+			schemes[projectFileName] = name
+			UserDefaults.standard.set(schemes, forKey: runSchemesKey)
+		},
+		runCommand: { projectPath, scheme, device in
+			try SimulatorRunCommand.prepare(
+				in: SimulatorRunCommand.defaultFolder(),
+				projectPath: projectPath,
+				scheme: scheme,
+				device: device
+			)
+		}
 	)
+
+	private static let runSchemesKey = "simulatorRunSchemeByProject"
 }
 
 extension SimulatorClient: TestDependencyKey {

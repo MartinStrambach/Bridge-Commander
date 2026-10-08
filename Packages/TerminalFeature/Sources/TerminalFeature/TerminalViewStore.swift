@@ -127,6 +127,11 @@ public final class TerminalViewStore {
 		}
 	}
 
+	/// Types Ctrl-C into the session, stopping what runs in its foreground the way the user would.
+	public func interrupt(sessionId: UUID) {
+		views[sessionId]?.send(txt: "\u{03}")
+	}
+
 	public func killSession(sessionId: UUID) {
 		if let view = views[sessionId] {
 			view.processDelegate = nil // the shell is about to exit on purpose, not fail

@@ -38,7 +38,23 @@ public struct SimulatorPaneReducer {
 		/// times out or is dismissed.
 		public var notice: Notice?
 
+		/// The workspace or project the Run button builds — the repository's, as its Xcode button
+		/// finds it; `nil` when it has none (a Tuist project not generated yet).
+		public var projectPath: String?
+		/// `projectPath`'s schemes that launch an app.
+		public var schemes: [XcodeScheme] = []
+		public var selectedSchemeName: String?
+		public var hasLoadedSchemes = false
+
 		public init() {}
+
+		public var selectedScheme: XcodeScheme? {
+			selectedSchemeName.flatMap { name in schemes.first { $0.name == name } }
+		}
+
+		public var canRun: Bool {
+			projectPath != nil && selectedScheme != nil && selectedDevice != nil
+		}
 
 		public var selectedDevice: SimulatorDevice? {
 			selectedDeviceId.flatMap { id in devices.first { $0.id == id } }
@@ -104,12 +120,25 @@ public struct SimulatorPaneReducer {
 		case closeButtonTapped(repositoryPath: String)
 		/// An MCP tool call touched `deviceId`: show it beside `repositoryPath`'s terminal.
 		case activityReported(deviceId: String, repositoryPath: String)
+		/// The repository on screen builds `projectPath` (`nil`: it has no Xcode project).
+		case projectChanged(String?)
+		case schemesLoaded([XcodeScheme], storedName: String?)
+		case schemeSelected(String)
+		case runButtonTapped
+		case delegate(Delegate)
+
+		public enum Delegate: Equatable {
+			/// Type `command` into the repository's run tab, named `title`, replacing what ran
+			/// there before.
+			case runRequested(command: String, title: String)
+		}
 	}
 
 	private enum CancelId {
 		case polling
 		case recordings
 		case notice
+		case schemes
 	}
 
 	@Dependency(SimulatorClient.self)
@@ -455,6 +484,70 @@ public struct SimulatorPaneReducer {
 				if repositoryPath == state.repositoryPath, state.devices.contains(where: { $0.id == deviceId }) {
 					state.selectedDeviceId = deviceId
 				}
+				return .none
+
+			case let .projectChanged(projectPath):
+				state.projectPath = projectPath
+				guard let projectPath else {
+					state.schemes = []
+					state.selectedSchemeName = nil
+					state.hasLoadedSchemes = true
+					return .cancel(id: CancelId.schemes)
+				}
+				state.hasLoadedSchemes = false
+				return .run { [simulatorClient] send in
+					let schemes = await simulatorClient.runnableSchemes(projectPath)
+					let fileName = (projectPath as NSString).lastPathComponent
+					await send(.schemesLoaded(schemes, storedName: simulatorClient.storedSchemeName(fileName)))
+				}
+				.cancellable(id: CancelId.schemes, cancelInFlight: true)
+
+			case let .schemesLoaded(schemes, storedName):
+				state.schemes = schemes
+				state.hasLoadedSchemes = true
+				// The one last run, else the one named after the workspace — the app itself,
+				// typically, among its extensions' schemes — else the first.
+				let baseName = state.projectPath.map { (($0 as NSString).lastPathComponent as NSString).deletingPathExtension }
+				let names = schemes.map(\.name)
+				state.selectedSchemeName = [storedName, state.selectedSchemeName, baseName]
+					.compactMap { $0 }
+					.first(where: names.contains)
+					?? names.first
+				return .none
+
+			case let .schemeSelected(name):
+				state.selectedSchemeName = name
+				guard let projectPath = state.projectPath else {
+					return .none
+				}
+				return .run { [simulatorClient] _ in
+					simulatorClient.storeSchemeName(name, (projectPath as NSString).lastPathComponent)
+				}
+
+			case .runButtonTapped:
+				guard let projectPath = state.projectPath, let scheme = state.selectedScheme, let device = state.selectedDevice else {
+					return .none
+				}
+				state.errorMessage = nil
+				var effects: [Effect<Action>] = [
+					.run { [simulatorClient] send in
+						simulatorClient.storeSchemeName(scheme.name, (projectPath as NSString).lastPathComponent)
+						do {
+							let command = try simulatorClient.runCommand(projectPath, scheme, device)
+							await send(.delegate(.runRequested(command: command, title: scheme.name)))
+						}
+						catch {
+							await send(.featureFinished(nil, errorMessage: "Could not run \(scheme.name): \(error.localizedDescription)"))
+						}
+					},
+				]
+				// Booted while the app builds, rather than by the script once the build is done.
+				if device.state == .shutdown, state.transitioningDeviceId == nil {
+					effects.append(.send(.bootButtonTapped))
+				}
+				return .merge(effects)
+
+			case .delegate:
 				return .none
 			}
 		}

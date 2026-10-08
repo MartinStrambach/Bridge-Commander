@@ -39,12 +39,21 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 	/// is the command — Claude, typically — having started, not Claude done with something the user
 	/// asked for, so it gets no notification.
 	public var awaitsStartupPrompt: Bool
+	/// Set on a tab opened to run something — an app built for the simulator pane — rather than
+	/// as a shell, and shown as its name. Running it again replaces the tab, and it is not reopened
+	/// at the next launch, which would run it again.
+	public let runTitle: String?
+
+	public var isRunTab: Bool {
+		runTitle != nil
+	}
 
 	public init(
 		repositoryPath: String,
 		startingDirectory: String? = nil,
 		startupCommand: String? = nil,
 		resumingClaudeSession claudeSessionId: String? = nil,
+		runTitle: String? = nil,
 		tabIndex: Int = 1
 	) {
 		self.id = UUID()
@@ -55,6 +64,7 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		let resumeCommand = claudeSessionId.flatMap { ClaudeSession.resumeCommand(sessionId: $0) }
 		self.resumedClaudeSessionId = resumeCommand == nil ? nil : claudeSessionId
 		self.commandToType = resumeCommand ?? self.startupCommand
+		self.runTitle = runTitle
 		self.tabIndex = tabIndex
 		self.status = .launching
 		// A resumed Claude booting to its prompt is no more news than a fresh one.

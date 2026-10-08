@@ -28,7 +28,8 @@ struct SavedTerminalTabs: Codable, Equatable, Sendable {
 	var tabs: [SavedTerminalTab] = []
 
 	/// Takes the session list as it stands. Failed tabs are left out — their shell is gone, and the
-	/// user had not asked for it to be retried.
+	/// user had not asked for it to be retried — and so are run tabs, whose command reopened would
+	/// build and launch the app again.
 	///
 	/// - Parameter panes: What each pane is doing. A session missing from it (one whose pane was
 	///   never created, because the panel has not been opened since the tabs were restored) keeps
@@ -40,7 +41,7 @@ struct SavedTerminalTabs: Codable, Equatable, Sendable {
 		panes: [UUID: TerminalPaneSnapshot]
 	) {
 		tabs = sessions
-			.filter(\.status.isLive)
+			.filter { $0.status.isLive && !$0.isRunTab }
 			.map { session in
 				SavedTerminalTab(
 					repositoryPath: session.repositoryPath,
