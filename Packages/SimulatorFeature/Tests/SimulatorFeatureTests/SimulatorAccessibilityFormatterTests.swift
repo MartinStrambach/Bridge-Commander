@@ -26,13 +26,24 @@ struct SimulatorAccessibilityFormatterTests {
 		)
 
 		#expect(SimulatorAccessibilityFormatter.describe(tree: tree) == """
-		"Demo", 5 elements. frame=(x,y,width,height) in points; tap an element's centre to activate it.
+		"Demo", 5 elements. frame=(x,y,width,height) in points; tap an element's centre to activate it, or its tap= point when it has one.
 		Application "Demo" frame=(0,0,402,874)
 		  StaticText "Title" frame=(20,60,200,30)
 		  Button id=close frame=(350,60,30,30)
 		  Group "Card" frame=(0,400,402,200)
 		    TextField value="hello" frame=(20,420,300,40) disabled
 		""")
+	}
+
+	@Test
+	func aWideSwitchIsTappedAtItsTrailingEnd() {
+		let row = SimulatorAccessibilityNode(role: "Switch", label: "Wi-Fi", value: "0", frame: frame(36, 511, 330, 28))
+		#expect(row.activationPoint == CGPoint(x: 335, y: 525))
+		#expect(SimulatorAccessibilityFormatter.line(for: row) == #"Switch "Wi-Fi" value="0" frame=(36,511,330,28) tap=(335,525)"#)
+
+		let bare = SimulatorAccessibilityNode(role: "Switch", frame: frame(300, 511, 51, 31))
+		#expect(bare.activationPoint == CGPoint(x: 325.5, y: 526.5))
+		#expect(SimulatorAccessibilityFormatter.line(for: bare) == "Switch frame=(300,511,51,31)")
 	}
 
 	@Test

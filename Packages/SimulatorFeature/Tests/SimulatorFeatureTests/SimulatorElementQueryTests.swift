@@ -58,6 +58,23 @@ struct SimulatorElementQueryTests {
 	}
 
 	@Test
+	func valuesAreMatchedAfterLabels() throws {
+		let fields = Self.node("Application", children: [
+			SimulatorAccessibilityNode(role: "TextField", value: "me@example.com", identifier: "email", frame: CGRect(x: 0, y: 0, width: 10, height: 10)),
+			SimulatorAccessibilityNode(role: "Switch", label: "Example", value: "1", frame: CGRect(x: 0, y: 20, width: 10, height: 10)),
+		]).flattened()
+		func found(_ query: SimulatorElementQuery) throws -> String? {
+			let node = fields[try query.match(in: fields)]
+			return node.identifier ?? node.label
+		}
+		#expect(try found(SimulatorElementQuery(value: "ME@example.com")) == "email")
+		#expect(try found(SimulatorElementQuery(value: "1")) == "Example")
+		// A label match wins over a value match.
+		#expect(try found(SimulatorElementQuery(label: "example", value: "example")) == "Example")
+		#expect(SimulatorElementQuery(value: "nothing").matches(in: fields).isEmpty)
+	}
+
+	@Test
 	func theApplicationIsNeverACandidate() throws {
 		// "Settings" is also the application's label; only the back button is pressable.
 		#expect(try matched(SimulatorElementQuery(label: "Settings")).identifier == "BackButton")

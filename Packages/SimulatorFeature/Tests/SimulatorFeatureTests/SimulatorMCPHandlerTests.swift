@@ -18,6 +18,25 @@ struct SimulatorMCPHandlerTests {
 		let calls = OSAllocatedUnfairLock<[String]>(initialState: [])
 		var devicesResult: [SimulatorDevice] = [phone]
 
+		/// A slider whose row is wider than its track, as Settings' Dynamic Type slider is: the thumb
+		/// runs from x 70 to 332 of a row from 20 to 382, and follows a drag only when the finger
+		/// starts on it. `step` makes it move in steps, as that one does.
+		struct Slider {
+			var value = 0.5
+			var step: Double?
+			static let frame = CGRect(x: 20, y: 700, width: 362, height: 80)
+			static let thumbMinX = 70.0
+			static let trackWidth = 262.0
+
+			mutating func set(_ value: Double) {
+				let clamped = min(max(value, 0), 1)
+				self.value = step.map { ($0 * (clamped / $0).rounded()) } ?? clamped
+			}
+		}
+		let slider = OSAllocatedUnfairLock(initialState: Slider())
+		/// How many tree reads the "Loaded" button waits before it appears; `nil` never shows it.
+		let loadedAfterReads = OSAllocatedUnfairLock<Int?>(initialState: nil)
+
 		func devices() async throws -> [SimulatorDevice] { devicesResult }
 		var selectedDeviceId: String? { "AAAA" }
 		func resolveDevice(udid: String?) async throws -> SimulatorDevice {
@@ -31,8 +50,15 @@ struct SimulatorMCPHandlerTests {
 		func tap(device: SimulatorDevice, x: Double, y: Double, holdFor: Duration) async throws {
 			record("tap \(x) \(y) \(holdFor)")
 		}
-		func swipe(device: SimulatorDevice, from: CGPoint, to: CGPoint, duration: Duration) async throws {
-			record("swipe \(from.x),\(from.y) \(to.x),\(to.y)")
+		func swipe(device: SimulatorDevice, from: CGPoint, to: CGPoint, duration: Duration, holdFor: Duration) async throws {
+			record("swipe \(from.x),\(from.y) \(to.x),\(to.y)" + (holdFor > .zero ? " hold \(holdFor)" : ""))
+			slider.withLock { slider in
+				let thumbX = Slider.thumbMinX + slider.value * Slider.trackWidth
+				guard Slider.frame.contains(from), abs(from.x - thumbX) <= 22 else {
+					return
+				}
+				slider.set(slider.value + (to.x - from.x) / Slider.trackWidth)
+			}
 		}
 		func type(device: SimulatorDevice, text: String) async throws { record("type \(text)") }
 		func press(device: SimulatorDevice, keys: [SimulatorKeyStroke]) async throws {
@@ -42,16 +68,25 @@ struct SimulatorMCPHandlerTests {
 			record("button \(button.rawValue) \(holdFor)")
 		}
 		func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode {
-			SimulatorAccessibilityNode(
-				role: "Application",
-				label: "Demo",
-				frame: CGRect(x: 0, y: 0, width: 402, height: 874),
-				children: [
-					SimulatorAccessibilityNode(role: "Button", label: "Go", frame: CGRect(x: 10, y: 20, width: 30, height: 40)),
-					SimulatorAccessibilityNode(role: "StaticText", label: "Welcome", frame: CGRect(x: 10, y: 80, width: 200, height: 20)),
-					SimulatorAccessibilityNode(role: "TextField", identifier: "email", frame: CGRect(x: 10, y: 120, width: 300, height: 40)),
-				]
-			)
+			let percent = Int((slider.withLock(\.value) * 100).rounded())
+			var children = [
+				SimulatorAccessibilityNode(role: "Button", label: "Go", frame: CGRect(x: 10, y: 20, width: 30, height: 40)),
+				SimulatorAccessibilityNode(role: "StaticText", label: "Welcome", frame: CGRect(x: 10, y: 80, width: 200, height: 20)),
+				SimulatorAccessibilityNode(role: "TextField", identifier: "email", frame: CGRect(x: 10, y: 120, width: 300, height: 40)),
+				SimulatorAccessibilityNode(role: "Switch", label: "Wi-Fi", value: "1", frame: CGRect(x: 36, y: 300, width: 330, height: 28)),
+				SimulatorAccessibilityNode(role: "Slider", value: "\(percent) %", identifier: "size", frame: Slider.frame),
+			]
+			let loaded = loadedAfterReads.withLock { reads -> Bool in
+				guard let remaining = reads else {
+					return false
+				}
+				reads = remaining - 1
+				return remaining <= 0
+			}
+			if loaded {
+				children.append(SimulatorAccessibilityNode(role: "Button", label: "Loaded", frame: CGRect(x: 10, y: 400, width: 100, height: 40)))
+			}
+			return SimulatorAccessibilityNode(role: "Application", label: "Demo", frame: CGRect(x: 0, y: 0, width: 402, height: 874), children: children)
 		}
 		func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode? {
 			point.x < 50 ? SimulatorAccessibilityNode(role: "Button", label: "Go", frame: CGRect(x: 10, y: 20, width: 30, height: 40)) : nil
@@ -80,7 +115,7 @@ struct SimulatorMCPHandlerTests {
 			record("element \(action) \(element.label ?? element.identifier ?? "")")
 			switch action {
 			case .press:
-				let effect: SimulatorElementOutcome.Effect = element.role == "Button" ? .pressed : .tappedCentre(CGPoint(x: element.frame.midX, y: element.frame.midY))
+				let effect: SimulatorElementOutcome.Effect = element.role == "Button" ? .pressed : .tapped(element.activationPoint)
 				return SimulatorElementOutcome(element: element, effect: effect)
 			case let .setValue(value):
 				guard element.role == "TextField" else {
@@ -89,6 +124,15 @@ struct SimulatorMCPHandlerTests {
 				return SimulatorElementOutcome(element: element, effect: .valueSet(readBack: value))
 			case .scrollToVisible:
 				return SimulatorElementOutcome(element: element, effect: .scrolled(to: element.frame.offsetBy(dx: 0, dy: -50)))
+			case .increment, .decrement:
+				guard element.role == "Slider" else {
+					throw SimulatorElementError.notAdjustable(element: SimulatorAccessibilityFormatter.line(for: element))
+				}
+				let value = slider.withLock { slider in
+					slider.set(slider.value + (action == .increment ? 1 : -1) * (slider.step ?? 0.1))
+					return slider.value
+				}
+				return SimulatorElementOutcome(element: element, effect: .valueSet(readBack: "\(Int((value * 100).rounded())) %"))
 			}
 		}
 
@@ -184,7 +228,7 @@ struct SimulatorMCPHandlerTests {
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
 			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element", "list_crashes", "crash_report", "rotate",
-			"set_location", "simulate_memory_warning", "start_recording", "stop_recording",
+			"wait_for_element", "set_slider", "gesture", "batch", "set_location", "simulate_memory_warning", "start_recording", "stop_recording",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -318,6 +362,7 @@ struct SimulatorMCPHandlerTests {
 			("press_element", ["label": "Go"]),
 			("set_value", ["value": "x"]),
 			("scroll_to_element", ["identifier": "email"]),
+			("gesture", ["preset": "scroll_down"]),
 		]
 		for (name, arguments) in calls {
 			let waiting = FakeActions()
@@ -353,7 +398,7 @@ struct SimulatorMCPHandlerTests {
 		let offering = tools.filter { $0["inputSchema"]?["properties"]?["wait_for_settle"]?["type"] == "boolean" }
 		#expect(offering.compactMap { $0["name"]?.stringValue } == [
 			"tap", "swipe", "pinch", "two_finger_drag", "type_text", "press_key", "press_button",
-			"press_element", "set_value", "scroll_to_element",
+			"press_element", "set_value", "scroll_to_element", "gesture",
 		])
 	}
 
@@ -376,8 +421,12 @@ struct SimulatorMCPHandlerTests {
 		#expect(pressed.isError == false)
 
 		let tapped = try await callText(actions, "press_element", ["label": "Welcome"])
-		#expect(tapped.text == "Tapped the centre of StaticText \"Welcome\" frame=(10,80,200,20) at (110, 90): it has no accessibility press, or refused it. Screen settled after 640 ms.")
-		#expect(actions.calls.withLock { $0 }.filter { $0.hasPrefix("element") } == ["element press Go", "element press Welcome"])
+		#expect(tapped.text == "Tapped StaticText \"Welcome\" frame=(10,80,200,20) at (110, 90): it has no accessibility press, or refused it. Screen settled after 640 ms.")
+
+		// A switch is tapped at its trailing end, where a finger toggles it; found here by value.
+		let toggled = try await callText(actions, "press_element", ["current_value": "1", "role": "switch", "wait_for_settle": false])
+		#expect(toggled.text == "Tapped Switch \"Wi-Fi\" value=\"1\" frame=(36,300,330,28) tap=(335,314) at (335, 314): it has no accessibility press, or refused it.")
+		#expect(actions.calls.withLock { $0 }.filter { $0.hasPrefix("element") } == ["element press Go", "element press Welcome", "element press Wi-Fi"])
 	}
 
 	@Test
@@ -561,6 +610,180 @@ struct SimulatorMCPHandlerTests {
 		let ended = try await callText(actions, "stop_recording", ["udid": "aaaa"])
 		#expect(ended.text == "The recording had already stopped — it reached the 10-minute limit — and was saved to /tmp/demo.mov (12.3 seconds).")
 		#expect(actions.calls.withLock { $0 } == ["start recording /tmp/flow.mov", "stop recording default", "stop recording aaaa"])
+	}
+
+	// MARK: - Waiting, sliders, gestures, batches
+
+	@Test
+	func waitForElementFindsWhatAppearsAndWhatIsGone() async throws {
+		let actions = FakeActions()
+		actions.loadedAfterReads.withLock { $0 = 2 }
+		let found = try await callText(actions, "wait_for_element", ["label": "Loaded", "timeout_ms": 5000])
+		#expect(found.isError == false)
+		#expect(found.text?.hasPrefix("Found Button \"Loaded\" frame=(10,400,100,40) after 0.") == true, "\(found.text ?? "nil")")
+
+		let gone = try await callText(FakeActions(), "wait_for_element", ["label": "Nowhere", "gone": true])
+		#expect(gone.text == "No element matches label \"Nowhere\" after 0.0 s.")
+
+		let missing = try await callText(FakeActions(), "wait_for_element", ["label": "Nowhere", "timeout_ms": 0])
+		#expect(missing.isError)
+		#expect(missing.text?.hasPrefix("Waited 0.0 s. No element matches label \"Nowhere\". Elements on screen:") == true)
+
+		let stays = try await callText(FakeActions(), "wait_for_element", ["label": "Go", "gone": true, "timeout_ms": 0])
+		#expect(stays.isError)
+		#expect(stays.text == "Button \"Go\" frame=(10,20,30,40) is still on screen after 0.0 s.")
+	}
+
+	@Test
+	func elementToolsWaitForTheirElementWithATimeout() async throws {
+		let actions = FakeActions()
+		actions.loadedAfterReads.withLock { $0 = 1 }
+		let pressed = try await callText(actions, "press_element", ["label": "Loaded", "timeout_ms": 3000, "wait_for_settle": false])
+		#expect(pressed.text == "Tapped Button \"Loaded\" frame=(10,400,100,40) at (60, 420): it has no accessibility press, or refused it."
+			|| pressed.text == "Pressed Button \"Loaded\" frame=(10,400,100,40) (AXPress).")
+
+		let late = FakeActions()
+		late.loadedAfterReads.withLock { $0 = 100 }
+		#expect(try await callText(late, "press_element", ["label": "Loaded", "wait_for_settle": false]).isError)
+	}
+
+	@Test
+	func setSliderDragsAndCorrectsTowardTheTarget() async throws {
+		let actions = FakeActions()
+		// Increments take it to 70 %; a drag overshoots to 74 % on the guessed track, a second one
+		// corrects it.
+		let moved = try await callText(actions, "set_slider", ["identifier": "size", "value": 73])
+		#expect(moved.isError == false)
+		#expect(moved.text == "Moved Slider value=\"73 %\" id=size frame=(20,700,362,80) from \"50 %\" to \"73 %\".", "\(moved.text ?? "nil")")
+		#expect(actions.calls.withLock { $0 }.filter { $0.hasPrefix("element") } == ["element increment size", "element increment size", "element increment size", "element decrement size"])
+		#expect(actions.calls.withLock { $0 }.filter { $0.hasPrefix("swipe") }.count == 2)
+
+		let already = try await callText(actions, "set_slider", ["value": 73])
+		#expect(already.text == "Slider value=\"73 %\" id=size frame=(20,700,362,80) is already at 73 %.")
+
+		#expect(try await callText(actions, "set_slider", ["value": 120]).isError)
+		#expect(try await callText(actions, "set_slider", ["label": "Go", "value": 10]).isError)
+	}
+
+	@Test
+	func setSliderStopsAtTheNearestStep() async throws {
+		let actions = FakeActions()
+		actions.slider.withLock { $0.step = 1.0 / 6 }
+		let moved = try await callText(actions, "set_slider", ["value": 80])
+		#expect(moved.text == "Moved Slider value=\"83 %\" id=size frame=(20,700,362,80) from \"50 %\" toward 80 %: it now reads \"83 %\", as close as it goes (it moves in steps).", "\(moved.text ?? "nil")")
+	}
+
+	@Test
+	func sliderValuesAreReadAsFractions() {
+		#expect(SimulatorSliderValue.fraction(from: "50 %") == 0.5)
+		#expect(SimulatorSliderValue.fraction(from: "50\u{202F}%") == 0.5)
+		#expect(SimulatorSliderValue.fraction(from: "%25") == 0.25)
+		#expect(SimulatorSliderValue.fraction(from: "12,5 %") == 0.125)
+		#expect(SimulatorSliderValue.fraction(from: "0.3") == 0.3)
+		#expect(SimulatorSliderValue.fraction(from: "75") == 0.75)
+		#expect(SimulatorSliderValue.fraction(from: "3 stars") == nil)
+		#expect(SimulatorSliderValue.fraction(from: "250") == nil)
+		#expect(SimulatorSliderValue.fraction(from: nil) == nil)
+	}
+
+	@Test
+	func sliderTrackIsMeasuredFromBigEnoughMoves() {
+		var track = SimulatorSliderTrack(frame: CGRect(x: 20, y: 0, width: 362, height: 80))
+		#expect(track.x(for: 0) == 34)
+		#expect(track.width == 334)
+		track.calibrate(fingerMoved: 10, valueMoved: 0.01)
+		#expect(track.width == 334)
+		track.calibrate(fingerMoved: 131, valueMoved: 0.5)
+		#expect(track.width == 262)
+		track.calibrate(fingerMoved: -100, valueMoved: 0.5)
+		#expect(track.width == 262)
+	}
+
+	@Test
+	func gesturePresetsAreSizedFromTheScreen() async throws {
+		let size = CGSize(width: 402, height: 874)
+		let down = SimulatorGesturePreset.scrollDown.path(in: size)
+		#expect(down.from == CGPoint(x: 201, y: 655.5))
+		#expect(down.to == CGPoint(x: 201, y: 218.5))
+		#expect(SimulatorGesturePreset.scrollLeft.path(in: size, distance: 100).to == CGPoint(x: 251, y: 437))
+		#expect(SimulatorGesturePreset.swipeFromLeftEdge.path(in: size).from == CGPoint(x: 2, y: 437))
+		let controlCenter = SimulatorGesturePreset.swipeFromTopEdge.path(in: size, position: CGPoint(x: 380, y: 437))
+		#expect(controlCenter.from == CGPoint(x: 380, y: 2))
+		#expect(SimulatorGesturePreset.swipeFromBottomEdge.path(in: size).from == CGPoint(x: 201, y: 872))
+
+		let actions = FakeActions()
+		let back = try await callText(actions, "gesture", ["preset": "swipe_from_left_edge", "y": 300, "wait_for_settle": false])
+		#expect(back.text == "swipe_from_left_edge: swiped from (2, 300) to (281.4, 300).")
+		#expect(actions.calls.withLock { $0 } == ["swipe 2.0,300.0 281.4,300.0"])
+		#expect(try await callText(actions, "gesture", ["preset": "shake"]).isError)
+	}
+
+	@Test
+	func swipeCanHoldBeforeMoving() async throws {
+		let actions = FakeActions()
+		let dragged = try await callText(actions, "swipe", ["from_x": 50, "from_y": 100, "to_x": 50, "to_y": 400, "hold_ms": 600, "wait_for_settle": false])
+		#expect(dragged.text == "Swiped from (50, 100) to (50, 400) after holding 600 ms.")
+		#expect(actions.calls.withLock { $0 } == ["swipe 50.0,100.0 50.0,400.0 hold 0.6 seconds"])
+	}
+
+	@Test
+	func batchRunsStepsInOrderAndCollectsScreenshots() async throws {
+		let actions = FakeActions()
+		let response = await handler(actions).response(to: try post([
+			"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+			"params": ["name": "batch", "arguments": ["steps": [
+				["tool": "tap", "x": 10, "y": 20, "wait_for_settle": false],
+				["tool": "sleep", "duration_ms": 10],
+				["tool": "type_text", "text": "hi", "wait_for_settle": false],
+				["tool": "screenshot"],
+			]]],
+		]))
+		let result = try decode(response)["result"]
+		guard case let .array(content)? = result?["content"] else {
+			Issue.record("expected content")
+			return
+		}
+		#expect(result?["isError"] == false)
+		#expect(content.first?["text"] == """
+		Ran 4 steps.
+		1. tap: Tapped (10, 20).
+		2. sleep: waited 0.0 s.
+		3. type_text: Typed 2 characters.
+		4. screenshot: iPhone, 402×874 points.
+		""")
+		#expect(content.count == 2)
+		#expect(content.last?["type"] == "image")
+		#expect(actions.calls.withLock { $0 } == ["tap 10.0 20.0 0.06 seconds", "type hi"])
+	}
+
+	@Test
+	func batchStopsAtAFailureUnlessToldToGoOn() async throws {
+		let steps: JSONValue = [
+			["tool": "press_key", "key": "warp"],
+			["tool": "tap", "x": 1, "y": 1, "wait_for_settle": false],
+		]
+		let stopping = FakeActions()
+		let stopped = try await callText(stopping, "batch", ["steps": steps])
+		#expect(stopped.isError)
+		#expect(stopped.text == """
+		1 of 2 steps failed.
+		1. press_key FAILED: Unknown key "warp".
+		Stopped at step 1; the last step was not run.
+		""")
+		#expect(stopping.calls.withLock { $0 }.isEmpty)
+
+		let going = FakeActions()
+		let went = try await callText(going, "batch", ["steps": steps, "continue_on_error": true])
+		#expect(went.isError)
+		#expect(going.calls.withLock { $0 } == ["tap 1.0 1.0 0.06 seconds"])
+
+		// Checked whole before anything runs.
+		let checked = FakeActions()
+		let refused = try await callText(checked, "batch", ["steps": [["tool": "tap", "x": 1, "y": 1], ["tool": "batch"]]])
+		#expect(refused.isError)
+		#expect(refused.text?.hasPrefix("Step 2: \"batch\" cannot be a batch step") == true)
+		#expect(checked.calls.withLock { $0 }.isEmpty)
+		#expect(try await callText(checked, "batch", ["steps": []]).isError)
 	}
 }
 
