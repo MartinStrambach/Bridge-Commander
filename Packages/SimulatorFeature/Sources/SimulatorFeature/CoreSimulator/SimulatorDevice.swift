@@ -60,6 +60,9 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 	/// The ID of the screen shown when it is not the main one: an open iPhone Duo's inner panel.
 	/// Also tells the pane to attach to another screen when it changes.
 	public let screenID: UInt32?
+	/// The interface's rotation on the screen shown while the device is held portrait: upright,
+	/// but a quarter turn clockwise on an open iPhone Duo's inner panel, which is mounted turned.
+	public let portraitRotation: SimulatorScreenRotation
 
 	public init(
 		id: String,
@@ -70,7 +73,8 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 		screenScale: CGFloat,
 		rotation: SimulatorScreenRotation = .upright,
 		fold: SimulatorFold? = nil,
-		screenID: UInt32? = nil
+		screenID: UInt32? = nil,
+		portraitRotation: SimulatorScreenRotation = .upright
 	) {
 		self.id = id
 		self.name = name
@@ -81,6 +85,12 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 		self.rotation = rotation
 		self.fold = fold
 		self.screenID = screenID
+		self.portraitRotation = portraitRotation
+	}
+
+	/// The interface's rotation when the device is held `orientation` and the app follows it.
+	public func interfaceRotation(for orientation: SimulatorDeviceOrientation) -> SimulatorScreenRotation {
+		orientation.screenRotation.adding(portraitRotation)
 	}
 
 	/// The panel in points, portrait.

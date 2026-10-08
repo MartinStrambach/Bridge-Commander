@@ -39,6 +39,10 @@ struct SimulatorFoldDisplays: Equatable, Sendable {
 		/// Portrait, as the framebuffer is.
 		let pixelSize: CGSize
 		let scale: CGFloat
+		/// The interface's rotation on this panel while the device is held portrait. The inner
+		/// panel is mounted turned (`nativeRotation` 270), so it shows the interface a quarter
+		/// turn clockwise then — landscape — and every orientation one quarter on from the cover's.
+		var portraitRotation: SimulatorScreenRotation = .upright
 	}
 
 	let cover: Panel
@@ -65,7 +69,13 @@ struct SimulatorFoldDisplays: Equatable, Sendable {
 				else {
 					return nil
 				}
-				return Panel(screenID: screenID, pixelSize: CGSize(width: width, height: height), scale: scale)
+				let nativeRotation = (display["nativeRotation"] as? NSNumber)?.intValue ?? 0
+				return Panel(
+					screenID: screenID,
+					pixelSize: CGSize(width: width, height: height),
+					scale: scale,
+					portraitRotation: SimulatorScreenRotation(quarterTurns: (360 - nativeRotation) / 90)
+				)
 			}
 			.sorted { $0.screenID < $1.screenID }
 		guard panels.count == 2 else {
@@ -85,20 +95,30 @@ struct SimulatorFoldDisplays: Equatable, Sendable {
 	}
 }
 
-/// The vendor-defined HID report that sets the hinge angle, as Xcode 27.1's DeviceHub sends it
-/// (`CoreDevicePopDeviceKitExtension`, through `CoreDevice.HIDVendorDefined`) and idb does
-/// (`SimulatorHingeAngle`, MIT): a binary-serialized CF dictionary, which the guest's `locationd`
-/// (`CMDeviceStateRelayManager`) turns into the fold state SpringBoard follows.
-enum SimulatorHingeReport {
+/// The vendor-defined HID reports of the guest's virtual-machine controls — DeviceHub's hinge
+/// slider and orientation picker — as Xcode 27.1 sends them (`CoreDevicePopDeviceKitExtension`,
+/// through `CoreDevice.HIDVendorDefined`) and idb does (`SimulatorHingeAngle`,
+/// `SimulatorHIDOrientation`, MIT): a binary-serialized CF dictionary, which the guest's `locationd`
+/// (`CMDeviceStateRelayManager`) turns into the device state SpringBoard follows. Only a runtime
+/// that reports device motion acts on them — of the iOS 27 ones, the iPhone Duo's.
+enum SimulatorDeviceStateReport {
 	static let usagePage: UInt64 = 0xFF61
 	static let usage: UInt64 = 0x5B
 
-	static func data(angle: Double) -> Data {
+	static func hinge(angle: Double) -> Data {
+		control(source: "hinge-slider-control", type: "range", value: min(max(angle, 0), 180))
+	}
+
+	static func orientation(_ orientation: SimulatorDeviceOrientation) -> Data {
+		control(source: "orientation-picker-control", type: "enum", value: orientation.deviceStateValue)
+	}
+
+	private static func control(source: String, type: String, value: Any) -> Data {
 		let body: [String: Any] = [
 			"provider": "com.apple.Virtualization.VirtualMachines",
-			"source": "hinge-slider-control",
-			"type": "range",
-			"value": min(max(angle, 0), 180),
+			"source": source,
+			"type": type,
+			"value": value,
 		]
 		return IOCFSerialize(body as CFDictionary, CFOptionFlags(kIOCFSerializeToBinary)) as Data? ?? Data()
 	}

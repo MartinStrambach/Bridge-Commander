@@ -155,7 +155,8 @@ public final class SimulatorHost: @unchecked Sendable {
 				? (try? screen(of: device, pixelSize: panel?.pixelSize)).map(screenRotation(of:)) ?? .upright
 				: .upright,
 			fold: fold,
-			screenID: panel?.screenID
+			screenID: panel?.screenID,
+			portraitRotation: panel?.portraitRotation ?? .upright
 		)
 	}
 

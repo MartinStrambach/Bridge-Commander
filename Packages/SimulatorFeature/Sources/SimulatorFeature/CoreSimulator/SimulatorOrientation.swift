@@ -31,6 +31,21 @@ public enum SimulatorDeviceOrientation: String, CaseIterable, Equatable, Sendabl
 		}
 	}
 
+	/// The orientation picker's value (`SimulatorDeviceStateReport`), as idb names them; "landscape-left"
+	/// turns the interface the way `landscapeLeft` does (checked live on the iPhone Duo, 2026-10-08).
+	var deviceStateValue: String {
+		switch self {
+		case .portrait:
+			"portrait"
+		case .portraitUpsideDown:
+			"pud"
+		case .landscapeLeft:
+			"landscape-left"
+		case .landscapeRight:
+			"landscape-right"
+		}
+	}
+
 	/// The guest's name for an orientation, as its orientation service reports it
 	/// (`currentDeviceOrientation`). `faceUp`, `faceDown` and `unknown` have no case here.
 	init?(guestName: String) {
@@ -138,6 +153,38 @@ public enum SimulatorScreenRotation: String, Equatable, Sendable {
 		default:
 			self = .upright
 		}
+	}
+
+	/// Quarter turns clockwise from upright, 0...3.
+	var quarterTurns: Int {
+		switch self {
+		case .upright:
+			0
+		case .clockwise:
+			1
+		case .upsideDown:
+			2
+		case .counterclockwise:
+			3
+		}
+	}
+
+	init(quarterTurns: Int) {
+		switch (quarterTurns % 4 + 4) % 4 {
+		case 1:
+			self = .clockwise
+		case 2:
+			self = .upsideDown
+		case 3:
+			self = .counterclockwise
+		default:
+			self = .upright
+		}
+	}
+
+	/// This rotation turned further by `other`.
+	func adding(_ other: SimulatorScreenRotation) -> SimulatorScreenRotation {
+		SimulatorScreenRotation(quarterTurns: quarterTurns + other.quarterTurns)
 	}
 
 	/// Whether width and height trade places.

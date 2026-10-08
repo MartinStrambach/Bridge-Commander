@@ -10,8 +10,14 @@ struct SimulatorFoldTests {
 		[
 			"capabilities": [
 				"displays": [
-					["deviceName": "primary", "displayType": "integrated", "screenID": 1, "width": 1398, "height": 2034, "scale": 3],
-					["deviceName": "primary-1", "displayType": "integrated", "screenID": 3, "width": 2007, "height": 2853, "scale": 3],
+					[
+						"deviceName": "primary", "displayType": "integrated", "screenID": 1, "width": 1398, "height": 2034, "scale": 3,
+						"nativeRotation": 0,
+					],
+					[
+						"deviceName": "primary-1", "displayType": "integrated", "screenID": 3, "width": 2007, "height": 2853, "scale": 3,
+						"nativeRotation": 270,
+					],
 					["deviceName": "external-0", "displayType": "tvOut", "screenID": 2, "width": 720, "height": 480, "scale": 1],
 					["deviceName": "wireless0", "displayType": "carPlay", "screenID": 4, "width": 720, "height": 480, "scale": 1],
 					["deviceName": "resizable", "displayType": "scene", "screenID": 5, "width": 7680, "height": 4320, "scale": 3],
@@ -24,7 +30,7 @@ struct SimulatorFoldTests {
 	func theDuosPanelsAreItsTwoIntegratedDisplays() throws {
 		let displays = try #require(SimulatorFoldDisplays(capabilities: Self.duoCapabilities))
 		#expect(displays.cover == .init(screenID: 1, pixelSize: CGSize(width: 1398, height: 2034), scale: 3))
-		#expect(displays.inner == .init(screenID: 3, pixelSize: CGSize(width: 2007, height: 2853), scale: 3))
+		#expect(displays.inner == .init(screenID: 3, pixelSize: CGSize(width: 2007, height: 2853), scale: 3, portraitRotation: .clockwise))
 		#expect(displays.panel(for: .open) == displays.inner)
 		#expect(displays.panel(for: .closed) == displays.cover)
 	}
@@ -43,18 +49,52 @@ struct SimulatorFoldTests {
 		#expect(SimulatorFoldDisplays(capabilities: [:]) == nil)
 	}
 
-	@Test
-	func theHingeReportIsTheSerializedDictionaryDeviceHubSends() throws {
-		let data = SimulatorHingeReport.data(angle: SimulatorFold.open.hingeAngle)
-		let decoded = try #require(data.withUnsafeBytes { bytes in
+	private static func decode(_ data: Data) throws -> [String: Any] {
+		try #require(data.withUnsafeBytes { bytes in
 			IOCFUnserializeWithSize(bytes.baseAddress!.assumingMemoryBound(to: CChar.self), bytes.count, nil, 0, nil) as? [String: Any]
 		})
+	}
+
+	@Test
+	func theHingeReportIsTheSerializedDictionaryDeviceHubSends() throws {
+		let decoded = try Self.decode(SimulatorDeviceStateReport.hinge(angle: SimulatorFold.open.hingeAngle))
 		#expect(decoded["provider"] as? String == "com.apple.Virtualization.VirtualMachines")
 		#expect(decoded["source"] as? String == "hinge-slider-control")
 		#expect(decoded["type"] as? String == "range")
 		#expect((decoded["value"] as? NSNumber)?.doubleValue == 180)
-		#expect(SimulatorHingeReport.usagePage == 0xFF61)
-		#expect(SimulatorHingeReport.usage == 0x5B)
+		#expect(SimulatorDeviceStateReport.usagePage == 0xFF61)
+		#expect(SimulatorDeviceStateReport.usage == 0x5B)
+	}
+
+	@Test
+	func theOrientationReportNamesTheOrientationAsThePickerDoes() throws {
+		let decoded = try Self.decode(SimulatorDeviceStateReport.orientation(.landscapeLeft))
+		#expect(decoded["source"] as? String == "orientation-picker-control")
+		#expect(decoded["type"] as? String == "enum")
+		#expect(decoded["value"] as? String == "landscape-left")
+		#expect(SimulatorDeviceOrientation.allCases.map(\.deviceStateValue) == ["portrait", "landscape-left", "landscape-right", "pud"])
+	}
+
+	/// What the open Duo's inner panel showed for each orientation, read live.
+	@Test
+	func theInnerPanelShowsEachOrientationAQuarterTurnOn() {
+		let inner = SimulatorDevice(
+			id: "D",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 2007, height: 2853),
+			screenScale: 3,
+			fold: .open,
+			screenID: 3,
+			portraitRotation: .clockwise
+		)
+		#expect(inner.interfaceRotation(for: .portrait) == .clockwise)
+		#expect(inner.interfaceRotation(for: .landscapeLeft) == .upright)
+		#expect(inner.interfaceRotation(for: .portraitUpsideDown) == .counterclockwise)
+		#expect(inner.interfaceRotation(for: .landscapeRight) == .upsideDown)
+		#expect(SimulatorScreenRotation(quarterTurns: -1) == .counterclockwise)
+		#expect(SimulatorScreenRotation(quarterTurns: 5) == .clockwise)
 	}
 
 	@Test

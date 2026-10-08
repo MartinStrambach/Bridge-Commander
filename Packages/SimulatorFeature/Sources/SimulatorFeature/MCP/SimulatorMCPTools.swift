@@ -410,12 +410,7 @@ enum SimulatorMCPTools {
 	private static func rotationReport(_ device: SimulatorDevice, orientation: SimulatorDeviceOrientation) -> String {
 		let size = device.screenPointSize
 		let points = "\(Int(size.width))×\(Int(size.height)) points"
-		if device.fold == .open {
-			// The inner panel's interface stayed put through every orientation, apps' included
-			// (checked live, 2026-10-08).
-			return "Turned the device to \(orientation.label). The open iPhone Duo's inner panel is \(device.rotation.label), \(points); take a new screenshot before using coordinates."
-		}
-		guard device.rotation == orientation.screenRotation else {
+		guard device.rotation == device.interfaceRotation(for: orientation) else {
 			return "Turned the device to \(orientation.label), but the interface stayed \(device.rotation.label) — the app does not support that orientation. The screen is \(points)."
 		}
 		return "Rotated to \(orientation.label). The screen is now \(points); take a new screenshot before using coordinates."

@@ -234,14 +234,16 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 		xpc_connection_send_message(connection, message(type: type, payload: payload, isBarrier: false))
 	}
 
-	/// Sends one vendor-defined HID report to `dtuhidd` in `device` and returns once the daemon has
-	/// handled it. A connection of its own, closed afterwards: the guest keeps what a report set
-	/// (the hinge angle) when the daemon drops the connection's virtual device.
+	/// Sends one vendor-defined HID report to `dtuhidd` in `device` and returns once the guest has
+	/// taken it. A connection of its own, closed afterwards: the guest keeps what a report set (the
+	/// hinge angle, the orientation) when the daemon drops the connection's virtual device.
 	///
 	/// The report has to go as a plain message — sent as the barrier itself it is answered but
-	/// never dispatched — and a barrier after it confirms delivery. Like `connect(to:)`, a
-	/// barrier first confirms the daemon is up, so a report sent while it is still starting is
-	/// not lost.
+	/// never dispatched — and a barrier after it confirms delivery to the daemon. The guest reads
+	/// the virtual device after that: an orientation report on a connection closed right after the
+	/// barrier was lost every time, one held 0.3 s never (checked live, 2026-10-08), so the
+	/// connection is held a little longer. Like `connect(to:)`, a barrier first confirms the
+	/// daemon is up, so a report sent while it is still starting is not lost.
 	static func sendVendorDefinedReport(usagePage: UInt64, usage: UInt64, data: Data, to device: AnyObject) async throws {
 		let payload = xpc_dictionary_create(nil, nil, 0)
 		xpc_dictionary_set_uint64(payload, "usagePage", usagePage)
@@ -262,6 +264,7 @@ final class SimulatorHIDConnection: @unchecked Sendable {
 				try await Task.sleep(for: .milliseconds(200))
 				connection.send(type: type, payload: payload)
 				if await connection.roundTrip(barrier) {
+					try await Task.sleep(for: .milliseconds(500))
 					return
 				}
 			}

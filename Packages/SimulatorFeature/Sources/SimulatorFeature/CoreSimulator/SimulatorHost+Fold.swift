@@ -65,9 +65,9 @@ extension SimulatorHost {
 			throw SimulatorError.notFoldable(device.name)
 		}
 		try await SimulatorHIDConnection.sendVendorDefinedReport(
-			usagePage: SimulatorHingeReport.usagePage,
-			usage: SimulatorHingeReport.usage,
-			data: SimulatorHingeReport.data(angle: fold.hingeAngle),
+			usagePage: SimulatorDeviceStateReport.usagePage,
+			usage: SimulatorDeviceStateReport.usage,
+			data: SimulatorDeviceStateReport.hinge(angle: fold.hingeAngle),
 			to: simDevice
 		)
 		Self.record(fold, udid: device.id, device: simDevice, displays: displays)
@@ -76,6 +76,11 @@ extension SimulatorHost {
 			throw SimulatorError.deviceNotFound(device.id)
 		}
 		_ = await waitForScreenToSettle(device: folded)
+		// SpringBoard defers orientation changes while it moves the interface between the panels
+		// ("Display content mode transition"), past the screen settling: a rotation sent at once
+		// was dropped about half the time, one sent 0.5 s or more later never (checked live,
+		// 2026-10-08). Returning a little later keeps a rotation right after a fold from vanishing.
+		try await Task.sleep(for: .seconds(1))
 		return try devices().first(where: { $0.id == device.id }) ?? folded
 	}
 }

@@ -96,7 +96,7 @@ struct SimulatorMCPHandlerTests {
 		func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
 			record("rotate \(orientation.rawValue)")
 			var rotated = device
-			rotated.rotation = orientation == .portraitUpsideDown ? device.rotation : orientation.screenRotation
+			rotated.rotation = orientation == .portraitUpsideDown ? device.rotation : device.interfaceRotation(for: orientation)
 			return rotated
 		}
 
@@ -113,7 +113,8 @@ struct SimulatorMCPHandlerTests {
 					screenScale: 3,
 					rotation: .clockwise,
 					fold: .open,
-					screenID: 3
+					screenID: 3,
+					portraitRotation: .clockwise
 				)
 				: device
 		}
@@ -512,6 +513,11 @@ struct SimulatorMCPHandlerTests {
 
 		let unknown = try await callForLastText(actions, "set_fold", ["state": "ajar"])
 		#expect(unknown.isError == true)
+
+		// The inner panel is mounted a quarter turn round: landscape left shows it portrait.
+		actions.devicesResult = [try await actions.setFold(device: duo, to: .open)]
+		let turned = try await callForLastText(actions, "rotate", ["orientation": "landscape_left"])
+		#expect(turned.text == "Rotated to landscape left. The screen is now 669×951 points; take a new screenshot before using coordinates.")
 	}
 
 	@Test
