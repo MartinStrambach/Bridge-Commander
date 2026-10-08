@@ -21,10 +21,19 @@ let package = Package(
 				.product(name: "AppUI", package: "AppUI"),
 			]
 		),
-		.testTarget(name: "TerminalFeatureTests", dependencies: ["TerminalFeature"]),
+		.testTarget(
+			name: "TerminalFeatureTests",
+			dependencies: [
+				"TerminalFeature",
+				.product(name: "SwiftTerm", package: "SwiftTerm"),
+			]
+		),
 	]
 )
 
 for target in package.targets {
-    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+    target.swiftSettings = (target.swiftSettings ?? []) + [
+        .treatAllWarnings(as: .error),
+        .enableUpcomingFeature("MemberImportVisibility"),
+    ]
 }

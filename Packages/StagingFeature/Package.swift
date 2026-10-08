@@ -32,11 +32,15 @@ let package = Package(
                 "StagingFeature",
                 .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
                 .product(name: "GitCore", package: "GitCore"),
+                .product(name: "DiffModelMapping", package: "AppUI"),
             ]
         ),
     ]
 )
 
 for target in package.targets {
-    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+    target.swiftSettings = (target.swiftSettings ?? []) + [
+        .treatAllWarnings(as: .error),
+        .enableUpcomingFeature("MemberImportVisibility"),
+    ]
 }

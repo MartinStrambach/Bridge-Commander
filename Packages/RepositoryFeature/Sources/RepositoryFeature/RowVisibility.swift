@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import Foundation
 
 /// What the list's filters reveal inside one repo group.
 ///
