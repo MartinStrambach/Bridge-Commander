@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Result of a process execution with captured output and error streams
 public nonisolated struct ProcessResult {
@@ -143,7 +144,12 @@ public nonisolated enum ProcessRunner {
 	/// directory on every invocation (~5ms per call). The app spawns dozens of git processes
 	/// per refresh, so the binary the shim points at is resolved once and used directly.
 	/// Falls back to the shim if resolution fails (e.g., no Xcode/CLT installed).
-	private static let resolvedGitExecutable = Task<URL, Never> { @concurrent in
+	///
+	/// The resolved binary lives inside an Xcode, which an update can delete or rename under the
+	/// running app (Xcodes.app replaces one release candidate with the next). It is resolved again
+	/// once it is gone; kept forever, every git call failed to launch until the app restarted —
+	/// rows stopped updating, ⌘R did nothing and a deleted worktree's row stayed.
+	private static let resolvedGitExecutable = ResolvedExecutable {
 		let fallback = URL(filePath: "/usr/bin/git")
 		let result = await run(
 			executableURL: URL(filePath: "/usr/bin/xcrun"),
@@ -167,10 +173,42 @@ public nonisolated enum ProcessRunner {
 		at repositoryPath: String
 	) async -> ProcessResult {
 		await run(
-			executableURL: resolvedGitExecutable.value,
+			executableURL: resolvedGitExecutable.url,
 			arguments: arguments,
 			currentDirectory: URL(filePath: repositoryPath),
 			environment: EnvironmentHelper.setupEnvironment()
 		)
+	}
+}
+
+/// An executable's path, resolved once and reused for as long as the file is still there.
+/// Concurrent callers share one resolution, so a launch-time burst of git calls runs `xcrun`
+/// once rather than once per call.
+nonisolated final class ResolvedExecutable: Sendable {
+	private let resolve: @Sendable () async -> URL
+	private let resolution: Mutex<Task<URL, Never>>
+
+	init(resolve: @escaping @Sendable () async -> URL) {
+		self.resolve = resolve
+		resolution = Mutex(Task(operation: resolve))
+	}
+
+	var url: URL {
+		get async {
+			let current = resolution.withLock { $0 }
+			let url = await current.value
+			if FileManager.default.isExecutableFile(atPath: url.path) {
+				return url
+			}
+
+			// Only the first caller to find it gone starts a new resolution; the rest await it.
+			let replacement = resolution.withLock { task in
+				if task == current {
+					task = Task(operation: resolve)
+				}
+				return task
+			}
+			return await replacement.value
+		}
 	}
 }
