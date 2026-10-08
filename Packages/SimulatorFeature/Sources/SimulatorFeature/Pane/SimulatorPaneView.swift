@@ -192,6 +192,14 @@ public struct SimulatorPaneView: View {
 					recordButton
 					iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
 					iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
+					if let fold = device.fold {
+						if fold == .open {
+							iconButton("book.closed", help: "Fold") { store.send(.foldButtonTapped) }
+						}
+						else {
+							iconButton("book", help: "Unfold") { store.send(.foldButtonTapped) }
+						}
+					}
 					iconButton("house", help: "Home") { store.send(.hardwareButtonTapped(.home)) }
 					moreMenu
 					iconButton("power", help: "Shut down \(device.name)") { store.send(.shutdownButtonTapped) }
@@ -264,20 +272,6 @@ public struct SimulatorPaneView: View {
 	/// Simulator.app's Features and the buttons that have no icon of their own here.
 	private var moreMenu: some View {
 		Menu {
-			if let fold = store.selectedDevice?.fold {
-				Button {
-					store.send(.foldButtonTapped)
-				} label: {
-					if fold == .open {
-						Label("Fold", systemImage: "book.closed")
-					}
-					else {
-						Label("Unfold", systemImage: "book")
-					}
-				}
-				Divider()
-			}
-
 			Button {
 				store.send(.memoryWarningButtonTapped)
 			} label: {

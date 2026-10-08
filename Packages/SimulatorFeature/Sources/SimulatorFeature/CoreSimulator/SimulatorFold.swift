@@ -24,7 +24,7 @@ public enum SimulatorFold: String, CaseIterable, Equatable, Sendable {
 		rawValue
 	}
 
-	/// The other state: what the pane's Fold/Unfold item switches to.
+	/// The other state: what the pane's Fold/Unfold button switches to.
 	public var toggled: SimulatorFold {
 		self == .open ? .closed : .open
 	}
