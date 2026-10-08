@@ -272,3 +272,19 @@ public enum SimulatorScreenRotation: String, Equatable, Sendable {
 		}
 	}
 }
+
+/// What turning the device came to: where the device is, and whether the interface followed. It
+/// does not when the frontmost app does not support the orientation (or, on an iPhone, the home
+/// screen, which stays portrait).
+public struct SimulatorRotation: Equatable, Sendable {
+	public var orientation: SimulatorDeviceOrientation
+	/// The interface's rotation on the panel shown, once the turn has settled.
+	public var interfaceRotation: SimulatorScreenRotation
+	public var interfaceFollowed: Bool
+
+	public init(orientation: SimulatorDeviceOrientation, interfaceRotation: SimulatorScreenRotation, interfaceFollowed: Bool) {
+		self.orientation = orientation
+		self.interfaceRotation = interfaceRotation
+		self.interfaceFollowed = interfaceFollowed
+	}
+}

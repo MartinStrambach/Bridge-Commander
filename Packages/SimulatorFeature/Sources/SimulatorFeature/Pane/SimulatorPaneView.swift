@@ -193,7 +193,7 @@ public struct SimulatorPaneView: View {
 					iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
 					iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
 					if let fold = device.fold {
-						if fold == .open {
+						if fold.showsInnerPanel {
 							iconButton("book.closed", help: "Fold") { store.send(.foldButtonTapped) }
 						}
 						else {
@@ -289,6 +289,26 @@ public struct SimulatorPaneView: View {
 				}
 			} label: {
 				Label("Location", systemImage: "location")
+			}
+
+			if let current = store.selectedDevice?.fold {
+				Menu {
+					ForEach(SimulatorFold.allCases, id: \.self) { fold in
+						Button {
+							store.send(.foldSelected(fold))
+						} label: {
+							if fold == current {
+								Label(fold.title, systemImage: "checkmark")
+							}
+							else {
+								Text(fold.title)
+							}
+						}
+					}
+				} label: {
+					Label("Hinge", systemImage: "book")
+				}
+				.labelStyle(.titleAndIcon)
 			}
 
 			Divider()

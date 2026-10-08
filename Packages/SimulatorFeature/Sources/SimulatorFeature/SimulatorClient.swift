@@ -14,8 +14,8 @@ public struct SimulatorClient: Sendable {
 	public var shutdown: @Sendable (_ id: String) async throws -> Void
 	public var pressButton: @Sendable (_ id: String, _ button: SimulatorHardwareButton) async throws -> Void
 	/// Turns the device a quarter clockwise or counterclockwise from where it is.
-	public var rotate: @Sendable (_ id: String, _ clockwise: Bool) async throws -> Void
-	/// Opens or closes a device that folds (the iPhone Duo).
+	public var rotate: @Sendable (_ id: String, _ clockwise: Bool) async throws -> SimulatorRotation
+	/// Opens, partially opens or closes a device that folds (the iPhone Duo).
 	public var setFold: @Sendable (_ device: SimulatorDevice, _ fold: SimulatorFold) async throws -> Void
 	/// Saves the device's screen as a PNG where Simulator.app would, and returns the file.
 	public var saveScreenshot: @Sendable (_ device: SimulatorDevice) async throws -> URL

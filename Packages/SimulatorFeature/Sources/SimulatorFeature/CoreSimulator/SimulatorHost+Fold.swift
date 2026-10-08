@@ -9,8 +9,9 @@ import os
 /// here during the device's current boot (a fresh boot starts closed), recorded per boot so a
 /// restart of the app keeps it. A fold made elsewhere — in Xcode's DeviceHub — is not seen.
 extension SimulatorHost {
-	/// Each open device's UDID and the `lastBootedAt` of the boot it was opened in, as
-	/// `timeIntervalSinceReferenceDate`.
+	/// Each open device's UDID, mapped to the `lastBootedAt` of the boot it was opened in (as
+	/// `timeIntervalSinceReferenceDate`, under `boot`) and how far it is open (`fold`, a
+	/// `SimulatorFold` raw value).
 	private static let openDevicesKey = "simulatorOpenFoldableDevices"
 	/// The inner panel of each device that is open now, set whenever a device is read, for the
 	/// calls that are given only a UDID (the pane's screen, rotation). Calls given a
@@ -27,13 +28,16 @@ extension SimulatorHost {
 		return SimulatorFoldDisplays(capabilities: capabilities)
 	}
 
-	/// Whether `device` is open now, refreshing what touches and the screen lookup go by.
+	/// How far `device` is open now, refreshing what touches and the screen lookup go by.
 	static func fold(of device: AnyObject, udid: String, displays: SimulatorFoldDisplays, isBooted: Bool) -> SimulatorFold {
 		let boot = bootKey(of: device)
 		return openPanels.withLock { panels in
-			let isOpen = isBooted && (UserDefaults.standard.dictionary(forKey: openDevicesKey)?[udid] as? Double) == boot
-			panels[udid] = isOpen ? displays.inner : nil
-			return isOpen ? .open : .closed
+			let record = UserDefaults.standard.dictionary(forKey: openDevicesKey)?[udid] as? [String: Any]
+			let fold = isBooted && record?["boot"] as? Double == boot
+				? (record?["fold"] as? String).flatMap(SimulatorFold.init(rawValue:)) ?? .closed
+				: .closed
+			panels[udid] = fold.showsInnerPanel ? displays.inner : nil
+			return fold
 		}
 	}
 
@@ -41,9 +45,9 @@ extension SimulatorHost {
 		let boot = bootKey(of: device)
 		openPanels.withLock { panels in
 			var open = UserDefaults.standard.dictionary(forKey: openDevicesKey) ?? [:]
-			open[udid] = fold == .open ? boot : nil
+			open[udid] = fold.showsInnerPanel ? ["boot": boot, "fold": fold.rawValue] : nil
 			UserDefaults.standard.set(open, forKey: openDevicesKey)
-			panels[udid] = fold == .open ? displays.inner : nil
+			panels[udid] = fold.showsInnerPanel ? displays.inner : nil
 		}
 	}
 
@@ -57,19 +61,14 @@ extension SimulatorHost {
 		openPanels.withLock { $0[udid] }
 	}
 
-	/// Opens or closes a device that folds, and returns it as it then is, once SpringBoard has moved
-	/// the interface to the other panel.
+	/// Opens, partially opens or closes a device that folds, and returns it as it then is, once
+	/// SpringBoard has moved the interface to the other panel.
 	public func setFold(device: SimulatorDevice, to fold: SimulatorFold) async throws -> SimulatorDevice {
 		let simDevice = try simDevice(udid: device.id)
 		guard let displays = Self.foldDisplays(of: simDevice) else {
 			throw SimulatorError.notFoldable(device.name)
 		}
-		try await SimulatorHIDConnection.sendVendorDefinedReport(
-			usagePage: SimulatorDeviceStateReport.usagePage,
-			usage: SimulatorDeviceStateReport.usage,
-			data: SimulatorDeviceStateReport.hinge(angle: fold.hingeAngle),
-			to: simDevice
-		)
+		try await sendDeviceState(SimulatorDeviceStateReport.hinge(angle: fold.hingeAngle), udid: device.id)
 		Self.record(fold, udid: device.id, device: simDevice, displays: displays)
 
 		guard let folded = try devices().first(where: { $0.id == device.id }) else {

@@ -114,28 +114,23 @@ extension SimulatorHost {
 	/// not to — so a screenshot taken next shows the settled screen.
 	public func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
 		var rotated = device
-		rotated.rotation = try await rotate(udid: device.id, to: orientation)
+		rotated.rotation = try await rotate(udid: device.id, to: orientation).interfaceRotation
 		return rotated
 	}
 
 	/// Turns the device a quarter left (counterclockwise) or right from where it is.
-	public func rotate(udid: String, clockwise: Bool) async throws {
+	public func rotate(udid: String, clockwise: Bool) async throws -> SimulatorRotation {
 		let current = try await deviceOrientation(udid: udid)
-		_ = try await rotate(udid: udid, to: clockwise ? current.rotatedRight : current.rotatedLeft)
+		return try await rotate(udid: udid, to: clockwise ? current.rotatedRight : current.rotatedLeft)
 	}
 
-	/// Sends the rotation and waits for the screen to settle; returns the interface rotation then.
+	/// Sends the rotation and waits for the screen to settle; returns where the interface is then.
 	@discardableResult
-	public func rotate(udid: String, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorScreenRotation {
+	public func rotate(udid: String, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorRotation {
 		let simDevice = try simDevice(udid: udid)
 		try await Self.sendPurpleOrientation(orientation, to: ObjectBox(object: simDevice))
 		if Self.foldDisplays(of: simDevice) != nil {
-			try await SimulatorHIDConnection.sendVendorDefinedReport(
-				usagePage: SimulatorDeviceStateReport.usagePage,
-				usage: SimulatorDeviceStateReport.usage,
-				data: SimulatorDeviceStateReport.orientation(orientation),
-				to: simDevice
-			)
+			try await sendDeviceState(SimulatorDeviceStateReport.orientation(orientation), udid: udid)
 		}
 
 		// The interface property turns as the rotation animation starts; the animation takes about
@@ -149,7 +144,11 @@ extension SimulatorHost {
 			rotation = try screenRotation(udid: udid)
 		}
 		try await Task.sleep(for: .milliseconds(rotation == target ? 500 : 0))
-		return try screenRotation(udid: udid)
+		return SimulatorRotation(
+			orientation: orientation,
+			interfaceRotation: try screenRotation(udid: udid),
+			interfaceFollowed: rotation == target
+		)
 	}
 
 	/// A `GSEventTypeDeviceOrientationChanged` (50, host flag 0x20000) GSEvent as a raw Mach message

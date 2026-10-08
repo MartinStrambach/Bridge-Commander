@@ -26,6 +26,10 @@ public final class SimulatorHost: @unchecked Sendable {
 		var deviceSet: ObjectBox?
 		var hidConnections: [String: SimulatorHIDConnection] = [:]
 		var pendingConnections: [String: Task<SimulatorHIDConnection, Error>] = [:]
+		/// Each device's vendor-defined connection, kept for its reports (`sendDeviceState`).
+		var vendorDefinedConnections: [String: SimulatorHIDConnection] = [:]
+		/// The last report sent to each device, which the next one waits for.
+		var deviceStateSends: [String: Task<Void, Error>] = [:]
 	}
 
 	private let state = OSAllocatedUnfairLock<State>(uncheckedState: State())
@@ -142,7 +146,7 @@ public final class SimulatorHost: @unchecked Sendable {
 		if let displays = foldDisplays(of: device) {
 			let current = Self.fold(of: device, udid: udid.uuidString, displays: displays, isBooted: state == .booted)
 			fold = current
-			panel = current == .open ? displays.inner : nil
+			panel = current.showsInnerPanel ? displays.inner : nil
 		}
 		return SimulatorDevice(
 			id: udid.uuidString,
@@ -403,6 +407,53 @@ public final class SimulatorHost: @unchecked Sendable {
 			state.withLock { $0.pendingConnections[udid] = nil }
 			throw error
 		}
+	}
+
+	/// Sends a device-state report (`SimulatorDeviceStateReport`: the hinge, the orientation) to
+	/// the device and returns once `dtuhidd` has handled it. Reports to one device go one at a
+	/// time, in the order sent, on one connection kept for them: a rotation and a fold in quick
+	/// succession neither overtake nor queue behind each other's connection set-up.
+	func sendDeviceState(_ data: Data, udid: String) async throws {
+		let device = try ObjectBox(object: simDevice(udid: udid))
+		let send: Task<Void, Error> = state.withLock { state in
+			let previous = state.deviceStateSends[udid]
+			let send = Task {
+				_ = await previous?.result
+				try await self.deliverDeviceState(data, udid: udid, device: device)
+			}
+			state.deviceStateSends[udid] = send
+			return send
+		}
+		try await send.value
+	}
+
+	private func deliverDeviceState(_ data: Data, udid: String, device: ObjectBox) async throws {
+		for attempt in 1...4 {
+			let kept = state.withLock { $0.vendorDefinedConnections[udid] }.flatMap { $0.isUsable ? $0 : nil }
+			let connection = try kept ?? SimulatorHIDConnection.vendorDefined(device: device.object)
+			state.withLock { $0.vendorDefinedConnections[udid] = connection }
+			let result = try await connection.sendVendorDefinedReport(
+				usagePage: SimulatorDeviceStateReport.usagePage,
+				usage: SimulatorDeviceStateReport.usage,
+				data: data,
+				isNewConnection: kept == nil
+			)
+			switch result {
+			case .delivered:
+				return
+			case .timedOut:
+				// A new connection would queue behind this one in the daemon; give up instead.
+				state.withLock { $0.vendorDefinedConnections[udid] = nil }
+				throw SimulatorError.inputUnavailable("dtuhidd did not answer")
+			case .failed:
+				// No daemon yet (early in a boot), or it restarted: try again on a new connection.
+				state.withLock { $0.vendorDefinedConnections[udid] = nil }
+				if attempt < 4 {
+					try await Task.sleep(for: .seconds(2))
+				}
+			}
+		}
+		throw SimulatorError.inputUnavailable("dtuhidd did not answer")
 	}
 
 	/// Opens the input connection ahead of the first touch, so a click in a freshly shown pane

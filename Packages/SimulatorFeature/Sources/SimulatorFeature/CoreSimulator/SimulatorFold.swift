@@ -2,31 +2,60 @@ import CoreGraphics
 import Foundation
 import IOKit
 
-/// Whether a device that folds — the iPhone Duo — is closed, showing its cover screen, or open,
-/// showing the larger inner panel.
+/// How far a device that folds — the iPhone Duo — is open: closed, showing its cover screen, or
+/// partially or fully open, showing the larger inner panel.
 public enum SimulatorFold: String, CaseIterable, Equatable, Sendable {
 	case closed
+	case partiallyOpen = "partially_open"
 	case open
 
-	/// The hinge angle that sets it, in degrees. SpringBoard moves the interface between the panels
-	/// only at the ends of the hinge's travel (checked live, 2026-10-08): 180 shows the inner panel,
-	/// 0 the cover, and an angle between keeps whichever is showing.
+	/// The hinge angle that sets it, in degrees. SpringBoard moves the interface to the inner panel
+	/// when the hinge opens past the cover — a single report of 130 from 0 does it, as 180 does —
+	/// and back to the cover at 0; from open, 130 keeps the inner panel (checked live, 2026-10-08).
+	/// 130 is where Xcode 27.1's DeviceHub leaves the hinge for its partial unfold; the guest's
+	/// `locationd` reports it as partly open (`propertyB` 2) rather than flat (3).
 	var hingeAngle: Double {
 		switch self {
 		case .closed:
 			0
+		case .partiallyOpen:
+			130
 		case .open:
 			180
 		}
 	}
 
-	public var label: String {
-		rawValue
+	/// Whether the device shows its inner panel rather than the cover.
+	public var showsInnerPanel: Bool {
+		self != .closed
 	}
 
-	/// The other state: what the pane's Fold/Unfold button switches to.
+	public var label: String {
+		switch self {
+		case .closed:
+			"folded"
+		case .partiallyOpen:
+			"partially unfolded"
+		case .open:
+			"unfolded"
+		}
+	}
+
+	public var title: String {
+		switch self {
+		case .closed:
+			"Closed"
+		case .partiallyOpen:
+			"Partially Open"
+		case .open:
+			"Open"
+		}
+	}
+
+	/// What the pane's Fold/Unfold button switches to: a closed device opens fully, a partially
+	/// or fully open one closes.
 	public var toggled: SimulatorFold {
-		self == .open ? .closed : .open
+		showsInnerPanel ? .closed : .open
 	}
 }
 
@@ -91,7 +120,7 @@ struct SimulatorFoldDisplays: Equatable, Sendable {
 	}
 
 	func panel(for fold: SimulatorFold) -> Panel {
-		fold == .open ? inner : cover
+		fold.showsInnerPanel ? inner : cover
 	}
 }
 

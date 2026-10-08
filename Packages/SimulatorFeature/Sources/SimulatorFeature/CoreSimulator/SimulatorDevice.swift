@@ -55,9 +55,10 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 	/// How the interface is turned on the panel, when the device was read. Always upright for a
 	/// device that is not booted.
 	public var rotation: SimulatorScreenRotation
-	/// Whether the device is open, for one that folds (the iPhone Duo); nil for one that does not.
+	/// How far the device is open, for one that folds (the iPhone Duo); nil for one that does not.
 	public let fold: SimulatorFold?
-	/// The ID of the screen shown when it is not the main one: an open iPhone Duo's inner panel.
+	/// The ID of the screen shown when it is not the main one: an open or partially open iPhone
+	/// Duo's inner panel.
 	/// Also tells the pane to attach to another screen when it changes.
 	public let screenID: UInt32?
 	/// The interface's rotation on the screen shown while the device is held portrait: upright,

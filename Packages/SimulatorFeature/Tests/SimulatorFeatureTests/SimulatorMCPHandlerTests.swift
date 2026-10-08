@@ -100,10 +100,11 @@ struct SimulatorMCPHandlerTests {
 			return rotated
 		}
 
-		/// Open shows a 669×951-point inner panel, turned landscape like the iPhone Duo's.
+		/// Open and partially open show a 669×951-point inner panel, turned landscape like the
+		/// iPhone Duo's.
 		func setFold(device: SimulatorDevice, to fold: SimulatorFold) async throws -> SimulatorDevice {
 			record("fold \(fold.rawValue)")
-			return fold == .open
+			return fold.showsInnerPanel
 				? SimulatorDevice(
 					id: device.id,
 					name: device.name,
@@ -112,7 +113,7 @@ struct SimulatorMCPHandlerTests {
 					screenPixelSize: CGSize(width: 2007, height: 2853),
 					screenScale: 3,
 					rotation: .clockwise,
-					fold: .open,
+					fold: fold,
 					screenID: 3,
 					portraitRotation: .clockwise
 				)
@@ -511,8 +512,15 @@ struct SimulatorMCPHandlerTests {
 		#expect(opened.text == "Unfolded iPhone Duo; it shows the inner panel, 951×669 points. Take a new screenshot before using coordinates.")
 		#expect(actions.calls.withLock { $0 } == ["fold open"])
 
+		let partly = try await callForLastText(actions, "set_fold", ["state": "partially_open"])
+		#expect(partly.text == "Partially unfolded iPhone Duo; it shows the inner panel, 951×669 points. Take a new screenshot before using coordinates.")
+		actions.devicesResult = [try await actions.setFold(device: duo, to: .partiallyOpen)]
+		let partlyListed = try await callForLastText(actions, "list_devices", [:])
+		#expect(partlyListed.text == "iPhone Duo (iOS 27.1) AAAA — Booted, 951×669 pt landscape, partially unfolded [shown]")
+
 		let unknown = try await callForLastText(actions, "set_fold", ["state": "ajar"])
 		#expect(unknown.isError == true)
+		#expect(unknown.text == "Unknown state \"ajar\"; use open, partially_open or closed.")
 
 		// The inner panel is mounted a quarter turn round: landscape left shows it portrait.
 		actions.devicesResult = [try await actions.setFold(device: duo, to: .open)]

@@ -32,6 +32,7 @@ struct SimulatorFoldTests {
 		#expect(displays.cover == .init(screenID: 1, pixelSize: CGSize(width: 1398, height: 2034), scale: 3))
 		#expect(displays.inner == .init(screenID: 3, pixelSize: CGSize(width: 2007, height: 2853), scale: 3, portraitRotation: .clockwise))
 		#expect(displays.panel(for: .open) == displays.inner)
+		#expect(displays.panel(for: .partiallyOpen) == displays.inner)
 		#expect(displays.panel(for: .closed) == displays.cover)
 	}
 
@@ -102,6 +103,16 @@ struct SimulatorFoldTests {
 		#expect(SimulatorFold.closed.hingeAngle == 0)
 		#expect(SimulatorFold.closed.toggled == .open)
 		#expect(SimulatorFold.open.toggled == .closed)
+	}
+
+	/// DeviceHub's partial unfold leaves the hinge at 130°; the inner panel stays in use.
+	@Test
+	func partiallyOpenIsDeviceHubsPartialUnfold() {
+		#expect(SimulatorFold.partiallyOpen.hingeAngle == 130)
+		#expect(SimulatorFold.partiallyOpen.showsInnerPanel)
+		#expect(!SimulatorFold.closed.showsInnerPanel)
+		#expect(SimulatorFold.partiallyOpen.toggled == .closed)
+		#expect(SimulatorFold(rawValue: "partially_open") == .partiallyOpen)
 	}
 
 	/// SpringBoard's Settings icon on the open Duo's inner panel, as read live: native portrait
