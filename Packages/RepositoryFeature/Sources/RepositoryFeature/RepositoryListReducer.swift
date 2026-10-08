@@ -983,6 +983,34 @@ struct RepositoryListReducer {
 				}
 				return .none
 
+			case let .terminalLayout(.simulatorPane(.delegate(.runRequested(command, title)))):
+				// The simulator pane's Run: into the repository's run tab, replacing what ran there
+				// (its shell is hung up with it), so running again is a fresh build and launch with
+				// a clean log, as in Xcode.
+				guard let path = state.terminalLayout?.activeRepositoryPath else {
+					return .none
+				}
+
+				let existing = state.terminalSessions.first { $0.repositoryPath == path && $0.isRunTab }
+				let tabIndex = existing?.tabIndex
+					?? (state.terminalSessions.filter { $0.repositoryPath == path }.map(\.tabIndex).max() ?? 0) + 1
+				let session = TerminalSession(
+					repositoryPath: path,
+					startupCommand: command,
+					runTitle: title,
+					tabIndex: tabIndex
+				)
+				if let existing, let position = state.terminalSessions.index(id: existing.id) {
+					state.terminalSessions.remove(id: existing.id)
+					state.terminalSessions.insert(session, at: position)
+					state.terminalLayout?.forget(sessionId: existing.id, repositoryPath: path)
+				}
+				else {
+					state.terminalSessions.append(session)
+				}
+				state.terminalLayout?.activate(session)
+				return .none
+
 			case let .terminalLayout(.retryTab(sessionId)):
 				guard
 					let old = state.terminalSessions[id: sessionId],
@@ -994,14 +1022,25 @@ struct RepositoryListReducer {
 				let repoPath = old.repositoryPath
 				let tabIndex = old.tabIndex
 				// A retried tab runs the command only if the tab it replaces did, so retrying a
-				// plain-shell tab does not suddenly start the command in it.
-				let newSession = TerminalSession(
-					repositoryPath: repoPath,
-					startupCommand: old.startupCommand == nil
-						? nil
-						: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
-					tabIndex: tabIndex
-				)
+				// plain-shell tab does not suddenly start the command in it. A run tab runs its own
+				// command again, not the group's.
+				let newSession = if old.isRunTab {
+					TerminalSession(
+						repositoryPath: repoPath,
+						startupCommand: old.startupCommand,
+						runTitle: old.runTitle,
+						tabIndex: tabIndex
+					)
+				}
+				else {
+					TerminalSession(
+						repositoryPath: repoPath,
+						startupCommand: old.startupCommand == nil
+							? nil
+							: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
+						tabIndex: tabIndex
+					)
+				}
 				// In the old one's place, not appended: the tab bar lays tabs out in array order,
 				// so appending moved the retried tab to the end of the bar.
 				state.terminalSessions.remove(id: sessionId)

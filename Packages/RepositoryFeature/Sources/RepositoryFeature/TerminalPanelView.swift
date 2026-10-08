@@ -419,11 +419,19 @@ struct TerminalPanelView: View {
 				terminalStack
 
 				if let path = store.activeRepositoryPath, isSimulatorPaneVisible {
+					let runTab = sessions.first { $0.repositoryPath == path && $0.isRunTab }
 					Divider()
 					SimulatorPaneView(
 						store: store.scope(\.simulatorPane, action: \.simulatorPane),
 						availableSize: proxy.size,
-						repositoryPath: path
+						repositoryPath: path,
+						projectPath: activeRowStore?.xcodeButton.projectPath,
+						hasRunTab: runTab != nil,
+						onStop: {
+							if let runTab {
+								terminalViewStore.interrupt(sessionId: runTab.id)
+							}
+						}
 					)
 				}
 			}
@@ -582,9 +590,17 @@ struct TerminalPanelView: View {
 	private func tabPill(session: TerminalSession, totalCount: Int) -> some View {
 		let isActive = session.id == activeSessionId
 		return HStack(spacing: 4) {
-			Text("Terminal \(session.tabIndex)")
-				.scaledFont(.caption)
-				.fontWeight(isActive ? .semibold : .regular)
+			if let runTitle = session.runTitle {
+				Label(runTitle, systemImage: "play.fill")
+					.labelStyle(.titleAndIcon)
+					.scaledFont(.caption)
+					.fontWeight(isActive ? .semibold : .regular)
+			}
+			else {
+				Text("Terminal \(session.tabIndex)")
+					.scaledFont(.caption)
+					.fontWeight(isActive ? .semibold : .regular)
+			}
 
 			if totalCount > 1 {
 				Button(action: { onKillTab(session.id) }) {
