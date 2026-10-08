@@ -13,6 +13,17 @@ public struct SimulatorAccessibilityNode: Equatable, Sendable {
 	public var isEnabled: Bool
 	public var children: [SimulatorAccessibilityNode]
 
+	/// Where a finger activates the element. The centre, except for a switch drawn at the trailing
+	/// end of a wide row: iOS reports a `UISwitch` (and a SwiftUI `Toggle`) with its whole row's
+	/// frame, and a tap on the row's centre does nothing (checked in Settings, 2026-10-08). AXe
+	/// found the same and taps 31 pt in from the trailing edge of a switch wider than 100 pt.
+	public var activationPoint: CGPoint {
+		guard role == "Switch", frame.width > 100 else {
+			return CGPoint(x: frame.midX, y: frame.midY)
+		}
+		return CGPoint(x: frame.maxX - 31, y: frame.midY)
+	}
+
 	public init(
 		role: String,
 		label: String? = nil,
@@ -206,6 +217,9 @@ final class SimulatorAccessibility: @unchecked Sendable {
 		if role.hasPrefix("AX") {
 			role.removeFirst(2)
 		}
+		if role == "CheckBox", isSwitch(element) {
+			role = "Switch"
+		}
 		return SimulatorAccessibilityNode(
 			role: role,
 			label: nonEmpty(element.accessibilityLabel()),
@@ -214,6 +228,16 @@ final class SimulatorAccessibility: @unchecked Sendable {
 			frame: element.accessibilityFrame(),
 			isEnabled: element.isAccessibilityEnabled()
 		)
+	}
+
+	/// The translator turns a `UISwitch` or SwiftUI `Toggle` into a macOS checkbox; its subrole
+	/// (`AXSwitch`) or role description still says what it is.
+	private static func isSwitch(_ element: NSAccessibilityElement) -> Bool {
+		if element.accessibilitySubrole() == .switch {
+			return true
+		}
+		let description = element.accessibilityRoleDescription()?.lowercased() ?? ""
+		return description.contains("switch") || description.contains("toggle")
 	}
 
 	private static func describe(_ value: Any?) -> String? {

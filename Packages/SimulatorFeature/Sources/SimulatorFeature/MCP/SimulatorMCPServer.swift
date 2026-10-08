@@ -273,8 +273,8 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 		try await host.tap(device: device, x: x, y: y, holdFor: holdFor)
 	}
 
-	func swipe(device: SimulatorDevice, from: CGPoint, to: CGPoint, duration: Duration) async throws {
-		try await host.swipe(device: device, from: from, to: to, duration: duration)
+	func swipe(device: SimulatorDevice, from: CGPoint, to: CGPoint, duration: Duration, holdFor: Duration) async throws {
+		try await host.swipe(device: device, from: from, to: to, duration: duration, holdFor: holdFor)
 	}
 
 	func type(device: SimulatorDevice, text: String) async throws {

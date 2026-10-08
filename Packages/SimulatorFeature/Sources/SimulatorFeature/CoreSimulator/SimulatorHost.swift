@@ -428,11 +428,16 @@ public final class SimulatorHost: @unchecked Sendable {
 		try await drain()
 	}
 
+	/// One finger from `start` to `end` (points) over `duration`. With `hold`, the finger first stays
+	/// down where it started for that long — a long press that picks up what it is on, for drag and
+	/// drop or reordering — and rests as long on the end before lifting, so a drop target that reacts
+	/// to hovering (a folder closing as an icon leaves it, a spring-loaded tab) has time to.
 	public func swipe(
 		device: SimulatorDevice,
 		from start: CGPoint,
 		to end: CGPoint,
-		duration: Duration = .milliseconds(300)
+		duration: Duration = .milliseconds(300),
+		holdFor hold: Duration = .zero
 	) async throws {
 		let from = try normalized(device: device, x: start.x, y: start.y)
 		let to = try normalized(device: device, x: end.x, y: end.y)
@@ -441,6 +446,9 @@ public final class SimulatorHost: @unchecked Sendable {
 		let interval = Duration.milliseconds(16)
 		let steps = max(2, Int(duration / interval))
 		connection.touch(from, phase: .began)
+		if hold > .zero {
+			try await Task.sleep(for: hold)
+		}
 		for step in 1...steps {
 			try await Task.sleep(for: interval)
 			let progress = CGFloat(step) / CGFloat(steps)
@@ -448,6 +456,9 @@ public final class SimulatorHost: @unchecked Sendable {
 				CGPoint(x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress),
 				phase: .moved
 			)
+		}
+		if hold > .zero {
+			try await Task.sleep(for: hold)
 		}
 		connection.touch(to, phase: .ended)
 		try await drain()

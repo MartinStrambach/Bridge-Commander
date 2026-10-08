@@ -3,7 +3,8 @@ import Foundation
 
 /// The MCP tools: their schemas, and what a call does.
 enum SimulatorMCPTools {
-	static let definitions: [JSONValue] = inputDefinitions + SimulatorFeatureTools.definitions
+	static let definitions: [JSONValue] = inputDefinitions + SimulatorElementTools.definitions + [gestureDefinition, SimulatorBatchTool.definition]
+		+ SimulatorFeatureTools.definitions
 
 	private static let inputDefinitions: [JSONValue] = [
 		tool(
@@ -26,7 +27,7 @@ enum SimulatorMCPTools {
 		),
 		tool(
 			"describe_ui",
-			"List the frontmost app's accessibility elements — role, label, value, identifier and frame in points — as an indented tree. Faster and more exact than reading a screenshot for finding what to tap: tap the centre of an element's frame. With x and y, describes just the element at that point.",
+			"List the frontmost app's accessibility elements — role, label, value, identifier and frame in points — as an indented tree. Faster and more exact than reading a screenshot for finding what to tap: tap the centre of an element's frame, or its tap= point when it has one (a switch at the end of a wide row). With x and y, describes just the element at that point.",
 			properties: [
 				"x": number("Optional: describe only the element at this x, in points."),
 				"y": number("Optional: describe only the element at this y, in points."),
@@ -48,13 +49,14 @@ enum SimulatorMCPTools {
 		),
 		tool(
 			"swipe",
-			"Drag one finger from one point to another, in points: scrolls, swipes, pulls to refresh. To scroll content down, swipe upwards (from a larger y to a smaller one).",
+			"Drag one finger from one point to another, in points: scrolls, swipes, pulls to refresh. To scroll content down, swipe upwards (from a larger y to a smaller one); gesture has presets for common scrolls and edge swipes. With hold_ms the finger first rests where it starts, then moves and rests as long on the end before lifting: drag and drop, reordering a list, moving a home screen icon (moved briskly after the hold: a slow start opens the icon's menu instead).",
 			properties: [
 				"from_x": number("Start x in points."),
 				"from_y": number("Start y in points."),
 				"to_x": number("End x in points."),
 				"to_y": number("End y in points."),
 				"duration_ms": number("How long the drag takes, in milliseconds. Default 300; shorter flings further."),
+				"hold_ms": number("Optional: hold the finger still where it starts for this long before moving — a long press that picks the item up — and as long on the end before lifting. About 600 for drag and drop and reordering; 1000 or more to drag an icon out of an open folder, which closes only once the finger has stayed outside it. Default 0."),
 				"udid": optionalUdid,
 				"wait_for_settle": waitForSettleProperty,
 			],
@@ -122,14 +124,19 @@ enum SimulatorMCPTools {
 		),
 		tool(
 			"press_element",
-			"Press an element found by identifier or label rather than by position: the accessibility press (AXPress), or a tap on its centre if it has none. Lists the candidates when nothing or several match. Check the result afterwards — AXPress reports success even on elements that ignore it.",
-			properties: SimulatorElementTools.queryProperties.merging(["udid": optionalUdid, "wait_for_settle": waitForSettleProperty]) { $1 }
+			"Press an element found by identifier, label or value rather than by position: the accessibility press (AXPress), or a tap on it if it has none (on a switch's trailing end, where a finger would toggle it). Lists the candidates when nothing or several match. Check the result afterwards — AXPress reports success even on elements that ignore it.",
+			properties: SimulatorElementTools.queryProperties.merging([
+				"timeout_ms": SimulatorElementTools.timeoutProperty,
+				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
+			]) { $1 }
 		),
 		tool(
 			"set_value",
 			"Set a text field's contents through accessibility, replacing what is there, without tapping or typing. With no identifier, label or role it looks among the text fields. If the element does not take a value, tap it and use type_text instead.",
 			properties: SimulatorElementTools.queryProperties.merging([
 				"value": ["type": "string", "description": "The new text."],
+				"timeout_ms": SimulatorElementTools.timeoutProperty,
 				"udid": optionalUdid,
 				"wait_for_settle": waitForSettleProperty,
 			]) { $1 },
@@ -138,7 +145,11 @@ enum SimulatorMCPTools {
 		tool(
 			"scroll_to_element",
 			"Scroll the enclosing lists until an element found by identifier or label is fully on screen (AXScrollToVisible) — for one that is cut off or under a toolbar. Only elements describe_ui lists can be found; to reach rows further down, swipe.",
-			properties: SimulatorElementTools.queryProperties.merging(["udid": optionalUdid, "wait_for_settle": waitForSettleProperty]) { $1 }
+			properties: SimulatorElementTools.queryProperties.merging([
+				"timeout_ms": SimulatorElementTools.timeoutProperty,
+				"udid": optionalUdid,
+				"wait_for_settle": waitForSettleProperty,
+			]) { $1 }
 		),
 		tool(
 			"list_crashes",
@@ -173,6 +184,25 @@ enum SimulatorMCPTools {
 			required: ["orientation"]
 		),
 	]
+
+	private static let gestureDefinition = tool(
+		"gesture",
+		SimulatorGesturePreset.toolDescription,
+		properties: [
+			"preset": [
+				"type": "string",
+				"enum": .array(SimulatorGesturePreset.allCases.map { .string($0.rawValue) }),
+				"description": "The gesture.",
+			],
+			"x": number("Optional: for a scroll, the centre of the drag (default the screen's); for swipe_from_top_edge or swipe_from_bottom_edge, where along the edge it starts."),
+			"y": number("Optional: for a scroll, the centre of the drag; for swipe_from_left_edge or swipe_from_right_edge, where along the edge it starts."),
+			"distance": number("Optional: how far a scroll drags, in points. Default half the screen."),
+			"duration_ms": number("Optional: how long the gesture takes, in milliseconds. Default 500 for scrolls, 250–300 for edge swipes."),
+			"udid": optionalUdid,
+			"wait_for_settle": waitForSettleProperty,
+		],
+		required: ["preset"]
+	)
 
 	/// Runs a tool and returns its `CallToolResult`. Failures are reported in the result
 	/// (`isError`), as MCP asks, so the model sees what went wrong.
@@ -277,14 +307,45 @@ enum SimulatorMCPTools {
 				let from = try CGPoint(x: number(arguments, "from_x"), y: number(arguments, "from_y"))
 				let to = try CGPoint(x: number(arguments, "to_x"), y: number(arguments, "to_y"))
 				let duration = milliseconds(arguments, "duration_ms", default: 300, range: 50...5000)
+				let holdMilliseconds = min(max(arguments["hold_ms"]?.doubleValue ?? 0, 0), 10000)
+				let hold = Duration.milliseconds(Int(holdMilliseconds))
+				let held = holdMilliseconds > 0 ? " after holding \(format(holdMilliseconds)) ms" : ""
 				return text(try await performWaitingForSettle(
-					"Swiped from (\(format(from.x)), \(format(from.y))) to (\(format(to.x)), \(format(to.y))).",
+					"Swiped from (\(format(from.x)), \(format(from.y))) to (\(format(to.x)), \(format(to.y)))\(held).",
 					device: device,
 					arguments: arguments,
 					actions: actions
 				) {
-					try await actions.swipe(device: device, from: from, to: to, duration: duration)
+					try await actions.swipe(device: device, from: from, to: to, duration: duration, holdFor: hold)
 				})
+
+			case "gesture":
+				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				let name = try string(arguments, "preset")
+				guard let preset = SimulatorGesturePreset(rawValue: name) else {
+					throw ToolError("Unknown preset \"\(name)\"; use one of \(SimulatorGesturePreset.allCases.map(\.rawValue).joined(separator: ", ")).")
+				}
+				let size = device.screenPointSize
+				let x = arguments["x"]?.doubleValue
+				let y = arguments["y"]?.doubleValue
+				let position = x == nil && y == nil ? nil : CGPoint(x: x ?? size.width / 2, y: y ?? size.height / 2)
+				var path = preset.path(in: size, position: position, distance: arguments["distance"]?.doubleValue)
+				if arguments["duration_ms"] != nil {
+					path.duration = milliseconds(arguments, "duration_ms", default: 300, range: 50...5000)
+				}
+				return text(try await performWaitingForSettle(
+					"\(name): swiped from (\(format(path.from.x)), \(format(path.from.y))) to (\(format(path.to.x)), \(format(path.to.y))).",
+					device: device,
+					arguments: arguments,
+					actions: actions
+				) {
+					try await actions.swipe(device: device, from: path.from, to: path.to, duration: path.duration, holdFor: .zero)
+				})
+
+			case "batch":
+				return try await SimulatorBatchTool.call(arguments: arguments) { tool, stepArguments in
+					await call(name: tool, arguments: stepArguments, actions: actions, reportActivity: reportActivity)
+				}
 
 			case "type_text":
 				let device = try await device(for: arguments, actions: actions, reportActivity: reportActivity)

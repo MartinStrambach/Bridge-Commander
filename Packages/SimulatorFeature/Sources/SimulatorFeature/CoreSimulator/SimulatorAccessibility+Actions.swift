@@ -86,6 +86,17 @@ extension SimulatorAccessibility {
 			// The scroll animates; the frame is worth reporting only once it has settled.
 			Thread.sleep(forTimeInterval: 0.4)
 			return .done(SimulatorElementOutcome(element: node, effect: .scrolled(to: element.accessibilityFrame())))
+
+		case .increment, .decrement:
+			let name = action == .increment ? NSAccessibility.Action.increment : NSAccessibility.Action.decrement
+			let actions = ObjCRuntime.object(element, "accessibilityActionNames") as? [String] ?? []
+			guard actions.contains(name.rawValue) else {
+				throw SimulatorElementError.notAdjustable(element: SimulatorAccessibilityFormatter.line(for: node))
+			}
+			_ = action == .increment ? element.accessibilityPerformIncrement() : element.accessibilityPerformDecrement()
+			// As for a value: the guest updates the value a moment later.
+			Thread.sleep(forTimeInterval: 0.15)
+			return .done(SimulatorElementOutcome(element: node, effect: .valueSet(readBack: attributes(of: element).value)))
 		}
 	}
 

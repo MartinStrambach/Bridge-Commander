@@ -7,17 +7,23 @@ import Foundation
 public nonisolated struct SimulatorElementQuery: Equatable, Sendable {
 	public var identifier: String?
 	public var label: String?
+	/// The element's current value ("value=" in describe_ui): a field's text, a switch's "1".
+	public var value: String?
 	/// Roles without the "AX" prefix ("Button", "TextField"), compared ignoring case; empty for any.
 	public var roles: Set<String>
 	/// Picks one of several matches, from 0 in tree order (top to bottom, roughly).
 	public var index: Int?
 
-	public init(identifier: String? = nil, label: String? = nil, roles: Set<String> = [], index: Int? = nil) {
+	public init(identifier: String? = nil, label: String? = nil, value: String? = nil, roles: Set<String> = [], index: Int? = nil) {
 		self.identifier = identifier
 		self.label = label
+		self.value = value
 		self.roles = roles
 		self.index = index
 	}
+
+	/// The roles `set_slider` looks among when it is given nothing else to go on.
+	public static let adjustableRoles: Set<String> = ["Slider", "Incrementor"]
 
 	/// The roles `set_value` looks among when it is given nothing else to go on.
 	public static let textEntryRoles: Set<String> = ["TextField", "SearchField", "SecureTextField", "TextArea", "ComboBox"]
@@ -25,46 +31,23 @@ public nonisolated struct SimulatorElementQuery: Equatable, Sendable {
 	/// The position in `candidates` (a flattened tree) of the element the query means.
 	///
 	/// Tiers, the first with any match winning: exact identifier, exact label, label equal ignoring
-	/// case, label containing the text ignoring case — so "Sign In" finds the button labelled
-	/// exactly that even when "Sign In with Apple" is on screen too. Among several matches of one
-	/// tier, `preferredRoles` (the controls, for a press) are kept over the rest, since a button and
-	/// a heading often share a label. The application element itself is never a candidate.
+	/// case, label containing the text ignoring case, then the same three for the value — so
+	/// "Sign In" finds the button labelled exactly that even when "Sign In with Apple" is on screen
+	/// too. Among several matches of one tier, `preferredRoles` (the controls, for a press) are kept
+	/// over the rest, since a button and a heading often share a label. The application element
+	/// itself is never a candidate.
 	func match(
 		in candidates: [SimulatorAccessibilityNode],
 		preferring preferredRoles: Set<String> = []
 	) throws(SimulatorElementError) -> Int {
-		let wantedRoles = Set(roles.map { Self.bareRole($0).lowercased() })
-		let pool = candidates.indices.filter { position in
-			let role = candidates[position].role
-			return role != "Application" && (wantedRoles.isEmpty || wantedRoles.contains(role.lowercased()))
-		}
-
-		var tiers: [[Int]] = []
-		if let identifier {
-			tiers.append(pool.filter { candidates[$0].identifier == identifier })
-		}
-		if let label {
-			tiers.append(pool.filter { candidates[$0].label == label })
-			tiers.append(pool.filter { candidates[$0].label?.compare(label, options: Self.looseComparison) == .orderedSame })
-			tiers.append(pool.filter { candidates[$0].label?.range(of: label, options: Self.looseComparison) != nil })
-		}
-		if identifier == nil, label == nil {
-			tiers.append(pool)
-		}
-
-		guard var matches = tiers.first(where: { !$0.isEmpty }) else {
+		let matches = matches(in: candidates, preferring: preferredRoles)
+		guard !matches.isEmpty else {
 			let onScreen = candidates.filter { $0.role != "Application" && SimulatorAccessibilityFormatter.isInformative($0) }
 			throw .notFound(
 				query: summary,
 				onScreen: onScreen.prefix(Self.listedLimit).map(SimulatorAccessibilityFormatter.line(for:)),
 				more: max(onScreen.count - Self.listedLimit, 0)
 			)
-		}
-		if matches.count > 1 {
-			let preferred = matches.filter { preferredRoles.contains(candidates[$0].role) }
-			if !preferred.isEmpty {
-				matches = preferred
-			}
 		}
 
 		let lines = matches.prefix(Self.listedLimit).enumerated().map { offset, position in
@@ -82,6 +65,50 @@ public nonisolated struct SimulatorElementQuery: Equatable, Sendable {
 		return matches[0]
 	}
 
+	/// The positions of every element of the winning tier (see `match`), `index` not applied; empty
+	/// when nothing matches — which is how `wait_for_element` tells an element's absence from an
+	/// ambiguity.
+	func matches(in candidates: [SimulatorAccessibilityNode], preferring preferredRoles: Set<String> = []) -> [Int] {
+		let wantedRoles = Set(roles.map { Self.bareRole($0).lowercased() })
+		let pool = candidates.indices.filter { position in
+			let role = candidates[position].role
+			return role != "Application" && (wantedRoles.isEmpty || wantedRoles.contains(role.lowercased()))
+		}
+
+		func textTiers(_ text: String, _ attribute: KeyPath<SimulatorAccessibilityNode, String?>) -> [[Int]] {
+			[
+				pool.filter { candidates[$0][keyPath: attribute] == text },
+				pool.filter { candidates[$0][keyPath: attribute]?.compare(text, options: Self.looseComparison) == .orderedSame },
+				pool.filter { candidates[$0][keyPath: attribute]?.range(of: text, options: Self.looseComparison) != nil },
+			]
+		}
+
+		var tiers: [[Int]] = []
+		if let identifier {
+			tiers.append(pool.filter { candidates[$0].identifier == identifier })
+		}
+		if let label {
+			tiers += textTiers(label, \.label)
+		}
+		if let value {
+			tiers += textTiers(value, \.value)
+		}
+		if identifier == nil, label == nil, value == nil {
+			tiers.append(pool)
+		}
+
+		guard var matches = tiers.first(where: { !$0.isEmpty }) else {
+			return []
+		}
+		if matches.count > 1 {
+			let preferred = matches.filter { preferredRoles.contains(candidates[$0].role) }
+			if !preferred.isEmpty {
+				matches = preferred
+			}
+		}
+		return matches
+	}
+
 	/// What the query asks for, as the messages quote it.
 	var summary: String {
 		var parts: [String] = []
@@ -90,6 +117,9 @@ public nonisolated struct SimulatorElementQuery: Equatable, Sendable {
 		}
 		if let label {
 			parts.append("label \"\(label)\"")
+		}
+		if let value {
+			parts.append("value \"\(value)\"")
 		}
 		if !roles.isEmpty {
 			parts.append("role \(roles.sorted().joined(separator: "/"))")
@@ -132,6 +162,9 @@ public nonisolated enum SimulatorElementAction: Equatable, Sendable {
 	case setValue(String)
 	/// AXScrollToVisible: the enclosing scroll views move until the element is on screen.
 	case scrollToVisible
+	/// AXIncrement / AXDecrement: one step of a slider or stepper (`accessibilityIncrement()`).
+	case increment
+	case decrement
 
 	/// Kept over other matches with the same label.
 	var preferredRoles: Set<String> {
@@ -140,6 +173,8 @@ public nonisolated enum SimulatorElementAction: Equatable, Sendable {
 			SimulatorAccessibilityFormatter.controlRoles
 		case .setValue:
 			SimulatorElementQuery.textEntryRoles
+		case .increment, .decrement:
+			SimulatorElementQuery.adjustableRoles
 		case .scrollToVisible:
 			[]
 		}
@@ -151,8 +186,9 @@ public nonisolated struct SimulatorElementOutcome: Equatable, Sendable {
 	public enum Effect: Equatable, Sendable {
 		/// The accessibility press was accepted.
 		case pressed
-		/// There was no accessibility press, or it was refused, so the element's centre was tapped.
-		case tappedCentre(CGPoint)
+		/// There was no accessibility press, or it was refused, so the element was tapped at its
+		/// activation point (its centre, or a wide switch's trailing end).
+		case tapped(CGPoint)
 		/// The value was set; `readBack` is what the element reports afterwards.
 		case valueSet(readBack: String?)
 		/// Scrolled into view; the element's frame afterwards.
@@ -179,6 +215,14 @@ public nonisolated enum SimulatorElementError: Error, Equatable, LocalizedError,
 	case indexOutOfRange(index: Int, query: String, count: Int, matches: [String])
 	case notSettable(element: String)
 	case notScrollable(element: String)
+	case notAdjustable(element: String)
+	/// `wait_for_element` gave up; the message says on what.
+	case timedOut(String)
+	case invalidSliderTarget
+	case notASlider(element: String)
+	case unreadableSlider(element: String)
+	case sliderDidNotMove(element: String)
+	case sliderVanished(element: String)
 
 	public var errorDescription: String? {
 		switch self {
@@ -202,6 +246,22 @@ public nonisolated enum SimulatorElementError: Error, Equatable, LocalizedError,
 				+ "(cmd+a then delete clears what is there)."
 		case let .notScrollable(element):
 			return "\(element) cannot be scrolled to through accessibility; swipe instead."
+		case let .notAdjustable(element):
+			return "\(element) has no accessibility increment or decrement."
+		case let .timedOut(message):
+			return message
+		case .invalidSliderTarget:
+			return "\"value\" must be a number from 0 to 100 (percent of the slider's range)."
+		case let .notASlider(element):
+			return "\(element) is not a slider; pass role \"Slider\" to look only among sliders."
+		case let .unreadableSlider(element):
+			return "\(element) does not report its value as a number, so where it is cannot be checked. Swipe its thumb instead."
+		case let .sliderDidNotMove(element):
+			return "Could not move \(element): neither dragging where its thumb should be nor accessibility increments changed its value. "
+				+ "Take a screenshot to find the thumb, and swipe it."
+		case let .sliderVanished(element):
+			return "Dragging \(element) changed the screen: the finger missed the thumb, and the drag did something else "
+				+ "(a drag to the right from the left of a page goes back). Take a screenshot, find the thumb, and swipe it."
 		}
 	}
 
