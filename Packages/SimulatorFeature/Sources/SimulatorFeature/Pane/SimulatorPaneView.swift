@@ -242,6 +242,15 @@ public struct SimulatorPaneView: View {
 						iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
 						iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
 					}
+					// At minimal density the More menu's Hinge submenu folds and unfolds.
+					if density != .minimal, let fold = device.fold {
+						if fold.showsInnerPanel {
+							iconButton("book.closed", help: "Fold") { store.send(.foldButtonTapped) }
+						}
+						else {
+							iconButton("book", help: "Unfold") { store.send(.foldButtonTapped) }
+						}
+					}
 					if density != .minimal {
 						iconButton("house", help: "Home") { store.send(.hardwareButtonTapped(.home)) }
 					}
@@ -364,6 +373,26 @@ public struct SimulatorPaneView: View {
 				Label("Location", systemImage: "location")
 			}
 
+			if let current = device.fold {
+				Menu {
+					ForEach(SimulatorFold.allCases, id: \.self) { fold in
+						Button {
+							store.send(.foldSelected(fold))
+						} label: {
+							if fold == current {
+								Label(fold.title, systemImage: "checkmark")
+							}
+							else {
+								Text(fold.title)
+							}
+						}
+					}
+				} label: {
+					Label("Hinge", systemImage: "book")
+				}
+				.labelStyle(.titleAndIcon)
+			}
+
 			Divider()
 
 			ForEach(Self.moreMenuButtons(density: density), id: \.self) { button in
@@ -479,7 +508,7 @@ public struct SimulatorPaneView: View {
 	private var content: some View {
 		if let device = store.selectedDevice {
 			if device.isBooted {
-				SimulatorScreen(deviceId: device.id, screenPixelSize: device.screenPixelSize)
+				SimulatorScreen(deviceId: device.id, screenPixelSize: device.screenPixelSize, screenID: device.screenID)
 					.aspectRatio(device.displayedPixelSize, contentMode: .fit)
 					.padding(Self.screenPadding)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)

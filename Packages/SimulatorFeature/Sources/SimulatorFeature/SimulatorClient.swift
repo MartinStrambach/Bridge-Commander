@@ -14,7 +14,9 @@ public struct SimulatorClient: Sendable {
 	public var shutdown: @Sendable (_ id: String) async throws -> Void
 	public var pressButton: @Sendable (_ id: String, _ button: SimulatorHardwareButton) async throws -> Void
 	/// Turns the device a quarter clockwise or counterclockwise from where it is.
-	public var rotate: @Sendable (_ id: String, _ clockwise: Bool) async throws -> Void
+	public var rotate: @Sendable (_ id: String, _ clockwise: Bool) async throws -> SimulatorRotation
+	/// Opens, partially opens or closes a device that folds (the iPhone Duo).
+	public var setFold: @Sendable (_ device: SimulatorDevice, _ fold: SimulatorFold) async throws -> Void
 	/// Saves the device's screen as a PNG where Simulator.app would, and returns the file.
 	public var saveScreenshot: @Sendable (_ device: SimulatorDevice) async throws -> URL
 	public var revealInFinder: @Sendable (_ url: URL) async -> Void
@@ -51,6 +53,7 @@ extension SimulatorClient: DependencyKey {
 		shutdown: { try await SimulatorHost.shared.shutdown(udid: $0) },
 		pressButton: { try await SimulatorHost.shared.press(udid: $0, button: $1) },
 		rotate: { try await SimulatorHost.shared.rotate(udid: $0, clockwise: $1) },
+		setFold: { _ = try await SimulatorHost.shared.setFold(device: $0, to: $1) },
 		saveScreenshot: { try SimulatorScreenshotFile.save(device: $0) },
 		revealInFinder: { url in
 			await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([url]) }
@@ -63,7 +66,7 @@ extension SimulatorClient: DependencyKey {
 				name: SimulatorScreenshotFile.recordingName(deviceName: device.name, date: .now),
 				exists: { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
 			)
-			_ = try await SimulatorScreenRecorder.shared.start(udid: device.id, deviceName: device.name, to: url)
+			_ = try await SimulatorScreenRecorder.shared.start(udid: device.id, deviceName: device.name, screenID: device.screenID, to: url)
 		},
 		stopRecording: { try await SimulatorScreenRecorder.shared.stop(udid: $0.id, deviceName: $0.name) },
 		recordingDeviceIds: { SimulatorScreenRecorder.shared.recordingDeviceIdChanges() },

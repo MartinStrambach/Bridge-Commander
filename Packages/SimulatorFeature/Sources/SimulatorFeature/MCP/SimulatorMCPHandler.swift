@@ -26,6 +26,8 @@ protocol SimulatorToolActions: Sendable {
 	var crashReports: any SimulatorCrashReportSource { get }
 	/// Turns the device and returns it as it then is, its `rotation` the interface's.
 	func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice
+	/// Opens, partially opens or closes a device that folds and returns it as it then is.
+	func setFold(device: SimulatorDevice, to fold: SimulatorFold) async throws -> SimulatorDevice
 	func simulateMemoryWarning(device: SimulatorDevice) async throws
 	func setLocation(device: SimulatorDevice, _ command: SimulatorLocationCommand) async throws
 	/// Starts recording the screen to `path` (a file or a folder; Simulator.app's folder when
@@ -130,7 +132,7 @@ struct SimulatorMCPHandler: Sendable {
 	later look differ. When the app crashes or vanishes, list_crashes and crash_report give the \
 	crash's reason and backtrace. set_location and simulate_memory_warning exercise location and \
 	low-memory handling; start_recording and stop_recording capture a video of the screen, to \
-	show a flow or a bug to the user.
+	show a flow or a bug to the user. set_fold opens, half-opens and closes an iPhone Duo.
 	"""
 
 	private static func result(id: JSONValue, _ result: JSONValue) -> JSONValue {

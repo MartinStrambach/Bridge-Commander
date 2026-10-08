@@ -140,8 +140,28 @@ struct SimulatorMCPHandlerTests {
 		func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
 			record("rotate \(orientation.rawValue)")
 			var rotated = device
-			rotated.rotation = orientation == .portraitUpsideDown ? device.rotation : orientation.screenRotation
+			rotated.rotation = orientation == .portraitUpsideDown ? device.rotation : device.interfaceRotation(for: orientation)
 			return rotated
+		}
+
+		/// Open and partially open show a 669×951-point inner panel, turned landscape like the
+		/// iPhone Duo's.
+		func setFold(device: SimulatorDevice, to fold: SimulatorFold) async throws -> SimulatorDevice {
+			record("fold \(fold.rawValue)")
+			return fold.showsInnerPanel
+				? SimulatorDevice(
+					id: device.id,
+					name: device.name,
+					runtimeName: device.runtimeName,
+					state: device.state,
+					screenPixelSize: CGSize(width: 2007, height: 2853),
+					screenScale: 3,
+					rotation: .clockwise,
+					fold: fold,
+					screenID: 3,
+					portraitRotation: .clockwise
+				)
+				: device
 		}
 
 		func simulateMemoryWarning(device: SimulatorDevice) async throws { record("memory warning") }
@@ -228,7 +248,8 @@ struct SimulatorMCPHandlerTests {
 		#expect(names == [
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
 			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element", "list_crashes", "crash_report", "rotate",
-			"wait_for_element", "set_slider", "gesture", "batch", "set_location", "simulate_memory_warning", "start_recording", "stop_recording",
+			"set_fold", "wait_for_element", "set_slider", "gesture", "batch", "set_location", "simulate_memory_warning", "start_recording",
+			"stop_recording",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -514,6 +535,47 @@ struct SimulatorMCPHandlerTests {
 
 		let unknown = try await callForLastText(actions, "rotate", ["orientation": "sideways"])
 		#expect(unknown.isError == true)
+	}
+
+	@Test
+	func setFoldOpensADuoAndRefusesAPhone() async throws {
+		let actions = FakeActions()
+		let refused = try await callForLastText(actions, "set_fold", ["state": "open"])
+		#expect(refused.isError == true)
+		#expect(refused.text == "iPhone does not fold; only the iPhone Duo does.")
+
+		let duo = SimulatorDevice(
+			id: "AAAA",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 1398, height: 2034),
+			screenScale: 3,
+			fold: .closed
+		)
+		actions.devicesResult = [duo]
+		let list = try await callForLastText(actions, "list_devices", [:])
+		#expect(list.text == "iPhone Duo (iOS 27.1) AAAA — Booted, 466×678 pt, folded [shown]")
+
+		let opened = try await callForLastText(actions, "set_fold", ["state": "open"])
+		#expect(opened.isError == false)
+		#expect(opened.text == "Unfolded iPhone Duo; it shows the inner panel, 951×669 points. Take a new screenshot before using coordinates.")
+		#expect(actions.calls.withLock { $0 } == ["fold open"])
+
+		let partly = try await callForLastText(actions, "set_fold", ["state": "partially_open"])
+		#expect(partly.text == "Partially unfolded iPhone Duo; it shows the inner panel, 951×669 points. Take a new screenshot before using coordinates.")
+		actions.devicesResult = [try await actions.setFold(device: duo, to: .partiallyOpen)]
+		let partlyListed = try await callForLastText(actions, "list_devices", [:])
+		#expect(partlyListed.text == "iPhone Duo (iOS 27.1) AAAA — Booted, 951×669 pt landscape, partially unfolded [shown]")
+
+		let unknown = try await callForLastText(actions, "set_fold", ["state": "ajar"])
+		#expect(unknown.isError == true)
+		#expect(unknown.text == "Unknown state \"ajar\"; use open, partially_open or closed.")
+
+		// The inner panel is mounted a quarter turn round: landscape left shows it portrait.
+		actions.devicesResult = [try await actions.setFold(device: duo, to: .open)]
+		let turned = try await callForLastText(actions, "rotate", ["orientation": "landscape_left"])
+		#expect(turned.text == "Rotated to landscape left. The screen is now 669×951 points; take a new screenshot before using coordinates.")
 	}
 
 	@Test

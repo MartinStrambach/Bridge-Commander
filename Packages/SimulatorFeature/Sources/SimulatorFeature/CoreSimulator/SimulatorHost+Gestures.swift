@@ -17,23 +17,38 @@ extension SimulatorHost {
 
 	/// The frontmost app's accessibility tree.
 	public func accessibilityTree(device: SimulatorDevice) async throws -> SimulatorAccessibilityNode {
-		try await SimulatorAccessibility.shared.frontmostTree(device: ObjectBox(object: simDevice(udid: device.id)))
+		try await SimulatorAccessibility.shared.frontmostTree(
+			device: ObjectBox(object: simDevice(udid: device.id)),
+			display: accessibilityDisplay(device)
+		)
 	}
 
 	/// The element at a point in screen points, if any. Hit-testing takes the point on the portrait
 	/// panel, though the frames it returns are in the interface's space like the tree's.
 	public func accessibilityElement(device: SimulatorDevice, at point: CGPoint) async throws -> SimulatorAccessibilityNode? {
-		try await SimulatorAccessibility.shared.element(at: device.nativePoint(point), device: ObjectBox(object: simDevice(udid: device.id)))
+		try await SimulatorAccessibility.shared.element(
+			at: device.nativePoint(point),
+			device: ObjectBox(object: simDevice(udid: device.id)),
+			display: accessibilityDisplay(device)
+		)
+	}
+
+	/// The screen `device` shows, for the accessibility calls.
+	func accessibilityDisplay(_ device: SimulatorDevice) -> SimulatorAccessibilityDisplay {
+		guard let screenID = device.screenID else {
+			return .main
+		}
+		return SimulatorAccessibilityDisplay(id: screenID, panel: .init(rotation: device.rotation, nativeSize: device.nativePointSize))
 	}
 
 	// MARK: - Multi-touch
 
 	/// One phase of a two-finger contact at normalized points, for the pane's live gestures.
-	public func twoFingerTouch(udid: String, fingers: FingerPair, phase: Int) async throws {
+	public func twoFingerTouch(udid: String, screenID: UInt32?, fingers: FingerPair, phase: Int) async throws {
 		guard let phase = SimulatorTouchPhase(rawValue: UInt64(phase)) else {
 			return
 		}
-		try await hidConnection(udid: udid).touch(fingers.first, fingers.second, phase: phase)
+		try await hidConnection(udid: udid).touch(fingers.first, fingers.second, phase: phase, target: screenID ?? 0)
 	}
 
 	/// Two fingers moving together from `start` to `end` (points), interpolated linearly: a pinch,
@@ -46,20 +61,21 @@ extension SimulatorHost {
 		duration: Duration = .milliseconds(400)
 	) async throws {
 		let connection = try await hidConnection(udid: device.id)
+		let target = device.screenID ?? 0
 		func normalized(_ point: CGPoint) -> CGPoint {
 			device.normalizedPoint(clamping: point)
 		}
 
 		let interval = Duration.milliseconds(16)
 		let steps = max(2, Int(duration / interval))
-		connection.touch(normalized(start.first), normalized(start.second), phase: .began)
+		connection.touch(normalized(start.first), normalized(start.second), phase: .began, target: target)
 		for step in 1...steps {
 			try await Task.sleep(for: interval)
 			let progress = CGFloat(step) / CGFloat(steps)
 			let fingers = Self.interpolate(start, end, progress)
-			connection.touch(normalized(fingers.first), normalized(fingers.second), phase: .moved)
+			connection.touch(normalized(fingers.first), normalized(fingers.second), phase: .moved, target: target)
 		}
-		connection.touch(normalized(end.first), normalized(end.second), phase: .ended)
+		connection.touch(normalized(end.first), normalized(end.second), phase: .ended, target: target)
 		try await drain()
 	}
 

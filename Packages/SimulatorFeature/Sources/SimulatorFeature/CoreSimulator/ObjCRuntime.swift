@@ -26,7 +26,7 @@ nonisolated enum ObjCRuntime {
 	}()
 
 	/// Runs `body`, turning an Objective-C exception it raises into a thrown error. Some
-	/// CoreSimulator calls assert instead of failing (see `SimulatorHost.mainScreen(of:)`), and an
+	/// CoreSimulator calls assert instead of failing (see `SimulatorHost.screen(of:pixelSize:)`), and an
 	/// exception thrown through Swift frames ends the process.
 	static func catchingException<T>(_ body: () -> T) throws -> T {
 		var result: T?

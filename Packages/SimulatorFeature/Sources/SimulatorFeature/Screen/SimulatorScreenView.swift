@@ -26,6 +26,17 @@ final class SimulatorScreenView: NSView {
 		}
 	}
 
+	/// The screen shown when it is not the main one (an open iPhone Duo's inner panel); a change
+	/// reattaches to the screen the device now shows.
+	var screenID: UInt32? {
+		didSet {
+			guard screenID != oldValue else {
+				return
+			}
+			attach()
+		}
+	}
+
 	/// The device's screen in pixels, portrait, for mapping a click to the image. The layer draws
 	/// aspect-fit.
 	var screenPixelSize: CGSize = .zero {
@@ -252,8 +263,9 @@ final class SimulatorScreenView: NSView {
 			return
 		}
 		let host = host
+		let screenID = screenID
 		let panelPoint = panelPoint(point)
-		enqueue { try await host.touch(udid: deviceId, at: panelPoint, phase: phase) }
+		enqueue { try await host.touch(udid: deviceId, screenID: screenID, at: panelPoint, phase: phase) }
 	}
 
 	private func touch(_ fingers: FingerPair, phase: Int) {
@@ -261,8 +273,9 @@ final class SimulatorScreenView: NSView {
 			return
 		}
 		let host = host
+		let screenID = screenID
 		let panelFingers = FingerPair(panelPoint(fingers.first), panelPoint(fingers.second))
-		enqueue { try await host.twoFingerTouch(udid: deviceId, fingers: panelFingers, phase: phase) }
+		enqueue { try await host.twoFingerTouch(udid: deviceId, screenID: screenID, fingers: panelFingers, phase: phase) }
 		showIndicators(phase == 2 ? nil : fingers)
 	}
 
@@ -603,7 +616,7 @@ private final class ScreenAttachment: @unchecked Sendable {
 		onFrame: @escaping @Sendable () -> Void
 	) {
 		queue.async { [self] in
-			guard !isStopped, let screen = try? host.mainScreen(udid: deviceId) else {
+			guard !isStopped, let screen = try? host.displayedScreen(udid: deviceId) else {
 				return
 			}
 			self.screen = ObjectBox(object: screen)
@@ -661,16 +674,19 @@ private final class ScreenAttachment: @unchecked Sendable {
 struct SimulatorScreen: NSViewRepresentable {
 	let deviceId: String
 	let screenPixelSize: CGSize
+	var screenID: UInt32?
 
 	func makeNSView(context: Context) -> SimulatorScreenView {
 		let view = SimulatorScreenView()
 		view.screenPixelSize = screenPixelSize
+		view.screenID = screenID
 		view.deviceId = deviceId
 		return view
 	}
 
 	func updateNSView(_ view: SimulatorScreenView, context: Context) {
 		view.screenPixelSize = screenPixelSize
+		view.screenID = screenID
 		view.deviceId = deviceId
 	}
 }

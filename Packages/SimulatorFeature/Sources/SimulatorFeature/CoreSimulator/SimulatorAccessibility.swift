@@ -72,10 +72,11 @@ final class SimulatorAccessibility: @unchecked Sendable {
 	private init() {}
 
 	/// The frontmost application's tree (SpringBoard's on the home screen).
-	func frontmostTree(device: ObjectBox) async throws -> SimulatorAccessibilityNode {
-		try await withFrontmostApplication(device: device) { element in
+	func frontmostTree(device: ObjectBox, display: SimulatorAccessibilityDisplay = .main) async throws -> SimulatorAccessibilityNode {
+		try await withFrontmostApplication(device: device, display: display) { element in
 			var budget = Self.maximumNodes
-			return Self.read(element, depth: 0, budget: &budget)
+			let tree = Self.read(element, depth: 0, budget: &budget)
+			return display.interfaceTree(tree, isSpringBoard: Self.isSpringBoard(element))
 		}
 	}
 
@@ -83,6 +84,7 @@ final class SimulatorAccessibility: @unchecked Sendable {
 	/// reads or acts on elements rather than on a copied tree.
 	func withFrontmostApplication<T: Sendable>(
 		device: ObjectBox,
+		display: SimulatorAccessibilityDisplay = .main,
 		_ body: @escaping @Sendable (NSAccessibilityElement) throws -> T
 	) async throws -> T {
 		try await perform { [self] translator in
@@ -91,7 +93,7 @@ final class SimulatorAccessibility: @unchecked Sendable {
 				let translation = unsafeBitCast(ObjCRuntime.messageSendFunction, to: Frontmost.self)(
 					translator,
 					sel_registerName("frontmostApplicationWithDisplayId:bridgeDelegateToken:"),
-					0,
+					display.id,
 					token as NSString
 				)?.takeUnretainedValue()
 				guard let element = platformElement(translation, token: token, translator: translator) else {
@@ -102,23 +104,33 @@ final class SimulatorAccessibility: @unchecked Sendable {
 		}
 	}
 
-	/// The element at a point in screen points, with its descendants.
-	func element(at point: CGPoint, device: ObjectBox) async throws -> SimulatorAccessibilityNode? {
-		try await perform { [self] translator in
+	/// SpringBoard's application element has no label (a blank one); every app's is its name.
+	static func isSpringBoard(_ application: NSAccessibilityElement) -> Bool {
+		nonEmpty(application.accessibilityLabel()) == nil
+	}
+
+	/// The element at a point on the portrait panel, in points, with its descendants.
+	func element(at point: CGPoint, device: ObjectBox, display: SimulatorAccessibilityDisplay = .main) async throws -> SimulatorAccessibilityNode? {
+		// SpringBoard's frames are turned on the inner panel; asked first, in its own turn of the
+		// queue, since it decides how the element's frames are read.
+		let isSpringBoard = display.panel == nil
+			? false
+			: try await withFrontmostApplication(device: device, display: display) { Self.isSpringBoard($0) }
+		return try await perform { [self] translator in
 			try withToken(device: device) { token in
 				typealias ObjectAtPoint = @convention(c) (AnyObject, Selector, CGPoint, UInt32, NSString) -> Unmanaged<AnyObject>?
 				let translation = unsafeBitCast(ObjCRuntime.messageSendFunction, to: ObjectAtPoint.self)(
 					translator,
 					sel_registerName("objectAtPoint:displayId:bridgeDelegateToken:"),
 					point,
-					0,
+					display.id,
 					token as NSString
 				)?.takeUnretainedValue()
 				guard let element = platformElement(translation, token: token, translator: translator) else {
 					return nil
 				}
 				var budget = 200
-				return Self.read(element, depth: 0, budget: &budget)
+				return display.interfaceFrames(Self.read(element, depth: 0, budget: &budget), isSpringBoard: isSpringBoard)
 			}
 		}
 	}

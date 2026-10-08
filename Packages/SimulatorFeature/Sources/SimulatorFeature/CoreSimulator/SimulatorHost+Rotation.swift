@@ -8,8 +8,10 @@ import XPC
 /// On Xcode 27 the rotation is a GSEvent sent to SpringBoard's `PurpleWorkspacePort`, as
 /// Simulator.app's `sendPurpleEvent:` does and idb does for runtimes without device motion. idb's
 /// other route, an orientation-picker report on `dtuhidd`'s vendor-defined service, is accepted
-/// and ignored by the iOS 27 runtimes, which report `deviceMotionState: false` (checked live,
-/// 2026-10-07).
+/// and ignored by the iOS 27.0 runtime, which reports `deviceMotionState: false` (checked live,
+/// 2026-10-07). The iPhone Duo's iOS 27.1 runtime is the other way round: the GSEvent changes the
+/// orientation its orientation service reports but not the interface, which follows only the
+/// report (checked live, 2026-10-08). A device that folds gets both.
 extension SimulatorHost {
 	private static let purpleQueue = DispatchQueue(label: "com.bridgecommander.simulator.purple")
 	private static let orientationService = "com.apple.coredevice.feature.remote.devicecontrol.orientation"
@@ -18,7 +20,7 @@ extension SimulatorHost {
 
 	/// How the main screen's interface is turned now.
 	public func screenRotation(udid: String) throws -> SimulatorScreenRotation {
-		try Self.screenRotation(of: mainScreen(udid: udid))
+		try Self.screenRotation(of: displayedScreen(udid: udid))
 	}
 
 	/// `-[SimScreen screenProperties].uiOrientation`, which follows the interface (an app that
@@ -112,25 +114,28 @@ extension SimulatorHost {
 	/// not to — so a screenshot taken next shows the settled screen.
 	public func rotate(device: SimulatorDevice, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorDevice {
 		var rotated = device
-		rotated.rotation = try await rotate(udid: device.id, to: orientation)
+		rotated.rotation = try await rotate(udid: device.id, to: orientation).interfaceRotation
 		return rotated
 	}
 
 	/// Turns the device a quarter left (counterclockwise) or right from where it is.
-	public func rotate(udid: String, clockwise: Bool) async throws {
+	public func rotate(udid: String, clockwise: Bool) async throws -> SimulatorRotation {
 		let current = try await deviceOrientation(udid: udid)
-		_ = try await rotate(udid: udid, to: clockwise ? current.rotatedRight : current.rotatedLeft)
+		return try await rotate(udid: udid, to: clockwise ? current.rotatedRight : current.rotatedLeft)
 	}
 
-	/// Sends the rotation and waits for the screen to settle; returns the interface rotation then.
+	/// Sends the rotation and waits for the screen to settle; returns where the interface is then.
 	@discardableResult
-	public func rotate(udid: String, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorScreenRotation {
-		let device = try ObjectBox(object: simDevice(udid: udid))
-		try await Self.sendPurpleOrientation(orientation, to: device)
+	public func rotate(udid: String, to orientation: SimulatorDeviceOrientation) async throws -> SimulatorRotation {
+		let simDevice = try simDevice(udid: udid)
+		try await Self.sendPurpleOrientation(orientation, to: ObjectBox(object: simDevice))
+		if Self.foldDisplays(of: simDevice) != nil {
+			try await sendDeviceState(SimulatorDeviceStateReport.orientation(orientation), udid: udid)
+		}
 
 		// The interface property turns as the rotation animation starts; the animation takes about
 		// 0.4 s more. An app that stays put never changes it, which the deadline covers.
-		let target = orientation.screenRotation
+		let target = orientation.screenRotation.adding(Self.openPanel(udid: udid)?.portraitRotation ?? .upright)
 		let clock = ContinuousClock()
 		let deadline = clock.now + .milliseconds(1500)
 		var rotation = try screenRotation(udid: udid)
@@ -139,7 +144,11 @@ extension SimulatorHost {
 			rotation = try screenRotation(udid: udid)
 		}
 		try await Task.sleep(for: .milliseconds(rotation == target ? 500 : 0))
-		return try screenRotation(udid: udid)
+		return SimulatorRotation(
+			orientation: orientation,
+			interfaceRotation: try screenRotation(udid: udid),
+			interfaceFollowed: rotation == target
+		)
 	}
 
 	/// A `GSEventTypeDeviceOrientationChanged` (50, host flag 0x20000) GSEvent as a raw Mach message

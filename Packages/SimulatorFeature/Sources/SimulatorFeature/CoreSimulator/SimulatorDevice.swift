@@ -48,12 +48,22 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 	/// The runtime's display name, e.g. "iOS 27.0".
 	public let runtimeName: String
 	public var state: State
-	/// The main screen in pixels, portrait: the panel's native size, whatever the rotation.
+	/// The screen in pixels, portrait: the panel's native size, whatever the rotation. The screen
+	/// the device shows — an open iPhone Duo's inner panel, else the main screen.
 	public let screenPixelSize: CGSize
 	public let screenScale: CGFloat
 	/// How the interface is turned on the panel, when the device was read. Always upright for a
 	/// device that is not booted.
 	public var rotation: SimulatorScreenRotation
+	/// How far the device is open, for one that folds (the iPhone Duo); nil for one that does not.
+	public let fold: SimulatorFold?
+	/// The ID of the screen shown when it is not the main one: an open or partially open iPhone
+	/// Duo's inner panel.
+	/// Also tells the pane to attach to another screen when it changes.
+	public let screenID: UInt32?
+	/// The interface's rotation on the screen shown while the device is held portrait: upright,
+	/// but a quarter turn clockwise on an open iPhone Duo's inner panel, which is mounted turned.
+	public let portraitRotation: SimulatorScreenRotation
 
 	public init(
 		id: String,
@@ -62,7 +72,10 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 		state: State,
 		screenPixelSize: CGSize,
 		screenScale: CGFloat,
-		rotation: SimulatorScreenRotation = .upright
+		rotation: SimulatorScreenRotation = .upright,
+		fold: SimulatorFold? = nil,
+		screenID: UInt32? = nil,
+		portraitRotation: SimulatorScreenRotation = .upright
 	) {
 		self.id = id
 		self.name = name
@@ -71,6 +84,14 @@ public struct SimulatorDevice: Identifiable, Equatable, Sendable {
 		self.screenPixelSize = screenPixelSize
 		self.screenScale = screenScale
 		self.rotation = rotation
+		self.fold = fold
+		self.screenID = screenID
+		self.portraitRotation = portraitRotation
+	}
+
+	/// The interface's rotation when the device is held `orientation` and the app follows it.
+	public func interfaceRotation(for orientation: SimulatorDeviceOrientation) -> SimulatorScreenRotation {
+		orientation.screenRotation.adding(portraitRotation)
 	}
 
 	/// The panel in points, portrait.
@@ -143,6 +164,7 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 	case alreadyRecording(device: String, path: String)
 	case notRecording(String)
 	case recordingFailed(String)
+	case notFoldable(String)
 
 	public var errorDescription: String? {
 		switch self {
@@ -184,6 +206,8 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 			"\(device) is not being recorded."
 		case let .recordingFailed(detail):
 			"The recording failed: \(detail)"
+		case let .notFoldable(name):
+			"\(name) does not fold; only the iPhone Duo does."
 		}
 	}
 }

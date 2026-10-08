@@ -60,7 +60,7 @@ enum SimulatorScreenshotFile {
 
 	/// Saves the device's screen as a PNG and returns where it went.
 	static func save(device: SimulatorDevice, host: SimulatorHost = .shared, date: Date = .now) throws -> URL {
-		let data = try host.screenshotPNG(udid: device.id)
+		let data = try host.screenshotPNG(device: device)
 		let url = unusedURL(
 			in: defaultFolder(),
 			name: name(deviceName: device.name, date: date),

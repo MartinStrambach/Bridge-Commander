@@ -10,7 +10,7 @@ extension SimulatorHost {
 	/// under way when the action returns still counts as its effect. Nil if it cannot be read.
 	func screenFingerprint(device: SimulatorDevice) -> ScreenFingerprint? {
 		guard
-			let screen = try? mainScreen(udid: device.id),
+			let screen = try? displayedScreen(device: device),
 			let surface = ObjCRuntime.object(screen, "framebufferSurface")
 		else {
 			return nil
@@ -27,7 +27,7 @@ extension SimulatorHost {
 		quietPeriod: Duration = .milliseconds(300),
 		baseline: ScreenFingerprint? = nil
 	) async -> ScreenSettleResult {
-		guard let screen = try? mainScreen(udid: device.id) else {
+		guard let screen = try? displayedScreen(device: device) else {
 			return .unavailable
 		}
 		var configuration = ScreenSettleDetector.Configuration()

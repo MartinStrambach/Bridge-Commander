@@ -103,10 +103,20 @@ public final class SimulatorScreenRecorder: @unchecked Sendable {
 	// MARK: - Starting
 
 	/// Starts recording `udid` to `url` and returns once simctl reports the recording running.
-	public func start(udid: String, deviceName: String, to url: URL, limit: Duration = defaultLimit) async throws -> URL {
+	/// `screenID` is the screen the device shows when it is not the main one (`SimulatorDevice.screenID`).
+	public func start(
+		udid: String,
+		deviceName: String,
+		screenID: UInt32? = nil,
+		to url: URL,
+		limit: Duration = defaultLimit
+	) async throws -> URL {
 		let process = Process()
 		process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-		process.arguments = ["simctl", "io", udid, "recordVideo", "--codec=h264", url.path(percentEncoded: false)]
+		// An open iPhone Duo is recorded on its inner panel; simctl records the main screen unless
+		// told otherwise. The recording stays on the panel it started on through a fold.
+		let display = screenID.map { ["--display=\($0)"] } ?? []
+		process.arguments = ["simctl", "io", udid, "recordVideo", "--codec=h264"] + display + [url.path(percentEncoded: false)]
 		process.environment = EnvironmentHelper.setupEnvironment()
 		let active = Active(process: process, url: url)
 

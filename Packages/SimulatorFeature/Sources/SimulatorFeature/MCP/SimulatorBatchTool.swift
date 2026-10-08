@@ -8,7 +8,7 @@ nonisolated enum SimulatorBatchTool {
 	/// nested batch.
 	static let stepTools: [String] = [
 		"tap", "swipe", "gesture", "pinch", "two_finger_drag", "type_text", "press_key", "press_button",
-		"press_element", "set_value", "set_slider", "scroll_to_element", "wait_for_element", "rotate",
+		"press_element", "set_value", "set_slider", "scroll_to_element", "wait_for_element", "rotate", "set_fold",
 		"describe_ui", "screenshot", "sleep",
 	]
 	static let maximumSteps = 40

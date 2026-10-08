@@ -202,7 +202,10 @@ struct SimulatorPaneReducerTests {
 		let store = TestStore(initialState: initial) {
 			SimulatorPaneReducer()
 		} withDependencies: {
-			$0[SimulatorClient.self].rotate = { _, clockwise in turns.withValue { $0.append(clockwise) } }
+			$0[SimulatorClient.self].rotate = { _, clockwise in
+				turns.withValue { $0.append(clockwise) }
+				return SimulatorRotation(orientation: .landscapeLeft, interfaceRotation: .counterclockwise, interfaceFollowed: true)
+			}
 			$0[SimulatorClient.self].devices = { [rotated] }
 			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
 		}
@@ -212,6 +215,161 @@ struct SimulatorPaneReducerTests {
 			$0.devices = [rotated]
 		}
 		#expect(turns.value == [false])
+	}
+
+	/// The device turns but the app stays put: without a word the button would seem broken.
+	@Test
+	func aRotationTheAppDoesNotFollowIsExplained() async {
+		let booted = Self.device("A", state: .booted)
+		let clock = TestClock()
+
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [booted]
+		initial.selectedDeviceId = "A"
+		initial.hasLoadedDevices = true
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].rotate = { _, _ in
+				SimulatorRotation(orientation: .landscapeRight, interfaceRotation: .upright, interfaceFollowed: false)
+			}
+			$0[SimulatorClient.self].devices = { [booted] }
+			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+			$0.continuousClock = clock
+		}
+
+		await store.send(.rotateButtonTapped(clockwise: true))
+		await store.receive(.devicesLoaded([booted], storedSelection: "A"))
+		let notice = SimulatorPaneReducer.Notice(
+			icon: "rotate.right",
+			title: "Turned to landscape right",
+			subtitle: "The app or home screen doesn't support it, so the screen stays portrait."
+		)
+		await store.receive(.featureFinished(notice, errorMessage: nil)) {
+			$0.notice = notice
+		}
+		await clock.advance(by: .seconds(6))
+		await store.receive(.noticeDismissed) {
+			$0.notice = nil
+		}
+	}
+
+	@Test
+	func foldTogglesADuoAndReloadsTheDevices() async {
+		let closed = SimulatorDevice(
+			id: "A",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 1398, height: 2034),
+			screenScale: 3,
+			fold: .closed
+		)
+		let open = SimulatorDevice(
+			id: "A",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 2007, height: 2853),
+			screenScale: 3,
+			rotation: .clockwise,
+			fold: .open,
+			screenID: 3
+		)
+		let folds = LockIsolated<[SimulatorFold]>([])
+
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [closed]
+		initial.selectedDeviceId = "A"
+		initial.hasLoadedDevices = true
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].setFold = { _, fold in folds.withValue { $0.append(fold) } }
+			$0[SimulatorClient.self].devices = { [open] }
+			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+		}
+
+		await store.send(.foldButtonTapped) {
+			$0.transitioningDeviceId = "A"
+		}
+		await store.receive(.devicesLoaded([open], storedSelection: "A")) {
+			$0.devices = [open]
+		}
+		await store.receive(.transitionFinished(errorMessage: nil)) {
+			$0.transitioningDeviceId = nil
+		}
+		#expect(folds.value == [.open])
+	}
+
+	@Test
+	func theHingeMenuPartiallyOpensADuoAndSkipsTheStateItIsIn() async {
+		let closed = SimulatorDevice(
+			id: "A",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 1398, height: 2034),
+			screenScale: 3,
+			fold: .closed
+		)
+		let partlyOpen = SimulatorDevice(
+			id: "A",
+			name: "iPhone Duo",
+			runtimeName: "iOS 27.1",
+			state: .booted,
+			screenPixelSize: CGSize(width: 2007, height: 2853),
+			screenScale: 3,
+			rotation: .clockwise,
+			fold: .partiallyOpen,
+			screenID: 3
+		)
+		let folds = LockIsolated<[SimulatorFold]>([])
+
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [closed]
+		initial.selectedDeviceId = "A"
+		initial.hasLoadedDevices = true
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].setFold = { _, fold in folds.withValue { $0.append(fold) } }
+			$0[SimulatorClient.self].devices = { [partlyOpen] }
+			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+		}
+
+		await store.send(.foldSelected(.closed))
+		await store.send(.foldSelected(.partiallyOpen)) {
+			$0.transitioningDeviceId = "A"
+		}
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A")) {
+			$0.devices = [partlyOpen]
+		}
+		await store.receive(.transitionFinished(errorMessage: nil)) {
+			$0.transitioningDeviceId = nil
+		}
+		#expect(folds.value == [.partiallyOpen])
+
+		// The header's Fold button closes a partially open device.
+		await store.send(.foldButtonTapped) {
+			$0.transitioningDeviceId = "A"
+		}
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A"))
+		await store.receive(.transitionFinished(errorMessage: nil)) {
+			$0.transitioningDeviceId = nil
+		}
+		#expect(folds.value == [.partiallyOpen, .closed])
+	}
+
+	@Test
+	func foldDoesNothingForADeviceThatDoesNotFold() async {
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		}
+		await store.send(.foldButtonTapped)
 	}
 
 	@Test

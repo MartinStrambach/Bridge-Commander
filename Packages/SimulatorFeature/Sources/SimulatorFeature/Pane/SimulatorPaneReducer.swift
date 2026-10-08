@@ -19,7 +19,7 @@ public struct SimulatorPaneReducer {
 		public var devices: [SimulatorDevice] = []
 		public var selectedDeviceId: String?
 		public var hasLoadedDevices = false
-		/// The device a boot or shutdown is running for.
+		/// The device a boot, shutdown or fold is running for.
 		public var transitioningDeviceId: String?
 		/// What the last boot, shutdown, button press or Claude Code registration reported.
 		public var errorMessage: String?
@@ -98,6 +98,10 @@ public struct SimulatorPaneReducer {
 		case transitionFinished(errorMessage: String?)
 		case hardwareButtonTapped(SimulatorHardwareButton)
 		case rotateButtonTapped(clockwise: Bool)
+		/// Opens a closed iPhone Duo, or closes an open or partially open one.
+		case foldButtonTapped
+		/// Sets how far an iPhone Duo is open: the More menu's Hinge items.
+		case foldSelected(SimulatorFold)
 		case screenshotButtonTapped
 		case screenshotSaved(URL)
 		case screenshotFailed(String)
@@ -157,6 +161,31 @@ public struct SimulatorPaneReducer {
 			await send(.noticeDismissed)
 		}
 		.cancellable(id: CancelId.notice, cancelInFlight: true)
+	}
+
+	/// Folds or unfolds the selected iPhone Duo to `fold`, then reloads the devices so the pane
+	/// shows the panel it moved to straight away. It shows as a transition: `dtuhidd` can take
+	/// many seconds to take the report while the guest is busy.
+	private func setFold(_ fold: SimulatorFold, state: inout State) -> Effect<Action> {
+		guard
+			let device = state.selectedDevice, device.isBooted, let current = device.fold, current != fold,
+			state.transitioningDeviceId == nil
+		else {
+			return .none
+		}
+		state.transitioningDeviceId = device.id
+		state.errorMessage = nil
+		return .run { [simulatorClient, repositoryPath = state.repositoryPath] send in
+			do {
+				try await simulatorClient.setFold(device, fold)
+				let devices = try await simulatorClient.devices()
+				await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
+				await send(.transitionFinished(errorMessage: nil))
+			}
+			catch {
+				await send(.transitionFinished(errorMessage: error.localizedDescription))
+			}
+		}
 	}
 
 	public var body: some Reducer<State, Action> {
@@ -292,17 +321,35 @@ public struct SimulatorPaneReducer {
 					return .none
 				}
 				// Reloads the devices when done, so the pane takes the rotated width without
-				// waiting for the next poll.
+				// waiting for the next poll. When the app does not support the orientation the
+				// device turns but the screen does not, which a notice says.
 				return .run { [simulatorClient, repositoryPath = state.repositoryPath] send in
 					do {
-						try await simulatorClient.rotate(device.id, clockwise)
+						let rotation = try await simulatorClient.rotate(device.id, clockwise)
 						let devices = try await simulatorClient.devices()
 						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
+						if !rotation.interfaceFollowed {
+							let notice = Notice(
+								icon: clockwise ? "rotate.right" : "rotate.left",
+								title: "Turned to \(rotation.orientation.label)",
+								subtitle: "The app or home screen doesn't support it, so the screen stays \(rotation.interfaceRotation.label)."
+							)
+							await send(.featureFinished(notice, errorMessage: nil))
+						}
 					}
 					catch {
 						await send(.transitionFinished(errorMessage: error.localizedDescription))
 					}
 				}
+
+			case .foldButtonTapped:
+				guard let fold = state.selectedDevice?.fold else {
+					return .none
+				}
+				return setFold(fold.toggled, state: &state)
+
+			case let .foldSelected(fold):
+				return setFold(fold, state: &state)
 
 			case .screenshotButtonTapped:
 				guard let device = state.selectedDevice, device.isBooted, !state.isSavingScreenshot else {

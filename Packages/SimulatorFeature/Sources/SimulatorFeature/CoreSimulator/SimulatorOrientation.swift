@@ -31,6 +31,21 @@ public enum SimulatorDeviceOrientation: String, CaseIterable, Equatable, Sendabl
 		}
 	}
 
+	/// The orientation picker's value (`SimulatorDeviceStateReport`), as idb names them; "landscape-left"
+	/// turns the interface the way `landscapeLeft` does (checked live on the iPhone Duo, 2026-10-08).
+	var deviceStateValue: String {
+		switch self {
+		case .portrait:
+			"portrait"
+		case .portraitUpsideDown:
+			"pud"
+		case .landscapeLeft:
+			"landscape-left"
+		case .landscapeRight:
+			"landscape-right"
+		}
+	}
+
 	/// The guest's name for an orientation, as its orientation service reports it
 	/// (`currentDeviceOrientation`). `faceUp`, `faceDown` and `unknown` have no case here.
 	init?(guestName: String) {
@@ -140,6 +155,38 @@ public enum SimulatorScreenRotation: String, Equatable, Sendable {
 		}
 	}
 
+	/// Quarter turns clockwise from upright, 0...3.
+	var quarterTurns: Int {
+		switch self {
+		case .upright:
+			0
+		case .clockwise:
+			1
+		case .upsideDown:
+			2
+		case .counterclockwise:
+			3
+		}
+	}
+
+	init(quarterTurns: Int) {
+		switch (quarterTurns % 4 + 4) % 4 {
+		case 1:
+			self = .clockwise
+		case 2:
+			self = .upsideDown
+		case 3:
+			self = .counterclockwise
+		default:
+			self = .upright
+		}
+	}
+
+	/// This rotation turned further by `other`.
+	func adding(_ other: SimulatorScreenRotation) -> SimulatorScreenRotation {
+		SimulatorScreenRotation(quarterTurns: quarterTurns + other.quarterTurns)
+	}
+
 	/// Whether width and height trade places.
 	public var isLandscape: Bool {
 		self == .clockwise || self == .counterclockwise
@@ -183,6 +230,18 @@ public enum SimulatorScreenRotation: String, Equatable, Sendable {
 		}
 	}
 
+	/// A rect on the panel as the rect it covers in the interface's space.
+	public func displayedRect(fromNative rect: CGRect, nativeSize: CGSize) -> CGRect {
+		let corner = displayedPoint(fromNative: rect.origin, nativeSize: nativeSize)
+		let opposite = displayedPoint(fromNative: CGPoint(x: rect.maxX, y: rect.maxY), nativeSize: nativeSize)
+		return CGRect(
+			x: min(corner.x, opposite.x),
+			y: min(corner.y, opposite.y),
+			width: abs(opposite.x - corner.x),
+			height: abs(opposite.y - corner.y)
+		)
+	}
+
 	/// The turn, in radians, that brings the portrait framebuffer upright on screen, in a y-down
 	/// (flipped) coordinate space where a positive angle turns clockwise.
 	var uprightingAngle: CGFloat {
@@ -211,5 +270,21 @@ public enum SimulatorScreenRotation: String, Equatable, Sendable {
 		case .counterclockwise:
 			.left
 		}
+	}
+}
+
+/// What turning the device came to: where the device is, and whether the interface followed. It
+/// does not when the frontmost app does not support the orientation (or, on an iPhone, the home
+/// screen, which stays portrait).
+public struct SimulatorRotation: Equatable, Sendable {
+	public var orientation: SimulatorDeviceOrientation
+	/// The interface's rotation on the panel shown, once the turn has settled.
+	public var interfaceRotation: SimulatorScreenRotation
+	public var interfaceFollowed: Bool
+
+	public init(orientation: SimulatorDeviceOrientation, interfaceRotation: SimulatorScreenRotation, interfaceFollowed: Bool) {
+		self.orientation = orientation
+		self.interfaceRotation = interfaceRotation
+		self.interfaceFollowed = interfaceFollowed
 	}
 }
