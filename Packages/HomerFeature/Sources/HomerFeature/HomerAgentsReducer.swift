@@ -4,8 +4,9 @@ import Foundation
 /// The Agents and Schedules pages of one instance: both show the instance's agents, Schedules
 /// only those with a cron. Agents mirrors the console's `agents/page.tsx` (search, Reload, the
 /// agent cards, Run); Schedules its `schedules/page.tsx` (with its Run, which fires the cron
-/// now). An agent's workflow graph is a sheet here; its detail page, file editor, debug runs
-/// and "New agent" open in the web console.
+/// now). An agent's page (`HomerAgentDetailReducer`) shows in place of the page that opened it,
+/// and its workflow graph is also a sheet over the cards; its file editor, debug runs and "New
+/// agent" open in the web console.
 @Reducer
 public struct HomerAgentsReducer: Sendable {
 	/// The console reads the list once and keeps it 5 minutes (`polling.agentsCacheTime`), then
@@ -13,6 +14,12 @@ public struct HomerAgentsReducer: Sendable {
 	/// stands in for that stream here, as the process list's does for the status stream; it
 	/// also keeps the schedules' next and last runs current once a cron has fired.
 	static let pollInterval: Duration = .seconds(30)
+
+	/// The two pages this reducer backs.
+	public enum Page: Equatable, Sendable {
+		case agents
+		case schedules
+	}
 
 	@ObservableState
 	public struct State: Equatable {
@@ -31,6 +38,10 @@ public struct HomerAgentsReducer: Sendable {
 		public var runAgent: HomerRunAgentReducer.State?
 		@Presents
 		public var workflowGraph: HomerAgentWorkflowGraphReducer.State?
+		/// An agent's page, shown in place of the page it was opened from. Plain optional state
+		/// rather than `@Presents`: its run history polls, and only a plain cancellation ID can be
+		/// stopped from here when the page is hidden or the whole state replaced (signed out).
+		public var detail: HomerAgentDetailReducer.State?
 		/// Schedules whose "Run Now" is still waiting on the server.
 		public internal(set) var cronRunsInFlight: Set<HomerAgent.ID> = []
 		/// "Run Now"'s confirmation, and why a fire failed.
@@ -39,11 +50,15 @@ public struct HomerAgentsReducer: Sendable {
 		/// The run the Run sheet started, opened once the sheet is gone — the run's page is a sheet
 		/// too, and one sheet cannot come up while the other is still going.
 		var processToOpen: Int?
-		/// Between `shown` and `hidden`: the page polls.
-		var isShown = false
+		/// The page on screen, between `shown` and `hidden`: the list polls.
+		var shownPage: Page?
 
 		public init(baseURL: String) {
 			self.baseURL = baseURL
+		}
+
+		var isShown: Bool {
+			shownPage != nil
 		}
 
 		/// The Agents page's cards.
@@ -63,8 +78,8 @@ public struct HomerAgentsReducer: Sendable {
 
 	public enum Action: BindableAction {
 		case binding(BindingAction<State>)
-		/// The page came on screen; it polls until `hidden`.
-		case shown
+		/// One of the pages came on screen; the list polls until `hidden`.
+		case shown(Page)
 		case hidden
 		/// The header's Refresh: fetches right away, without waiting for the next poll.
 		case refreshTapped
@@ -80,8 +95,9 @@ public struct HomerAgentsReducer: Sendable {
 		/// The Run sheet went off screen, however it was closed.
 		case runSheetDismissed
 
-		/// The agent's console page: its parameters, workflow graph and run history.
+		/// The agent's page: its run history, parameters and workflow graph.
 		case agentTapped(agentName: String)
+		case detail(HomerAgentDetailReducer.Action)
 		case workflowGraphTapped(agentName: String)
 		case workflowGraph(PresentationAction<HomerAgentWorkflowGraphReducer.Action>)
 		/// The console's file editor, which also holds the debug runs.
@@ -121,20 +137,34 @@ public struct HomerAgentsReducer: Sendable {
 			case .binding:
 				return .none
 
-			case .shown:
-				state.isShown = true
-				return poll(state)
+			case let .shown(page):
+				state.shownPage = page
+				return .merge(poll(state), showDetailIfOnScreen(state))
 
 			case .refreshTapped:
-				return state.isShown ? poll(state) : .none
+				guard state.isShown else {
+					return .none
+				}
+				let detail: Effect<Action> = state.detail?.isShown == true ? .send(.detail(.refreshTapped)) : .none
+				return .merge(poll(state), detail)
 
 			case .hidden:
-				state.isShown = false
-				return .cancel(id: CancelID.polling)
+				state.shownPage = nil
+				state.detail?.isShown = false
+				return .merge(
+					.cancel(id: CancelID.polling),
+					.cancel(id: HomerAgentDetailReducer.CancelID.polling),
+					// With no page left (the state was replaced), whatever else it runs stops too.
+					state.detail == nil ? HomerAgentDetailReducer.cancelEffects() : .none
+				)
 
 			case let .agentsLoaded(.success(agents)):
 				let sorted = agents.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
 				state.agents = IdentifiedArray(sorted, uniquingIDsWith: { first, _ in first })
+				if let agentName = state.detail?.agentName {
+					let agent = state.agents[id: agentName]
+					state.detail?.agent = agent
+				}
 				state.hasLoaded = true
 				state.loadError = nil
 				return .none
@@ -213,8 +243,39 @@ public struct HomerAgentsReducer: Sendable {
 				return .send(.processTapped(processId: processId))
 
 			case let .agentTapped(agentName):
-				let path = HomerAgent(name: agentName).consolePath
-				return .send(.delegate(.openWebConsole(path: path, title: agentName)))
+				state.detail = HomerAgentDetailReducer.State(
+					baseURL: state.baseURL,
+					agentName: agentName,
+					openedFrom: state.shownPage ?? .agents,
+					agent: state.agents[id: agentName]
+				)
+				// Another agent's page may have been polling.
+				return .merge(HomerAgentDetailReducer.cancelEffects(), showDetailIfOnScreen(state))
+
+			case .detail(.delegate(.back)):
+				state.detail = nil
+				return HomerAgentDetailReducer.cancelEffects()
+
+			case .detail(.delegate(.run)):
+				guard let agentName = state.detail?.agentName else {
+					return .none
+				}
+				return .send(.runTapped(agentName: agentName))
+
+			case .detail(.delegate(.edit)):
+				guard let agentName = state.detail?.agentName else {
+					return .none
+				}
+				return .send(.editTapped(agentName: agentName))
+
+			case let .detail(.delegate(.openProcess(processId))):
+				return .send(.processTapped(processId: processId))
+
+			case .detail(.delegate(.unauthorized)):
+				return .send(.delegate(.unauthorized))
+
+			case .detail:
+				return .none
 
 			case let .workflowGraphTapped(agentName):
 				state.workflowGraph = HomerAgentWorkflowGraphReducer.State(baseURL: state.baseURL, agentName: agentName)
@@ -302,6 +363,9 @@ public struct HomerAgentsReducer: Sendable {
 				return .none
 			}
 		}
+		.ifLet(\.detail, action: \.detail) {
+			HomerAgentDetailReducer()
+		}
 		.ifLet(\.$runAgent, action: \.runAgent) {
 			HomerRunAgentReducer()
 		}
@@ -318,6 +382,14 @@ public struct HomerAgentsReducer: Sendable {
 			return "\(agentName) is no longer loaded, or your account may not run schedules."
 		}
 		return error.localizedDescription
+	}
+
+	/// Starts the agent's page if it belongs to the page now on screen and is not running yet.
+	private func showDetailIfOnScreen(_ state: State) -> Effect<Action> {
+		guard let detail = state.detail, !detail.isShown, detail.openedFrom == state.shownPage else {
+			return .none
+		}
+		return .send(.detail(.shown))
 	}
 
 	/// Fetches right away, then every `pollInterval`. Restarting it replaces the running loop.

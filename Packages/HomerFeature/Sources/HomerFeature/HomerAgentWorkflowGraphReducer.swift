@@ -35,6 +35,12 @@ public struct HomerAgentWorkflowGraphReducer: Sendable {
 		}
 	}
 
+	/// A load in flight. The agent's page holds this reducer as plain state, so it stops the
+	/// load itself when it goes (`HomerAgentDetailReducer.cancelEffects`).
+	nonisolated enum CancelID: Hashable {
+		case load
+	}
+
 	@Dependency(HomerAgentsClient.self)
 	private var agentsClient
 
@@ -54,6 +60,7 @@ public struct HomerAgentWorkflowGraphReducer: Sendable {
 				return .run { [baseURL = state.baseURL, agentName = state.agentName] send in
 					await send(.graphsLoaded(Result { try await agentsClient.workflowGraphs(baseURL, agentName) }))
 				}
+				.cancellable(id: CancelID.load)
 
 			case let .graphsLoaded(.success(graphs)):
 				state.isLoading = false

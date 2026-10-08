@@ -829,10 +829,12 @@ public struct HomerInstanceReducer: Sendable {
 				case (.continuations, .refresh):
 					await send(.continuations(.refreshTapped))
 				case (.agents, .shown):
-					await send(.agents(.shown))
-				case (.agents, .hidden):
+					await send(.agents(.shown(.agents)))
+				case (.schedules, .shown):
+					await send(.agents(.shown(.schedules)))
+				case (.agents, .hidden), (.schedules, .hidden):
 					await send(.agents(.hidden))
-				case (.agents, .refresh):
+				case (.agents, .refresh), (.schedules, .refresh):
 					await send(.agents(.refreshTapped))
 				case (.costs, .shown):
 					await send(.costs(.shown))
