@@ -614,6 +614,7 @@ struct HomerWorkflowSlot: View {
 		if let workflow = store.workflow {
 			HomerWorkflowStatusView(
 				status: workflow,
+				imageName: "Run \(store.processId) \(workflow.label) workflow",
 				openProcess: { store.send(.processLinkTapped(processId: $0)) },
 				openGraph: { store.send(.openInWebConsoleTapped) }
 			)

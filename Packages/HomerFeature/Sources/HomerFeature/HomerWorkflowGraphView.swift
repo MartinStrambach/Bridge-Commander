@@ -1,18 +1,23 @@
 import AppKit
 import AppUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A LangGraph workflow drawn from its topology (`workflow-graph.tsx`, ADR-0073), laid out by
 /// `HomerGraphLayout`. With a run's `status` the nodes take their state's tint and their sub
 /// runs' command dots, the edges the run took are green, and a node with sub runs opens
 /// `nodeDetails` in a popover; without one it is the workflow's bare structure, as on the
-/// console's agent page. Edges are drawn in a `Canvas`; nodes are views over it, so they get
-/// tooltips, popovers and accessibility. Above the render cap `fallback` is shown instead.
+/// console's agent page. The drawing is `HomerWorkflowGraphDrawing`: edges in a `Canvas`, node
+/// boxes as views over it, for tooltips and accessibility. Above the render cap `fallback` is
+/// shown instead.
+/// "Save as Image…" and "Copy Image" render the whole graph, not the part scrolled into view.
 struct HomerWorkflowGraphView<NodeDetails: View, Fallback: View>: View {
 	let topology: HomerLangGraphStatus.Topology
 	var status: HomerLangGraphStatus?
 	/// The tallest the graph gets before it scrolls.
 	var maxHeight: CGFloat = 480
+	/// The saved image's file name, without its extension.
+	var imageName = "Workflow"
 	@ViewBuilder
 	let nodeDetails: (String) -> NodeDetails
 	@ViewBuilder
@@ -26,6 +31,9 @@ struct HomerWorkflowGraphView<NodeDetails: View, Fallback: View>: View {
 
 	@State
 	private var openNode: String?
+
+	@Environment(\.colorScheme)
+	private var colorScheme
 
 	private enum LayoutState: Equatable {
 		case pending
@@ -69,10 +77,6 @@ struct HomerWorkflowGraphView<NodeDetails: View, Fallback: View>: View {
 		.systemFont(ofSize: UIFontScale.pointSize(of: .callout) * scale)
 	}
 
-	private static func labelFontSize(scale: CGFloat) -> CGFloat {
-		UIFontScale.pointSize(of: .caption) * scale
-	}
-
 	/// The boxes as the console sizes them (`layout.ts`: the label plus 16 pt each side, at
 	/// least 72 wide and 36 high, a terminal 56 by 28), measured in the font they are drawn
 	/// with rather than estimated per character, and grown with the text size.
@@ -81,7 +85,7 @@ struct HomerWorkflowGraphView<NodeDetails: View, Fallback: View>: View {
 		scale: CGFloat
 	) -> (nodes: [String: CGSize], labels: [String: CGSize]) {
 		let nodeFont = nodeFont(scale: scale)
-		let labelFont = NSFont.systemFont(ofSize: labelFontSize(scale: scale))
+		let labelFont = NSFont.systemFont(ofSize: HomerWorkflowGraphDrawing.labelFontSize(scale: scale))
 		var nodes: [String: CGSize] = [:]
 		for node in topology.nodes {
 			let (label, isTerminal) = HomerGraphLayout.nodeLabel(node.id)
@@ -104,29 +108,235 @@ struct HomerWorkflowGraphView<NodeDetails: View, Fallback: View>: View {
 	private func graph(_ layout: HomerGraphLayout) -> some View {
 		VStack(spacing: 10) {
 			ScrollView([.horizontal, .vertical]) {
-				ZStack(alignment: .topLeading) {
-					edges(layout)
-					ForEach(layout.nodes) { node in
-						nodeView(node)
-							.frame(width: node.frame.width, height: node.frame.height)
-							.position(x: node.frame.midX, y: node.frame.midY)
+				HomerWorkflowGraphDrawing(layout: layout, status: status)
+					.overlay(alignment: .topLeading) {
+						nodeButtons(layout)
 					}
-				}
-				.frame(width: layout.size.width, height: layout.size.height)
-				// Centred when narrower than the view.
-				.containerRelativeFrame(.horizontal) { length, _ in max(length, layout.size.width) }
+					// Centred when narrower than the view.
+					.containerRelativeFrame(.horizontal) { length, _ in max(length, layout.size.width) }
 			}
 			// As high as the graph up to `maxHeight`, and less where there is less room.
 			.frame(minHeight: 0, idealHeight: min(layout.size.height, maxHeight), maxHeight: min(layout.size.height, maxHeight))
-			edgeLegend
+			.contextMenu {
+				imageActions(layout)
+			}
+			HStack(spacing: 16) {
+				edgeLegend
+				Spacer(minLength: 0)
+				Menu {
+					imageActions(layout)
+				} label: {
+					Label("Export", systemImage: "square.and.arrow.up")
+				}
+				.menuStyle(.borderlessButton)
+				.fixedSize()
+				.help("Save or copy the whole graph as an image")
+			}
 		}
 		.padding(12)
 		.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
 		.overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.secondary.opacity(0.2)))
 	}
 
-	private var takenEdges: Set<EdgeKey> {
-		Set((status?.traversed ?? []).map { EdgeKey(source: $0.source, target: $0.target) })
+	/// Clear buttons over the nodes with sub runs, each opening them in a popover — as the console
+	/// lays its popover triggers over the drawn graph. The drawing stays the same view the
+	/// saved image renders.
+	private func nodeButtons(_ layout: HomerGraphLayout) -> some View {
+		ZStack(alignment: .topLeading) {
+			ForEach(layout.nodes.filter { !$0.isTerminal && !(status?.subs?[$0.id]?.isEmpty ?? true) }) { node in
+				let shape = RoundedRectangle(cornerRadius: 8)
+				Button {
+					openNode = node.id
+				} label: {
+					Color.clear
+						.contentShape(shape)
+				}
+				.buttonStyle(.plain)
+				.help("\(node.id): show its runs")
+				.accessibilityLabel("Show the runs of \(node.id)")
+				.popover(
+					isPresented: Binding(
+						get: { openNode == node.id },
+						set: { isPresented in
+							if !isPresented, openNode == node.id {
+								openNode = nil
+							}
+						}
+					),
+					arrowEdge: .bottom
+				) {
+					nodeDetails(node.id)
+				}
+				.frame(width: node.frame.width, height: node.frame.height)
+				.position(x: node.frame.midX, y: node.frame.midY)
+			}
+		}
+		.frame(width: layout.size.width, height: layout.size.height)
+	}
+
+	// MARK: Image
+
+	@ViewBuilder
+	private func imageActions(_ layout: HomerGraphLayout) -> some View {
+		Button {
+			saveImage(layout)
+		} label: {
+			Label("Save as Image…", systemImage: "square.and.arrow.down")
+		}
+		Button {
+			copyImage(layout)
+		} label: {
+			Label("Copy Image", systemImage: "doc.on.doc")
+		}
+	}
+
+	private func pngData(_ layout: HomerGraphLayout) -> Data? {
+		HomerWorkflowGraphDrawing.pngData(layout: layout, status: status, scale: scale, colorScheme: colorScheme)
+	}
+
+	private func saveImage(_ layout: HomerGraphLayout) {
+		guard let data = pngData(layout) else {
+			NSSound.beep()
+			return
+		}
+		let panel = NSSavePanel()
+		panel.allowedContentTypes = [.png]
+		panel.canCreateDirectories = true
+		panel.nameFieldStringValue = HomerWorkflowGraphDrawing.fileName(imageName)
+		panel.begin { response in
+			guard response == .OK, let url = panel.url else {
+				return
+			}
+			do {
+				try data.write(to: url, options: .atomic)
+			}
+			catch {
+				NSAlert(error: error).runModal()
+			}
+		}
+	}
+
+	private func copyImage(_ layout: HomerGraphLayout) {
+		guard let data = pngData(layout) else {
+			NSSound.beep()
+			return
+		}
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setData(data, forType: .png)
+	}
+
+	private var edgeLegend: some View {
+		HomerFlowLayout(spacing: 16) {
+			legendEntry("fixed edge", color: .secondary, lineWidth: 1.25, dashed: false)
+			legendEntry("conditional edge", color: .secondary, lineWidth: 1.25, dashed: true)
+			if status?.traversed != nil {
+				legendEntry("taken path", color: .green, lineWidth: 2, dashed: false)
+			}
+		}
+		.scaledFont(.caption)
+		.foregroundStyle(.secondary)
+	}
+
+	private func legendEntry(_ title: String, color: Color, lineWidth: CGFloat, dashed: Bool) -> some View {
+		HStack(spacing: 6) {
+			Path { path in
+				path.move(to: CGPoint(x: 0, y: 3))
+				path.addLine(to: CGPoint(x: 20, y: 3))
+			}
+			.stroke(color, style: StrokeStyle(lineWidth: lineWidth, dash: dashed ? [4, 3] : []))
+			.frame(width: 20, height: 6)
+			Text(title)
+		}
+	}
+}
+
+extension HomerWorkflowGraphView where NodeDetails == EmptyView {
+	/// The workflow's structure alone.
+	init(
+		topology: HomerLangGraphStatus.Topology,
+		maxHeight: CGFloat = 480,
+		imageName: String,
+		@ViewBuilder fallback: @escaping () -> Fallback
+	) {
+		self.init(
+			topology: topology,
+			status: nil,
+			maxHeight: maxHeight,
+			imageName: imageName,
+			nodeDetails: { _ in EmptyView() },
+			fallback: fallback
+		)
+	}
+}
+
+/// A laid-out workflow as drawn — the edges in a `Canvas`, the node boxes over them — at the
+/// layout's own size. The graph view shows it scrolled with buttons over it; the saved and copied
+/// image is this view rendered whole.
+struct HomerWorkflowGraphDrawing: View {
+	let layout: HomerGraphLayout
+	var status: HomerLangGraphStatus?
+
+	@Environment(\.uiFontScale)
+	private var scale
+
+	/// The image's pixels per point: sharp on a Retina screen and in a document.
+	static let imageScale: CGFloat = 2
+	/// Room around the graph in the image.
+	static let imagePadding: CGFloat = 16
+
+	static func labelFontSize(scale: CGFloat) -> CGFloat {
+		UIFontScale.pointSize(of: .caption) * scale
+	}
+
+	var body: some View {
+		ZStack(alignment: .topLeading) {
+			edges
+			ForEach(layout.nodes) { node in
+				HomerWorkflowNodeBox(
+					node: node,
+					tint: node.isTerminal ? nil : status.flatMap { HomerWorkflowNodeTint(status: $0, node: node.id) },
+					commandStates: status?.subs?[node.id]?.flatMap { ($0.commands ?? []).map(\.state) } ?? []
+				)
+				.help(node.id)
+				.frame(width: node.frame.width, height: node.frame.height)
+				.position(x: node.frame.midX, y: node.frame.midY)
+			}
+		}
+		.frame(width: layout.size.width, height: layout.size.height)
+	}
+
+	/// The whole graph as a PNG on the graph's background, in the given appearance and text size.
+	/// Twice the pixels of its points, marked as such so it opens at the graph's size.
+	@MainActor
+	static func pngData(
+		layout: HomerGraphLayout,
+		status: HomerLangGraphStatus?,
+		scale: CGFloat,
+		colorScheme: ColorScheme
+	) -> Data? {
+		let renderer = ImageRenderer(
+			content: HomerWorkflowGraphDrawing(layout: layout, status: status)
+				.padding(imagePadding)
+				.background(Color(nsColor: .textBackgroundColor))
+				.environment(\.colorScheme, colorScheme)
+				.environment(\.uiFontScale, scale)
+		)
+		renderer.scale = imageScale
+		guard let image = renderer.cgImage else {
+			return nil
+		}
+		let bitmap = NSBitmapImageRep(cgImage: image)
+		bitmap.size = CGSize(
+			width: layout.size.width + 2 * imagePadding,
+			height: layout.size.height + 2 * imagePadding
+		)
+		return bitmap.representation(using: .png, properties: [:])
+	}
+
+	/// The saved image's file name: `/` and `:` cannot stand in one.
+	static func fileName(_ name: String) -> String {
+		String(name.map { $0 == "/" || $0 == ":" ? "-" : $0 }) + ".png"
 	}
 
 	private struct EdgeKey: Hashable {
@@ -134,10 +344,11 @@ struct HomerWorkflowGraphView<NodeDetails: View, Fallback: View>: View {
 		var target: String
 	}
 
-	private func edges(_ layout: HomerGraphLayout) -> some View {
-		let taken = takenEdges
+	private var edges: some View {
+		let taken = Set((status?.traversed ?? []).map { EdgeKey(source: $0.source, target: $0.target) })
 		let labelFont = Font.system(size: Self.labelFontSize(scale: scale))
 		let background = Color(nsColor: .textBackgroundColor)
+		let layout = layout
 		return Canvas { context, _ in
 			// Taken edges last, on top of the rest.
 			let ordered = layout.edges.sorted { lhs, rhs in
@@ -215,76 +426,6 @@ struct HomerWorkflowGraphView<NodeDetails: View, Fallback: View>: View {
 		path.addLine(to: CGPoint(x: base.x + direction.y * half, y: base.y - direction.x * half))
 		path.closeSubpath()
 		return path
-	}
-
-	@ViewBuilder
-	private func nodeView(_ node: HomerGraphLayout.Node) -> some View {
-		let box = HomerWorkflowNodeBox(
-			node: node,
-			tint: node.isTerminal ? nil : status.flatMap { HomerWorkflowNodeTint(status: $0, node: node.id) },
-			commandStates: status?.subs?[node.id]?.flatMap { ($0.commands ?? []).map(\.state) } ?? []
-		)
-		if !node.isTerminal, let subs = status?.subs?[node.id], !subs.isEmpty {
-			Button {
-				openNode = node.id
-			} label: {
-				box
-			}
-			.buttonStyle(.plain)
-			.help("\(node.id): show its runs")
-			.popover(
-				isPresented: Binding(
-					get: { openNode == node.id },
-					set: { isPresented in
-						if !isPresented, openNode == node.id {
-							openNode = nil
-						}
-					}
-				),
-				arrowEdge: .bottom
-			) {
-				nodeDetails(node.id)
-			}
-		}
-		else {
-			box
-				.help(node.id)
-		}
-	}
-
-	private var edgeLegend: some View {
-		HStack(spacing: 16) {
-			legendEntry("fixed edge", color: .secondary, lineWidth: 1.25, dashed: false)
-			legendEntry("conditional edge", color: .secondary, lineWidth: 1.25, dashed: true)
-			if status?.traversed != nil {
-				legendEntry("taken path", color: .green, lineWidth: 2, dashed: false)
-			}
-		}
-		.scaledFont(.caption)
-		.foregroundStyle(.secondary)
-	}
-
-	private func legendEntry(_ title: String, color: Color, lineWidth: CGFloat, dashed: Bool) -> some View {
-		HStack(spacing: 6) {
-			Path { path in
-				path.move(to: CGPoint(x: 0, y: 3))
-				path.addLine(to: CGPoint(x: 20, y: 3))
-			}
-			.stroke(color, style: StrokeStyle(lineWidth: lineWidth, dash: dashed ? [4, 3] : []))
-			.frame(width: 20, height: 6)
-			Text(title)
-		}
-	}
-}
-
-extension HomerWorkflowGraphView where NodeDetails == EmptyView {
-	/// The workflow's structure alone.
-	init(
-		topology: HomerLangGraphStatus.Topology,
-		maxHeight: CGFloat = 480,
-		@ViewBuilder fallback: @escaping () -> Fallback
-	) {
-		self.init(topology: topology, status: nil, maxHeight: maxHeight, nodeDetails: { _ in EmptyView() }, fallback: fallback)
 	}
 }
 

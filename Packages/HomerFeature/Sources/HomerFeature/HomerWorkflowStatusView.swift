@@ -8,6 +8,8 @@ import SwiftUI
 /// status without a graph — in the graph's order, each with where the run went from it.
 struct HomerWorkflowStatusView: View {
 	let status: HomerLangGraphStatus
+	/// The graph's file name when saved as an image.
+	var imageName = "Workflow"
 	let openProcess: (Int) -> Void
 	let openGraph: () -> Void
 
@@ -36,6 +38,7 @@ struct HomerWorkflowStatusView: View {
 					HomerWorkflowGraphView(
 						topology: topology,
 						status: status,
+						imageName: imageName,
 						nodeDetails: { HomerWorkflowNodeDetails(status: status, node: $0, openProcess: openProcess) },
 						fallback: { nodes }
 					)

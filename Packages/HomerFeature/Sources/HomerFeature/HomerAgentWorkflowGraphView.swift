@@ -48,7 +48,11 @@ struct HomerAgentWorkflowGraphView: View {
 			}
 		}
 		.padding(20)
-		.frame(minWidth: 560, idealWidth: 820, minHeight: 360, idealHeight: 680)
+		// Resizable, as a graph can be larger than any default size. A flexible frame alone leaves
+		// the sheet's window fixed; `.fitted` sizing opens it at the ideal size and makes it
+		// resizable down to the minimum (checked 2026-10-08).
+		.frame(minWidth: 560, idealWidth: 820, maxWidth: .infinity, minHeight: 360, idealHeight: 680, maxHeight: .infinity)
+		.presentationSizing(.fitted)
 		.task { store.send(.task) }
 	}
 
@@ -96,7 +100,11 @@ struct HomerAgentWorkflowGraphView: View {
 	@ViewBuilder
 	private func graph(_ graph: HomerAgentWorkflowGraph, maxHeight: CGFloat) -> some View {
 		if let topology = graph.topology {
-			HomerWorkflowGraphView(topology: topology, maxHeight: maxHeight) {
+			HomerWorkflowGraphView(
+				topology: topology,
+				maxHeight: maxHeight,
+				imageName: "\(store.agentName) \(graph.label) workflow"
+			) {
 				Text("Graph could not be drawn (\(topology.nodes.count) nodes, \(topology.edges.count) edges).")
 					.scaledFont(.callout)
 					.foregroundStyle(.secondary)
