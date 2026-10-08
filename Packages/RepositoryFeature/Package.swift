@@ -9,7 +9,6 @@ let package = Package(
 	],
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
-		.package(path: "../ActivityLog"),
 		.package(path: "../GitCore"),
 		.package(path: "../GitGraphFeature"),
 		.package(path: "../AppUI"),
@@ -21,7 +20,7 @@ let package = Package(
 		.package(path: "../ActionButtons"),
 		.package(path: "../StagingFeature"),
 		.package(path: "../YouTrackMenu"),
-		.package(url: "https://github.com/MartinStrambach/Homer-console-mac-app", from: "0.2.0"),
+		.package(url: "https://github.com/MartinStrambach/Homer-console-mac-app", from: "0.2.1"),
 		.package(path: "../SimulatorFeature"),
 	],
 	targets: [
@@ -29,7 +28,6 @@ let package = Package(
 			name: "RepositoryFeature",
 			dependencies: [
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
-				.product(name: "ActivityLog", package: "ActivityLog"),
 				.product(name: "GitCore", package: "GitCore"),
 				.product(name: "GitGraphFeature", package: "GitGraphFeature"),
 				.product(name: "AppUI", package: "AppUI"),
