@@ -127,10 +127,12 @@ struct HomerAgentsView: View {
 }
 
 /// The Schedules page of the selected instance (the console's `schedules/page.tsx`): its agents
-/// that run on a cron, soonest next run first. Admins only — the console shows it to no one
-/// else, and the instance never tells this reducer it is on screen for anyone else.
+/// that run on a cron, soonest next run first, each with Run (fire it now as the cron would).
+/// Admins only — the console shows it to no one else, and the instance never tells this reducer
+/// it is on screen for anyone else.
 struct HomerSchedulesView: View {
-	let store: StoreOf<HomerAgentsReducer>
+	@Bindable
+	var store: StoreOf<HomerAgentsReducer>
 
 	@State
 	private var selection: Set<HomerAgent.ID> = []
@@ -156,6 +158,7 @@ struct HomerSchedulesView: View {
 				table
 			}
 		}
+		.alert($store.scope(\.$alert, action: \.alert))
 	}
 
 	private var table: some View {
@@ -209,6 +212,24 @@ struct HomerSchedulesView: View {
 				lastRun(agent.cron)
 			}
 			.width(min: 120, ideal: 150)
+
+			TableColumn("Actions") { agent in
+				if store.cronRunsInFlight.contains(agent.name) {
+					ProgressView()
+						.controlSize(.small)
+				}
+				else {
+					Button {
+						store.send(.cronRunTapped(agentName: agent.name))
+					} label: {
+						Label("Run", systemImage: "play.fill")
+					}
+					.buttonStyle(.scaledBordered)
+					.controlSize(.small)
+					.help("Run \(agent.name) now, as its cron would")
+				}
+			}
+			.width(min: 80, ideal: 90)
 		}
 		.contextMenu(forSelectionType: HomerAgent.ID.self) { ids in
 			if let id = ids.first, let agent = store.agents[id: id] {
@@ -260,6 +281,12 @@ struct HomerSchedulesView: View {
 				Label("Open Last Run #\(processId)", systemImage: "doc.text.magnifyingglass")
 			}
 		}
+		Button {
+			store.send(.cronRunTapped(agentName: agent.name))
+		} label: {
+			Label("Run Now…", systemImage: "play")
+		}
+		.disabled(store.cronRunsInFlight.contains(agent.name))
 		Divider()
 		if let expression = agent.cron?.expression {
 			Button {

@@ -95,4 +95,6 @@ public nonisolated struct HomerContinuation: Equatable, Sendable, Identifiable, 
 /// `GET /api/v1/continuations`.
 nonisolated struct HomerContinuationList: Decodable {
 	var continuations: [HomerContinuation]
+	/// Every visible row matching the filters, before paging.
+	var total: Int?
 }

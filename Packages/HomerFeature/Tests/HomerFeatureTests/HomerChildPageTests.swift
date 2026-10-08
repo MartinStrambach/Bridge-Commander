@@ -80,6 +80,7 @@ struct HomerChildPageTests {
 			$0.continuousClock = TestClock()
 			$0[HomerClient.self].processes = { _, _ in HomerProcessPage(processes: [], total: 0) }
 			$0[HomerClient.self].openQuestions = { _ in [] }
+			$0[HomerContinuationsClient.self].pendingCount = { _ in 0 }
 			$0[HomerContinuationsClient.self].continuations = { _, _ in
 				fetches.withValue { $0 += 1 }
 				return []

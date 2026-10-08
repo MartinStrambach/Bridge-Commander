@@ -93,6 +93,7 @@ struct HomerConsoleReducerTests {
 			}
 			$0[HomerClient.self].agentNames = { _ in [] }
 			$0[HomerClient.self].openQuestions = { _ in [] }
+			$0[HomerContinuationsClient.self].pendingCount = { _ in 0 }
 		}
 		store.exhaustivity = .off(showSkippedAssertions: false)
 

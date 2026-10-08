@@ -296,4 +296,110 @@ struct HomerAgentsReducerTests {
 		await store.send(.newAgentTapped)
 		await store.receive(\.delegate, .openWebConsole(path: "agents", title: "Agents"))
 	}
+
+	@Test("a schedule's Run asks first, fires the cron and refetches the list for its last run")
+	func cronRunFires() async {
+		let clock = TestClock()
+		let fired = LockIsolated<[String]>([])
+		let ran = HomerAgent(
+			name: "Nightly",
+			cron: HomerAgent.Cron(
+				expression: "0 3 * * *",
+				timezone: "UTC",
+				nextRunAt: 1_760_000_000,
+				lastRunAt: 1_759_000_000,
+				lastRunProcessId: 42
+			)
+		)
+		let store = TestStore(initialState: loadedState()) {
+			HomerAgentsReducer()
+		} withDependencies: { [factory] in
+			$0.continuousClock = clock
+			$0[HomerAgentsClient.self].fireCron = { baseURL, name in
+				#expect(baseURL == Self.baseURL)
+				fired.withValue { $0.append(name) }
+			}
+			$0[HomerAgentsClient.self].agents = { _ in [factory, ran] }
+		}
+
+		await store.send(.cronRunTapped(agentName: "Nightly")) {
+			$0.alert = AlertState {
+				TextState("Run Nightly now?")
+			} actions: {
+				ButtonState(action: .cronRunConfirmed(agentName: "Nightly")) {
+					TextState("Run Now")
+				}
+				ButtonState(role: .cancel) {
+					TextState("Cancel")
+				}
+			} message: {
+				TextState(
+					"This starts the agent immediately with its cron semantics — no parameters are asked for, and the run is owned by the scheduler. A fire that starts no run (cost cap, cooldown, lock, parallel-run or queued-runs cap) is only logged, never reported as an error."
+				)
+			}
+		}
+		await store.send(.alert(.presented(.cronRunConfirmed(agentName: "Nightly")))) {
+			$0.alert = nil
+			$0.cronRunsInFlight = ["Nightly"]
+		}
+		await store.receive(\.cronRunFinished) {
+			$0.cronRunsInFlight = []
+		}
+		await store.receive(\.agentsLoaded) {
+			$0.agents = [factory, ran]
+		}
+		#expect(fired.value == ["Nightly"])
+
+		await store.send(.hidden) {
+			$0.isShown = false
+		}
+	}
+
+	@Test("a schedule's Run already on its way is not asked again")
+	func cronRunInFlight() async {
+		var initialState = loadedState()
+		initialState.cronRunsInFlight = ["Nightly"]
+		let store = TestStore(initialState: initialState) {
+			HomerAgentsReducer()
+		}
+
+		await store.send(.cronRunTapped(agentName: "Nightly"))
+	}
+
+	@Test("a refused Run says why; the 404 a non-admin gets reads as either cause")
+	func cronRunRefused() async {
+		var initialState = loadedState()
+		initialState.cronRunsInFlight = ["Nightly"]
+		let store = TestStore(initialState: initialState) {
+			HomerAgentsReducer()
+		}
+
+		await store.send(.cronRunFinished(agentName: "Nightly", .failure(HomerAPIError.server(status: 404, message: "Not found")))) {
+			$0.cronRunsInFlight = []
+			$0.alert = AlertState {
+				TextState("Could not run Nightly")
+			} actions: {
+				ButtonState(role: .cancel) {
+					TextState("OK")
+				}
+			} message: {
+				TextState("Nightly is no longer loaded, or your account may not run schedules.")
+			}
+		}
+	}
+
+	@Test("a Run answering 401 asks the instance to sign out; one for a replaced page is dropped")
+	func cronRunUnauthorized() async {
+		var initialState = loadedState()
+		initialState.cronRunsInFlight = ["Nightly"]
+		let store = TestStore(initialState: initialState) {
+			HomerAgentsReducer()
+		}
+
+		await store.send(.cronRunFinished(agentName: "Nightly", .failure(HomerAPIError.unauthorized))) {
+			$0.cronRunsInFlight = []
+		}
+		await store.receive(\.delegate, .unauthorized)
+		await store.send(.cronRunFinished(agentName: "Nightly", .failure(HomerAPIError.unauthorized)))
+	}
 }

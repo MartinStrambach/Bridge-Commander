@@ -3,9 +3,9 @@ import SwiftUI
 
 /// A LangGraph workflow's state (`workflow-status.tsx`): each node's state, the sub-agent runs
 /// the parked nodes dispatched, and the nodes' errors. The console draws the nodes on the
-/// workflow's Mermaid graph; here they are its node list — the console's own view of a status
-/// without a graph — in the graph's order, and the graph itself is a click away in the web
-/// console.
+/// workflow's graph, its taken edges green; here they are its node list — the console's own
+/// view of a status without a graph — in the graph's order, each with where the run went from
+/// it, and the graph itself is a click away in the web console.
 struct HomerWorkflowStatusView: View {
 	let status: HomerLangGraphStatus
 	let openProcess: (Int) -> Void
@@ -64,6 +64,13 @@ struct HomerWorkflowStatusView: View {
 					if let commands = commandStates(of: node.name), !commands.isEmpty {
 						HomerCommandDots(states: commands)
 					}
+					let targets = status.takenTargets(from: node.name)
+					if !targets.isEmpty {
+						Text("→ " + targets.joined(separator: ", "))
+							.scaledFont(.callout, design: .monospaced)
+							.foregroundStyle(.green)
+							.help("The run went on from \(node.name) to \(targets.joined(separator: ", "))")
+					}
 				}
 			}
 		}
@@ -80,7 +87,7 @@ struct HomerWorkflowStatusView: View {
 			Text("thread \(status.threadId)")
 				.scaledFont(.caption, design: .monospaced)
 				.textSelection(.enabled)
-			if status.mermaid != nil {
+			if status.hasGraph {
 				Button("Show Graph", action: openGraph)
 					.buttonStyle(.link)
 					.help("Open the run in the web console, which draws the workflow's graph")

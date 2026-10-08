@@ -69,11 +69,44 @@ struct HomerProcessDetailModelsTests {
 		#expect(status.allSubs.map(\.sub.interruptId) == ["i-1", "i-2"])
 	}
 
-	@Test("without a Mermaid source the nodes are listed by name")
+	@Test("workflow nodes come in the topology's order, ahead of the Mermaid source's; taken edges by node")
+	func workflowNodeOrderFromTopology() throws {
+		let json = #"""
+			{
+			  "label": "workflow", "module": "flow", "threadId": "t-1",
+			  "topology": {
+			    "nodes": [{ "id": "__start__" }, { "id": "review" }, { "id": "fan out" }, { "id": "plan" }, { "id": "__end__" }],
+			    "edges": [
+			      { "source": "__start__", "target": "review", "label": null, "conditional": false },
+			      { "source": "review", "target": "fan out", "conditional": true },
+			      { "source": "review", "target": "plan", "label": "retry", "conditional": true }
+			    ]
+			  },
+			  "mermaid": "graph TD;\n\tplan(plan)\n\tfan\\20out(fan out)\n\treview(review)\n",
+			  "nodes": { "plan": "pending", "fan out": "parked", "review": "done", "extra": "pending" },
+			  "traversed": [
+			    { "source": "__start__", "target": "review" },
+			    { "source": "review", "target": "fan out" },
+			    { "source": "review", "target": "plan" }
+			  ]
+			}
+			"""#
+
+		let status = try JSONDecoder().decode(HomerLangGraphStatus.self, from: Data(json.utf8))
+
+		#expect(status.nodes.map(\.name) == ["review", "fan out", "plan", "extra"])
+		#expect(status.takenTargets(from: "review") == ["fan out", "plan"])
+		#expect(status.takenTargets(from: "plan").isEmpty)
+		#expect(status.hasGraph)
+	}
+
+	@Test("without a topology or Mermaid source the nodes are listed by name, with no graph")
 	func workflowNodesWithoutGraph() {
 		let status = HomerLangGraphStatus(label: "workflow", threadId: "t", nodeStates: ["b": "done", "a": "pending"])
 
 		#expect(status.nodes.map(\.name) == ["a", "b"])
+		#expect(!status.hasGraph)
+		#expect(status.takenTargets(from: "a").isEmpty)
 	}
 
 	@Test("Mermaid node ids escape like langchain's `_to_safe_id`")
