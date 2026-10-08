@@ -30,6 +30,13 @@ struct ProcessRunnerTests {
 			)
 		}
 
+		// A read end that had a readability handler is closed asynchronously, on the handler's
+		// dispatch queue, so the last few launches' read ends can still be open for a moment
+		// (often under Thread Sanitizer). A leak never closes.
+		let deadline = ContinuousClock.now + .seconds(2)
+		while openDescriptorCount() > before, ContinuousClock.now < deadline {
+			try? await Task.sleep(for: .milliseconds(10))
+		}
 		#expect(openDescriptorCount() <= before)
 	}
 
