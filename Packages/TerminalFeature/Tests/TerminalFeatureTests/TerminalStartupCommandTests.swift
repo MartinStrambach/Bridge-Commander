@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftTerm
 import Testing
 
 @testable import TerminalFeature

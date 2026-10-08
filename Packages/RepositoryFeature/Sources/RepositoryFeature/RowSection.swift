@@ -1,3 +1,4 @@
+import Settings
 import SwiftUI
 
 /// A run of adjacent rows the list draws one header above.

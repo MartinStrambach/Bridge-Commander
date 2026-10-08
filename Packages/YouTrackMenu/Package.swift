@@ -27,11 +27,15 @@ let package = Package(
 				"YouTrackMenu",
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "ToolsIntegration", package: "ToolsIntegration"),
+				.product(name: "AppUI", package: "AppUI"),
 			]
 		),
 	]
 )
 
 for target in package.targets {
-    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+    target.swiftSettings = (target.swiftSettings ?? []) + [
+        .treatAllWarnings(as: .error),
+        .enableUpcomingFeature("MemberImportVisibility"),
+    ]
 }

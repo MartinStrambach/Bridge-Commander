@@ -29,10 +29,11 @@ Packages/
   YouTrackMenu/           # YouTrack ticket menu (move to a reachable state)
   GitGraphFeature/        # Commit graph view + selected commit's diff
   StagingFeature/         # File staging panel (detail view, diff, commit)
-  HomerFeature/           # Homer console section (instances, sign-in, processes, questions)
   SimulatorFeature/       # iOS simulator pane beside the terminal + MCP server for Claude Code
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature; hosts the window's sections)
 ```
+
+The Homer console section is the `HomerFeature` product of a separate repository, https://github.com/MartinStrambach/Homer-console-mac-app (its own modules, tests and a standalone app), which RepositoryFeature depends on by version. Change it there, tag a release, and raise the requirement in `Packages/RepositoryFeature/Package.swift`; to work on both at once, point that dependency at a local checkout (`.package(path:)`) and switch it back before committing.
 
 ### App Target
 
@@ -115,7 +116,8 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 **Test:**
 - Unit tests live in per-package `Tests/` targets and use Swift Testing (`import Testing`, `@Test`/`#expect`).
 - Run a single package's tests: `swift test --package-path Packages/<Name>` (e.g. `swift test --package-path Packages/GitCore`).
-- Warnings are errors: the app target sets `SWIFT_TREAT_WARNINGS_AS_ERRORS`, and every `Package.swift` ends with a loop adding `.treatAllWarnings(as: .error)` to all its targets, tests included (a new package needs the same loop). Test targets are compiled only by `swift test`, not by the app build, so run them after touching tests or bumping a dependency that deprecates something. The reverse holds too: the app target enables TCA's `ComposableArchitecture2Deprecations` trait and a package build does not, so `swift build` passes code (e.g. `Effect.concatenate`) that the app build rejects as deprecated — build the app before calling a package change done.
+- Warnings are errors: the app target sets `SWIFT_TREAT_WARNINGS_AS_ERRORS`, and every `Package.swift` ends with a loop adding `.treatAllWarnings(as: .error)` to all its targets, tests included (a new package needs the same loop).
+- Imports are explicit: the app target sets `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY` and the same `Package.swift` loop adds `.enableUpcomingFeature("MemberImportVisibility")`, so a file must import every module whose members it uses (often `Foundation`) — an import in another file of the module no longer makes them visible. Test targets are compiled only by `swift test`, not by the app build, so run them after touching tests or bumping a dependency that deprecates something. The reverse holds too: the app target enables TCA's `ComposableArchitecture2Deprecations` trait and a package build does not, so `swift build` passes code (e.g. `Effect.concatenate`) that the app build rejects as deprecated — build the app before calling a package change done.
 - In `TestStore` assertions, mutate `@Shared` state as `$0.$x.withLock { $0 = … }`; the plain setter is deprecated.
 - When adding tests to a package that has none, add a `.testTarget(name: "<Name>Tests", dependencies: ["<Name>"])` to that package's `Package.swift`.
 - Prefer pure, dependency-free logic (helpers, models) for unit tests; code that shells out to git is verified by build + manual run.

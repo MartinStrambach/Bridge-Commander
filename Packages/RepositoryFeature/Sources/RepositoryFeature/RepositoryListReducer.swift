@@ -1,8 +1,11 @@
+import ActionButtons
 import ActivityLog
 import AppKit
 import ComposableArchitecture
 import Foundation
+import GitActionsMenu
 import GitCore
+import GitGraphFeature
 internal import OrderedCollections
 import Settings
 import SimulatorFeature

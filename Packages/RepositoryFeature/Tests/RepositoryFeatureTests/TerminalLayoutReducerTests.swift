@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import GitCore
 import GitGraphFeature
 import StagingFeature
 import TerminalFeature

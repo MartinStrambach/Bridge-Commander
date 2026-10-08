@@ -1,5 +1,6 @@
 import AppUI
 import Foundation
+import SwiftUI
 
 /// One configurable element of a repository row's action bar.
 ///
