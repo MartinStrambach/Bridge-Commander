@@ -28,10 +28,11 @@ Packages/
   YouTrackMenu/           # YouTrack ticket menu (move to a reachable state)
   GitGraphFeature/        # Commit graph view + selected commit's diff
   StagingFeature/         # File staging panel (detail view, diff, commit)
-  HomerFeature/           # Homer console section (instances, sign-in, processes, questions)
   SimulatorFeature/       # iOS simulator pane beside the terminal + MCP server for Claude Code
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature; hosts the window's sections)
 ```
+
+The Homer console section is the `HomerFeature` product of a separate repository, https://github.com/MartinStrambach/Homer-console-mac-app (its own modules, tests and a standalone app), which RepositoryFeature depends on by version. Change it there, tag a release, and raise the requirement in `Packages/RepositoryFeature/Package.swift`; to work on both at once, point that dependency at a local checkout (`.package(path:)`) and switch it back before committing.
 
 ### App Target
 
