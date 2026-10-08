@@ -4,8 +4,8 @@ import Foundation
 /// The Agents and Schedules pages of one instance: both show the instance's agents, Schedules
 /// only those with a cron. Agents mirrors the console's `agents/page.tsx` (search, Reload, the
 /// agent cards, Run); Schedules its `schedules/page.tsx` (with its Run, which fires the cron
-/// now). An agent's detail page, workflow
-/// graph, file editor, debug runs and "New agent" open in the web console.
+/// now). An agent's workflow graph is a sheet here; its detail page, file editor, debug runs
+/// and "New agent" open in the web console.
 @Reducer
 public struct HomerAgentsReducer: Sendable {
 	/// The console reads the list once and keeps it 5 minutes (`polling.agentsCacheTime`), then
@@ -29,6 +29,8 @@ public struct HomerAgentsReducer: Sendable {
 		public internal(set) var reloadError: String?
 		@Presents
 		public var runAgent: HomerRunAgentReducer.State?
+		@Presents
+		public var workflowGraph: HomerAgentWorkflowGraphReducer.State?
 		/// Schedules whose "Run Now" is still waiting on the server.
 		public internal(set) var cronRunsInFlight: Set<HomerAgent.ID> = []
 		/// "Run Now"'s confirmation, and why a fire failed.
@@ -80,6 +82,8 @@ public struct HomerAgentsReducer: Sendable {
 
 		/// The agent's console page: its parameters, workflow graph and run history.
 		case agentTapped(agentName: String)
+		case workflowGraphTapped(agentName: String)
+		case workflowGraph(PresentationAction<HomerAgentWorkflowGraphReducer.Action>)
 		/// The console's file editor, which also holds the debug runs.
 		case editTapped(agentName: String)
 		/// The console's agents page, whose "New agent" dialog creates one.
@@ -212,6 +216,17 @@ public struct HomerAgentsReducer: Sendable {
 				let path = HomerAgent(name: agentName).consolePath
 				return .send(.delegate(.openWebConsole(path: path, title: agentName)))
 
+			case let .workflowGraphTapped(agentName):
+				state.workflowGraph = HomerAgentWorkflowGraphReducer.State(baseURL: state.baseURL, agentName: agentName)
+				return .none
+
+			case .workflowGraph(.presented(.delegate(.unauthorized))):
+				state.workflowGraph = nil
+				return .send(.delegate(.unauthorized))
+
+			case .workflowGraph:
+				return .none
+
 			case let .editTapped(agentName):
 				let path = HomerAgent(name: agentName).consolePath + "/edit"
 				return .send(.delegate(.openWebConsole(path: path, title: "Edit \(agentName)")))
@@ -289,6 +304,9 @@ public struct HomerAgentsReducer: Sendable {
 		}
 		.ifLet(\.$runAgent, action: \.runAgent) {
 			HomerRunAgentReducer()
+		}
+		.ifLet(\.$workflowGraph, action: \.workflowGraph) {
+			HomerAgentWorkflowGraphReducer()
 		}
 		.ifLet(\.$alert, action: \.alert)
 	}

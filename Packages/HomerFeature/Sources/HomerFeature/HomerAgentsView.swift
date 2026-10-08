@@ -39,6 +39,9 @@ struct HomerAgentsView: View {
 		) { runStore in
 			HomerRunAgentView(store: runStore)
 		}
+		.sheet(item: $store.scope(\.$workflowGraph, action: \.workflowGraph)) { graphStore in
+			HomerAgentWorkflowGraphView(store: graphStore)
+		}
 	}
 
 	private var toolbar: some View {

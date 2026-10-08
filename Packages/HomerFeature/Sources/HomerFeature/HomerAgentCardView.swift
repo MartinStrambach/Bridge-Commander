@@ -68,6 +68,14 @@ struct HomerAgentCard: View {
 
 			Spacer(minLength: 0)
 
+			Button {
+				store.send(.workflowGraphTapped(agentName: agent.name))
+			} label: {
+				Image(systemName: "point.3.connected.trianglepath.dotted")
+			}
+			.buttonStyle(.borderless)
+			.help("Show the workflow graph of \(agent.name)'s LangGraph commands")
+
 			if user.canEdit(agent) {
 				Button {
 					store.send(.editTapped(agentName: agent.name))
@@ -146,6 +154,11 @@ struct HomerAgentCard: View {
 			store.send(.agentTapped(agentName: agent.name))
 		} label: {
 			Label("Open Agent", systemImage: "square.stack.3d.up")
+		}
+		Button {
+			store.send(.workflowGraphTapped(agentName: agent.name))
+		} label: {
+			Label("Show Workflow Graph", systemImage: "point.3.connected.trianglepath.dotted")
 		}
 		if let url = HomerEndpoint.pageURL(baseURL: store.baseURL, path: agent.consolePath) {
 			Button {
