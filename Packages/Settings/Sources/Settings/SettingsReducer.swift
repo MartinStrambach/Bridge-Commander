@@ -46,6 +46,9 @@ public struct SettingsReducer {
 		@Shared(.deleteDerivedDataOnWorktreeDelete)
 		public var deleteDerivedDataOnWorktreeDelete = true
 
+		@Shared(.activityLogIncludesReadOnlyGitCommands)
+		public var activityLogIncludesReadOnlyGitCommands = false
+
 		@Shared(.tuistCacheType)
 		public var tuistCacheType = TuistCacheType.externalOnly
 
@@ -152,6 +155,7 @@ public struct SettingsReducer {
 		case setTicketBranchNameTemplate(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
+		case setActivityLogIncludesReadOnlyGitCommands(Bool)
 		case setTuistCacheType(TuistCacheType)
 		case setTerminalApp(TerminalApp)
 		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
@@ -571,6 +575,10 @@ public struct SettingsReducer {
 
 			case let .setDeleteDerivedDataOnWorktreeDelete(value):
 				state.$deleteDerivedDataOnWorktreeDelete.withLock { $0 = value }
+				return .none
+
+			case let .setActivityLogIncludesReadOnlyGitCommands(value):
+				state.$activityLogIncludesReadOnlyGitCommands.withLock { $0 = value }
 				return .none
 
 			case let .setTuistCacheType(cacheType):

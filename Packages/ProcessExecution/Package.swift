@@ -7,11 +7,15 @@ let package = Package(
     products: [
         .library(name: "ProcessExecution", targets: ["ProcessExecution"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(path: "../ActivityLog"),
+    ],
     targets: [
         .target(
             name: "ProcessExecution",
-            dependencies: []
+            dependencies: [
+                .product(name: "ActivityLog", package: "ActivityLog"),
+            ]
         ),
         .testTarget(
             name: "ProcessExecutionTests",

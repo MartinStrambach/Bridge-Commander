@@ -161,6 +161,9 @@ public struct SettingsView<Updates: View>: View {
 			tuistCacheOptionsSection
 			tuistGenerateOptionsSection
 
+		case .activityLog:
+			activityLogSection
+
 		case .updates:
 			SettingsSection("Updates") {
 				updates
@@ -966,6 +969,34 @@ public struct SettingsView<Updates: View>: View {
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
+		}
+	}
+
+	// MARK: - Activity Log
+
+	private var activityLogSection: some View {
+		SettingsSection("Activity Log") {
+			Text(
+				"Records the git commands Bridge Commander runs that change a repository (push, pull, fetch, merge, checkout, stash, commit, worktrees), the GitHub, GitLab and YouTrack requests repository rows make, and errors, with their exit and status codes. Save the log to attach it to a bug report. Tokens are never recorded and your home folder appears as ~."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			Toggle(
+				"Also record read-only git commands",
+				isOn: $store.activityLogIncludesReadOnlyGitCommands
+					.sending(\.setActivityLogIncludesReadOnlyGitCommands)
+			)
+			.padding(.top, 4)
+
+			Text(
+				"Status, log, diff and the like, which every refresh runs for every repository, so the log fills quickly. They are recorded whenever they fail, with this off too."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			ActivityLogControls()
+				.padding(.top, 4)
 		}
 	}
 

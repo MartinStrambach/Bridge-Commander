@@ -1,3 +1,4 @@
+import ActivityLog
 import ComposableArchitecture
 import RepositoryFeature
 import Settings
@@ -18,6 +19,23 @@ struct BridgeCommanderApp: App {
 		updaterDelegate: nil,
 		userDriverDelegate: nil
 	)
+
+	init() {
+		ActivityLog.installUncaughtExceptionHandler()
+		let info = Bundle.main.infoDictionary ?? [:]
+		ActivityLog.shared.record(
+			.app,
+			"Launched \(info["CFBundleShortVersionString"] as? String ?? "?") on \(ProcessInfo.processInfo.operatingSystemVersionString)"
+		)
+		// Entries are written on a background queue; quitting would drop what is still queued.
+		NotificationCenter.default.addObserver(
+			forName: NSApplication.willTerminateNotification,
+			object: nil,
+			queue: nil
+		) { _ in
+			ActivityLog.shared.flush()
+		}
+	}
 
 	var body: some Scene {
 		WindowGroup(id: "main") {

@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 
 public nonisolated extension YouTrackService {
@@ -23,7 +24,7 @@ public nonisolated extension YouTrackService {
 		request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
 		request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-		let (data, response) = try await URLSession.shared.data(for: request)
+		let (data, response) = try await URLSession.shared.loggedData(for: request)
 		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 			throw YouTrackServiceError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
 		}

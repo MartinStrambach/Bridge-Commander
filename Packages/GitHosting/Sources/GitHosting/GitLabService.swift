@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 
 public nonisolated enum GitLabService {
@@ -74,7 +75,7 @@ public nonisolated enum GitLabService {
 		)
 
 		print("GitLabService: Fetching MR for \(projectPath) on branch \(branch)")
-		let (data, response) = try await URLSession.shared.data(for: request)
+		let (data, response) = try await URLSession.shared.loggedData(for: request)
 
 		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 			let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -124,7 +125,7 @@ public nonisolated enum GitLabService {
 			BareGraphQLRequest(query: "{ currentUser { username } }")
 		)
 
-		let (data, response) = try await URLSession.shared.data(for: request)
+		let (data, response) = try await URLSession.shared.loggedData(for: request)
 		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
 			throw GitHostingError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
 		}

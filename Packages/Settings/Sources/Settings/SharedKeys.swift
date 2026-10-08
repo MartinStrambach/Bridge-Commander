@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 import Sharing
 
@@ -65,6 +66,12 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 
 	static var deleteDerivedDataOnWorktreeDelete: Self {
 		appStorage("deleteDerivedDataOnWorktreeDelete")
+	}
+
+	/// Whether the activity log records every git command rather than only those that change
+	/// something or fail. ActivityLog reads the same user defaults key on each command.
+	static var activityLogIncludesReadOnlyGitCommands: Self {
+		appStorage(ActivityLog.includesReadOnlyGitCommandsKey)
 	}
 
 	/// Whether highlighting text in the built-in terminal copies it to the pasteboard right away.
