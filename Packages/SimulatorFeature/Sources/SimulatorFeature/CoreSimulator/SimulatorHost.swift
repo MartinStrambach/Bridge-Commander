@@ -59,29 +59,47 @@ public final class SimulatorHost: @unchecked Sendable {
 		return "/Applications/Xcode.app/Contents/Developer"
 	}()
 
-	private static let frameworkLoad: Result<Void, SimulatorError> = {
-		let path = "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator"
+	private static let frameworkDirectory = "/Library/Developer/PrivateFrameworks/CoreSimulator.framework"
+
+	/// The result is the loaded version, which gates the input transport: it changed in 1155.4
+	/// (see `SimulatorHIDConnection`).
+	private static let frameworkLoad: Result<String?, SimulatorError> = {
+		let path = "\(frameworkDirectory)/CoreSimulator"
 		guard dlopen(path, RTLD_NOW | RTLD_GLOBAL) != nil else {
 			let detail = dlerror().map { String(cString: $0) } ?? path
 			return .failure(.frameworkUnavailable(detail))
 		}
-		return .success(())
+		return .success(installedCoreSimulatorVersion())
 	}()
 
-	/// The loaded CoreSimulator's version, e.g. "1171.7". Gates the input transport, which changed
-	/// in 1155.4 (see `SimulatorHIDConnection`).
-	public static var coreSimulatorVersion: String? {
-		guard case .success = frameworkLoad, let simDevice = NSClassFromString("SimDevice") else {
-			return nil
+	/// The version of the CoreSimulator on disk now, read afresh (`Bundle` would cache it).
+	private static func installedCoreSimulatorVersion() -> String? {
+		let plist = NSDictionary(contentsOfFile: "\(frameworkDirectory)/Resources/Info.plist")
+		return plist?["CFBundleVersion"] as? String
+	}
+
+	/// Loads CoreSimulator and returns its version, e.g. "1171.7" — or fails if the one loaded has
+	/// since been replaced on disk.
+	///
+	/// Every Xcode shares the one CoreSimulator.framework in `/Library/Developer`, and selecting or
+	/// updating Xcode can install another version over it. The copy loaded here can then no longer
+	/// reach CoreSimulatorService ("CoreSimulator.framework was changed while the process was
+	/// running"), and some of its calls raise instead of failing — `-[SimDeviceIOClient ioPorts]`
+	/// asserts — so nothing more is sent to it. A loaded framework cannot be unloaded: only a
+	/// restart of the app recovers.
+	private static func loadedFramework() throws -> String? {
+		let loaded = try frameworkLoad.get()
+		if let loaded, let installed = installedCoreSimulatorVersion(), installed != loaded {
+			throw SimulatorError.coreSimulatorChanged(loaded: loaded, installed: installed)
 		}
-		return Bundle(for: simDevice).infoDictionary?["CFBundleVersion"] as? String
+		return loaded
 	}
 
 	private func deviceSet() throws -> AnyObject {
+		_ = try Self.loadedFramework()
 		if let existing = state.withLock({ $0.deviceSet }) {
 			return existing.object
 		}
-		try Self.frameworkLoad.get()
 
 		guard let contextClass = NSClassFromString("SimServiceContext") else {
 			throw SimulatorError.frameworkUnavailable("SimServiceContext is missing")
@@ -238,7 +256,9 @@ public final class SimulatorHost: @unchecked Sendable {
 		guard
 			let deviceType = ObjCRuntime.object(device, "deviceType"),
 			let io = ObjCRuntime.object(device, "io"),
-			let ports = ObjCRuntime.object(io, "ioPorts") as? [AnyObject]
+			// Asserts when the IO client cannot enumerate the device's ports (CoreSimulatorService
+			// unreachable) rather than returning nil.
+			let ports = try ObjCRuntime.catchingException({ ObjCRuntime.object(io, "ioPorts") }) as? [AnyObject]
 		else {
 			throw SimulatorError.noFramebuffer
 		}
@@ -351,8 +371,7 @@ public final class SimulatorHost: @unchecked Sendable {
 	// MARK: - Input
 
 	func hidConnection(udid: String) async throws -> SimulatorHIDConnection {
-		guard let version = Self.coreSimulatorVersion else {
-			try Self.frameworkLoad.get()
+		guard let version = try Self.loadedFramework() else {
 			throw SimulatorError.frameworkUnavailable("unknown CoreSimulator version")
 		}
 		guard version.compare("1155.4", options: .numeric) != .orderedAscending else {
