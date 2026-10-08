@@ -9,7 +9,9 @@ protocol SimulatorToolActions: Sendable {
 	func select(_ device: SimulatorDevice) async
 	func screenshotJPEG(device: SimulatorDevice) async throws -> Data
 	func tap(device: SimulatorDevice, x: Double, y: Double, holdFor: Duration) async throws
-	func swipe(device: SimulatorDevice, from: CGPoint, to: CGPoint, duration: Duration) async throws
+	/// A one-finger drag; with `holdFor` above zero the finger first rests where it starts (a long
+	/// press before moving).
+	func swipe(device: SimulatorDevice, from: CGPoint, to: CGPoint, duration: Duration, holdFor: Duration) async throws
 	func type(device: SimulatorDevice, text: String) async throws
 	/// Presses the keys one after another.
 	func press(device: SimulatorDevice, keys: [SimulatorKeyStroke]) async throws
@@ -117,9 +119,13 @@ struct SimulatorMCPHandler: Sendable {
 	left — the same size as the screenshot image, and as displayed when rotate has turned the \
 	interface to landscape. describe_ui lists the screen's elements with \
 	their frames: prefer it for finding what to tap, and screenshots for how things look. To act \
-	on an element describe_ui lists, press_element, set_value and scroll_to_element find it by \
-	identifier or label, with no coordinates. The actions (tap, swipe, pinch, two_finger_drag, \
-	type_text, press_key, press_button and the element tools) return once \
+	on an element describe_ui lists, press_element, set_value, set_slider and scroll_to_element \
+	find it by identifier, label or value, with no coordinates; wait_for_element waits for one to \
+	appear (or go) while a screen loads. gesture does common scrolls and edge swipes with no \
+	coordinates; swipe with hold_ms drags and drops. batch runs several steps in one call — prefer \
+	it for a flow whose steps do not depend on looking at the screen in between. The actions (tap, \
+	swipe, gesture, pinch, two_finger_drag, type_text, press_key, press_button and the element \
+	tools) return once \
 	the screen has stopped changing, up to 3 s, and say whether it settled, did not change or is \
 	still changing — so look at the result right away instead of waiting or taking extra \
 	screenshots to catch up. Only when it is still changing (loading, a long animation) may a \

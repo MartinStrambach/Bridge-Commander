@@ -270,3 +270,32 @@ public nonisolated struct HomerAgentReloadResult: Equatable, Sendable, Decodable
 nonisolated struct HomerAgentRunResponse: Decodable {
 	var processId: Int
 }
+
+/// One LangGraph command's workflow graph (`LangGraphGraphInfo`,
+/// `GET /api/v1/agents/{name}/langgraph`). The server sends a topology or an error, never both;
+/// a server older than Homer 1.28 sends only the Mermaid source, which is not decoded, so such a
+/// graph has neither.
+public nonisolated struct HomerAgentWorkflowGraph: Equatable, Sendable, Identifiable, Decodable {
+	/// The command that runs the workflow.
+	public var label: String
+	public var module: String?
+	public var topology: HomerLangGraphStatus.Topology?
+	/// Why the server could not read the graph — `busy` when too many inspections run at once.
+	public var error: String?
+
+	public init(
+		label: String,
+		module: String? = nil,
+		topology: HomerLangGraphStatus.Topology? = nil,
+		error: String? = nil
+	) {
+		self.label = label
+		self.module = module
+		self.topology = topology
+		self.error = error
+	}
+
+	public var id: String {
+		label
+	}
+}

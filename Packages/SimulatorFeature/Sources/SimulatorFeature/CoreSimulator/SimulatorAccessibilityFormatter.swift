@@ -19,7 +19,7 @@ public nonisolated enum SimulatorAccessibilityFormatter {
 		var count = 0
 		append(root, depth: 0, into: &lines, count: &count, isRoot: true)
 		let header = "\(root.label.map { "\"\($0)\"" } ?? root.role), \(count) elements. "
-			+ "frame=(x,y,width,height) in points; tap an element's centre to activate it."
+			+ "frame=(x,y,width,height) in points; tap an element's centre to activate it, or its tap= point when it has one."
 		return ([header] + lines).joined(separator: "\n")
 	}
 
@@ -69,6 +69,10 @@ public nonisolated enum SimulatorAccessibilityFormatter {
 		parts.append(
 			"frame=(\(rounded(frame.minX)),\(rounded(frame.minY)),\(rounded(frame.width)),\(rounded(frame.height)))"
 		)
+		let point = node.activationPoint
+		if point != CGPoint(x: frame.midX, y: frame.midY) {
+			parts.append("tap=(\(rounded(point.x)),\(rounded(point.y)))")
+		}
 		if !node.isEnabled {
 			parts.append("disabled")
 		}

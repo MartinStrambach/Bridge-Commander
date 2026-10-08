@@ -19,8 +19,10 @@ let package = Package(
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
 				.product(name: "AppUI", package: "AppUI"),
 				.product(name: "ProcessExecution", package: "ProcessExecution"),
+				"ObjCExceptionCatching",
 			]
 		),
+		.target(name: "ObjCExceptionCatching"),
 		.testTarget(name: "SimulatorFeatureTests", dependencies: ["SimulatorFeature"]),
 	]
 )

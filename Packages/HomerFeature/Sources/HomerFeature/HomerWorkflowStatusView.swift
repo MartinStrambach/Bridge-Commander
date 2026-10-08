@@ -1,13 +1,15 @@
 import AppUI
 import SwiftUI
 
-/// A LangGraph workflow's state (`workflow-status.tsx`): each node's state, the sub-agent runs
-/// the parked nodes dispatched, and the nodes' errors. The console draws the nodes on the
-/// workflow's Mermaid graph; here they are its node list — the console's own view of a status
-/// without a graph — in the graph's order, and the graph itself is a click away in the web
-/// console.
+/// A LangGraph workflow's state (`workflow-status.tsx`): the workflow's graph with each node's
+/// state and the edges the run took, the sub-agent runs the parked nodes dispatched, and the
+/// nodes' errors. Without a topology (a server or `homer_langgraph` runtime before Homer 1.28),
+/// or above the graph's render cap, the nodes are a list instead — the console's own view of a
+/// status without a graph — in the graph's order, each with where the run went from it.
 struct HomerWorkflowStatusView: View {
 	let status: HomerLangGraphStatus
+	/// The graph's file name when saved as an image.
+	var imageName = "Workflow"
 	let openProcess: (Int) -> Void
 	let openGraph: () -> Void
 
@@ -32,7 +34,18 @@ struct HomerWorkflowStatusView: View {
 		}
 		else {
 			VStack(alignment: .leading, spacing: 8) {
-				nodes
+				if let topology = status.topology {
+					HomerWorkflowGraphView(
+						topology: topology,
+						status: status,
+						imageName: imageName,
+						nodeDetails: { HomerWorkflowNodeDetails(status: status, node: $0, openProcess: openProcess) },
+						fallback: { nodes }
+					)
+				}
+				else {
+					nodes
+				}
 				legend
 				subs
 				if let truncated = status.subsTruncated, !truncated.isEmpty {
@@ -64,6 +77,13 @@ struct HomerWorkflowStatusView: View {
 					if let commands = commandStates(of: node.name), !commands.isEmpty {
 						HomerCommandDots(states: commands)
 					}
+					let targets = status.takenTargets(from: node.name)
+					if !targets.isEmpty {
+						Text("→ " + targets.joined(separator: ", "))
+							.scaledFont(.callout, design: .monospaced)
+							.foregroundStyle(.green)
+							.help("The run went on from \(node.name) to \(targets.joined(separator: ", "))")
+					}
 				}
 			}
 		}
@@ -80,7 +100,8 @@ struct HomerWorkflowStatusView: View {
 			Text("thread \(status.threadId)")
 				.scaledFont(.caption, design: .monospaced)
 				.textSelection(.enabled)
-			if status.mermaid != nil {
+			// Only the deprecated Mermaid source to go by: the web console draws that.
+			if status.topology == nil, status.hasGraph {
 				Button("Show Graph", action: openGraph)
 					.buttonStyle(.link)
 					.help("Open the run in the web console, which draws the workflow's graph")
@@ -114,18 +135,7 @@ struct HomerWorkflowStatusView: View {
 						HStack(spacing: 4) {
 							Text(entry.node + ":")
 								.fontWeight(.medium)
-							Text(entry.sub.agentName ?? "sub")
-							if let processId = entry.sub.processId {
-								Button("#\(processId)") { openProcess(processId) }
-									.buttonStyle(.link)
-									.help("Open run #\(processId)")
-							}
-							// A resolved node keeps its subs, and an old one may have left the
-							// process store by now.
-							Text("— \(entry.sub.status ?? "purged")")
-							if let commands = entry.sub.commands, !commands.isEmpty {
-								HomerCommandDots(states: commands.map(\.state), labels: commands.map(\.label))
-							}
+							HomerWorkflowSubRow(sub: entry.sub, openProcess: openProcess)
 						}
 						.padding(.leading, 14)
 					}
@@ -139,6 +149,60 @@ struct HomerWorkflowStatusView: View {
 	/// The commands of a node's sub runs, in order — the dots the console pins to the node's box.
 	private func commandStates(of node: String) -> [String]? {
 		status.subs?[node]?.flatMap { ($0.commands ?? []).map(\.state) }
+	}
+}
+
+/// A sub run of a parked node: its agent, a link to its run, its status and its commands' dots.
+struct HomerWorkflowSubRow: View {
+	let sub: HomerLangGraphStatus.Sub
+	let openProcess: (Int) -> Void
+
+	var body: some View {
+		HStack(spacing: 4) {
+			Text(sub.agentName ?? "sub")
+			if let processId = sub.processId {
+				Button("#\(processId)") { openProcess(processId) }
+					.buttonStyle(.link)
+					.help("Open run #\(processId)")
+			}
+			// A resolved node keeps its subs, and an old one may have left the process store by
+			// now.
+			Text("— \(sub.status ?? "purged")")
+			if let commands = sub.commands, !commands.isEmpty {
+				HomerCommandDots(states: commands.map(\.state), labels: commands.map(\.label))
+			}
+		}
+	}
+}
+
+/// A graph node's popover (the console's node details): its state and the sub runs it
+/// dispatched. Opening a run closes it.
+private struct HomerWorkflowNodeDetails: View {
+	let status: HomerLangGraphStatus
+	let node: String
+	let openProcess: (Int) -> Void
+
+	@Environment(\.dismiss)
+	private var dismiss
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 8) {
+			Text("\(node) — \(status.nodeStates?[node] ?? "unreached")")
+				.fontWeight(.medium)
+				.textSelection(.enabled)
+			VStack(alignment: .leading, spacing: 4) {
+				ForEach(status.subs?[node] ?? [], id: \.interruptId) { sub in
+					HomerWorkflowSubRow(sub: sub) { processId in
+						dismiss()
+						openProcess(processId)
+					}
+				}
+			}
+			.foregroundStyle(.secondary)
+		}
+		.scaledFont(.caption)
+		.padding(12)
+		.frame(minWidth: 220, alignment: .leading)
 	}
 }
 

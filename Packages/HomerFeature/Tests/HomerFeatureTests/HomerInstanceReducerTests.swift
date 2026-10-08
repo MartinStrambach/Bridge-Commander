@@ -321,6 +321,7 @@ struct HomerInstanceReducerTests {
 					: HomerProcessPage(processes: [root], total: 1)
 			}
 			$0[HomerClient.self].openQuestions = { _ in [] }
+			$0[HomerContinuationsClient.self].pendingCount = { _ in 0 }
 		}
 
 		await store.send(.refreshTapped)
@@ -408,5 +409,86 @@ struct HomerInstanceReducerTests {
 
 		#expect(store.state.processActionsInFlight.isEmpty)
 		#expect(store.state.alert?.title == TextState("Could Not Kill #5"))
+	}
+
+	@Test("coming on screen counts the pending continuations for the page picker")
+	func pendingContinuationCountOnActivation() async {
+		let store = TestStore(initialState: signedInState()) {
+			HomerInstanceReducer()
+		} withDependencies: {
+			$0.continuousClock = TestClock()
+			$0[HomerClient.self].processes = { _, _ in HomerProcessPage(processes: [], total: 0) }
+			$0[HomerClient.self].agentNames = { _ in [] }
+			$0[HomerClient.self].openQuestions = { _ in [] }
+			$0[HomerContinuationsClient.self].pendingCount = { baseURL in
+				#expect(baseURL == Self.baseURL)
+				return 3
+			}
+		}
+		// The processes, questions and agent names load too; this test is about the count.
+		store.exhaustivity = .off(showSkippedAssertions: false)
+
+		await store.send(.activated)
+		await store.receive(\.pendingContinuationCountLoaded) {
+			$0.pendingContinuations = 3
+		}
+		#expect(store.state.pendingContinuationCount == 3)
+		await store.skipInFlightEffects()
+	}
+
+	@Test("the pending continuations count polls while on screen, is re-read after a cancel, and keeps its last value on a failure")
+	func pendingContinuationCountPolling() async {
+		let clock = TestClock()
+		let answers = LockIsolated<[Int?]>([2, nil, 1])
+		var initialState = signedInState()
+		initialState.isActive = true
+		let store = TestStore(initialState: initialState) {
+			HomerInstanceReducer()
+		} withDependencies: {
+			$0.continuousClock = clock
+			$0[HomerContinuationsClient.self].pendingCount = { _ in
+				let answer = answers.withValue { $0.removeFirst() }
+				guard let answer else {
+					throw HomerAPIError.unreachable("offline")
+				}
+				return answer
+			}
+		}
+
+		await store.send(.continuations(.delegate(.continuationsChanged)))
+		await store.receive(\.pendingContinuationCountLoaded) {
+			$0.pendingContinuations = 2
+		}
+		// The failed poll sends nothing; the count stays.
+		await clock.advance(by: HomerContinuationsReducer.pollInterval)
+		await clock.advance(by: HomerContinuationsReducer.pollInterval)
+		await store.receive(\.pendingContinuationCountLoaded) {
+			$0.pendingContinuations = 1
+		}
+
+		await store.send(.deactivated) {
+			$0.isActive = false
+		}
+		await clock.advance(by: HomerContinuationsReducer.pollInterval * 3)
+		// Off screen, a cancel elsewhere does not start it again.
+		await store.send(.continuations(.delegate(.continuationsChanged)))
+	}
+
+	@Test("signing out drops the count, and one arriving afterwards is ignored")
+	func pendingContinuationCountSignedOut() async {
+		var initialState = signedInState()
+		initialState.pendingContinuations = 4
+		let store = TestStore(initialState: initialState) {
+			HomerInstanceReducer()
+		} withDependencies: {
+			$0[HomerClient.self].logout = { _ in }
+		}
+
+		await store.send(.signOutTapped) {
+			$0.session = .signedOut
+			$0.pendingContinuations = nil
+		}
+		await store.send(.pendingContinuationCountLoaded(5))
+		#expect(store.state.pendingContinuationCount == 0)
 	}
 }

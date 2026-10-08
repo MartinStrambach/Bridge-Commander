@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ObjCExceptionCatching
 import ObjectiveC
 
 /// Typed `objc_msgSend` calls for the private classes this package talks to.
@@ -23,6 +24,20 @@ nonisolated enum ObjCRuntime {
 		}
 		return symbol
 	}()
+
+	/// Runs `body`, turning an Objective-C exception it raises into a thrown error. Some
+	/// CoreSimulator calls assert instead of failing (see `SimulatorHost.screen(of:pixelSize:)`), and an
+	/// exception thrown through Swift frames ends the process.
+	static func catchingException<T>(_ body: () -> T) throws -> T {
+		var result: T?
+		if let exception = BCCatchObjCException({ result = body() }) {
+			throw SimulatorError.coreSimulatorException(exception.reason ?? exception.name.rawValue)
+		}
+		guard let result else {
+			throw SimulatorError.coreSimulatorException("no result")
+		}
+		return result
+	}
 
 	static func responds(_ target: AnyObject, to selector: String) -> Bool {
 		target.responds(to: sel_registerName(selector))

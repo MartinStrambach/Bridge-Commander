@@ -170,8 +170,11 @@ public struct HomerContinuationsReducer: Sendable {
 					state.cancelErrors[id] = Self.cancelErrorMessage(error)
 				}
 				// Either way the lists are refetched, as the console does on settle: a 409/404
-				// means what is shown was stale.
-				return state.isShown ? poll(state) : .none
+				// means what is shown was stale. The badge's count too.
+				return .merge(
+					.send(.delegate(.continuationsChanged)),
+					state.isShown ? poll(state) : .none
+				)
 			}
 		}
 		.ifLet(\.$alert, action: \.alert)

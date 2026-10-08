@@ -91,8 +91,20 @@ public struct SimulatorPaneView: View {
 
 	// MARK: - Run
 
-	/// Below the screen: which scheme to build, and Run / Stop for the device shown above.
+	/// Below the screen: which scheme to build, and Run / Stop for the device shown above. When the
+	/// pane is too narrow, Run and Stop lose their titles first, then the scheme's name truncates
+	/// (last, because a menu that may shrink also stretches, moving its chevron away from the name).
 	private var runBar: some View {
+		ViewThatFits(in: .horizontal) {
+			runBarRow(iconOnly: false, truncatesScheme: false)
+			runBarRow(iconOnly: true, truncatesScheme: false)
+			runBarRow(iconOnly: true, truncatesScheme: true)
+		}
+		.padding(.horizontal, 10)
+		.frame(height: Self.runBarHeight)
+	}
+
+	private func runBarRow(iconOnly: Bool, truncatesScheme: Bool) -> some View {
 		HStack(spacing: 8) {
 			if projectPath == nil {
 				Text("No Xcode project to run")
@@ -108,14 +120,14 @@ public struct SimulatorPaneView: View {
 					.help("Only shared schemes and your own, saved as .xcscheme files, are listed.")
 			}
 			else {
-				schemeMenu
+				schemeMenu(truncates: truncatesScheme)
 			}
 
 			Spacer(minLength: 4)
 
 			if hasRunTab {
 				Button(action: onStop) {
-					Label("Stop", systemImage: "stop.fill")
+					runBarLabel("Stop", systemImage: "stop.fill", iconOnly: iconOnly)
 				}
 				.buttonStyle(.scaledBordered)
 				.help("Stop the build or the running app (Ctrl-C in its tab)")
@@ -124,18 +136,27 @@ public struct SimulatorPaneView: View {
 			Button {
 				store.send(.runButtonTapped)
 			} label: {
-				Label("Run", systemImage: "play.fill")
+				runBarLabel("Run", systemImage: "play.fill", iconOnly: iconOnly)
 			}
 			.buttonStyle(.scaledBorderedProminent)
 			.disabled(!store.canRun)
 			.help(runHelp)
 		}
-		.labelStyle(.titleAndIcon)
-		.padding(.horizontal, 10)
-		.frame(height: Self.runBarHeight)
 	}
 
-	private var schemeMenu: some View {
+	@ViewBuilder
+	private func runBarLabel(_ title: String, systemImage: String, iconOnly: Bool) -> some View {
+		if iconOnly {
+			Label(title, systemImage: systemImage)
+				.labelStyle(.iconOnly)
+		}
+		else {
+			Label(title, systemImage: systemImage)
+				.labelStyle(.titleAndIcon)
+		}
+	}
+
+	private func schemeMenu(truncates: Bool) -> some View {
 		Menu {
 			ForEach(store.schemes) { scheme in
 				Button {
@@ -151,11 +172,12 @@ public struct SimulatorPaneView: View {
 			}
 		} label: {
 			Label(store.selectedSchemeName ?? "Scheme", systemImage: "app.dashed")
+				.labelStyle(.titleAndIcon)
 				.scaledFont(.subheadline)
 				.lineLimit(1)
 		}
 		.menuStyle(.borderlessButton)
-		.fixedSize()
+		.fixedSize(horizontal: !truncates, vertical: true)
 		.disabled(store.schemes.isEmpty)
 		.help("The scheme Run builds")
 	}
@@ -169,9 +191,33 @@ public struct SimulatorPaneView: View {
 
 	// MARK: - Header
 
+	/// How many of the header's controls show as icons; the rest move into the More menu, so the
+	/// header fits whatever width the pane gets.
+	private enum HeaderDensity {
+		/// Every control as an icon.
+		case full
+		/// Screenshot and rotation in the More menu.
+		case compact
+		/// Everything but a running recording's stop button in the More menu.
+		case minimal
+	}
+
 	private var header: some View {
+		ViewThatFits(in: .horizontal) {
+			headerRow(.full)
+			headerRow(.compact)
+			headerRow(.minimal)
+			// Only when nothing else fits: a menu that may shrink also stretches, which would leave
+			// its chevron away from the name.
+			headerRow(.minimal, truncatesName: true)
+		}
+		.padding(.horizontal, 10)
+		.frame(height: Self.headerHeight)
+	}
+
+	private func headerRow(_ density: HeaderDensity, truncatesName: Bool = false) -> some View {
 		HStack(spacing: 6) {
-			deviceMenu
+			deviceMenu(truncates: truncatesName)
 
 			Spacer(minLength: 4)
 
@@ -186,13 +232,18 @@ public struct SimulatorPaneView: View {
 							.controlSize(.small)
 							.frame(width: 22, height: 22)
 					}
-					else {
+					else if density == .full {
 						iconButton("camera", help: "Save Screenshot") { store.send(.screenshotButtonTapped) }
 					}
-					recordButton
-					iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
-					iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
-					if let fold = device.fold {
+					if density != .minimal || store.isRecordingSelectedDevice || store.isTogglingRecording {
+						recordButton
+					}
+					if density == .full {
+						iconButton("rotate.left", help: "Rotate Left") { store.send(.rotateButtonTapped(clockwise: false)) }
+						iconButton("rotate.right", help: "Rotate Right") { store.send(.rotateButtonTapped(clockwise: true)) }
+					}
+					// At minimal density the More menu's Hinge submenu folds and unfolds.
+					if density != .minimal, let fold = device.fold {
 						if fold.showsInnerPanel {
 							iconButton("book.closed", help: "Fold") { store.send(.foldButtonTapped) }
 						}
@@ -200,9 +251,13 @@ public struct SimulatorPaneView: View {
 							iconButton("book", help: "Unfold") { store.send(.foldButtonTapped) }
 						}
 					}
-					iconButton("house", help: "Home") { store.send(.hardwareButtonTapped(.home)) }
-					moreMenu
-					iconButton("power", help: "Shut down \(device.name)") { store.send(.shutdownButtonTapped) }
+					if density != .minimal {
+						iconButton("house", help: "Home") { store.send(.hardwareButtonTapped(.home)) }
+					}
+					moreMenu(device: device, density: density)
+					if density != .minimal {
+						iconButton("power", help: "Shut down \(device.name)") { store.send(.shutdownButtonTapped) }
+					}
 				}
 				else if store.isRecordingSelectedDevice {
 					// simctl may still be finishing a recording of a device that shut down.
@@ -214,11 +269,9 @@ public struct SimulatorPaneView: View {
 				store.send(.closeButtonTapped(repositoryPath: repositoryPath))
 			}
 		}
-		.padding(.horizontal, 10)
-		.frame(height: Self.headerHeight)
 	}
 
-	private var deviceMenu: some View {
+	private func deviceMenu(truncates: Bool) -> some View {
 		Menu {
 			ForEach(store.devices) { device in
 				Button {
@@ -238,7 +291,7 @@ public struct SimulatorPaneView: View {
 				.lineLimit(1)
 		}
 		.menuStyle(.borderlessButton)
-		.fixedSize()
+		.fixedSize(horizontal: !truncates, vertical: true)
 		.labelStyle(.titleAndIcon)
 		.disabled(store.devices.isEmpty)
 	}
@@ -269,9 +322,38 @@ public struct SimulatorPaneView: View {
 		}
 	}
 
-	/// Simulator.app's Features and the buttons that have no icon of their own here.
-	private var moreMenu: some View {
+	/// Simulator.app's Features, the buttons that have no icon of their own here, and the header's
+	/// controls that do not fit at the pane's width.
+	private func moreMenu(device: SimulatorDevice, density: HeaderDensity) -> some View {
 		Menu {
+			if density != .full {
+				Button {
+					store.send(.screenshotButtonTapped)
+				} label: {
+					Label("Save Screenshot", systemImage: "camera")
+				}
+				.disabled(store.isSavingScreenshot)
+				if density == .minimal, !store.isRecordingSelectedDevice, !store.isTogglingRecording {
+					Button {
+						store.send(.recordButtonTapped)
+					} label: {
+						Label("Record Screen", systemImage: "record.circle")
+					}
+				}
+				Button {
+					store.send(.rotateButtonTapped(clockwise: false))
+				} label: {
+					Label("Rotate Left", systemImage: "rotate.left")
+				}
+				Button {
+					store.send(.rotateButtonTapped(clockwise: true))
+				} label: {
+					Label("Rotate Right", systemImage: "rotate.right")
+				}
+
+				Divider()
+			}
+
 			Button {
 				store.send(.memoryWarningButtonTapped)
 			} label: {
@@ -291,7 +373,7 @@ public struct SimulatorPaneView: View {
 				Label("Location", systemImage: "location")
 			}
 
-			if let current = store.selectedDevice?.fold {
+			if let current = device.fold {
 				Menu {
 					ForEach(SimulatorFold.allCases, id: \.self) { fold in
 						Button {
@@ -313,11 +395,21 @@ public struct SimulatorPaneView: View {
 
 			Divider()
 
-			ForEach([SimulatorHardwareButton.sideButton, .siri, .volumeUp, .volumeDown, .playPause], id: \.self) { button in
+			ForEach(Self.moreMenuButtons(density: density), id: \.self) { button in
 				Button {
 					store.send(.hardwareButtonTapped(button))
 				} label: {
 					Label(button.title, systemImage: Self.icon(for: button))
+				}
+			}
+
+			if density == .minimal {
+				Divider()
+
+				Button {
+					store.send(.shutdownButtonTapped)
+				} label: {
+					Label("Shut Down \(device.name)", systemImage: "power")
 				}
 			}
 		} label: {
@@ -331,6 +423,11 @@ public struct SimulatorPaneView: View {
 		.fixedSize()
 		.labelStyle(.titleAndIcon)
 		.help("More")
+	}
+
+	private static func moreMenuButtons(density: HeaderDensity) -> [SimulatorHardwareButton] {
+		let buttons: [SimulatorHardwareButton] = [.sideButton, .siri, .volumeUp, .volumeDown, .playPause]
+		return density == .minimal ? [.home] + buttons : buttons
 	}
 
 	private static func icon(for button: SimulatorHardwareButton) -> String {
