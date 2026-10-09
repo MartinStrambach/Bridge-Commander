@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The simulator beside the terminal: a device menu, its controls, and its live screen.
 public struct SimulatorPaneView: View {
-	let store: StoreOf<SimulatorPaneReducer>
+	@Bindable var store: StoreOf<SimulatorPaneReducer>
 	/// The space the panel offers, from which the pane takes a width that fits the device's
 	/// screen at the available height.
 	let availableSize: CGSize
@@ -117,6 +117,7 @@ public struct SimulatorPaneView: View {
 		.task(id: projectPath) {
 			store.send(.projectChanged(projectPath))
 		}
+		.alert($store.scope(\.$alert, action: \.alert))
 	}
 
 	// MARK: - Resizing
@@ -430,6 +431,21 @@ public struct SimulatorPaneView: View {
 				Label("Location", systemImage: "location")
 			}
 
+			Menu {
+				ForEach(SimulatorAppearance.allCases, id: \.self) { appearance in
+					Button(appearance.title) { store.send(.appearanceSelected(appearance)) }
+				}
+			} label: {
+				Label("Appearance", systemImage: "circle.lefthalf.filled")
+			}
+
+			Menu {
+				Button("Clean (9:41, Full Signal and Battery)") { store.send(.statusBarSelected(.override(.clean))) }
+				Button("Clear Override") { store.send(.statusBarSelected(.clear)) }
+			} label: {
+				Label("Status Bar", systemImage: "cellularbars")
+			}
+
 			if let current = device.fold {
 				Menu {
 					ForEach(SimulatorFold.allCases, id: \.self) { fold in
@@ -460,9 +476,14 @@ public struct SimulatorPaneView: View {
 				}
 			}
 
-			if density == .minimal {
-				Divider()
+			Divider()
 
+			Button {
+				store.send(.eraseButtonTapped)
+			} label: {
+				Label("Erase All Content and Settings…", systemImage: "trash")
+			}
+			if density == .minimal {
 				Button {
 					store.send(.shutdownButtonTapped)
 				} label: {

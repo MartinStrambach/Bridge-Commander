@@ -36,6 +36,15 @@ protocol SimulatorToolActions: Sendable {
 	/// Stops the recording of `udid` — with none given, the only recording running, else the
 	/// repository's device's.
 	func stopRecording(udid: String?) async throws -> SimulatorRecording
+	func setUISettings(device: SimulatorDevice, _ settings: SimulatorUISettings) async throws
+	func setStatusBar(device: SimulatorDevice, _ command: SimulatorStatusBarCommand) async throws
+	/// Erases the device, shutting it down first and booting it again after when it was booted;
+	/// returns whether it was booted again.
+	func erase(device: SimulatorDevice) async throws -> Bool
+	func launchApp(device: SimulatorDevice, _ request: SimulatorAppLaunchRequest) async throws -> SimulatorAppLaunch
+	/// Terminates the app and returns the file its output was being captured to, if it was.
+	func terminateApp(device: SimulatorDevice, bundleId: String) async throws -> URL?
+	func openURL(device: SimulatorDevice, _ url: String) async throws
 }
 
 /// A tool call touched a device: the pane should show it, beside the terminal the call came from.
@@ -114,8 +123,10 @@ struct SimulatorMCPHandler: Sendable {
 
 	static let instructions = """
 	Drives the iOS Simulator shown in Bridge Commander, beside the terminal you run in. Build and \
-	install with xcodebuild and `xcrun simctl install`/`launch` as usual; use these tools to look \
-	at the running app and interact with it. Coordinates are in points with the origin at the top \
+	install with xcodebuild and `xcrun simctl install` as usual; use these tools to look at the \
+	running app and interact with it. Launch it with launch_app rather than `simctl launch`: it \
+	captures the app's print/NSLog output and os_log messages to a file you can tail or grep. \
+	Coordinates are in points with the origin at the top \
 	left — the same size as the screenshot image, and as displayed when rotate has turned the \
 	interface to landscape. describe_ui lists the screen's elements with \
 	their frames: prefer it for finding what to tap, and screenshots for how things look. To act \
@@ -132,7 +143,9 @@ struct SimulatorMCPHandler: Sendable {
 	later look differ. When the app crashes or vanishes, list_crashes and crash_report give the \
 	crash's reason and backtrace. set_location and simulate_memory_warning exercise location and \
 	low-memory handling; start_recording and stop_recording capture a video of the screen, to \
-	show a flow or a bug to the user. set_fold opens, half-opens and closes an iPhone Duo.
+	show a flow or a bug to the user. set_fold opens, half-opens and closes an iPhone Duo. \
+	set_appearance switches dark mode and the text size, set_status_bar gives screenshots a clean \
+	status bar, open_url tests deep links, and erase_device resets a simulator to new.
 	"""
 
 	private static func result(id: JSONValue, _ result: JSONValue) -> JSONValue {
