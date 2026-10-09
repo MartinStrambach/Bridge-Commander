@@ -16,6 +16,9 @@ struct SavedTerminalTab: Codable, Equatable, Sendable {
 	/// one it is typed instead of `startupCommand`: resuming the conversation is what reopening a
 	/// tab that was in Claude means, and starting a fresh Claude beside it would be a second one.
 	var claudeSessionId: String?
+	/// The title the tab's program last set, shown again until a program in the reopened tab sets
+	/// one — a resumed Claude does once it is back up. Absent from tabs saved before titles were.
+	var title: String?
 	var tabIndex: Int
 	/// The tab the repository was showing (`lastActiveSessionByRepo`).
 	var isRepositoryCurrentTab: Bool
@@ -48,6 +51,7 @@ struct SavedTerminalTabs: Codable, Equatable, Sendable {
 					directory: panes[session.id]?.directory ?? session.startingDirectory,
 					startupCommand: session.startupCommand,
 					claudeSessionId: panes[session.id].map(\.claudeSessionId) ?? session.resumedClaudeSessionId,
+					title: session.title,
 					tabIndex: session.tabIndex,
 					isRepositoryCurrentTab: layout?.lastActiveSessionByRepo[session.repositoryPath] == session.id,
 					isOnScreen: layout?.activeSessionId == session.id

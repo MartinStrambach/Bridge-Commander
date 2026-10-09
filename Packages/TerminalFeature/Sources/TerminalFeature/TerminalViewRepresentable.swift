@@ -42,6 +42,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let font: NSFont
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	public let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	public let onTitleChange: @Sendable (UUID, String?) -> Void
 
 	public init(
 		terminalViewStore: TerminalViewStore,
@@ -56,7 +57,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		mouseReporting: Bool,
 		font: NSFont,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
+		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
+		onTitleChange: @escaping @Sendable (UUID, String?) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
 		self.sessions = sessions
@@ -71,6 +73,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.font = font
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
+		self.onTitleChange = onTitleChange
 	}
 
 	public func makeNSView(context: Context) -> NSView {
@@ -98,7 +101,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 				}
 				else {
 					let newDelegate = TerminalProcessDelegate(
-						onFailed: { message in onStatusChange(sessionId, .failed(message), nil) }
+						onFailed: { message in onStatusChange(sessionId, .failed(message), nil) },
+						onTitleChange: { title in onTitleChange(sessionId, title) }
 					)
 					context.coordinator.processDelegates[sessionId] = newDelegate
 					delegate = newDelegate

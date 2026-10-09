@@ -43,9 +43,19 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 	/// as a shell, and shown as its name. Running it again replaces the tab, and it is not reopened
 	/// at the next launch, which would run it again.
 	public let runTitle: String?
+	/// What the program in the tab last called it with the terminal title escape (OSC 0/2), cleaned
+	/// for display; `nil` until it sets one, or when it sets an empty one. Claude Code sets a short
+	/// summary of the conversation.
+	public var title: String?
 
 	public var isRunTab: Bool {
 		runTitle != nil
+	}
+
+	/// The tab's name in the tab bar and in notifications: what it was opened to run, else the
+	/// title its program set, else its number.
+	public var tabTitle: String {
+		runTitle ?? title ?? "Terminal \(tabIndex)"
 	}
 
 	public init(
@@ -54,6 +64,7 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		startupCommand: String? = nil,
 		resumingClaudeSession claudeSessionId: String? = nil,
 		runTitle: String? = nil,
+		title: String? = nil,
 		tabIndex: Int = 1
 	) {
 		self.id = UUID()
@@ -65,6 +76,7 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		self.resumedClaudeSessionId = resumeCommand == nil ? nil : claudeSessionId
 		self.commandToType = resumeCommand ?? self.startupCommand
 		self.runTitle = runTitle
+		self.title = title
 		self.tabIndex = tabIndex
 		self.status = .launching
 		// A resumed Claude booting to its prompt is no more news than a fresh one.

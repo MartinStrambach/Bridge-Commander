@@ -174,6 +174,9 @@ struct RepositoryListReducer {
 			)
 			/// The program in a pane asked for a notification (OSC 9 / OSC 777).
 			case terminalNotificationReceived(sessionId: UUID, notification: TerminalNotification)
+			/// The program in a pane set the terminal title (OSC 0/2), already cleaned for display;
+			/// `nil` for an empty one.
+			case terminalSessionTitleChanged(sessionId: UUID, title: String?)
 		}
 
 		enum Alert: Equatable {
@@ -282,6 +285,15 @@ struct RepositoryListReducer {
 					for: session,
 					in: state
 				)
+
+			case let .view(.terminalSessionTitleChanged(sessionId, title)):
+				// Programs set the same title over and over (a shell theme sets it before every
+				// prompt); writing only a change keeps that from invalidating the views that observe
+				// the session list.
+				if state.terminalSessions[id: sessionId]?.title != title {
+					state.terminalSessions[id: sessionId]?.title = title
+				}
+				return .none
 
 			case .view(.onAppear):
 				return .merge(
@@ -1354,12 +1366,13 @@ struct RepositoryListReducer {
 		}
 	}
 
-	/// Names the tab: the repository, and which tab when it has more than one.
+	/// Names the tab: the repository, and the tab's own name when it has a title or the repository
+	/// has more than one tab.
 	private func notificationLocation(for session: TerminalSession, in state: State) -> String {
 		let name = findRowState(for: session.repositoryPath, in: state)?.name
 			?? URL(fileURLWithPath: session.repositoryPath).lastPathComponent
 		let tabCount = state.terminalSessions.filter { $0.repositoryPath == session.repositoryPath }.count
-		return tabCount > 1 ? "\(name) · Terminal \(session.tabIndex)" : name
+		return tabCount > 1 || session.title != nil ? "\(name) · \(session.tabTitle)" : name
 	}
 }
 
@@ -1446,6 +1459,7 @@ private func restoreTerminalTabs(
 			startingDirectory: tab.directory,
 			startupCommand: tab.startupCommand,
 			resumingClaudeSession: tab.claudeSessionId,
+			title: tab.title,
 			tabIndex: tab.tabIndex
 		)
 		state.terminalSessions.append(session)

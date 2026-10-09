@@ -56,6 +56,7 @@ struct TerminalPanelView: View {
 	let activeSessionId: UUID?
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	let onTitleChange: @Sendable (UUID, String?) -> Void
 	let onRetry: (UUID) -> Void
 	let onNewTab: () -> Void
 	let onSelectTab: (UUID) -> Void
@@ -437,7 +438,8 @@ struct TerminalPanelView: View {
 				mouseReporting: terminalMouseReporting,
 				font: terminalFont,
 				onStatusChange: onStatusChange,
-				onNotification: onNotification
+				onNotification: onNotification,
+				onTitleChange: onTitleChange
 			)
 
 			if
@@ -580,9 +582,15 @@ struct TerminalPanelView: View {
 					.fontWeight(isActive ? .semibold : .regular)
 			}
 			else {
-				Text("Terminal \(session.tabIndex)")
+				// A program's title can be a sentence (Claude's summary of the conversation), so it
+				// is cut to keep the bar from growing a tab per screen; the tooltip has all of it.
+				Text(session.tabTitle)
 					.scaledFont(.caption)
 					.fontWeight(isActive ? .semibold : .regular)
+					.lineLimit(1)
+					.truncationMode(.tail)
+					.frame(maxWidth: 200)
+					.help(session.tabTitle)
 			}
 
 			if totalCount > 1 {
