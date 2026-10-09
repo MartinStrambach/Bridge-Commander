@@ -135,6 +135,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("terminal notifications come from whichever channel a program speaks until changed")
+	func terminalNotificationSourceDefaultsToAutomatic() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalNotificationSource == .automatic)
+
+		await store.send(.setTerminalNotificationSource(.statusReports)) {
+			$0.$terminalNotificationSource.withLock { $0 = .statusReports }
+		}
+		await store.send(.setTerminalNotificationSource(.programNotifications)) {
+			$0.$terminalNotificationSource.withLock { $0 = .programNotifications }
+		}
+	}
+
 	@Test("terminal notifications are on until the user turns them off")
 	func terminalNotificationsDefaultToOn() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {

@@ -72,6 +72,9 @@ struct RepositoryListReducer {
 		@Shared(.terminalNotifications)
 		fileprivate(set) var terminalNotifications = true
 
+		@Shared(.terminalNotificationSource)
+		fileprivate(set) var terminalNotificationSource = TerminalNotificationSource.default
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -255,9 +258,15 @@ struct RepositoryListReducer {
 				return waitingNotificationEffect(for: session, changingTo: status, report: report, in: state)
 
 			case let .view(.terminalNotificationReceived(sessionId, notification)):
-				// Only posted: the session's status is the program's reports to set, so a report of
-				// waiting that follows still posts its own (under the same identifier, replacing this).
-				guard let session = state.terminalSessions[id: sessionId] else {
+				// Only posted: the session's status is the program's reports to set. Whether it is
+				// posted at all depends on the program: one that reports its status has already said
+				// what this says, and the setting picks which of the two to show.
+				guard
+					let session = state.terminalSessions[id: sessionId],
+					state.terminalNotificationSource.postsProgramNotification(
+						fromStatusReportingProgram: notification.isFromStatusReportingProgram
+					)
+				else {
 					return .none
 				}
 
@@ -1288,8 +1297,9 @@ struct RepositoryListReducer {
 	}
 
 	/// Posts a notification when the program in a session starts waiting for the user, and withdraws
-	/// it once the session is back at work — by then the user has answered it. The program is named
-	/// as it reports itself, with what it says it is waiting for when it says.
+	/// it once the session is back at work — by then the user has answered it, whichever channel
+	/// posted it. The program is named as it reports itself, with what it says it is waiting for
+	/// when it says.
 	private func waitingNotificationEffect(
 		for session: TerminalSession,
 		changingTo status: TerminalSessionStatus,
@@ -1308,25 +1318,19 @@ struct RepositoryListReducer {
 			return .run { _ in await client.remove(sessionId) }
 		}
 
+		guard state.terminalNotificationSource.postsStatusReports else {
+			return .none
+		}
+
 		return postNotification(
 			TerminalNotificationContent(
 				sessionId: sessionId,
 				title: notificationLocation(for: session, in: state),
-				body: Self.waitingNotificationBody(for: report)
+				body: report?.notificationBody ?? "A program is waiting for your input."
 			),
 			for: session,
 			in: state
 		)
-	}
-
-	/// "Claude is waiting for your input.", or what the program says it is waiting for.
-	static func waitingNotificationBody(for report: TerminalProgramReport?) -> String {
-		let report = report ?? TerminalProgramReport(program: nil, message: nil)
-		guard let message = report.message else {
-			return "\(report.displayName) is waiting for your input."
-		}
-
-		return "\(report.displayName): \(message)"
 	}
 
 	/// Nothing is posted for the tab on screen while the app is frontmost: the user is already

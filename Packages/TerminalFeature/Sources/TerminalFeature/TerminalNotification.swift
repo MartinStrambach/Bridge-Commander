@@ -8,10 +8,16 @@ public struct TerminalNotification: Equatable, Sendable {
 	/// `nil` for OSC 9, which carries a body only.
 	public let title: String?
 	public let body: String
+	/// Whether the pane's program stood behind an OSC 7501 status report when it asked. Such a
+	/// program has already said it is waiting, so the notification may repeat what the report's own
+	/// notification says (Claude Code sends both once its notification channel is Ghostty); the
+	/// `terminalNotificationSource` setting decides which one is shown.
+	public var isFromStatusReportingProgram: Bool
 
-	public init(title: String?, body: String) {
+	public init(title: String?, body: String, isFromStatusReportingProgram: Bool = false) {
 		self.title = title
 		self.body = body
+		self.isFromStatusReportingProgram = isFromStatusReportingProgram
 	}
 }
 

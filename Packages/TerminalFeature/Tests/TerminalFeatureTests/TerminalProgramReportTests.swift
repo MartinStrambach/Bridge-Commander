@@ -6,50 +6,48 @@ import Testing
 
 /// Records are built the way a pane gets them: OSC 7501 reports fed through SwiftTerm's parser,
 /// since `TerminalProgramStatus` has no public initializer.
-struct ProgramStatusReportTests {
+struct TerminalProgramReportTests {
 	private final class Delegate: TerminalDelegate {
 		func send(source: Terminal, data: ArraySlice<UInt8>) {}
 	}
 
-	private static func status(after reports: [String]) -> ProgramStatusReport? {
+	private static func status(after reports: [String]) -> TerminalProgramReport? {
 		let delegate = Delegate()
 		let terminal = Terminal(delegate: delegate)
 		for report in reports {
 			terminal.feed(text: "\u{1B}]7501;\(report)\u{1B}\\")
 		}
-		return ProgramStatusReport(records: terminal.programStatusRecords)
+		return TerminalProgramReport(records: terminal.programStatusRecords)
 	}
 
 	@Test func readsTheRootRecord() {
 		let status = Self.status(after: ["state=working:app=claude-code"])
-		#expect(status?.state == .working)
-		#expect(status?.report == TerminalProgramReport(program: "claude-code", message: nil))
+		#expect(status == TerminalProgramReport(program: "claude-code", state: .working, message: nil))
 	}
 
 	@Test func readsAnyProgram() {
 		// "Allow write?"
 		let status = Self.status(after: ["state=blocked:app=codex:kind=permission:msg=QWxsb3cgd3JpdGU/"])
-		#expect(status?.state == .blocked)
-		#expect(status?.report == TerminalProgramReport(program: "codex", message: "Allow write?"))
+		#expect(status == TerminalProgramReport(program: "codex", state: .blocked(.permission), message: "Allow write?"))
 	}
 
 	@Test func readsAProgramThatGivesNoName() {
 		let status = Self.status(after: ["state=done"])
 		#expect(status?.state == .done)
-		#expect(status?.report.program == nil)
-		#expect(status?.report.displayName == "A program")
+		#expect(status?.program == nil)
+		#expect(status?.displayName == "A program")
 	}
 
 	@Test func takesTheTitleWhenThereIsNoMessage() {
 		// "Build"
 		let status = Self.status(after: ["state=done:app=make:title=QnVpbGQ="])
-		#expect(status?.report.message == "Build")
+		#expect(status?.message == "Build")
 	}
 
 	@Test func takesTheTitleWhenTheMessageIsBlank() {
 		// An empty message, then " " ("IA=="): neither leaves anything to show, the title does.
-		#expect(Self.status(after: ["state=done:app=make:msg=:title=QnVpbGQ="])?.report.message == "Build")
-		#expect(Self.status(after: ["state=done:app=make:msg=IA==:title=QnVpbGQ="])?.report.message == "Build")
+		#expect(Self.status(after: ["state=done:app=make:msg=:title=QnVpbGQ="])?.message == "Build")
+		#expect(Self.status(after: ["state=done:app=make:msg=IA==:title=QnVpbGQ="])?.message == "Build")
 	}
 
 	@Test func readsTheLatestReport() {
@@ -57,7 +55,18 @@ struct ProgramStatusReportTests {
 			"state=working:app=claude-code",
 			"state=blocked:app=claude-code:kind=permission",
 		])
-		#expect(status?.state == .blocked)
+		#expect(status?.state == .blocked(.permission))
+	}
+
+	@Test(arguments: [
+		("state=blocked:kind=question", TerminalProgramReport.State.blocked(.question)),
+		("state=blocked:kind=auth", .blocked(.signIn)),
+		("state=blocked", .blocked(nil)),
+		("state=idle", .idle),
+		("state=error", .error),
+	])
+	func readsTheState(report: String, state: TerminalProgramReport.State) {
+		#expect(Self.status(after: [report])?.state == state)
 	}
 
 	@Test func aSubtaskStillWorkingDoesNotMakeTheProgramWork() {
@@ -81,8 +90,29 @@ struct ProgramStatusReportTests {
 	// MARK: - Display
 
 	@Test func namesClaudeAsUsersKnowIt() {
-		#expect(TerminalProgramReport(program: "claude-code", message: nil).displayName == "Claude")
-		#expect(TerminalProgramReport(program: "codex", message: nil).displayName == "codex")
+		#expect(TerminalProgramReport(program: "claude-code", state: .done, message: nil).displayName == "Claude")
+		#expect(TerminalProgramReport(program: "codex", state: .done, message: nil).displayName == "codex")
+	}
+
+	@Test(arguments: [
+		(TerminalProgramReport.State.blocked(.permission), "Claude needs your permission."),
+		(.blocked(.question), "Claude has a question."),
+		(.blocked(.signIn), "Claude needs you to sign in."),
+		(.blocked(nil), "Claude needs your input."),
+		(.done, "Claude is done."),
+		(.idle, "Claude is waiting for your input."),
+		(.error, "Claude ran into an error."),
+	])
+	func saysWhatTheProgramWaitsFor(state: TerminalProgramReport.State, body: String) {
+		#expect(TerminalProgramReport(program: "claude-code", state: state, message: nil).notificationBody == body)
+	}
+
+	@Test func addsTheProgramsMessage() {
+		let report = TerminalProgramReport(program: "codex", state: .blocked(.permission), message: "Allow write?")
+		#expect(report.notificationBody == "codex needs your permission: Allow write?")
+		#expect(
+			TerminalProgramReport(program: nil, state: .done, message: nil).notificationBody == "A program is done."
+		)
 	}
 
 	@Test func dropsInvisibleFormattingCharacters() {

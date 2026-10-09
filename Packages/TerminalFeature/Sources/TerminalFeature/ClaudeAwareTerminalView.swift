@@ -201,15 +201,19 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// `OSC 7501 ; ?` probe itself, which is what makes Claude Code report at all.
 	override public func programStatusChanged(source: TerminalView, records: [TerminalProgramStatus]) {
 		super.programStatusChanged(source: source, records: records)
-		detector.statusReported(ProgramStatusReport(records: records))
+		detector.statusReported(TerminalProgramReport(records: records))
 	}
 
-	/// Passes a notification up, unless the pane's session is being killed. The pane's status is left
-	/// to the program's reports: a notification alone does not say the program is waiting.
+	/// Passes a notification up, unless the pane's session is being killed, marked with whether the
+	/// program reports its status. The pane's status is left to the program's reports: a
+	/// notification alone does not say the program is waiting.
 	private func notificationReceived(_ notification: TerminalNotification) {
 		guard !detector.isStopped else {
 			return
 		}
+
+		var notification = notification
+		notification.isFromStatusReportingProgram = detector.isReportStanding
 
 		onNotification(sessionId, notification)
 	}

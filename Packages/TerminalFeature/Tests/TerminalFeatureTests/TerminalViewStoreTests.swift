@@ -217,7 +217,7 @@ struct TerminalViewStoreTests {
 		// "Allow write?"
 		view.feed(text: Self.statusReport("state=blocked:app=codex:kind=permission:msg=QWxsb3cgd3JpdGU/"))
 		#expect(await eventually { reported.statuses.last == .waitingForInput })
-		#expect(reported.reports.last == TerminalProgramReport(program: "codex", message: "Allow write?"))
+		#expect(reported.reports.last == TerminalProgramReport(program: "codex", state: .blocked(.permission), message: "Allow write?"))
 
 		view.feed(text: Self.statusReport("state=working:app=codex"))
 		#expect(await eventually { reported.statuses.last == .active })

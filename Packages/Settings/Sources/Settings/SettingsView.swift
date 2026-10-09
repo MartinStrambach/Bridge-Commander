@@ -814,10 +814,25 @@ public struct SettingsView<Updates: View>: View {
 			)
 
 			Text(
-				"Posts a notification when Claude Code, or another program that reports its status (OSC 7501), in a built-in terminal tab you are not looking at is waiting for you, or when a program asks for one (OSC 9 / OSC 777, as in Ghostty). Click it to open that tab. Claude Code reports its status from version 2.1.295 on (not inside tmux). For Claude's own permission notifications, set its notification channel to Ghostty in /config."
+				"Posts a notification when a program in a built-in terminal tab you are not looking at is waiting for you: Claude Code, or another program that reports its status (OSC 7501), or one that asks for a notification itself (OSC 9 / OSC 777, as in Ghostty). Click it to open that tab. Claude Code reports its status from version 2.1.295 on (not inside tmux)."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
+
+			Picker(
+				"Notify from:",
+				selection: $store.terminalNotificationSource.sending(\.setTerminalNotificationSource)
+			) {
+				ForEach(TerminalNotificationSource.allCases, id: \.self) { source in
+					Text(source.displayName).tag(source)
+				}
+			}
+			.fixedSize()
+			.disabled(!store.terminalNotifications)
+
+			Text(store.terminalNotificationSource.explanation)
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
 		}
 	}
 

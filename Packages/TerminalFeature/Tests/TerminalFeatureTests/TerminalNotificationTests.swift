@@ -123,9 +123,44 @@ struct TerminalNotificationTests {
 
 		view.feed(text: "\u{1B}]7501;state=done:app=claude-code\u{1B}\\")
 		let expected: [ReceivedStatuses.Item] = [
-			.init(status: .waitingForInput, report: TerminalProgramReport(program: "claude-code", message: nil)),
+			.init(status: .waitingForInput, report: TerminalProgramReport(program: "claude-code", state: .done, message: nil)),
 		]
 		#expect(await eventually { statuses.items == expected })
+	}
+
+	/// A program that reports its status has its notifications marked, so the setting can keep the
+	/// two channels from posting the same news twice. Once it clears its report, it is a plain
+	/// program again.
+	@MainActor
+	@Test func marksNotificationsFromAProgramThatReportsItsStatus() async {
+		let received = Received()
+		let statuses = ReceivedStatuses()
+		let view = ClaudeAwareTerminalView(
+			repositoryPath: "/tmp/repo",
+			sessionId: UUID(),
+			onStatusChange: { _, status, report in
+				MainActor.assumeIsolated { statuses.items.append(.init(status: status, report: report)) }
+			},
+			onNotification: { id, notification in
+				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
+			}
+		)
+		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
+
+		view.feed(text: "\u{1B}]9;before\u{07}")
+		#expect(await eventually { received.items.count == 1 })
+
+		view.feed(text: "\u{1B}]7501;state=idle:app=claude-code\u{1B}\\")
+		#expect(await eventually { statuses.items.count == 1 })
+		view.feed(text: "\u{1B}]777;notify;Claude Code;Claude needs your permission\u{1B}\\")
+		#expect(await eventually { received.items.count == 2 })
+
+		view.feed(text: "\u{1B}]7501;state=clear\u{1B}\\")
+		#expect(await eventually { statuses.items.count == 2 })
+		view.feed(text: "\u{1B}]9;after\u{07}")
+		#expect(await eventually { received.items.count == 3 })
+
+		#expect(received.items.map(\.notification.isFromStatusReportingProgram) == [false, true, false])
 	}
 
 	@MainActor

@@ -98,9 +98,10 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("terminalStartupCommandInNewTabs")
 	}
 
-	/// Whether built-in terminal tabs post system notifications: when Claude Code in one starts
-	/// waiting for the user, and when a program asks for one with OSC 9 / OSC 777 (as Ghostty and
-	/// iTerm2 do). On by default. Clicking the notification opens that tab.
+	/// Whether built-in terminal tabs post system notifications: when a program in one reports
+	/// that it is waiting for the user (OSC 7501), and when a program asks for one with OSC 9 /
+	/// OSC 777 (as Ghostty and iTerm2 do) — which of the two, `terminalNotificationSource` decides.
+	/// On by default. Clicking the notification opens that tab.
 	static var terminalNotifications: Self {
 		appStorage("terminalNotifications")
 	}
@@ -133,6 +134,14 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<Reposit
 	/// Which action bar items a repository row shows, their order and the tool buttons' size.
 	static var repositoryRowLayout: Self {
 		appStorage("repositoryRowLayout")
+	}
+}
+
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalNotificationSource> {
+	/// Which notifications built-in terminal tabs post: a program's status reports, its own
+	/// notifications, or (by default) the one its program speaks.
+	static var terminalNotificationSource: Self {
+		appStorage("terminalNotificationSource")
 	}
 }
 

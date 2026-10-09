@@ -1,5 +1,4 @@
 import Foundation
-import SwiftTerm
 import Testing
 
 @testable import TerminalFeature
@@ -23,7 +22,6 @@ struct ProgramStatusDetectorTests {
 	/// for.
 	private static let neverFires: TimeInterval = 3600
 
-	private static let claude = TerminalProgramReport(program: "claude-code", message: nil)
 
 	private func makeDetector(
 		reported: Reported,
@@ -41,22 +39,24 @@ struct ProgramStatusDetectorTests {
 	}
 
 	private static func report(
-		_ state: TerminalProgramStatusState,
-		_ report: TerminalProgramReport = claude
-	) -> ProgramStatusReport {
-		ProgramStatusReport(state: state, report: report)
+		_ state: TerminalProgramReport.State,
+		program: String = "claude-code",
+		message: String? = nil
+	) -> TerminalProgramReport {
+		TerminalProgramReport(program: program, state: state, message: message)
 	}
 
 	// MARK: - Reports
 
 	@Test(arguments: [
-		(TerminalProgramStatusState.working, TerminalSessionStatus.active),
-		(.blocked, .waitingForInput),
+		(TerminalProgramReport.State.working, TerminalSessionStatus.active),
+		(.blocked(.permission), .waitingForInput),
+		(.blocked(nil), .waitingForInput),
 		(.done, .waitingForInput),
 		(.idle, .waitingForInput),
 		(.error, .waitingForInput),
 	])
-	func onlyWorkIsNotWaiting(state: TerminalProgramStatusState, status: TerminalSessionStatus) {
+	func onlyWorkIsNotWaiting(state: TerminalProgramReport.State, status: TerminalSessionStatus) {
 		#expect(ProgramStatusDetector.status(for: state) == status)
 	}
 
@@ -66,7 +66,7 @@ struct ProgramStatusDetectorTests {
 
 		detector.statusReported(Self.report(.idle))
 		detector.statusReported(Self.report(.working))
-		detector.statusReported(Self.report(.blocked))
+		detector.statusReported(Self.report(.blocked(.permission)))
 		detector.statusReported(Self.report(.working))
 		detector.statusReported(Self.report(.done))
 
@@ -74,14 +74,14 @@ struct ProgramStatusDetectorTests {
 	}
 
 	@Test func aChangeToWaitingCarriesTheReport() {
-		let codex = TerminalProgramReport(program: "codex", message: "Allow write?")
+		let blocked = Self.report(.blocked(.permission), program: "codex", message: "Allow write?")
 		let reported = Reported()
 		let detector = makeDetector(reported: reported)
 
-		detector.statusReported(Self.report(.blocked, codex))
-		detector.statusReported(Self.report(.working, codex))
+		detector.statusReported(blocked)
+		detector.statusReported(Self.report(.working, program: "codex"))
 
-		#expect(reported.reports == [codex, nil])
+		#expect(reported.reports == [blocked, nil])
 	}
 
 	@Test func aClearedReportLeavesThePaneActive() {
@@ -214,6 +214,25 @@ struct ProgramStatusDetectorTests {
 		detector.statusReported(Self.report(.idle))
 
 		#expect(reported.statuses == [.waitingForInput, .active, .waitingForInput])
+	}
+
+	@Test func aReportStandsUntilClearedOrSetAside() {
+		let foreground = Foreground()
+		let detector = makeDetector(reported: Reported(), foreground: foreground)
+		#expect(!detector.isReportStanding, "a plain shell reports nothing")
+
+		detector.statusReported(Self.report(.working))
+		#expect(detector.isReportStanding, "working counts too: the program speaks for itself")
+
+		foreground.isShell = true
+		detector.checkForeground()
+		#expect(!detector.isReportStanding, "a report left behind by a crash speaks for nobody")
+
+		detector.statusReported(Self.report(.idle))
+		#expect(detector.isReportStanding)
+
+		detector.statusReported(nil)
+		#expect(!detector.isReportStanding)
 	}
 
 	// MARK: - Stopping

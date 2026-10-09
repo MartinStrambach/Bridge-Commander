@@ -27,12 +27,15 @@ public struct TerminalNotificationContent: Equatable, Sendable {
 /// clicked.
 ///
 /// A notification's identifier is its terminal session's id, so a second post for the same tab
-/// replaces the first rather than stacking, and a click can name the tab to open.
+/// replaces the first rather than stacking, and a click can name the tab to open. A tab's
+/// notifications are spaced at least `NotificationThrottle` interval apart: one posted sooner
+/// waits, and only the latest of those waiting is shown.
 @DependencyClient
 public struct TerminalNotificationClient: Sendable {
-	/// Asks for permission on first use; posts nothing when it is refused.
+	/// Asks for permission on first use; posts nothing when it is refused. Returns once the
+	/// notification is shown or dropped, which a throttled one may take a moment.
 	public var post: @Sendable (_ content: TerminalNotificationContent) async -> Void
-	/// Withdraws the tab's notification, delivered or not.
+	/// Withdraws the tab's notification, delivered, pending or still waiting out the throttle.
 	public var remove: @Sendable (_ sessionId: UUID) async -> Void
 	/// The session ids of clicked notifications. One subscriber at a time: a new call finishes
 	/// the stream handed out before it.
@@ -43,8 +46,21 @@ public struct TerminalNotificationClient: Sendable {
 }
 
 extension TerminalNotificationClient: DependencyKey {
+	/// Two seconds lets a program answer a dialog and finish the turn without a second alert, and
+	/// is still soon enough that the news it carries is not stale.
+	private static let throttle = Mutex(NotificationThrottle(interval: 2))
+
 	public static let liveValue = TerminalNotificationClient(
 		post: { notification in
+			let id = notification.sessionId
+			let (ticket, delay) = throttle.withLock { $0.schedule(id, at: Date()) }
+			if delay > 0 {
+				try? await Task.sleep(for: .seconds(delay))
+			}
+			guard throttle.withLock({ $0.claim(id, ticket: ticket, at: Date()) }) else {
+				return
+			}
+
 			let center = UNUserNotificationCenter.current()
 			TerminalNotificationDelegate.install()
 			guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else {
@@ -66,6 +82,7 @@ extension TerminalNotificationClient: DependencyKey {
 			try? await center.add(request)
 		},
 		remove: { sessionId in
+			throttle.withLock { $0.cancel(sessionId) }
 			let center = UNUserNotificationCenter.current()
 			center.removeDeliveredNotifications(withIdentifiers: [sessionId.uuidString])
 			center.removePendingNotificationRequests(withIdentifiers: [sessionId.uuidString])

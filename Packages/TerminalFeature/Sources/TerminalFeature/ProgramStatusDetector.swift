@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import SwiftTerm
 
 /// Decides whether a pane is waiting for the user or working, from what the program in it says
 /// about itself.
@@ -44,7 +43,7 @@ final class ProgramStatusDetector {
 	private(set) var isStopped = false
 
 	/// The pane's root record, or `nil` while no program reports anything.
-	private var programStatus: ProgramStatusReport?
+	private var report: TerminalProgramReport?
 
 	/// Set when the last foreground check found the shell back in the foreground while a report
 	/// stood: a program that crashed or was suspended, leaving its last report behind. Cleared by
@@ -67,13 +66,13 @@ final class ProgramStatusDetector {
 
 	/// Takes in the pane's root OSC 7501 record, `nil` once there is none (Claude clears its records
 	/// when it exits).
-	func statusReported(_ status: ProgramStatusReport?) {
+	func statusReported(_ report: TerminalProgramReport?) {
 		guard !isStopped else {
 			return
 		}
 
-		trace("\(status?.report.program ?? "no program") reports \(status.map(\.state.rawValue) ?? "nothing")")
-		programStatus = status
+		trace("\(report?.program ?? "no program") reports \(report.map { "\($0.state)" } ?? "nothing")")
+		self.report = report
 		isReportLeftBehind = false
 		reportStatus(derivedStatus, reason: "the program's report")
 	}
@@ -81,7 +80,7 @@ final class ProgramStatusDetector {
 	/// Takes in a burst of output written by the child process. Re-arms the foreground check while a
 	/// report stands: the shell drawing its prompt after a crashed program is output too.
 	func outputReceived() {
-		guard !isStopped, programStatus != nil else {
+		guard !isStopped, report != nil else {
 			return
 		}
 
@@ -106,7 +105,7 @@ final class ProgramStatusDetector {
 	/// again until its state changes). A foreground that can't be told leaves the report standing.
 	/// Called on the debounce, and directly by tests so they need not wait one out.
 	func checkForeground() {
-		guard !isStopped, programStatus != nil else {
+		guard !isStopped, report != nil else {
 			return
 		}
 
@@ -124,16 +123,22 @@ final class ProgramStatusDetector {
 
 	// MARK: - Reporting
 
+	/// Whether the program in the pane stands behind a report: one was made and has not been set
+	/// aside as left behind. A notification such a program asks for repeats what its report says.
+	var isReportStanding: Bool {
+		report != nil && !isReportLeftBehind
+	}
+
 	private var derivedStatus: TerminalSessionStatus {
-		guard let programStatus, !isReportLeftBehind else {
+		guard let report, !isReportLeftBehind else {
 			return .active
 		}
 
-		return Self.status(for: programStatus.state)
+		return Self.status(for: report.state)
 	}
 
 	/// What a reported state means for the pane: only work in progress is not waiting.
-	static func status(for state: TerminalProgramStatusState) -> TerminalSessionStatus {
+	static func status(for state: TerminalProgramReport.State) -> TerminalSessionStatus {
 		switch state {
 		case .working:
 			.active
@@ -152,8 +157,7 @@ final class ProgramStatusDetector {
 
 		trace("\(currentStatus) → \(status) on \(reason())")
 		currentStatus = status
-		let report = status == .waitingForInput ? programStatus?.report : nil
-		onStatusChange(status, report)
+		onStatusChange(status, status == .waitingForInput ? report : nil)
 	}
 
 	/// Records a status decision when `BC_TERMINAL_STATUS_LOG` is set in the environment. Read it
