@@ -51,7 +51,8 @@ public final class TerminalViewStore {
 		statusSource: ClaudeStatusSource = .progressAndScreen,
 		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
+		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
+		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
 	) -> ClaudeAwareTerminalView {
 		if let existing = views[session.id] {
 			return existing
@@ -62,7 +63,8 @@ public final class TerminalViewStore {
 			sessionId: session.id,
 			statusSource: statusSource,
 			onStatusChange: onStatusChange,
-			onNotification: onNotification
+			onNotification: onNotification,
+			onOpenFile: onOpenFile
 		)
 
 		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.

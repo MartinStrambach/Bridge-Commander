@@ -72,6 +72,7 @@ struct TerminalPanelView: View {
 	let activeSessionId: UUID?
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 	let onRetry: (UUID) -> Void
 	let onNewTab: () -> Void
 	let onSelectTab: (UUID) -> Void
@@ -454,7 +455,8 @@ struct TerminalPanelView: View {
 				statusSource: claudeStatusSource,
 				font: terminalFont,
 				onStatusChange: onStatusChange,
-				onNotification: onNotification
+				onNotification: onNotification,
+				onOpenFile: onOpenFile
 			)
 
 			if

@@ -255,6 +255,11 @@ struct RepositoryListView: View {
 					MainActor.assumeIsolated {
 						_ = send(.terminalNotificationReceived(sessionId: sessionId, notification: notification))
 					}
+				},
+				onOpenFile: { sessionId, link in
+					MainActor.assumeIsolated {
+						_ = send(.terminalFileLinkClicked(sessionId: sessionId, link: link))
+					}
 				}
 			)
 			.transition(.opacity)

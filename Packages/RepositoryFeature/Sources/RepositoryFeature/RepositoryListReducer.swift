@@ -119,6 +119,8 @@ struct RepositoryListReducer {
 		case checkAccessibilityPermission
 		case checkPermissions
 		case checkSystemEventsPermission
+		/// A file ⌘-clicked in a terminal could not be opened.
+		case terminalFileOpenFailed(String)
 		/// A terminal tab's notification was clicked.
 		case terminalNotificationTapped(sessionId: UUID)
 		/// A simulator MCP tool call touched a device.
@@ -163,6 +165,8 @@ struct RepositoryListReducer {
 			case showTerminalsRequested
 			case sortModeButtonTapped
 			case terminalSessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
+			/// A ⌘-clicked link in a pane named a file.
+			case terminalFileLinkClicked(sessionId: UUID, link: TerminalFileLink)
 			/// The program in a pane asked for a notification (OSC 9 / OSC 777).
 			case terminalNotificationReceived(sessionId: UUID, notification: TerminalNotification)
 		}
@@ -269,6 +273,40 @@ struct RepositoryListReducer {
 					for: session,
 					in: state
 				)
+
+			case let .view(.terminalFileLinkClicked(sessionId, link)):
+				// Opened the way the staging panel's "Open in IDE" opens a file, with the tab's own
+				// repository's Xcode project, even for a file outside it.
+				guard let repositoryPath = state.terminalSessions[id: sessionId]?.repositoryPath else {
+					return .none
+				}
+
+				let iosSubfolderPath = findRowState(for: repositoryPath, in: state)?.iosSubfolderPath ?? ""
+				return .run { send in
+					do {
+						let xcodeProjectPath = XcodeProjectDetector.findXcodeProject(
+							in: repositoryPath,
+							iosSubfolderPath: iosSubfolderPath
+						)
+						try await FileOpener.openFileInIDE(
+							atPath: link.path,
+							line: link.line,
+							repositoryPath: repositoryPath,
+							xcodeProjectPath: xcodeProjectPath
+						)
+					}
+					catch {
+						await send(.terminalFileOpenFailed(error.localizedDescription))
+					}
+				}
+
+			case let .terminalFileOpenFailed(message):
+				state.alert = AlertState {
+					TextState("Failed to Open File")
+				} message: {
+					TextState(message)
+				}
+				return .none
 
 			case .view(.onAppear):
 				return .merge(

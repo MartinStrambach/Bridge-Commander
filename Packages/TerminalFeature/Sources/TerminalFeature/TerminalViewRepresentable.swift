@@ -45,6 +45,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let font: NSFont
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 	public let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	/// A ⌘-clicked link that names a file.
+	public let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 
 	public init(
 		terminalViewStore: TerminalViewStore,
@@ -60,7 +62,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		statusSource: ClaudeStatusSource = .progressAndScreen,
 		font: NSFont,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
+		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
+		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
 		self.sessions = sessions
@@ -76,6 +79,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.font = font
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
+		self.onOpenFile = onOpenFile
 	}
 
 	public func makeNSView(context: Context) -> NSView {
@@ -119,7 +123,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					statusSource: statusSource,
 					processDelegate: delegate,
 					onStatusChange: onStatusChange,
-					onNotification: onNotification
+					onNotification: onNotification,
+					onOpenFile: onOpenFile
 				)
 				// Assigned on every update, not at creation: panes outlive a change to the
 				// setting, and the colors only look like they don't because a new theme is
