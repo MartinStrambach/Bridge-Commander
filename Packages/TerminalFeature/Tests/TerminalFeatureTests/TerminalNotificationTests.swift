@@ -25,20 +25,10 @@ struct TerminalNotificationTests {
 	}
 
 	@Test func osc9ProgressIsNotANotification() {
-		// Claude Code reports progress this way while it works.
-		#expect(OSC9Payload(bytes("4;1;50")) == .progress(Terminal.ProgressReport(state: .set, progress: 50)))
-		#expect(OSC9Payload(bytes("4;3")) == .progress(Terminal.ProgressReport(state: .indeterminate, progress: nil)))
-		#expect(OSC9Payload(bytes("4;0;")) == .progress(Terminal.ProgressReport(state: .remove, progress: nil)))
-	}
-
-	@Test func osc9ProgressFollowsSwiftTermsParsing() {
-		// A set without a value starts at 0, a value is clamped, and a malformed report is dropped.
-		#expect(OSC9Payload(bytes("4;1")) == .progress(Terminal.ProgressReport(state: .set, progress: 0)))
-		#expect(OSC9Payload(bytes("4;1;250")) == .progress(Terminal.ProgressReport(state: .set, progress: 100)))
-		#expect(OSC9Payload(bytes("4;0;50")) == .progress(Terminal.ProgressReport(state: .remove, progress: nil)))
-		#expect(OSC9Payload(bytes("4;9;50")) == .ignored)
-		#expect(OSC9Payload(bytes("4;1;half")) == .ignored)
-		#expect(OSC9Payload(bytes("4")) == .ignored)
+		// SwiftTerm draws the progress bar for these itself.
+		#expect(OSC9Payload(bytes("4;1;50")) == .ignored)
+		#expect(OSC9Payload(bytes("4;3")) == .ignored)
+		#expect(OSC9Payload(bytes("4;0;")) == .ignored)
 	}
 
 	@Test func osc9InvalidUTF8IsIgnored() {
@@ -83,7 +73,7 @@ struct TerminalNotificationTests {
 		let view = ClaudeAwareTerminalView(
 			repositoryPath: "/tmp/repo",
 			sessionId: sessionId,
-			onStatusChange: { _, _ in },
+			onStatusChange: { _, _, _ in },
 			onNotification: { id, notification in
 				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
 			}

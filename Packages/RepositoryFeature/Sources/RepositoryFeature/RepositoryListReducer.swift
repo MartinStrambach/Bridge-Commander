@@ -162,7 +162,13 @@ struct RepositoryListReducer {
 			case searchTextChanged(String)
 			case showTerminalsRequested
 			case sortModeButtonTapped
-			case terminalSessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
+			/// `report` is what the program said about itself (OSC 7501), sent along with a change to
+			/// `.waitingForInput` that its report caused.
+			case terminalSessionStatusChanged(
+				sessionId: UUID,
+				status: TerminalSessionStatus,
+				report: TerminalProgramReport? = nil
+			)
 			/// The program in a pane asked for a notification (OSC 9 / OSC 777).
 			case terminalNotificationReceived(sessionId: UUID, notification: TerminalNotification)
 		}
@@ -229,7 +235,7 @@ struct RepositoryListReducer {
 			switch action {
 			// MARK: - View Actions
 
-			case let .view(.terminalSessionStatusChanged(sessionId, status)):
+			case let .view(.terminalSessionStatusChanged(sessionId, status, report)):
 				// Reported by the pane itself, and kept on the session list rather than on the
 				// terminal panel: the panel can be closed while a session keeps running, and the
 				// dots in the repository list still have to move. A late report from a session
@@ -246,7 +252,7 @@ struct RepositoryListReducer {
 					state.terminalSessions[id: sessionId]?.awaitsStartupPrompt = false
 					return .none
 				}
-				return claudeNotificationEffect(for: session, changingTo: status, in: state)
+				return waitingNotificationEffect(for: session, changingTo: status, report: report, in: state)
 
 			case let .view(.terminalNotificationReceived(sessionId, notification)):
 				// The pane already holds itself at waiting until the user types; this is the
@@ -1283,11 +1289,13 @@ struct RepositoryListReducer {
 		.cancellable(id: CancellableId.scan)
 	}
 
-	/// Posts a notification when a session starts waiting at Claude's prompt, and withdraws it once
-	/// the session is back at work — by then the user has answered it.
-	private func claudeNotificationEffect(
+	/// Posts a notification when the program in a session starts waiting for the user, and withdraws
+	/// it once the session is back at work — by then the user has answered it. The program is named
+	/// as it reports itself, with what it says it is waiting for when it says.
+	private func waitingNotificationEffect(
 		for session: TerminalSession,
 		changingTo status: TerminalSessionStatus,
+		report: TerminalProgramReport?,
 		in state: State
 	) -> Effect<Action> {
 		let wasWaiting = session.status == .waitingForInput
@@ -1306,11 +1314,21 @@ struct RepositoryListReducer {
 			TerminalNotificationContent(
 				sessionId: sessionId,
 				title: notificationLocation(for: session, in: state),
-				body: "Claude is waiting for your input."
+				body: Self.waitingNotificationBody(for: report)
 			),
 			for: session,
 			in: state
 		)
+	}
+
+	/// "Claude is waiting for your input.", or what the program says it is waiting for.
+	static func waitingNotificationBody(for report: TerminalProgramReport?) -> String {
+		let name = report?.displayName ?? "A program"
+		guard let message = report?.message else {
+			return "\(name) is waiting for your input."
+		}
+
+		return "\(name): \(message)"
 	}
 
 	/// Nothing is posted for the tab on screen while the app is frontmost: the user is already

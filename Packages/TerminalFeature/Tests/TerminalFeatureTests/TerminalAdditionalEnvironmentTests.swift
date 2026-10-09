@@ -26,7 +26,7 @@ struct TerminalAdditionalEnvironmentTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
+			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
 		defer { store.killSession(sessionId: session.id) }

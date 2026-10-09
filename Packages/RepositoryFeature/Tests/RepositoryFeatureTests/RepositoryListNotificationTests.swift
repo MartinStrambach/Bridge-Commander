@@ -21,12 +21,30 @@ struct RepositoryListNotificationTests {
 			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
 		}
 
-		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
+		await store.send(.view(.terminalSessionStatusChanged(
+			sessionId: session.id,
+			status: .waitingForInput,
+			report: TerminalProgramReport(program: "claude-code", message: nil)
+		))) {
 			$0.terminalSessions[id: session.id]?.status = .waitingForInput
 		}
 		#expect(posted.value == [
 			TerminalNotificationContent(sessionId: session.id, title: "alpha", body: "Claude is waiting for your input."),
 		])
+	}
+
+	@Test("names the program waiting, and says what for when it says")
+	func namesTheProgramAndWhatItWaitsFor() {
+		#expect(
+			RepositoryListReducer.waitingNotificationBody(for: TerminalProgramReport(program: "codex", message: nil))
+				== "codex is waiting for your input."
+		)
+		#expect(
+			RepositoryListReducer.waitingNotificationBody(
+				for: TerminalProgramReport(program: "claude-code", message: "Bash: rm -rf build")
+			) == "Claude: Bash: rm -rf build"
+		)
+		#expect(RepositoryListReducer.waitingNotificationBody(for: nil) == "A program is waiting for your input.")
 	}
 
 	@Test("a startup command's first prompt posts nothing, and the next one posts")

@@ -29,22 +29,6 @@ struct TerminalPanelView: View {
 	@Shared(.terminalMouseReporting)
 	private var terminalMouseReporting = true
 
-	@Shared(.terminalClaudeStatusDetection)
-	private var terminalClaudeStatusDetection = ClaudeStatusDetection.default
-
-	/// The setting in TerminalFeature's terms, mapped here so that package needs no Settings
-	/// dependency.
-	private var claudeStatusSource: ClaudeStatusSource {
-		switch terminalClaudeStatusDetection {
-		case .progressAndScreen:
-			.progressAndScreen
-		case .progressOnly:
-			.progressOnly
-		case .screenOnly:
-			.screenOnly
-		}
-	}
-
 	/// Read here like its sibling settings; the ⌘+/⌘−/⌘0 shortcuts write it through
 	/// `TerminalLayoutReducer` so the zoom actions stay testable.
 	@Shared(.terminalFontSize)
@@ -70,7 +54,7 @@ struct TerminalPanelView: View {
 	let terminalViewStore: TerminalViewStore
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let activeSessionId: UUID?
-	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 	let onRetry: (UUID) -> Void
 	let onNewTab: () -> Void
@@ -451,7 +435,6 @@ struct TerminalPanelView: View {
 				selectionColor: resolvedTheme.selection,
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
-				statusSource: claudeStatusSource,
 				font: terminalFont,
 				onStatusChange: onStatusChange,
 				onNotification: onNotification

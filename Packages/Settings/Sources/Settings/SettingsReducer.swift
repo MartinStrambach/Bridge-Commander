@@ -98,9 +98,6 @@ public struct SettingsReducer {
 		@Shared(.terminalNotifications)
 		public var terminalNotifications = true
 
-		@Shared(.terminalClaudeStatusDetection)
-		public var terminalClaudeStatusDetection = ClaudeStatusDetection.default
-
 		@Shared(.terminalFontSize)
 		public var terminalFontSize = TerminalFontSize.default
 
@@ -170,7 +167,6 @@ public struct SettingsReducer {
 		case setTerminalStartupCommand(String)
 		case setTerminalStartupCommandInNewTabs(Bool)
 		case setTerminalNotifications(Bool)
-		case setTerminalClaudeStatusDetection(ClaudeStatusDetection)
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
 		case setUIFontSize(Double)
@@ -637,10 +633,6 @@ public struct SettingsReducer {
 
 			case let .setTerminalNotifications(value):
 				state.$terminalNotifications.withLock { $0 = value }
-				return .none
-
-			case let .setTerminalClaudeStatusDetection(value):
-				state.$terminalClaudeStatusDetection.withLock { $0 = value }
 				return .none
 
 			case let .setTerminalFontSize(size):

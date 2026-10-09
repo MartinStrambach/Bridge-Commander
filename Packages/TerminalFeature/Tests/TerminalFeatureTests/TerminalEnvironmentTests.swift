@@ -3,18 +3,14 @@ import Testing
 @testable import TerminalFeature
 
 struct TerminalEnvironmentTests {
-	@Test func claimsConEmuSoClaudeReportsProgress() {
-		#expect(TerminalEnvironment.variables(requestingProgress: true).contains("ConEmuANSI=ON"))
+	@Test func keepsSwiftTermsDefaults() {
+		#expect(TerminalEnvironment.variables.contains("TERM=xterm-256color"))
+		#expect(TerminalEnvironment.variables.contains("COLORTERM=truecolor"))
 	}
 
-	@Test func leavesConEmuOutWhenProgressIsNotWanted() {
-		#expect(!TerminalEnvironment.variables(requestingProgress: false).contains("ConEmuANSI=ON"))
-	}
-
-	@Test(arguments: [true, false])
-	func keepsSwiftTermsDefaults(requestingProgress: Bool) {
-		let variables = TerminalEnvironment.variables(requestingProgress: requestingProgress)
-		#expect(variables.contains("TERM=xterm-256color"))
-		#expect(variables.contains("COLORTERM=truecolor"))
+	@Test func claimsNoOtherTerminal() {
+		// Claiming ConEmu once made Claude Code send OSC 9;4 progress. Its status now comes over
+		// OSC 7501, which it asks the terminal about instead.
+		#expect(!TerminalEnvironment.variables.contains("ConEmuANSI=ON"))
 	}
 }

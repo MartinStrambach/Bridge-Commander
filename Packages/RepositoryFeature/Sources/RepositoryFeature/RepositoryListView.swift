@@ -246,9 +246,9 @@ struct RepositoryListView: View {
 				activeRowStore: activeRowStore,
 				sessions: store.terminalSessions,
 				terminalViewStore: terminalViewStore,
-				onStatusChange: { sessionId, status in
+				onStatusChange: { sessionId, status, report in
 					MainActor.assumeIsolated {
-						_ = send(.terminalSessionStatusChanged(sessionId: sessionId, status: status))
+						_ = send(.terminalSessionStatusChanged(sessionId: sessionId, status: status, report: report))
 					}
 				},
 				onNotification: { sessionId, notification in

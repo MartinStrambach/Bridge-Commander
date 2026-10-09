@@ -76,6 +76,7 @@ private func firstChild(of pid: pid_t) async -> pid_t? {
 @MainActor
 private final class Reported {
 	var statuses: [TerminalSessionStatus] = []
+	var reports: [TerminalProgramReport?] = []
 }
 
 @MainActor
@@ -99,7 +100,7 @@ struct TerminalViewStoreTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
+			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
 		return (session, view.process.shellPid, view.process.childfd)
@@ -157,8 +158,8 @@ struct TerminalViewStoreTests {
 	}
 
 	/// A killed pane gets one last burst of output as its shell exits, and the pane can outlive the
-	/// kill for a moment. Judging that screen would report a status for a session the reducer has
-	/// already dropped, and would do so after the terminal panel may have closed.
+	/// kill for a moment. Acting on it would report a status for a session the reducer has already
+	/// dropped, and would do so after the terminal panel may have closed.
 	@Test func killSessionSilencesStatusReports() async throws {
 		let store = makeStore()
 		let session = TerminalSession(repositoryPath: "/")
@@ -168,7 +169,7 @@ struct TerminalViewStoreTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, status in
+			onStatusChange: { _, status, _ in
 				MainActor.assumeIsolated { reported.statuses.append(status) }
 			},
 			onNotification: { _, _ in }
@@ -177,12 +178,73 @@ struct TerminalViewStoreTests {
 
 		store.killSession(sessionId: session.id)
 		let reportedBeforeOutput = reported.statuses
-		// What Claude's final frame looks like to the detector: the prompt glyph at column 0.
-		view.feed(text: "❯ ")
+		// What Claude's last word looks like to the detector: its records cleared on exit, after a
+		// report of waiting that would otherwise move the dot.
+		view.feed(text: Self.statusReport("state=done:app=claude-code") + Self.statusReport("state=clear"))
 		view.processOutputReceived()
-		try await Task.sleep(for: .seconds(2)) // past the detector's idle threshold
+		try await Task.sleep(for: .seconds(2)) // past the detector's foreground check
 
 		#expect(reported.statuses == reportedBeforeOutput, "a killed pane has nothing more to say")
+	}
+
+	/// An OSC 7501 report as a program writes it.
+	private static func statusReport(_ body: String) -> String {
+		"\u{1B}]7501;\(body)\u{1B}\\"
+	}
+
+	/// A program's own report, parsed by SwiftTerm, is what moves the pane's status — whichever
+	/// program it is — and it comes with what the program said, for the notification.
+	@Test func aProgramsReportSetsThePanesStatus() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let view = store.view(
+			for: session,
+			foregroundColor: .white,
+			backgroundColor: .black,
+			processDelegate: processDelegate,
+			onStatusChange: { _, status, report in
+				MainActor.assumeIsolated {
+					reported.statuses.append(status)
+					reported.reports.append(report)
+				}
+			},
+			onNotification: { _, _ in }
+		)
+		defer { store.killSession(sessionId: session.id) }
+		try #require(view.process.shellPid > 0)
+
+		// "Allow write?"
+		view.feed(text: Self.statusReport("state=blocked:app=codex:kind=permission:msg=QWxsb3cgd3JpdGU/"))
+		#expect(await eventually { reported.statuses.last == .waitingForInput })
+		#expect(reported.reports.last == TerminalProgramReport(program: "codex", message: "Allow write?"))
+
+		view.feed(text: Self.statusReport("state=working:app=codex"))
+		#expect(await eventually { reported.statuses.last == .active })
+	}
+
+	/// A pane's shell leads its own process group, so it holds the foreground exactly while no job
+	/// runs — what tells a report left behind by a crashed program from a live one.
+	@Test func theShellHoldsTheForegroundOnlyAtItsPrompt() async throws {
+		let store = makeStore(shell: "/bin/zsh", arguments: ["-f"])
+		let session = TerminalSession(repositoryPath: "/")
+		let view = store.view(
+			for: session,
+			foregroundColor: .white,
+			backgroundColor: .black,
+			processDelegate: processDelegate,
+			onStatusChange: { _, _, _ in },
+			onNotification: { _, _ in }
+		)
+		defer { store.killSession(sessionId: session.id) }
+		let shell = view.process.shellPid
+		let pty = view.process.childfd
+		try #require(shell > 0)
+		#expect(await eventually { PtyForegroundProcess.isInForeground(processGroup: shell, ptyDescriptor: pty) == true })
+
+		view.send(txt: "sleep 5\r")
+
+		#expect(await eventually { PtyForegroundProcess.isInForeground(processGroup: shell, ptyDescriptor: pty) == false })
 	}
 
 	/// What a relaunch reopens a tab in: where its shell is now, which is not where it started once
@@ -195,7 +257,7 @@ struct TerminalViewStoreTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
+			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
 		try #require(view.process.shellPid > 0)
@@ -232,7 +294,7 @@ struct TerminalViewStoreTests {
 			foregroundColor: .white,
 			backgroundColor: .black,
 			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
+			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
 		view.process.send(data: Array("sleep 300\n".utf8)[...])

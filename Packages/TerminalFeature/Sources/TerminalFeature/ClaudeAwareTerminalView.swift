@@ -3,44 +3,46 @@ import Foundation
 import SwiftTerm
 import Synchronization
 
-/// A terminal pane that reports whether it is waiting for the user at Claude Code's prompt.
+/// A terminal pane that reports whether the program in it — Claude Code, or anything else that
+/// reports its status — is waiting for the user, and knows the Claude conversation it runs.
 ///
-/// The judgement lives in `ClaudeStatusDetector`. This type owns the pane, forwards the two events
-/// the detector listens to, and supplies the screen reads it needs through `PromptScreen`.
+/// The judgement lives in `ProgramStatusDetector`. This type owns the pane and forwards it what
+/// the program reports (OSC 7501), notification requests, output and input.
 public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	public let repositoryPath: String
 	public let sessionId: UUID
 
-	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	private let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 
-	/// Built on first use, since it takes this view as its screen and `self` isn't available until
+	/// Built on first use, since it reads this view's process and `self` isn't available until
 	/// `super.init` has run.
-	private let statusSource: ClaudeStatusSource
-
-	private lazy var detector = ClaudeStatusDetector(
+	private lazy var detector = ProgramStatusDetector(
 		label: repositoryPath,
-		screen: self,
-		source: statusSource,
-		onStatusChange: { [weak self] status in
+		isShellInForeground: { [weak self] in
+			guard let process = self?.process else {
+				return nil
+			}
+
+			return PtyForegroundProcess.isInForeground(processGroup: process.shellPid, ptyDescriptor: process.childfd)
+		},
+		onStatusChange: { [weak self] status, report in
 			guard let self else {
 				return
 			}
 
-			onStatusChange(sessionId, status)
+			onStatusChange(sessionId, status, report)
 		}
 	)
 
 	public init(
 		repositoryPath: String,
 		sessionId: UUID,
-		statusSource: ClaudeStatusSource = .progressAndScreen,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId
-		self.statusSource = statusSource
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
 		super.init(frame: .zero)
@@ -188,15 +190,17 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 			return
 		}
 
-		switch OSC9Payload(payload) {
-		case let .notification(notification):
+		if case let .notification(notification) = OSC9Payload(payload) {
 			notificationReceived(notification)
-		case let .progress(report):
-			// `remove` is what Claude sends when a turn is done; `error` also ends one.
-			detector.progressReported(isWorking: report.state != .remove && report.state != .error)
-		case .ignored:
-			break
 		}
+	}
+
+	/// OSC 7501 reports, as SwiftTerm stores them: all of the pane's current records, on the main
+	/// thread, possibly several updates folded into one call. SwiftTerm answers a program's
+	/// `OSC 7501 ; ?` probe itself, which is what makes Claude Code report at all.
+	override public func programStatusChanged(source: TerminalView, records: [TerminalProgramStatus]) {
+		super.programStatusChanged(source: source, records: records)
+		detector.statusReported(ProgramStatusReport(records: records))
 	}
 
 	/// A program asking for the user is the plainest sign the pane is waiting, so the detector is
