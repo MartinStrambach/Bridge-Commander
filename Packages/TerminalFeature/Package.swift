@@ -8,7 +8,7 @@ let package = Package(
 		.library(name: "TerminalFeature", targets: ["TerminalFeature"]),
 	],
 	dependencies: [
-		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
+		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1", traits: ["ComposableArchitecture2Deprecations", "ComposableArchitecture2DeprecationOverloads"]),
 		.package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.20.0"),
 		.package(path: "../AppUI"),
 	],

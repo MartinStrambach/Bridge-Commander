@@ -9,7 +9,7 @@ let package = Package(
         .library(name: "DiffModelMapping", targets: ["DiffModelMapping"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1", traits: ["ComposableArchitecture2Deprecations", "ComposableArchitecture2DeprecationOverloads"]),
         .package(path: "../GitCore"),
     ],
     targets: [
