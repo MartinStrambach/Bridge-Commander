@@ -37,6 +37,8 @@ public struct SimulatorPaneReducer {
 		/// What just happened — a file saved, a memory warning sent — shown in a banner until it
 		/// times out or is dismissed.
 		public var notice: Notice?
+		/// Asks before erasing a device.
+		@Presents public var alert: AlertState<Action.Alert>?
 
 		/// The workspace or project the Run button builds — the repository's, as its Xcode button
 		/// finds it; `nil` when it has none (a Tuist project not generated yet).
@@ -112,6 +114,11 @@ public struct SimulatorPaneReducer {
 		case recordingDeviceIdsChanged(Set<String>)
 		case memoryWarningButtonTapped
 		case locationSelected(SimulatorLocationCommand)
+		case appearanceSelected(SimulatorAppearance)
+		case statusBarSelected(SimulatorStatusBarCommand)
+		/// Asks to confirm, then erases the device's content and settings.
+		case eraseButtonTapped
+		case alert(PresentationAction<Alert>)
 		/// A feature (memory warning, location) did its thing, or failed with a message.
 		case featureFinished(Notice?, errorMessage: String?)
 		case showNoticeFileInFinderTapped
@@ -130,6 +137,10 @@ public struct SimulatorPaneReducer {
 		case schemeSelected(String)
 		case runButtonTapped
 		case delegate(Delegate)
+
+		public enum Alert: Equatable {
+			case confirmErase(deviceId: String)
+		}
 
 		public enum Delegate: Equatable {
 			/// Type `command` into the repository's run tab, named `title`, replacing what ran
@@ -459,6 +470,74 @@ public struct SimulatorPaneReducer {
 					}
 				}
 
+			case let .appearanceSelected(appearance):
+				guard let device = state.selectedDevice, device.isBooted else {
+					return .none
+				}
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.setUISettings(device.id, SimulatorUISettings(appearance: appearance))
+						let icon = appearance == .dark ? "moon.fill" : "sun.max.fill"
+						await send(.featureFinished(Notice(icon: icon, title: "\(appearance.title) appearance"), errorMessage: nil))
+					}
+					catch {
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
+					}
+				}
+
+			case let .statusBarSelected(command):
+				guard let device = state.selectedDevice, device.isBooted else {
+					return .none
+				}
+				let title = command == .clear ? "Status bar override cleared" : "Status bar overridden"
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.setStatusBar(device.id, command)
+						await send(.featureFinished(Notice(icon: "cellularbars", title: title), errorMessage: nil))
+					}
+					catch {
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
+					}
+				}
+
+			case .eraseButtonTapped:
+				guard let device = state.selectedDevice, state.transitioningDeviceId == nil else {
+					return .none
+				}
+				state.alert = AlertState {
+					TextState("Erase \(device.name)?")
+				} actions: {
+					ButtonState(role: .destructive, action: .confirmErase(deviceId: device.id)) {
+						TextState("Erase")
+					}
+					ButtonState(role: .cancel) {
+						TextState("Cancel")
+					}
+				} message: {
+					TextState("All apps, their data and the device's settings are deleted. A booted device is shut down and booted again.")
+				}
+				return .none
+
+			case let .alert(.presented(.confirmErase(deviceId))):
+				guard let device = state.devices.first(where: { $0.id == deviceId }), state.transitioningDeviceId == nil else {
+					return .none
+				}
+				state.transitioningDeviceId = device.id
+				state.errorMessage = nil
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.erase(device.id)
+						await send(.transitionFinished(errorMessage: nil))
+						await send(.featureFinished(Notice(icon: "trash", title: "Erased \(device.name)"), errorMessage: nil))
+					}
+					catch {
+						await send(.transitionFinished(errorMessage: error.localizedDescription))
+					}
+				}
+
+			case .alert:
+				return .none
+
 			case let .featureFinished(notice, errorMessage):
 				state.errorMessage = errorMessage
 				guard let notice else {
@@ -598,5 +677,6 @@ public struct SimulatorPaneReducer {
 				return .none
 			}
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 }

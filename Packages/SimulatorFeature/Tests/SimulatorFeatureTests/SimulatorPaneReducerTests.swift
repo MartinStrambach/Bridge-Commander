@@ -554,6 +554,99 @@ struct SimulatorPaneReducerTests {
 	}
 
 	@Test
+	func appearanceAndStatusBarReportWhatTheyDid() async {
+		let settings = LockIsolated<[SimulatorUISettings]>([])
+		let statusBars = LockIsolated<[SimulatorStatusBarCommand]>([])
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].setUISettings = { _, value in settings.withValue { $0.append(value) } }
+			$0[SimulatorClient.self].setStatusBar = { _, command in statusBars.withValue { $0.append(command) } }
+			$0.continuousClock = TestClock()
+		}
+
+		await store.send(.appearanceSelected(.dark))
+		await store.receive(.featureFinished(.init(icon: "moon.fill", title: "Dark appearance"), errorMessage: nil)) {
+			$0.notice = .init(icon: "moon.fill", title: "Dark appearance")
+		}
+		await store.send(.statusBarSelected(.override(.clean)))
+		await store.receive(.featureFinished(.init(icon: "cellularbars", title: "Status bar overridden"), errorMessage: nil)) {
+			$0.notice = .init(icon: "cellularbars", title: "Status bar overridden")
+		}
+		#expect(settings.value == [SimulatorUISettings(appearance: .dark)])
+		#expect(statusBars.value == [.override(.clean)])
+		await store.send(.noticeDismissed) {
+			$0.notice = nil
+		}
+	}
+
+	@Test
+	func eraseAsksFirst() async {
+		let erased = LockIsolated<[String]>([])
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].erase = { id in erased.withValue { $0.append(id) } }
+			$0.continuousClock = TestClock()
+		}
+		let name = initial.devices[0].name
+
+		await store.send(.eraseButtonTapped) {
+			$0.alert = AlertState {
+				TextState("Erase \(name)?")
+			} actions: {
+				ButtonState(role: .destructive, action: .confirmErase(deviceId: "A")) {
+					TextState("Erase")
+				}
+				ButtonState(role: .cancel) {
+					TextState("Cancel")
+				}
+			} message: {
+				TextState("All apps, their data and the device's settings are deleted. A booted device is shut down and booted again.")
+			}
+		}
+		await store.send(.alert(.dismiss)) {
+			$0.alert = nil
+		}
+		#expect(erased.value.isEmpty)
+
+		await store.send(.eraseButtonTapped) {
+			$0.alert = AlertState {
+				TextState("Erase \(name)?")
+			} actions: {
+				ButtonState(role: .destructive, action: .confirmErase(deviceId: "A")) {
+					TextState("Erase")
+				}
+				ButtonState(role: .cancel) {
+					TextState("Cancel")
+				}
+			} message: {
+				TextState("All apps, their data and the device's settings are deleted. A booted device is shut down and booted again.")
+			}
+		}
+		await store.send(.alert(.presented(.confirmErase(deviceId: "A")))) {
+			$0.alert = nil
+			$0.transitioningDeviceId = "A"
+		}
+		await store.receive(.transitionFinished(errorMessage: nil)) {
+			$0.transitioningDeviceId = nil
+		}
+		await store.receive(.featureFinished(.init(icon: "trash", title: "Erased \(name)"), errorMessage: nil)) {
+			$0.notice = .init(icon: "trash", title: "Erased \(name)")
+		}
+		#expect(erased.value == ["A"])
+		await store.send(.noticeDismissed) {
+			$0.notice = nil
+		}
+	}
+
+	@Test
 	func aFailedFeatureIsReported() async {
 		var initial = SimulatorPaneReducer.State()
 		initial.devices = [Self.device("A", state: .booted)]

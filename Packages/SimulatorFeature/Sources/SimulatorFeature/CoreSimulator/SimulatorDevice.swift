@@ -165,6 +165,9 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 	case notRecording(String)
 	case recordingFailed(String)
 	case notFoldable(String)
+	case invalidArgument(String)
+	case appNotInstalled(bundleId: String, device: String)
+	case launchFailed(String)
 
 	public var errorDescription: String? {
 		switch self {
@@ -208,6 +211,12 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 			"The recording failed: \(detail)"
 		case let .notFoldable(name):
 			"\(name) does not fold; only the iPhone Duo does."
+		case let .invalidArgument(detail):
+			detail
+		case let .appNotInstalled(bundleId, device):
+			"\(bundleId) is not installed on \(device). Install it with `xcrun simctl install <udid> <path to .app>`."
+		case let .launchFailed(detail):
+			"The app did not launch: \(detail)"
 		}
 	}
 }

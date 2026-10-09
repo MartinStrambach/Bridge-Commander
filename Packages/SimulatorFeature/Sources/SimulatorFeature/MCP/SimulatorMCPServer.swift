@@ -329,6 +329,30 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 		try await host.setLocation(udid: device.id, command)
 	}
 
+	func setUISettings(device: SimulatorDevice, _ settings: SimulatorUISettings) async throws {
+		try await host.setUISettings(udid: device.id, settings)
+	}
+
+	func setStatusBar(device: SimulatorDevice, _ command: SimulatorStatusBarCommand) async throws {
+		try await host.setStatusBar(udid: device.id, command)
+	}
+
+	func erase(device: SimulatorDevice) async throws -> Bool {
+		try await host.erase(udid: device.id)
+	}
+
+	func launchApp(device: SimulatorDevice, _ request: SimulatorAppLaunchRequest) async throws -> SimulatorAppLaunch {
+		try await SimulatorAppLauncher.shared.launch(udid: device.id, deviceName: device.name, request)
+	}
+
+	func terminateApp(device: SimulatorDevice, bundleId: String) async throws -> URL? {
+		try await SimulatorAppLauncher.shared.terminate(udid: device.id, bundleId: bundleId)
+	}
+
+	func openURL(device: SimulatorDevice, _ url: String) async throws {
+		try await host.openURL(udid: device.id, url)
+	}
+
 	func startRecording(device: SimulatorDevice, path: String?) async throws -> URL {
 		let url = try SimulatorScreenRecorder.destination(
 			requested: path,

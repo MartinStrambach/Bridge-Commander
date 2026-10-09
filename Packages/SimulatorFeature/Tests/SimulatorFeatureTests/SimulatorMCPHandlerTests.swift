@@ -178,6 +178,35 @@ struct SimulatorMCPHandlerTests {
 			return stoppedRecording
 		}
 
+		func setUISettings(device: SimulatorDevice, _ settings: SimulatorUISettings) async throws {
+			record("ui \(try settings.simctlCommands(udid: device.id).map { $0.dropFirst(2).joined(separator: " ") }.joined(separator: ", "))")
+		}
+		func setStatusBar(device: SimulatorDevice, _ command: SimulatorStatusBarCommand) async throws {
+			record(try command.simctlArguments(udid: device.id).dropFirst(2).joined(separator: " "))
+		}
+		func erase(device: SimulatorDevice) async throws -> Bool {
+			record("erase \(device.id)")
+			return device.isBooted
+		}
+		func launchApp(device: SimulatorDevice, _ request: SimulatorAppLaunchRequest) async throws -> SimulatorAppLaunch {
+			record("launch \(request.bundleId) \(request.arguments) capture \(request.captureLogs)")
+			guard request.captureLogs else {
+				return SimulatorAppLaunch(processId: 4321)
+			}
+			return SimulatorAppLaunch(
+				processId: 4321,
+				logURL: URL(fileURLWithPath: "/tmp/com.example.App.log"),
+				logPredicate: request.logPredicate ?? "default"
+			)
+		}
+		func terminateApp(device: SimulatorDevice, bundleId: String) async throws -> URL? {
+			record("terminate \(bundleId)")
+			return URL(fileURLWithPath: "/tmp/com.example.App.log")
+		}
+		func openURL(device: SimulatorDevice, _ url: String) async throws {
+			record("open \(url)")
+		}
+
 		private func record(_ call: String) {
 			calls.withLock { $0.append(call) }
 		}
@@ -249,7 +278,7 @@ struct SimulatorMCPHandlerTests {
 			"list_devices", "select_device", "screenshot", "describe_ui", "tap", "swipe", "pinch", "two_finger_drag",
 			"type_text", "press_key", "press_button", "press_element", "set_value", "scroll_to_element", "list_crashes", "crash_report", "rotate",
 			"set_fold", "wait_for_element", "set_slider", "gesture", "batch", "set_location", "simulate_memory_warning", "start_recording",
-			"stop_recording",
+			"stop_recording", "set_appearance", "set_status_bar", "erase_device", "launch_app", "stop_app", "open_url",
 		])
 		#expect(try decode(response)["id"] == "x")
 	}
@@ -672,6 +701,89 @@ struct SimulatorMCPHandlerTests {
 		let ended = try await callText(actions, "stop_recording", ["udid": "aaaa"])
 		#expect(ended.text == "The recording had already stopped — it reached the 10-minute limit — and was saved to /tmp/demo.mov (12.3 seconds).")
 		#expect(actions.calls.withLock { $0 } == ["start recording /tmp/flow.mov", "stop recording default", "stop recording aaaa"])
+	}
+
+	@Test
+	func appearanceSetsOnlyWhatIsGiven() async throws {
+		let actions = FakeActions()
+		let dark = try await callText(actions, "set_appearance", ["appearance": "dark"])
+		#expect(dark.text == "Set iPhone to dark mode.")
+		let all = try await callText(actions, "set_appearance", [
+			"appearance": "light", "content_size": "accessibility-large", "increase_contrast": true,
+		])
+		#expect(all.text == "Set iPhone to light mode, text size accessibility-large, Increase Contrast on.")
+		#expect(actions.calls.withLock { $0 } == [
+			"ui appearance dark",
+			"ui appearance light, content_size accessibility-large, increase_contrast enabled",
+		])
+		#expect(try await callText(actions, "set_appearance", ["appearance": "sepia"]).isError)
+		#expect(try await callText(actions, "set_appearance", [:]).isError)
+		#expect(try await callText(actions, "set_appearance", ["content_size": "huge"]).isError)
+	}
+
+	@Test
+	func statusBarStartsFromCleanAndClearsAlone() async throws {
+		let actions = FakeActions()
+		let clean = try await callText(actions, "set_status_bar", ["clean": true, "battery_level": 42, "data_network": "5g"])
+		#expect(clean.text == "Overrode iPhone's status bar. set_status_bar with clear removes the override.")
+		_ = try await callText(actions, "set_status_bar", ["time": "10:00"])
+		let cleared = try await callText(actions, "set_status_bar", ["clear": true])
+		#expect(cleared.text == "Cleared iPhone's status bar override.")
+		#expect(actions.calls.withLock { $0 } == [
+			"override --time 9:41 --dataNetwork 5g --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --operatorName  --batteryState charged --batteryLevel 42",
+			"override --time 10:00",
+			"clear",
+		])
+		for arguments: JSONValue in [[:], ["clear": true, "time": "9:41"], ["wifi_bars": .number(1.5)], ["battery_level": 101], ["data_network": "6g"]] as [JSONValue] {
+			#expect(try await callText(actions, "set_status_bar", arguments).isError, "\(arguments)")
+		}
+	}
+
+	@Test
+	func eraseNeedsTheDevicesUdid() async throws {
+		let actions = FakeActions()
+		let missing = try await callText(actions, "erase_device", [:])
+		#expect(missing.isError)
+		#expect(try await callText(actions, "erase_device", ["udid": "BBBB"]).isError)
+		let erased = try await callText(actions, "erase_device", ["udid": "aaaa"])
+		#expect(erased.text == "Erased iPhone and booted it again; it is as new, with no apps of yours installed.")
+		#expect(actions.calls.withLock { $0 } == ["erase AAAA"])
+	}
+
+	@Test
+	func launchAppNamesTheLogFile() async throws {
+		let actions = FakeActions()
+		let launched = try await callText(actions, "launch_app", [
+			"bundle_id": "com.example.App", "arguments": ["-UITesting", "YES"], "environment": ["MODE": "demo", "COUNT": 3],
+		])
+		#expect(launched.text == """
+		Launched com.example.App on iPhone (pid 4321). Its output and log go to /tmp/com.example.App.log until it exits; read it with tail or grep.
+		os_log messages kept: default
+		""")
+		let plain = try await callText(actions, "launch_app", ["bundle_id": "com.example.App", "capture_logs": false])
+		#expect(plain.text == "Launched com.example.App on iPhone (pid 4321).")
+		let stopped = try await callText(actions, "stop_app", ["bundle_id": "com.example.App"])
+		#expect(stopped.text == "Terminated com.example.App on iPhone. Its captured output is in /tmp/com.example.App.log.")
+		let opened = try await callText(actions, "open_url", ["url": "myapp://item/1"])
+		#expect(opened.text == "Opened myapp://item/1 on iPhone. Take a screenshot to see what handled it.")
+		#expect(actions.calls.withLock { $0 } == [
+			"launch com.example.App [\"-UITesting\", \"YES\"] capture true",
+			"launch com.example.App [] capture false",
+			"terminate com.example.App",
+			"open myapp://item/1",
+		])
+		#expect(try await callText(actions, "launch_app", [:]).isError)
+		#expect(try await callText(actions, "launch_app", ["bundle_id": "com.example.App", "arguments": "-flag"]).isError)
+	}
+
+	@Test
+	func launchRequestReadsEnvironmentAndPredicate() throws {
+		let request = try SimulatorAppTools.launchRequest(from: [
+			"bundle_id": "com.example.App", "environment": ["MODE": "demo", "COUNT": 3], "log_predicate": "  ",
+		])
+		#expect(request.environment == ["MODE": "demo", "COUNT": "3"])
+		#expect(request.logPredicate == nil)
+		#expect(request.captureLogs)
 	}
 
 	// MARK: - Waiting, sliders, gestures, batches
