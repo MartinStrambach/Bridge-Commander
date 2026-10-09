@@ -213,7 +213,7 @@ struct TerminalLayoutView: View {
 			store.send(.selectRepo(repositoryPath: NSHomeDirectory()))
 		} label: {
 			HStack(spacing: 8) {
-				TerminalStatusDotView(status: status, size: 12)
+				TerminalStatusDotView(status: status, size: 12, showsActive: !showOnlyWithTerminals)
 				VStack(alignment: .leading, spacing: 2) {
 					Text("Home Directory")
 						.scaledFont(.caption)
@@ -252,6 +252,7 @@ struct TerminalLayoutView: View {
 			store: rowStore,
 			isActive: store.activeRepositoryPath == path,
 			sessionStatus: statusByPath[path],
+			showsActiveDot: !showOnlyWithTerminals,
 			onTap: {
 				store.send(.selectRepo(repositoryPath: path))
 			},

@@ -5,10 +5,14 @@ import SwiftUI
 public struct TerminalStatusDotView: View {
 	public let status: TerminalSessionStatus?
 	public let size: CGFloat
+	/// `false` leaves a running terminal's green dot out (its space stays), for lists where every
+	/// row has a terminal and only the ones needing attention should stand out.
+	public let showsActive: Bool
 
-	public init(status: TerminalSessionStatus?, size: CGFloat = 6) {
+	public init(status: TerminalSessionStatus?, size: CGFloat = 6, showsActive: Bool = true) {
 		self.status = status
 		self.size = size
+		self.showsActive = showsActive
 	}
 
 	public var body: some View {
@@ -16,7 +20,7 @@ public struct TerminalStatusDotView: View {
 		case .active,
 		     .launching:
 			Circle()
-				.fill(Color.green)
+				.fill(showsActive ? Color.green : Color.clear)
 				.frame(width: size, height: size)
 
 		case .waitingForInput:

@@ -12,6 +12,9 @@ struct SidebarRepositoryRowView: View {
 	let store: StoreOf<RepositoryRowReducer>
 	let isActive: Bool
 	let sessionStatus: TerminalSessionStatus?
+	/// Off while the sidebar shows only rows with a terminal, where a green dot on every row says
+	/// nothing; the waiting-for-input dot still shows.
+	var showsActiveDot = true
 	let onTap: () -> Void
 	var onKill: (() -> Void)?
 
@@ -23,7 +26,7 @@ struct SidebarRepositoryRowView: View {
 		Button(action: onTap) {
 			HStack(spacing: 8) {
 				// Terminal-active indicator dot
-				TerminalStatusDotView(status: sessionStatus, size: 12)
+				TerminalStatusDotView(status: sessionStatus, size: 12, showsActive: showsActiveDot)
 
 				VStack(alignment: .leading, spacing: 2) {
 					HStack(spacing: 4) {
