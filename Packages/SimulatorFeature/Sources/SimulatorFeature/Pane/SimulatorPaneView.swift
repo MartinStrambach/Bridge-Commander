@@ -37,19 +37,43 @@ public struct SimulatorPaneView: View {
 	private static let headerHeight: CGFloat = 36
 	private static let runBarHeight: CGFloat = 40
 	private static let screenPadding: CGFloat = 12
+	private static let minimumWidth: CGFloat = 260
+	/// What dragging the pane wider leaves the terminal beside it.
+	private static let minimumTerminalWidth: CGFloat = 320
+	/// Wider than the 1 pt divider it sits on, so the edge is easy to grab.
+	private static let resizeHandleWidth: CGFloat = 8
 
-	/// Wide enough for the device's screen at the height left under the header, within limits that
-	/// keep the terminal usable.
+	/// Set by dragging the pane's leading edge; 0 until then, and after a double-click on the edge,
+	/// which leave the width to `fittingWidth`. Clamped where it is read, since it comes back from
+	/// user defaults and the window may have shrunk since.
+	@AppStorage("simulatorPane.width") private var storedWidth: Double = 0
+	/// The width when the current drag began: the drag's translation is measured from its start,
+	/// so it applies to that width rather than accumulating onto every intermediate one.
+	@State private var dragStartWidth: CGFloat?
+
+	/// The width the user chose, else the fitting one, within limits that keep the terminal usable.
+	/// Rotating never changes it — the screen fits itself inside instead.
 	private var paneWidth: CGFloat {
-		let aspect: CGFloat = if let size = store.selectedDevice?.displayedPixelSize, size.height > 0 {
-			size.width / size.height
+		clampedWidth(storedWidth > 0 ? storedWidth : fittingWidth)
+	}
+
+	/// Wide enough for the device's screen held portrait at the height left under the header, and
+	/// at most half the panel. Portrait rather than the interface's orientation, so it stays put
+	/// when the device turns.
+	private var fittingWidth: CGFloat {
+		let portraitSize = store.selectedDevice.map { $0.portraitRotation.displayedSize(native: $0.screenPixelSize) }
+		let aspect: CGFloat = if let portraitSize, portraitSize.height > 0 {
+			portraitSize.width / portraitSize.height
 		}
 		else {
 			0.46
 		}
 		let screenHeight = max(availableSize.height - Self.headerHeight - Self.runBarHeight - Self.screenPadding * 2, 100)
-		let fitting = screenHeight * aspect + Self.screenPadding * 2
-		return min(max(fitting, 280), max(availableSize.width * 0.5, 280))
+		return min(screenHeight * aspect + Self.screenPadding * 2, availableSize.width * 0.5)
+	}
+
+	private func clampedWidth(_ width: CGFloat) -> CGFloat {
+		min(max(width, Self.minimumWidth), max(availableSize.width - Self.minimumTerminalWidth, Self.minimumWidth))
 	}
 
 	public var body: some View {
@@ -78,6 +102,12 @@ public struct SimulatorPaneView: View {
 		}
 		.frame(width: paneWidth)
 		.background(Color(NSColor.underPageBackgroundColor))
+		// Centred on the divider the panel puts before the pane. The pane is drawn after the
+		// terminal, so the half reaching past its edge is not covered.
+		.overlay(alignment: .leading) {
+			resizeHandle
+				.offset(x: -Self.resizeHandleWidth / 2)
+		}
 		// Restarted with the repository, so switching between two repositories that both show the
 		// pane switches to the other's device.
 		.task(id: repositoryPath) {
@@ -87,6 +117,33 @@ public struct SimulatorPaneView: View {
 		.task(id: projectPath) {
 			store.send(.projectChanged(projectPath))
 		}
+	}
+
+	// MARK: - Resizing
+
+	private var resizeHandle: some View {
+		Color.clear
+			.frame(width: Self.resizeHandleWidth)
+			.contentShape(Rectangle())
+			.pointerStyle(.frameResize(position: .leading))
+			.help("Drag to resize; double-click to fit the device")
+			.onTapGesture(count: 2) {
+				storedWidth = 0
+			}
+			.gesture(
+				// Global space: the handle moves with the width, so a translation measured in its
+				// own space would shift under the pointer as it is dragged.
+				DragGesture(minimumDistance: 1, coordinateSpace: .global)
+					.onChanged { value in
+						let start = dragStartWidth ?? paneWidth
+						dragStartWidth = start
+						// The handle is on the leading edge: dragging left widens the pane.
+						storedWidth = clampedWidth(start - value.translation.width)
+					}
+					.onEnded { _ in
+						dragStartWidth = nil
+					}
+			)
 	}
 
 	// MARK: - Run
