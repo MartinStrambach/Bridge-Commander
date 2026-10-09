@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftTerm
+import Synchronization
 
 /// A terminal pane that reports whether it is waiting for the user at Claude Code's prompt.
 ///
@@ -45,7 +46,8 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		super.init(frame: .zero)
 		cellGridScale = Self.currentBackingScale(of: nil)
 		registerForDraggedTypes([.fileURL])
-		registerNotificationHandlers()
+		observeNotifications()
+		observeProcessOutput()
 	}
 
 	/// Unsupported: a pane is only ever built in code, for the session it belongs to.
@@ -145,7 +147,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 					modifiers: event.modifierFlags,
 					charactersIgnoringModifiers: event.charactersIgnoringModifiers,
 					optionIsMeta: optionAsMetaKey,
-					kittyProtocolActive: !terminal.keyboardEnhancementFlags.isEmpty
+					kittyProtocolActive: !keyboardEnhancementFlags.isEmpty
 				)
 			else {
 				return event
@@ -158,32 +160,42 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	// MARK: - Notifications
 
+	/// Keeps the OSC observation below alive for as long as the pane.
+	private var oscObservation: TerminalOscObservation?
+
 	/// Handles OSC 9 and OSC 777 the way Ghostty does. SwiftTerm parses OSC 777 but hands it to a
 	/// delegate method its Mac view never implements, and treats OSC 9 as a progress report only,
-	/// so both are taken over here. A registered handler replaces SwiftTerm's own for that code,
-	/// which is why a `9;4` progress report is passed back to SwiftTerm's progress bar by hand.
-	private func registerNotificationHandlers() {
-		let terminal = getTerminal()
-		terminal.registerOscHandler(code: 9) { [weak self] data in
-			guard let self else {
+	/// so both are watched here. The observation is passive — SwiftTerm still handles every
+	/// sequence itself, so a `9;4` progress report still reaches its progress bar — and its events
+	/// arrive on a private serial queue, in the order they were parsed.
+	private func observeNotifications() {
+		oscObservation = observeOscEvents { [weak self] event in
+			guard event.code == 9 || event.code == 777 else {
 				return
 			}
 
-			switch OSC9Payload(data) {
-			case let .notification(notification):
-				notificationReceived(notification)
-			case let .progress(report):
-				// `remove` is what Claude sends when a turn is done; `error` also ends one.
-				detector.progressReported(isWorking: report.state != .remove && report.state != .error)
-				progressReport(source: terminal, report: report)
-			case .ignored:
-				break
+			DispatchQueue.main.async {
+				self?.oscEventReceived(code: event.code, payload: event.payload[...])
 			}
 		}
-		terminal.registerOscHandler(code: 777) { [weak self] data in
-			if let notification = TerminalNotification(osc777: data) {
-				self?.notificationReceived(notification)
+	}
+
+	private func oscEventReceived(code: Int, payload: ArraySlice<UInt8>) {
+		if code == 777 {
+			if let notification = TerminalNotification(osc777: payload) {
+				notificationReceived(notification)
 			}
+			return
+		}
+
+		switch OSC9Payload(payload) {
+		case let .notification(notification):
+			notificationReceived(notification)
+		case let .progress(report):
+			// `remove` is what Claude sends when a turn is done; `error` also ends one.
+			detector.progressReported(isWorking: report.state != .remove && report.state != .error)
+		case .ignored:
+			break
 		}
 	}
 
@@ -344,10 +356,12 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// Puts the current selection on the pasteboard, if `SelectionCopyDecider` judges there is one
 	/// worth copying. Internal so a test can drive it without synthesizing a mouse event.
 	func copySelectionToPasteboard() {
+		// `nil` while no selection is active.
+		let selectedText = getSelection()
 		guard
 			let text = copyDecider.textToCopy(
-				selectionIsActive: selection?.active == true,
-				selectedText: selection?.getSelectedText() ?? ""
+				selectionIsActive: selectedText != nil,
+				selectedText: selectedText ?? ""
 			)
 		else {
 			return
@@ -365,10 +379,28 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// the prompt; a startup file that prints something first costs at most that stray echo.
 	var pendingStartupCommand: String?
 
-	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
-	override public func dataReceived(slice: ArraySlice<UInt8>) {
-		super.dataReceived(slice: slice)
-		detector.outputReceived(slice)
+	/// Has the main thread told about the child's output.
+	///
+	/// SwiftTerm parses the child's output on its IO thread and calls the handler there after
+	/// each batch, with no bytes (since 1.99 `dataReceived(slice:)` is no longer called). A burst
+	/// of output is many batches, so a hop already queued is not queued again.
+	private func observeProcessOutput() {
+		let hop = PendingMainHop()
+		setProcessOutputHandler { [weak self] in
+			guard hop.claim() else {
+				return
+			}
+
+			DispatchQueue.main.async {
+				hop.release()
+				self?.processOutputReceived()
+			}
+		}
+	}
+
+	/// Internal so a test can stand in for the child writing output, which it cannot do once killed.
+	func processOutputReceived() {
+		detector.outputReceived()
 		if let command = pendingStartupCommand {
 			pendingStartupCommand = nil
 			send(txt: command + "\r")
@@ -379,5 +411,21 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	override public func send(source: TerminalView, data: ArraySlice<UInt8>) {
 		super.send(source: source, data: data)
 		detector.inputSent(data)
+	}
+}
+
+/// Whether a hop to the main thread is already queued, claimed from SwiftTerm's IO thread and
+/// released on the main thread.
+private final class PendingMainHop: Sendable {
+	private let isPending = Atomic(false)
+
+	/// Whether the caller should queue the hop: `false` while one is already queued.
+	func claim() -> Bool {
+		isPending.compareExchange(expected: false, desired: true, ordering: .acquiringAndReleasing).exchanged
+	}
+
+	/// Released before the hop does its work, so output that arrives meanwhile queues another.
+	func release() {
+		isPending.store(false, ordering: .releasing)
 	}
 }

@@ -77,7 +77,7 @@ struct TerminalNotificationTests {
 	// MARK: - The pane
 
 	@MainActor
-	@Test func aPaneForwardsTheNotificationsItsProgramAsksFor() {
+	@Test func aPaneForwardsTheNotificationsItsProgramAsksFor() async {
 		let received = Received()
 		let sessionId = UUID()
 		let view = ClaudeAwareTerminalView(
@@ -94,10 +94,19 @@ struct TerminalNotificationTests {
 		view.feed(text: "\u{1B}]9;first\u{07}")
 		view.feed(text: "\u{1B}]777;notify;Title;second\u{1B}\\")
 
-		#expect(received.items == [
+		// SwiftTerm delivers observed OSC sequences off the parse path, in order, and the pane hops
+		// each to the main actor; polling yields it.
+		let expected: [Received.Item] = [
 			.init(id: sessionId, notification: TerminalNotification(title: nil, body: "first")),
 			.init(id: sessionId, notification: TerminalNotification(title: "Title", body: "second")),
-		])
+		]
+		let clock = ContinuousClock()
+		let deadline = clock.now + .seconds(5)
+		while received.items != expected, clock.now < deadline {
+			try? await Task.sleep(for: .milliseconds(20))
+		}
+
+		#expect(received.items == expected)
 	}
 }
 

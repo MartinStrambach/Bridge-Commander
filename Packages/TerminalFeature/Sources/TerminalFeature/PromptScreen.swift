@@ -31,4 +31,8 @@ protocol PromptScreen: AnyObject {
 	/// The text in `row`'s leading `columns` cells. Read only for a row already known to draw the
 	/// prompt glyph, to tell a dialog's numbered option from Claude's input box.
 	func leadingText(ofRow row: Int, columns: Int) -> String
+
+	/// The text of the live screen's rows, top to bottom, `""` for a row with nothing written on
+	/// it. Read only while the viewport shows scrollback, when the rows above are history instead.
+	func liveScreenRows() -> [String]
 }

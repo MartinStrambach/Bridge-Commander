@@ -64,8 +64,6 @@ final class ClaudeStatusDetector {
 	/// the screen-only judgement in charge.
 	private var isClaudeWorking = false
 
-	private var renderTracker = RenderTracker()
-
 	/// Holds a waiting pane until a second idle check agrees it has gone back to work.
 	private let waitingStateGate = WaitingStateGate()
 
@@ -86,12 +84,11 @@ final class ClaudeStatusDetector {
 	// MARK: - Events
 
 	/// Takes in a burst of output written by the child process.
-	func outputReceived(_ slice: ArraySlice<UInt8>) {
+	func outputReceived() {
 		guard !isStopped else {
 			return
 		}
 
-		renderTracker.received(slice)
 		scheduleIdleCheck()
 	}
 
@@ -189,8 +186,6 @@ final class ClaudeStatusDetector {
 			return
 		}
 
-		renderTracker.markJudged()
-
 		guard let screen else {
 			return
 		}
@@ -226,7 +221,8 @@ final class ClaudeStatusDetector {
 		case dialogOnScreen(row: Int)
 		/// Claude is in the foreground and not mid-turn, which `progressOnly` takes as waiting.
 		case claudeNotWorking
-		/// The user is reading scrollback, so the last frame drawn is judged in place of the grid.
+		/// The user is reading scrollback, so the live screen below it is judged in place of the
+		/// visible rows.
 		case scrolledBack(drewPrompt: Bool)
 		/// The cursor is sitting in the input box Claude drew.
 		case cursorAtPrompt
@@ -286,7 +282,7 @@ final class ClaudeStatusDetector {
 		}
 
 		guard screen.isShowingLiveScreen else {
-			return .scrolledBack(drewPrompt: renderTracker.drewPrompt)
+			return .scrolledBack(drewPrompt: liveScreenDrawsPrompt(on: screen))
 		}
 
 		// The cursor is the surest anchor for the input box: while Claude waits, it sits in the box
@@ -314,6 +310,25 @@ final class ClaudeStatusDetector {
 		}
 
 		return .noPromptOnScreen
+	}
+
+	/// Whether the live screen draws the prompt glyph where Claude would put it, for a pane whose
+	/// viewport is on scrollback. Copying the live screen out costs more than reading a visible row,
+	/// so the cursor's row is not tried apart; otherwise it is the same bottom-up walk.
+	private func liveScreenDrawsPrompt(on screen: any PromptScreen) -> Bool {
+		var inspectedRows = 0
+		for text in screen.liveScreenRows().reversed() where !text.isEmpty {
+			if text.prefix(Self.promptColumns).contains(where: { $0.unicodeScalars.first?.value == Self.promptScalar }) {
+				return true
+			}
+
+			inspectedRows += 1
+			if inspectedRows == Self.maxInspectedRows {
+				break
+			}
+		}
+
+		return false
 	}
 
 	/// The verdict while Claude reports a turn in progress: waiting only when a dialog is up.

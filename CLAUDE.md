@@ -107,7 +107,7 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 
 **Build:**
 - `open BridgeCommander.xcodeproj` (the project references all local SPM packages under `Packages/`)
-- Or: `xcodebuild -project BridgeCommander.xcodeproj -scheme BridgeCommander -destination 'platform=macOS' build`
+- Or: `xcodebuild -project BridgeCommander.xcodeproj -scheme BridgeCommander -destination 'platform=macOS' -skipPackagePluginValidation build` (SwiftTerm runs a build-tool plugin, `SwiftTermBuildInfoPlugin`, that generates its build info and terminfo table; Xcode asks once to Trust & Enable it, and a command-line build stops at "Validate plug-in" without the flag)
 
 **Run:**
 - ⌘R in Xcode

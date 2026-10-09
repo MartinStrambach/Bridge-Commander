@@ -10,6 +10,8 @@ private final class FakeScreen: PromptScreen {
 	var rows: [String?] = []
 	var cursorRow = 0
 	var isShowingLiveScreen = true
+	/// The live screen below the scrollback, read only while `isShowingLiveScreen` is false.
+	var liveRows: [String] = []
 	var isClaudeInForeground: Bool? = true
 
 	var rowCount: Int {
@@ -36,6 +38,10 @@ private final class FakeScreen: PromptScreen {
 		}
 
 		return String(String.UnicodeScalarView(text.unicodeScalars.prefix(columns)))
+	}
+
+	func liveScreenRows() -> [String] {
+		liveRows
 	}
 }
 
@@ -127,26 +133,29 @@ struct ClaudeStatusDetectorTests {
 
 	// MARK: - Scrollback
 
-	@Test func judgesTheLastFrameDrawnWhileTheUserReadsScrollback() {
+	@Test func judgesTheLiveScreenWhileTheUserReadsScrollback() {
 		let screen = FakeScreen()
 		screen.rows = ["a page of history", "with no prompt on it"]
+		screen.liveRows = Self.inputBox + ["", ""]
 		screen.isShowingLiveScreen = false
 
 		let reported = Reported()
 		let detector = makeDetector(screen: screen, reported: reported)
-		detector.outputReceived(Array("\u{1B}[39m❯\u{A0}".utf8)[...])
+		detector.outputReceived()
 		detector.checkIdleState()
 
 		#expect(reported.statuses == [.waitingForInput])
 	}
 
-	@Test func staysActiveInScrollbackWhenTheLastFrameDrewNoPrompt() {
+	@Test func staysActiveInScrollbackWhenTheLiveScreenHasNoPrompt() {
 		let screen = FakeScreen()
+		screen.rows = ["│ ❯ a prompt scrolled into history"]
+		screen.liveRows = ["✻ Thinking…", "  a reply quoting ❯ mid-line"]
 		screen.isShowingLiveScreen = false
 
 		let reported = Reported()
 		let detector = makeDetector(screen: screen, reported: reported)
-		detector.outputReceived(Array("✻ Thinking…".utf8)[...])
+		detector.outputReceived()
 		detector.checkIdleState()
 
 		#expect(reported.statuses.isEmpty)
@@ -272,7 +281,7 @@ struct ClaudeStatusDetectorTests {
 		detector.inputSent(Array("h".utf8)[...])
 		screen.rows = ["exited"]
 		screen.cursorRow = 0
-		detector.outputReceived(Array("exited".utf8)[...])
+		detector.outputReceived()
 		detector.checkIdleState()
 
 		#expect(reported.statuses == [.waitingForInput], "a stopped detector has nothing more to say")
@@ -456,7 +465,7 @@ struct ClaudeStatusDetectorTests {
 		let detector = makeDetector(screen: screen, reported: reported)
 		detector.checkIdleState()
 
-		detector.outputReceived(Array("a whole frame of repaint".utf8)[...])
+		detector.outputReceived()
 
 		#expect(reported.statuses == [.waitingForInput])
 	}

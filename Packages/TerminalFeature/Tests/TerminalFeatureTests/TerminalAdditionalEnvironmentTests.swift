@@ -36,7 +36,7 @@ struct TerminalAdditionalEnvironmentTests {
 		let deadline = clock.now + .seconds(5)
 		var screen = ""
 		while clock.now < deadline {
-			screen = String(decoding: view.getTerminal().getBufferAsData(), as: UTF8.self)
+			screen = String(decoding: view.getBufferAsData(), as: UTF8.self)
 			if screen.contains(expected) {
 				break
 			}

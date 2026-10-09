@@ -88,7 +88,7 @@ public final class TerminalViewStore {
 			// profile's author picked a selection color that works behind exactly that text.
 			terminalView.selectedTextForegroundColor = foregroundColor
 		}
-		terminalView.terminal.changeHistorySize(3000)
+		terminalView.changeScrollback(3000)
 
 		terminalView.processDelegate = processDelegate
 		terminalView.pendingStartupCommand = session.commandToType

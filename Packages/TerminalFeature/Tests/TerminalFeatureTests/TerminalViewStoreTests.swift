@@ -178,7 +178,8 @@ struct TerminalViewStoreTests {
 		store.killSession(sessionId: session.id)
 		let reportedBeforeOutput = reported.statuses
 		// What Claude's final frame looks like to the detector: the prompt glyph at column 0.
-		view.dataReceived(slice: Array("❯ ".utf8)[...])
+		view.feed(text: "❯ ")
+		view.processOutputReceived()
 		try await Task.sleep(for: .seconds(2)) // past the detector's idle threshold
 
 		#expect(reported.statuses == reportedBeforeOutput, "a killed pane has nothing more to say")
