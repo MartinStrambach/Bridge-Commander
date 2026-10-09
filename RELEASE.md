@@ -37,7 +37,21 @@ Produces a Developer ID signed, notarized, stapled `.dmg` suitable for distribut
    $EDITOR .env.release
    ```
 
+## Version
+
+Bump the version on `main` before releasing:
+
+```sh
+make bump                   # patch: 0.9.2 -> 0.9.3
+make bump VERSION=0.10.0    # anything else, only when asked for
+git push
+```
+
+`make bump` sets `MARKETING_VERSION` in both configurations (`CFBundleVersion` follows it) and commits `chore: bump version to <version>`. Release a patch unless a minor or major version is asked for.
+
 ## Release
+
+After bumping a Point-Free package (TCA, Dependencies, CasePaths…), `make build-release` stops with `Macro "…MacrosPlugin" … was changed since a previous approval`: open the project in Xcode, build once and choose **Trust & Enable**, then run it again.
 
 From the repository root:
 

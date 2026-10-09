@@ -1,0 +1,20 @@
+# Names the docs mention that are not in this repository's sources, one per line
+# (a whole backticked span, or one dotted component of it).
+
+# Apple frameworks and private API
+NSHostingView
+fittingSize
+swift_unknownObjectRetain
+physicalPurpleOrientation
+getdisplayinfo
+powerState
+backlight
+AXCheckBox
+
+# idb (facebook/idb)
+SimulatorFrameworkBridge
+
+# SwiftTerm
+mouseMode
+shiftBypassesMouseReporting
+selectNone
