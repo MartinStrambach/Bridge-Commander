@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
+import SwiftTerm
 
-/// Dropping files onto a pane types their paths at the prompt.
+/// Dropping files onto a pane pastes their paths at the prompt.
 extension ClaudeAwareTerminalView {
 	override public func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
 		sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
@@ -18,12 +19,10 @@ extension ClaudeAwareTerminalView {
 			return false
 		}
 
-		let paths = urls.map(\.path.shellEscaped).joined(separator: " ")
-		guard let bytes = paths.data(using: .utf8) else {
-			return false
-		}
-
-		send(source: self, data: ArraySlice(bytes))
+		// A paste, not typed input: bracketed when the program asked for bracketed paste, so Claude
+		// Code takes the paths as one dropped item. It still reaches `send(source:data:)`, which
+		// releases a waiting pane like a keystroke.
+		pasteText(urls.map(\.path.shellEscaped).joined(separator: " "))
 		return true
 	}
 }
