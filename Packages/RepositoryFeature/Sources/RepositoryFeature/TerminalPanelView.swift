@@ -406,7 +406,8 @@ struct TerminalPanelView: View {
 	///
 	/// The simulator pane sits to the right of that container, as a sibling in an `HStack` whose
 	/// first child is always the container — showing or hiding the pane changes the terminal's
-	/// width (one deliberate SIGWINCH), never its place in the hierarchy.
+	/// width (one deliberate SIGWINCH), never its place in the hierarchy. The container resizes
+	/// only the pane on screen, so the width change does not reach other repositories' shells.
 	/// Whether the repository on screen has the simulator open beside its terminal — each
 	/// repository's is shown or hidden on its own.
 	private var isSimulatorPaneVisible: Bool {
