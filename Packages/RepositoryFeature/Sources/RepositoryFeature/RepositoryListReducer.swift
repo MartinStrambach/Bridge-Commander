@@ -1321,12 +1321,12 @@ struct RepositoryListReducer {
 
 	/// "Claude is waiting for your input.", or what the program says it is waiting for.
 	static func waitingNotificationBody(for report: TerminalProgramReport?) -> String {
-		let name = report?.displayName ?? "A program"
-		guard let message = report?.message else {
-			return "\(name) is waiting for your input."
+		let report = report ?? TerminalProgramReport(program: nil, message: nil)
+		guard let message = report.message else {
+			return "\(report.displayName) is waiting for your input."
 		}
 
-		return "\(name): \(message)"
+		return "\(report.displayName): \(message)"
 	}
 
 	/// Nothing is posted for the tab on screen while the app is frontmost: the user is already

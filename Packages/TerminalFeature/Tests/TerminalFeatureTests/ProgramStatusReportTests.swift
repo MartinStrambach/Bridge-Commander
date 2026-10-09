@@ -46,6 +46,12 @@ struct ProgramStatusReportTests {
 		#expect(status?.report.message == "Build")
 	}
 
+	@Test func takesTheTitleWhenTheMessageIsBlank() {
+		// An empty message, then " " ("IA=="): neither leaves anything to show, the title does.
+		#expect(Self.status(after: ["state=done:app=make:msg=:title=QnVpbGQ="])?.report.message == "Build")
+		#expect(Self.status(after: ["state=done:app=make:msg=IA==:title=QnVpbGQ="])?.report.message == "Build")
+	}
+
 	@Test func readsTheLatestReport() {
 		let status = Self.status(after: [
 			"state=working:app=claude-code",
@@ -87,6 +93,15 @@ struct ProgramStatusReportTests {
 	@Test func dropsTextThatIsOnlyInvisible() {
 		#expect(TerminalProgramReport.displayText("\u{200B} \u{2066}") == nil)
 		#expect(TerminalProgramReport.displayText(nil) == nil)
+	}
+
+	@Test func turnsLineAndParagraphSeparatorsIntoSpaces() {
+		#expect(TerminalProgramReport.displayText("one\u{2028}two\u{2029}three") == "one two three")
+	}
+
+	@Test func keepsAMessageThatJustFits() {
+		let text = String(repeating: "a", count: 10)
+		#expect(TerminalProgramReport.displayText(text, maxLength: 10) == text)
 	}
 
 	@Test func shortensALongMessage() {

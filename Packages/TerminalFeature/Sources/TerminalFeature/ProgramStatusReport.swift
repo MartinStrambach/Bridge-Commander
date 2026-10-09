@@ -82,10 +82,9 @@ struct ProgramStatusReport: Equatable {
 		state = root.state
 		report = TerminalProgramReport(
 			program: TerminalProgramReport.displayText(root.effectiveApp),
-			message: TerminalProgramReport.displayText(
-				root.message ?? root.title,
-				maxLength: TerminalProgramReport.maxMessageLength
-			)
+			// Per field, so a message that cleans up to nothing still leaves the title.
+			message: TerminalProgramReport.displayText(root.message, maxLength: TerminalProgramReport.maxMessageLength)
+				?? TerminalProgramReport.displayText(root.title, maxLength: TerminalProgramReport.maxMessageLength)
 		)
 	}
 

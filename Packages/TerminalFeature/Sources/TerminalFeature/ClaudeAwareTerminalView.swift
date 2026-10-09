@@ -414,8 +414,8 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 }
 
 /// Whether a hop to the main thread is already queued, claimed from SwiftTerm's IO thread and
-/// released on the main thread.
-private final class PendingMainHop: Sendable {
+/// released on the main thread. Internal for its tests.
+final class PendingMainHop: Sendable {
 	private let isPending = Atomic(false)
 
 	/// Whether the caller should queue the hop: `false` while one is already queued.

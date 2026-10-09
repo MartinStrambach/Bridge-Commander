@@ -20,8 +20,7 @@ extension ClaudeAwareTerminalView {
 		}
 
 		// A paste, not typed input: bracketed when the program asked for bracketed paste, so Claude
-		// Code takes the paths as one dropped item. It still reaches `send(source:data:)`, which
-		// releases a waiting pane like a keystroke.
+		// Code takes the paths as one dropped item.
 		pasteText(urls.map(\.path.shellEscaped).joined(separator: " "))
 		return true
 	}
