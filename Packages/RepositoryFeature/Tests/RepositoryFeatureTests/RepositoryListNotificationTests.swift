@@ -76,7 +76,7 @@ struct RepositoryListNotificationTests {
 		#expect(posted.value.map(\.sessionId) == [session.id])
 	}
 
-	@Test("a program's notification posts even before a startup command's first prompt")
+	@Test("a program's notification posts even before a startup command's first prompt, which still posts nothing")
 	func programNotificationBeforeStartupPrompt() async {
 		var session = TerminalSession(repositoryPath: "/repos/alpha", startupCommand: "claude")
 		session.status = .active
@@ -90,7 +90,10 @@ struct RepositoryListNotificationTests {
 		}
 
 		let notification = TerminalNotification(title: nil, body: "build finished")
-		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification))) {
+		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification)))
+		#expect(posted.value.map(\.body) == ["build finished"])
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
 			$0.terminalSessions[id: session.id]?.status = .waitingForInput
 			$0.terminalSessions[id: session.id]?.awaitsStartupPrompt = false
 		}
@@ -228,7 +231,7 @@ struct RepositoryListNotificationTests {
 
 	// MARK: - Notifications a program asks for
 
-	@Test("a program's notification marks the session waiting and posts once, with its own text")
+	@Test("a program's notification posts once, with its own text, and leaves the session's status alone")
 	func programNotificationPosts() async {
 		var first = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
 		first.status = .active
@@ -244,9 +247,7 @@ struct RepositoryListNotificationTests {
 		}
 
 		let notification = TerminalNotification(title: "Claude Code", body: "Claude needs your permission to use Bash")
-		await store.send(.view(.terminalNotificationReceived(sessionId: second.id, notification: notification))) {
-			$0.terminalSessions[id: second.id]?.status = .waitingForInput
-		}
+		await store.send(.view(.terminalNotificationReceived(sessionId: second.id, notification: notification)))
 		#expect(posted.value == [
 			TerminalNotificationContent(
 				sessionId: second.id,
@@ -270,10 +271,33 @@ struct RepositoryListNotificationTests {
 		}
 
 		let notification = TerminalNotification(title: nil, body: "build finished")
-		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification))) {
+		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification)))
+		#expect(posted.value == [TerminalNotificationContent(sessionId: session.id, title: "alpha", body: "build finished")])
+	}
+
+	@Test("a program's notification does not swallow the waiting notification its report brings next")
+	func programNotificationThenReportOfWaiting() async {
+		var session = TerminalSession(repositoryPath: "/repos/alpha")
+		session.status = .active
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [session]
+		let posted = LockIsolated<[TerminalNotificationContent]>([])
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
+		}
+
+		let notification = TerminalNotification(title: nil, body: "build finished")
+		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification)))
+		await store.send(.view(.terminalSessionStatusChanged(
+			sessionId: session.id,
+			status: .waitingForInput,
+			report: TerminalProgramReport(program: "claude-code", message: nil)
+		))) {
 			$0.terminalSessions[id: session.id]?.status = .waitingForInput
 		}
-		#expect(posted.value == [TerminalNotificationContent(sessionId: session.id, title: "alpha", body: "build finished")])
+		#expect(posted.value.map(\.body) == ["build finished", "Claude is waiting for your input."])
 	}
 
 	@Test("a notification from a session that is gone changes nothing")

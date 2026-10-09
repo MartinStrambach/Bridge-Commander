@@ -12,10 +12,10 @@ import SwiftTerm
 /// program waiting for the user. A pane without a report — a plain shell, a build, an older
 /// Claude — is active.
 ///
-/// Two things sit on top of the report. A program asking for a notification (OSC 9 or OSC 777)
-/// holds the pane at waiting until the user types. And a report outlives a program that crashed
-/// without clearing it, so once the pane falls quiet, a report is set aside while the shell has
-/// the foreground back.
+/// A report outlives a program that crashed without clearing it, so once the pane falls quiet, a
+/// report is set aside while the shell has the foreground back. Nothing else moves the status:
+/// not the user's input (typing into Claude's input box leaves it `done` until the prompt is
+/// sent, and then it reports `working` itself), and not a notification the program asks for.
 @MainActor
 final class ProgramStatusDetector {
 	private static let isTracing = ProcessInfo.processInfo.environment["BC_TERMINAL_STATUS_LOG"] != nil
@@ -32,8 +32,8 @@ final class ProgramStatusDetector {
 	/// How long the pane must be quiet before the foreground is checked.
 	private let foregroundCheckDelay: TimeInterval
 
-	/// The report travels with a change to `.waitingForInput` caused by one, so the notification
-	/// can say who is waiting and why.
+	/// The report travels with a change to `.waitingForInput`, so the notification can say who is
+	/// waiting and why.
 	private let onStatusChange: (TerminalSessionStatus, TerminalProgramReport?) -> Void
 
 	private var currentStatus: TerminalSessionStatus = .active
@@ -41,7 +41,7 @@ final class ProgramStatusDetector {
 
 	/// Set once the pane's session is killed. The shell's exit writes a last frame, and acting on it
 	/// would report a status for a session that no longer exists.
-	private var isStopped = false
+	private(set) var isStopped = false
 
 	/// The pane's root record, or `nil` while no program reports anything.
 	private var programStatus: ProgramStatusReport?
@@ -50,11 +50,6 @@ final class ProgramStatusDetector {
 	/// stood: a program that crashed or was suspended, leaving its last report behind. Cleared by
 	/// the next report, or by a check that finds a program in the foreground again.
 	private var isReportLeftBehind = false
-
-	/// Set when the program in the pane asked for a notification, and cleared by the user's next
-	/// keystroke or by a report of work. While set, the pane is waiting whatever is reported: the
-	/// program said it wants the user, and a build's notification comes with no report at all.
-	private var isHeldForAttention = false
 
 	init(
 		label: String,
@@ -80,9 +75,6 @@ final class ProgramStatusDetector {
 		trace("\(status?.report.program ?? "no program") reports \(status.map(\.state.rawValue) ?? "nothing")")
 		programStatus = status
 		isReportLeftBehind = false
-		if status?.state == .working {
-			isHeldForAttention = false
-		}
 		reportStatus(derivedStatus, reason: "the program's report")
 	}
 
@@ -99,40 +91,6 @@ final class ProgramStatusDetector {
 		}
 		pendingForegroundCheck = check
 		DispatchQueue.main.asyncAfter(deadline: .now() + foregroundCheckDelay, execute: check)
-	}
-
-	/// Takes in bytes sent to the child process, whether typed, pasted or dropped. Only releases a
-	/// notification hold: what a reporting program is doing is its report's to say, and typing into
-	/// Claude's input box does not change it until the prompt is sent.
-	func inputSent(_ data: ArraySlice<UInt8>) {
-		guard !isStopped, isHeldForAttention else {
-			return
-		}
-
-		// A reply is the terminal answering a focus change or a query, not the user typing.
-		guard !TerminalReply.matches(data) else {
-			return
-		}
-
-		isHeldForAttention = false
-		reportStatus(derivedStatus, reason: "user input")
-	}
-
-	/// Takes in a notification the program in the pane asked for (OSC 9 or OSC 777). The pane is
-	/// waiting from now until the user types. Its session learns that together with the
-	/// notification rather than through `onStatusChange`, so the two do not each post one.
-	///
-	/// - Returns: `false` once the detector is stopped, when the notification belongs to a
-	///   session that is going away and should not be shown.
-	func attentionRequested() -> Bool {
-		guard !isStopped else {
-			return false
-		}
-
-		trace("\(currentStatus) → waitingForInput on a notification request")
-		isHeldForAttention = true
-		currentStatus = .waitingForInput
-		return true
 	}
 
 	/// Ends all reporting. Called when the pane's session is killed, before the shell is hung up:
@@ -167,10 +125,6 @@ final class ProgramStatusDetector {
 	// MARK: - Reporting
 
 	private var derivedStatus: TerminalSessionStatus {
-		if isHeldForAttention {
-			return .waitingForInput
-		}
-
 		guard let programStatus, !isReportLeftBehind else {
 			return .active
 		}
@@ -198,7 +152,7 @@ final class ProgramStatusDetector {
 
 		trace("\(currentStatus) → \(status) on \(reason())")
 		currentStatus = status
-		let report = status == .waitingForInput && !isHeldForAttention ? programStatus?.report : nil
+		let report = status == .waitingForInput ? programStatus?.report : nil
 		onStatusChange(status, report)
 	}
 

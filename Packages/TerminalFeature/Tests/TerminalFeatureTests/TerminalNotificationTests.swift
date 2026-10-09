@@ -98,6 +98,77 @@ struct TerminalNotificationTests {
 
 		#expect(received.items == expected)
 	}
+
+	/// A notification is only a notification: the pane's status is the program's report to set, so
+	/// a report of waiting after one still moves the pane, and carries what the program said.
+	@MainActor
+	@Test func aNotificationLeavesThePanesStatusToTheProgramsReport() async {
+		let received = Received()
+		let statuses = ReceivedStatuses()
+		let view = ClaudeAwareTerminalView(
+			repositoryPath: "/tmp/repo",
+			sessionId: UUID(),
+			onStatusChange: { _, status, report in
+				MainActor.assumeIsolated { statuses.items.append(.init(status: status, report: report)) }
+			},
+			onNotification: { id, notification in
+				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
+			}
+		)
+		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
+
+		view.feed(text: "\u{1B}]9;build finished\u{07}")
+		#expect(await eventually { received.items.count == 1 })
+		#expect(statuses.items.isEmpty, "a notification does not set the pane's status")
+
+		view.feed(text: "\u{1B}]7501;state=done:app=claude-code\u{1B}\\")
+		let expected: [ReceivedStatuses.Item] = [
+			.init(status: .waitingForInput, report: TerminalProgramReport(program: "claude-code", message: nil)),
+		]
+		#expect(await eventually { statuses.items == expected })
+	}
+
+	@MainActor
+	@Test func aStoppedPaneForwardsNoNotifications() async throws {
+		let received = Received()
+		let view = ClaudeAwareTerminalView(
+			repositoryPath: "/tmp/repo",
+			sessionId: UUID(),
+			onStatusChange: { _, _, _ in },
+			onNotification: { id, notification in
+				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
+			}
+		)
+		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
+
+		view.stopReportingStatus()
+		view.feed(text: "\u{1B}]9;late\u{07}")
+		try await Task.sleep(for: .milliseconds(300))
+
+		#expect(received.items.isEmpty, "the notification belongs to a session that is going away")
+	}
+
+	/// Polls the main actor until `condition` holds, for up to five seconds: SwiftTerm delivers
+	/// observed OSC sequences and status records off the parse path.
+	@MainActor
+	private func eventually(_ condition: () -> Bool) async -> Bool {
+		let clock = ContinuousClock()
+		let deadline = clock.now + .seconds(5)
+		while !condition(), clock.now < deadline {
+			try? await Task.sleep(for: .milliseconds(20))
+		}
+		return condition()
+	}
+}
+
+@MainActor
+private final class ReceivedStatuses {
+	struct Item: Equatable {
+		let status: TerminalSessionStatus
+		let report: TerminalProgramReport?
+	}
+
+	var items: [Item] = []
 }
 
 @MainActor

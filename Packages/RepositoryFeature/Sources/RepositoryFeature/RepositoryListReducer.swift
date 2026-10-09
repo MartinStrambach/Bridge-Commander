@@ -255,14 +255,12 @@ struct RepositoryListReducer {
 				return waitingNotificationEffect(for: session, changingTo: status, report: report, in: state)
 
 			case let .view(.terminalNotificationReceived(sessionId, notification)):
-				// The pane already holds itself at waiting until the user types; this is the
-				// session learning it, and the reason the status-change path posts nothing more.
+				// Only posted: the session's status is the program's reports to set, so a report of
+				// waiting that follows still posts its own (under the same identifier, replacing this).
 				guard let session = state.terminalSessions[id: sessionId] else {
 					return .none
 				}
 
-				state.terminalSessions[id: sessionId]?.status = .waitingForInput
-				state.terminalSessions[id: sessionId]?.awaitsStartupPrompt = false
 				let location = notificationLocation(for: session, in: state)
 				let title = notification.title ?? location
 				return postNotification(

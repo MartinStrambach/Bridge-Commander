@@ -7,7 +7,8 @@ import Synchronization
 /// reports its status — is waiting for the user, and knows the Claude conversation it runs.
 ///
 /// The judgement lives in `ProgramStatusDetector`. This type owns the pane and forwards it what
-/// the program reports (OSC 7501), notification requests, output and input.
+/// the program reports (OSC 7501) and when output arrives. Notifications the program asks for go
+/// straight up to the session.
 public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	public let repositoryPath: String
 	public let sessionId: UUID
@@ -203,10 +204,10 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		detector.statusReported(ProgramStatusReport(records: records))
 	}
 
-	/// A program asking for the user is the plainest sign the pane is waiting, so the detector is
-	/// told before the notification goes up: it holds the pane at waiting until the user types.
+	/// Passes a notification up, unless the pane's session is being killed. The pane's status is left
+	/// to the program's reports: a notification alone does not say the program is waiting.
 	private func notificationReceived(_ notification: TerminalNotification) {
-		guard detector.attentionRequested() else {
+		guard !detector.isStopped else {
 			return
 		}
 
@@ -409,12 +410,6 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 			pendingStartupCommand = nil
 			send(txt: command + "\r")
 		}
-	}
-
-	/// Called when bytes are sent to the child process, whether typed, pasted or dropped.
-	override public func send(source: TerminalView, data: ArraySlice<UInt8>) {
-		super.send(source: source, data: data)
-		detector.inputSent(data)
 	}
 }
 

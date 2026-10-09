@@ -106,17 +106,6 @@ struct ProgramStatusDetectorTests {
 		#expect(reported.statuses == [.waitingForInput])
 	}
 
-	@Test func typingIntoTheProgramDoesNotReleaseTheWaitingState() {
-		// Claude stays done until the prompt is sent, and then reports work itself.
-		let reported = Reported()
-		let detector = makeDetector(reported: reported)
-
-		detector.statusReported(Self.report(.done))
-		detector.inputSent(Array("h".utf8)[...])
-
-		#expect(reported.statuses == [.waitingForInput])
-	}
-
 	// MARK: - A report left behind
 
 	@Test func aReportLeftByACrashedProgramIsSetAside() {
@@ -169,58 +158,6 @@ struct ProgramStatusDetectorTests {
 		detector.statusReported(Self.report(.idle))
 
 		#expect(reported.statuses == [.waitingForInput, .active, .waitingForInput])
-	}
-
-	// MARK: - Notification requests
-
-	@Test func aNotificationRequestHoldsThePaneUntilTheUserTypes() {
-		// A build that rings for attention reports no status. The pane must stay waiting through
-		// its output, and go back to work on the user's keystroke.
-		let reported = Reported()
-		let detector = makeDetector(reported: reported)
-		#expect(detector.attentionRequested())
-		detector.outputReceived()
-		#expect(reported.statuses.isEmpty, "the session learns of the request with the notification")
-
-		detector.inputSent(Array("\u{1B}[I".utf8)[...])
-		#expect(reported.statuses.isEmpty, "a focus report is not the user answering")
-
-		// Claude Code asks for the cell size whenever its pane gains or loses focus, so every tab
-		// switch makes SwiftTerm answer into both panes.
-		detector.inputSent(Array("\u{1B}[6;32;16t".utf8)[...])
-		#expect(reported.statuses.isEmpty, "a query reply is not the user answering")
-
-		detector.inputSent(Array("y".utf8)[...])
-		#expect(reported.statuses == [.active])
-	}
-
-	@Test func aNotificationHoldOutlastsAReportOfWaiting() {
-		let reported = Reported()
-		let detector = makeDetector(reported: reported)
-		#expect(detector.attentionRequested())
-
-		detector.statusReported(Self.report(.done))
-		detector.inputSent(Array("y".utf8)[...])
-
-		#expect(reported.statuses.isEmpty, "the program is still done after the keystroke, so still waiting")
-	}
-
-	@Test func aReportOfWorkReleasesANotificationHold() {
-		let reported = Reported()
-		let detector = makeDetector(reported: reported)
-		#expect(detector.attentionRequested())
-
-		detector.statusReported(Self.report(.working))
-
-		#expect(reported.statuses == [.active])
-	}
-
-	@Test func aNotificationRequestAfterStopIsRefused() {
-		let reported = Reported()
-		let detector = makeDetector(reported: reported)
-		detector.stop()
-
-		#expect(!detector.attentionRequested())
 	}
 
 	// MARK: - Stopping
