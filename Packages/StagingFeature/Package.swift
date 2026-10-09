@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "StagingFeature", targets: ["StagingFeature"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
+        .package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1", traits: ["ComposableArchitecture2Deprecations", "ComposableArchitecture2DeprecationOverloads"]),
         .package(path: "../GitCore"),
         .package(path: "../AppUI"),
         .package(path: "../Settings"),

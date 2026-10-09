@@ -47,13 +47,7 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 
 ## Architecture
 
-**TCA Pattern:**
-- Reducers handle state + side effects
-- State is mutated only inside reducers
-- Actions trigger changes
-- Effects wrap async work
-
-**Dependencies (`@DependencyClient` structs of closures, conforming to `DependencyKey` + `TestDependencyKey`, injected as `@Dependency(XxxClient.self)`):**
+TCA throughout. Dependencies are `@DependencyClient` structs of closures, conforming to `DependencyKey` + `TestDependencyKey`, injected as `@Dependency(XxxClient.self)`:
 - `GitClient` (GitCore, in `GitService.swift`) plus feature-specific git clients (`GitStagingClient`, `GitLogClient`, `GitCommitActionClient`, …)
 - `XcodeClient`, `YouTrackClient`, `LastOpenedDirectoryClient` (ToolsIntegration)
 
@@ -61,9 +55,7 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 
 **New Button:**
 - Create `XxxButtonReducer.swift` + `XxxButtonView.swift` in `Packages/RepositoryFeature/Sources/RepositoryFeature/`
-- Follow TCA pattern (Reducer + View pair)
 - If it goes in the row's action bar: add a `RepositoryRowItem` case (`Settings/RepositoryRowLayout.swift`), render it in `RepositoryRowView`'s item switch and in `RepositoryRowMoreMenu.swift` (see `Packages/RepositoryFeature/README.md`)
-- Handle async with `Effect { send in ... }`
 
 **New Git Operation:**
 - Add helper in `Packages/GitCore/Sources/GitCore/` (shell out via `ProcessRunner.runGit(arguments:at:)`)
@@ -73,7 +65,11 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 **New Service:**
 - Add a `@DependencyClient public struct XxxClient: Sendable` of `@Sendable` closures, with `extension XxxClient: DependencyKey { liveValue }` and `TestDependencyKey { testValue }` (see `XcodeService.swift`)
 - Implement the live value with a helper in `Packages/ToolsIntegration/Sources/ToolsIntegration/` (or the package it belongs to)
-- Use via `@Dependency(XxxClient.self)` in reducers
+
+**New Package:**
+- Start from a small package's `Package.swift` (e.g. `Packages/YouTrackMenu/Package.swift`): it carries the closing settings loop and the TCA deprecation traits. Create `Tests/<Name>Tests/` before declaring the test target, and add a `README.md`
+- In Xcode, drag `Packages/<Name>` into the project's Packages group (and add its product to the app target if the app links it); do not hand-write `project.pbxproj` entries
+- `scripts/check-packages.sh` (part of `make check`) lists whatever is still missing
 
 **Key Files:**
 - `BridgeCommander/BridgeCommanderApp.swift` — app entry point
@@ -85,63 +81,31 @@ Each package's design notes and gotchas live in `Packages/<Name>/README.md` (the
 
 ## Patterns
 
-**Shell Commands:**
-- Use `ProcessRunner.runGit(arguments:at:)` (ProcessExecution package) for git operations; git helpers live in GitCore
-
 **Activity log:**
 - New network calls go through `URLSession.loggedData(for:)` and new git calls through `ProcessRunner.runGit`, so they land in the shareable activity log; a dependency client whose errors matter wraps its live closures in `ActivityLog.shared.recordingErrors` (see `Packages/ActivityLog/README.md`)
-
-**Async:**
-- Wrap in TCA `Effect { send in ... }`
-- Send result actions
-
-**State:**
-- View has Reducer
-- State flows through reducers
-- Views observe store
 
 **UI text scaling (every view):**
 - Write `.scaledFont(.caption)` / `.scaledFont(size: 12)` instead of `.font(...)`, and `.buttonStyle(.scaledBordered)` / `.scaledBorderedProminent` / `.scaledAutomatic` on text buttons, so text follows Settings ▸ General ▸ Appearance. Exceptions and the reasons behind them are in `Packages/AppUI/README.md`
 
-## Build & Run
+**Menus with icons:**
+- macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `GitActionsMenuView`, `TuistButtonView`). A nested `Menu`'s content does not inherit it and needs its own
 
-**Build:**
-- `open BridgeCommander.xcodeproj` (the project references all local SPM packages under `Packages/`)
-- Or: `xcodebuild -project BridgeCommander.xcodeproj -scheme BridgeCommander -destination 'platform=macOS' -skipPackagePluginValidation build` (SwiftTerm runs a build-tool plugin, `SwiftTermBuildInfoPlugin`, that generates its build info and terminfo table; Xcode asks once to Trust & Enable it, and a command-line build stops at "Validate plug-in" without the flag)
+## Build, Test & Run
+
+**`make check` before calling a change done.** It checks the package setup and the docs, builds the app, and tests the packages changed since `origin/main` plus the packages that depend on them. Each step prints only errors, failures and a result line; full logs go to `$TMPDIR/bridge-commander-check/`. The steps also run alone:
+- `make build`: the app, Debug (`scripts/build.sh`; extra arguments go to `xcodebuild`)
+- `make test`: the changed packages; `make test PKG=all`, or `PKG="GitCore AppUI"`. It runs TerminalFeature through `xcodebuild test`, because `swift test` cannot build SwiftTerm's Metal shader
+- `scripts/check-packages.sh` and `scripts/check-docs.py`. The second fails when a backticked name in CLAUDE.md or a README is gone from the code, or when this file grows past its line budget
 
 **Run:**
-- ⌘R in Xcode
-- Or: `open -a BridgeCommander`
+- The installed release app: `open -a "Bridge Commander"`
+- A Debug build: `BridgeCommander.app` under DerivedData's `Build/Products/Debug/`. It shows as "Bridge Commander Debug" and its process is `BridgeCommander`
 
-**Test:**
-- Unit tests live in per-package `Tests/` targets and use Swift Testing (`import Testing`, `@Test`/`#expect`).
-- Run a single package's tests: `swift test --package-path Packages/<Name>` (e.g. `swift test --package-path Packages/GitCore`).
-- Warnings are errors: the app target sets `SWIFT_TREAT_WARNINGS_AS_ERRORS`, and every `Package.swift` ends with a loop adding `.treatAllWarnings(as: .error)` to all its targets, tests included (a new package needs the same loop).
-- Imports are explicit: the app target sets `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY` and the same `Package.swift` loop adds `.enableUpcomingFeature("MemberImportVisibility")`, so a file must import every module whose members it uses (often `Foundation`) — an import in another file of the module no longer makes them visible. Test targets are compiled only by `swift test`, not by the app build, so run them after touching tests or bumping a dependency that deprecates something. The reverse holds too: the app target enables TCA's `ComposableArchitecture2Deprecations` trait and a package build does not, so `swift build` passes code (e.g. `Effect.concatenate`) that the app build rejects as deprecated — build the app before calling a package change done.
-- In `TestStore` assertions, mutate `@Shared` state as `$0.$x.withLock { $0 = … }`; the plain setter is deprecated.
-- When adding tests to a package that has none, add a `.testTarget(name: "<Name>Tests", dependencies: ["<Name>"])` to that package's `Package.swift`.
-- Prefer pure, dependency-free logic (helpers, models) for unit tests; code that shells out to git is verified by build + manual run.
+**Release:** `RELEASE.md` (`make bump`, `make release`, `make publish`).
 
-## Dependencies
-
-**External:**
-- swift-composable-architecture, swift-dependencies, swift-sharing (used across packages)
-- SwiftTerm (TerminalFeature)
-- Sparkle (app target)
-
-**System:**
-- SwiftUI, AppKit
-- Foundation
-- ProcessInfo
-- FileManager
-- AppleScript (via Process)
-
-## Notes
-
-- Terminal automation requires user permission
-- Git must be in PATH
-- Worktree detection: looks for `.git` files with gitdir pointers
-- Large directory scans may be slow
-- Git operations use `ProcessRunner.runGit(arguments:at:)` (ProcessExecution) to shell out to git
-- Each package has its own `Package.swift` under `Packages/<Name>/`
-- macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `GitActionsMenuView`, `TuistButtonView`). A nested `Menu`'s content does not inherit it and needs its own
+**Tests:**
+- Tests use Swift Testing (`import Testing`, `@Test`/`#expect`) in per-package `Tests/` targets. Prefer pure, dependency-free logic (helpers, models). Code that shells out to git is verified by build plus a manual run
+- Warnings are errors (`SWIFT_TREAT_WARNINGS_AS_ERRORS` in the app, `.treatAllWarnings(as: .error)` in every package's closing loop), tests included
+- Imports are explicit (MemberImportVisibility), so a file must import every module whose members it uses, often `Foundation`. An import in another file of the module no longer makes them visible
+- Packages enable the same TCA deprecation traits as the app target, so `swift build` rejects what the app build rejects. The app build does not compile test targets, so only `make test` catches a deprecated API used in a test
+- In `TestStore` assertions, mutate `@Shared` state as `$0.$x.withLock { $0 = … }`; the plain setter is deprecated

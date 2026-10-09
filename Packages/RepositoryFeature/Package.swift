@@ -8,7 +8,7 @@ let package = Package(
 		.library(name: "RepositoryFeature", targets: ["RepositoryFeature"]),
 	],
 	dependencies: [
-		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1"),
+		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1", traits: ["ComposableArchitecture2Deprecations", "ComposableArchitecture2DeprecationOverloads"]),
 		.package(path: "../GitCore"),
 		.package(path: "../GitGraphFeature"),
 		.package(path: "../AppUI"),
@@ -20,7 +20,7 @@ let package = Package(
 		.package(path: "../ActionButtons"),
 		.package(path: "../StagingFeature"),
 		.package(path: "../YouTrackMenu"),
-		.package(url: "https://github.com/MartinStrambach/Homer-console-mac-app", from: "0.2.1"),
+		.package(url: "https://github.com/MartinStrambach/Homer-console-mac-app", from: "0.3.0"),
 		.package(path: "../SimulatorFeature"),
 	],
 	targets: [

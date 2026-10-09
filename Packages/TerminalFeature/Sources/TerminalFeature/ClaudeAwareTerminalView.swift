@@ -15,6 +15,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	private let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	private let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 
 	/// Built on first use, since it reads this view's process and `self` isn't available until
 	/// `super.init` has run.
@@ -40,12 +41,14 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		repositoryPath: String,
 		sessionId: UUID,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void
+		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
+		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
+		self.onOpenFile = onOpenFile
 		super.init(frame: .zero)
 		cellGridScale = Self.currentBackingScale(of: nil)
 		registerForDraggedTypes([.fileURL])
@@ -216,6 +219,24 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		notification.isFromStatusReportingProgram = detector.isReportStanding
 
 		onNotification(sessionId, notification)
+	}
+
+	// MARK: - Links
+
+	/// Opens a ⌘-clicked link. A file goes up to `onOpenFile`, to open in the repository's IDE; a
+	/// relative path is looked up in the shell's current directory, where the program that printed
+	/// it was started, then at the repository root. Other URLs get the default handler, and a link
+	/// that names nothing beeps rather than doing nothing — see `TerminalLinkTarget`.
+	override public func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+		let directories = [currentDirectory, repositoryPath].compactMap(\.self)
+		switch TerminalLinkTarget(link: link, relativeTo: directories) {
+		case let .file(file):
+			onOpenFile(sessionId, file)
+		case let .url(url):
+			NSWorkspace.shared.open(url)
+		case nil:
+			NSSound.beep()
+		}
 	}
 
 	// MARK: - Focus

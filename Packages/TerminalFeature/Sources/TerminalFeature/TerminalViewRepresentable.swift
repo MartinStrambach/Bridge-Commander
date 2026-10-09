@@ -11,8 +11,10 @@ import SwiftUI
 /// call that otherwise fires when a view is re-parented, which would send a
 /// SIGWINCH to the shell and cause zsh to clear the visible terminal output.
 ///
-/// Auto Layout constraints pin each terminal view to the container's edges, so
-/// the frame resolves from the container's correct bounds in one step.
+/// Only the visible pane follows the container's size (`TerminalPaneContainerView`); hidden panes
+/// keep the size they last had, so a width change that belongs to one repository — its simulator
+/// pane opening or closing, or a switch to a repository whose pane is in the other state — resizes
+/// only the pane on screen, not every shell in the app.
 public struct TerminalContainerRepresentable: NSViewRepresentable {
 
 	// MARK: - Coordinator
@@ -43,6 +45,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	public let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 	public let onTitleChange: @Sendable (UUID, String?) -> Void
+	/// A ⌘-clicked link that names a file.
+	public let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 
 	public init(
 		terminalViewStore: TerminalViewStore,
@@ -58,7 +62,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		font: NSFont,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onTitleChange: @escaping @Sendable (UUID, String?) -> Void
+		onTitleChange: @escaping @Sendable (UUID, String?) -> Void,
+		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void
 	) {
 		self.terminalViewStore = terminalViewStore
 		self.sessions = sessions
@@ -74,10 +79,11 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
 		self.onTitleChange = onTitleChange
+		self.onOpenFile = onOpenFile
 	}
 
 	public func makeNSView(context: Context) -> NSView {
-		NSView(frame: .zero)
+		TerminalPaneContainerView(frame: .zero)
 	}
 
 	public func makeCoordinator() -> Coordinator {
@@ -117,7 +123,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					selectionColor: selectionColor,
 					processDelegate: delegate,
 					onStatusChange: onStatusChange,
-					onNotification: onNotification
+					onNotification: onNotification,
+					onOpenFile: onOpenFile
 				)
 				// Assigned on every update, not at creation: panes outlive a change to the
 				// setting, and the colors only look like they don't because a new theme is
@@ -140,17 +147,19 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 				}
 
 				if termView.superview !== nsView {
-					termView.translatesAutoresizingMaskIntoConstraints = false
+					termView.translatesAutoresizingMaskIntoConstraints = true
+					termView.autoresizingMask = []
 					nsView.addSubview(termView)
-					NSLayoutConstraint.activate([
-						termView.topAnchor.constraint(equalTo: nsView.topAnchor),
-						termView.bottomAnchor.constraint(equalTo: nsView.bottomAnchor),
-						termView.leadingAnchor.constraint(equalTo: nsView.leadingAnchor),
-						termView.trailingAnchor.constraint(equalTo: nsView.trailingAnchor),
-					])
+					nsView.needsLayout = true
 				}
 				let isActive = session.id == activeSessionId
-				termView.isHidden = !isActive
+				if termView.isHidden == isActive {
+					termView.isHidden = !isActive
+					// Sized in the container's next layout, not here: this update can run before
+					// SwiftUI gives the container the width of the newly shown repository, and sizing
+					// to the stale bounds would resize the pane twice.
+					nsView.needsLayout = true
+				}
 				if isActive {
 					termView.requestFocus()
 				}
@@ -170,4 +179,36 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 			.filter { activeIds.contains($0.key) }
 	}
 
+}
+
+/// Hosts the terminal panes and sizes only the visible one to its bounds.
+///
+/// Every pane used to be pinned to the container's edges, so any change of the container's width
+/// resized all of them — and the container's width depends on the repository on screen, whose
+/// simulator pane may be open while another's is not. Each resize is a reflow and a SIGWINCH; a
+/// narrow→wide reflow of a Claude Code screen joins unrelated lines (SwiftTerm keeps stale soft-wrap
+/// flags, see the README), so switching between two repositories' tabs garbled every terminal
+/// in the app a little more each time. A hidden pane now keeps its size until it is shown, which
+/// for a repository's own tabs is the size they will be shown at.
+final class TerminalPaneContainerView: NSView {
+	override init(frame frameRect: NSRect) {
+		super.init(frame: frameRect)
+		autoresizesSubviews = false
+	}
+
+	@available(*, unavailable)
+	required init?(coder: NSCoder) {
+		fatalError("init(coder:) has not been implemented")
+	}
+
+	override func layout() {
+		super.layout()
+		for pane in subviews where pane.frame != bounds {
+			// A pane never laid out yet is sized even while hidden, so its shell does not start
+			// at SwiftTerm's default size and reflow when first shown.
+			if !pane.isHidden || pane.frame.isEmpty {
+				pane.frame = bounds
+			}
+		}
+	}
 }

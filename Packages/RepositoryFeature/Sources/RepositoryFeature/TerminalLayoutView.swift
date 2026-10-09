@@ -19,6 +19,7 @@ struct TerminalLayoutView: View {
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 	let onTitleChange: @Sendable (UUID, String?) -> Void
+	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 
 	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
 	/// Set by dragging the sidebar's trailing edge. Clamped where it is read as well as where it is
@@ -56,6 +57,7 @@ struct TerminalLayoutView: View {
 				onStatusChange: onStatusChange,
 				onNotification: onNotification,
 				onTitleChange: onTitleChange,
+				onOpenFile: onOpenFile,
 				onRetry: { sessionId in
 					terminalViewStore.killSession(sessionId: sessionId)
 					store.send(.retryTab(sessionId: sessionId))
