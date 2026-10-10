@@ -15,6 +15,10 @@ public struct FileDiffViewer: Sendable {
 		var displayDiff: AppUI.FileDiff?
 		var fileId: String?
 		var fileIsStaged: Bool?
+		/// Set from a hunk's Stage/Unstage/Discard until the diff reloads, and further hunk actions
+		/// are dropped meanwhile: the hunks on screen are stale until then, and a double click used
+		/// to apply the same patch twice (an added hunk was staged twice).
+		var isApplyingHunk = false
 
 		init(repositoryPath: String) {
 			self.repositoryPath = repositoryPath
@@ -24,19 +28,20 @@ public struct FileDiffViewer: Sendable {
 			fileDiff?.hunks.first { $0.id == id }
 		}
 
-		/// Drops the current file. Every caller must clear all four properties together, so the
+		/// Drops the current file. Every caller must clear these properties together, so the
 		/// display diff cannot outlive the selection it belongs to.
 		mutating func clearSelection() {
 			fileId = nil
 			fileIsStaged = nil
 			fileDiff = nil
 			displayDiff = nil
+			isApplyingHunk = false
 		}
 	}
 
 	public enum Action {
 		case load(FileChange, isStaged: Bool)
-		case loadResponse(GitCore.FileDiff?)
+		case loadResponse(fileId: String, isStaged: Bool, diff: GitCore.FileDiff?, displayDiff: AppUI.FileDiff?)
 		case stageHunk(hunkId: String)
 		case unstageHunk(hunkId: String)
 		case discardHunk(hunkId: String)
@@ -66,49 +71,58 @@ public struct FileDiffViewer: Sendable {
 				state.fileIsStaged = isStaged
 				return .run { [path = state.repositoryPath] send in
 					let diff = await gitStagingClient.fetchFileDiff(path, file, isStaged)
-					await send(.loadResponse(diff))
+					// Mapped here rather than in the reducer, which runs on the main actor: a large
+					// diff's conversion is long enough to hang the window.
+					await send(.loadResponse(fileId: file.id, isStaged: isStaged, diff: diff, displayDiff: diff?.toAppUI()))
 				}
 				.cancellable(id: CancellableId.loadDiff, cancelInFlight: true)
 
-			case let .loadResponse(diff):
-				guard let diff else {
-					guard let fileId = state.fileId, let isStaged = state.fileIsStaged else {
-						state.clearSelection()
-						return .none
-					}
+			case let .loadResponse(fileId, isStaged, diff, displayDiff):
+				// Clearing the selection does not cancel the load, so its diff may arrive for a file
+				// that is no longer selected; showing it would also bring back its hunk buttons.
+				guard fileId == state.fileId, isStaged == state.fileIsStaged else {
+					return .none
+				}
 
+				state.isApplyingHunk = false
+				guard let diff, let displayDiff else {
 					state.clearSelection()
 					return .send(.delegate(.fileHasNoChanges(fileId: fileId, isStaged: isStaged)))
 				}
 
 				state.fileDiff = diff
-				state.displayDiff = diff.toAppUI()
+				state.displayDiff = displayDiff
 				return .none
 
 			case let .stageHunk(hunkId):
-				guard let file = state.fileDiff?.fileChange, let hunk = state.hunk(id: hunkId) else {
-					return .none
-				}
-
-				return .send(.delegate(.stageHunk(file, hunk)))
+				return applyHunk(id: hunkId, state: &state, Action.Delegate.stageHunk)
 
 			case let .unstageHunk(hunkId):
-				guard let file = state.fileDiff?.fileChange, let hunk = state.hunk(id: hunkId) else {
-					return .none
-				}
-
-				return .send(.delegate(.unstageHunk(file, hunk)))
+				return applyHunk(id: hunkId, state: &state, Action.Delegate.unstageHunk)
 
 			case let .discardHunk(hunkId):
-				guard let file = state.fileDiff?.fileChange, let hunk = state.hunk(id: hunkId) else {
-					return .none
-				}
-
-				return .send(.delegate(.discardHunk(file, hunk)))
+				return applyHunk(id: hunkId, state: &state, Action.Delegate.discardHunk)
 
 			case .delegate:
 				return .none
 			}
 		}
+	}
+
+	private func applyHunk(
+		id hunkId: String,
+		state: inout State,
+		_ delegate: (FileChange, GitCore.DiffHunk) -> Action.Delegate
+	) -> EffectOf<FileDiffViewer> {
+		guard
+			!state.isApplyingHunk,
+			let file = state.fileDiff?.fileChange,
+			let hunk = state.hunk(id: hunkId)
+		else {
+			return .none
+		}
+
+		state.isApplyingHunk = true
+		return .send(.delegate(delegate(file, hunk)))
 	}
 }

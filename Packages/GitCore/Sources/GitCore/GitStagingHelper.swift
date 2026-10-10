@@ -25,10 +25,19 @@ public nonisolated enum GitStagingHelper {
 		)
 	}
 
+	// MARK: - Reading Diffs
+
+	/// `git diff` against the working tree writes refreshed stat data back to the index whenever a
+	/// file's timestamps changed but its content did not, taking `index.lock` to do it. A stage or
+	/// commit starting at that moment fails with "index.lock: File exists", and the index write
+	/// wakes `GitRepositoryWatcher`. `--no-optional-locks` does not stop it (git 2.54 still writes
+	/// the index under it); turning off `diff.autoRefreshIndex` does, and the output is the same.
+	private static let diffWithoutIndexRefresh = ["-c", "diff.autoRefreshIndex=false", "diff"]
+
 	// MARK: - Line Stats
 
 	private static func fetchLineStats(at repositoryPath: String, staged: Bool) async -> [String: GitLineStats] {
-		var arguments = ["diff", "--numstat", "-z", "-M"]
+		var arguments = diffWithoutIndexRefresh + ["--numstat", "-z", "-M"]
 		if staged {
 			arguments.append("--cached")
 		}
@@ -90,13 +99,13 @@ public nonisolated enum GitStagingHelper {
 		let arguments: [String] =
 			if isStaged {
 				if file.status == .renamed, let oldPath = file.oldPath {
-					["diff", "--cached", "--", oldPath, file.path]
+					diffWithoutIndexRefresh + ["--cached", "--", oldPath, file.path]
 				} else {
-					["diff", "--cached", "--", file.path]
+					diffWithoutIndexRefresh + ["--cached", "--", file.path]
 				}
 			}
 			else {
-				["diff", "--", file.path]
+				diffWithoutIndexRefresh + ["--", file.path]
 			}
 
 		let result = await ProcessRunner.runGit(arguments: arguments, at: repositoryPath)

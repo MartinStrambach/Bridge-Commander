@@ -148,7 +148,7 @@ struct FileDiffViewerDisplayTests {
 		await store.receive(\.loadResponse)
 		#expect(store.state.displayDiff != nil)
 
-		await store.send(.loadResponse(nil))
+		await store.send(.loadResponse(fileId: file.id, isStaged: false, diff: nil, displayDiff: nil))
 
 		#expect(store.state.fileDiff == nil)
 		#expect(store.state.displayDiff == nil)
@@ -163,6 +163,7 @@ struct FileDiffViewerDisplayTests {
 		state.fileIsStaged = false
 		state.fileDiff = diff(for: file)
 		state.displayDiff = diff(for: file).toAppUI()
+		state.isApplyingHunk = true
 
 		state.clearSelection()
 
@@ -170,6 +171,7 @@ struct FileDiffViewerDisplayTests {
 		#expect(state.fileIsStaged == nil)
 		#expect(state.fileDiff == nil)
 		#expect(state.displayDiff == nil, "a stale display diff would keep rendering the old file")
+		#expect(!state.isApplyingHunk)
 	}
 
 	@Test("deselecting a file in the detail view clears the rendered diff")
