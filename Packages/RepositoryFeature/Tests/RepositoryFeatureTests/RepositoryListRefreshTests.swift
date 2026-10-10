@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Foundation
 import GitCore
 import GitHosting
+import Settings
 import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
@@ -60,6 +61,63 @@ struct RepositoryListRefreshTests {
 		// Exhaustive: an unasserted `startScan` — or any row refresh — fails here.
 		await store.send(.refreshRepositories(.user))
 		await store.finish()
+	}
+
+	@Test("a refresh during another's fan-out takes over, so no row is asked twice for the rest")
+	func refreshDuringFanOutCancelsTheRest() async {
+		let clock = TestClock()
+		let store = makeStore(clock: clock)
+		store.exhaustivity = .off
+		let statusReads = LockIsolated<[String: Int]>([:])
+		store.dependencies[GitClient.self].getCurrentBranch = { path in
+			statusReads.withValue { $0[path, default: 0] += 1 }
+			return GitPorcelainStatus(parsing: "", didSucceed: false)
+		}
+
+		store.state.$trackedRepoPaths.withLock { $0 = ["/repos/alpha", "/repos/beta"] }
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
+		]))
+		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+			mainRepo("/repos/beta", name: "beta"),
+		]))
+
+		// The periodic refresh has reached the first row when the user presses ⌘R.
+		await store.send(.refreshRepositories(.periodic(.fiveMinutes)))
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.send(.refreshRepositories(.user))
+		await clock.advance(by: .seconds(5))
+		await store.finish()
+
+		// The first row was asked by both refreshes; the rest only by the one that took over.
+		#expect(statusReads.value == ["/repos/alpha": 2, "/repos/alpha-one": 1, "/repos/beta": 1])
+	}
+
+	/// The refresh spaces its rows out, so a group can be removed before its rows' turn. A refresh
+	/// sent to a row that is gone would be reported as an issue by `forEach`, failing the test.
+	@Test("a group removed while a refresh is under way is not refreshed")
+	func groupRemovedMidRefreshIsSkipped() async {
+		let clock = TestClock()
+		let store = makeStore(clock: clock)
+		store.exhaustivity = .off
+		let statusReads = LockIsolated<[String]>([])
+		store.dependencies[GitClient.self].getCurrentBranch = { path in
+			statusReads.withValue { $0.append(path) }
+			return GitPorcelainStatus(parsing: "", didSucceed: false)
+		}
+
+		store.state.$trackedRepoPaths.withLock { $0 = ["/repos/alpha", "/repos/beta"] }
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [mainRepo("/repos/alpha", name: "alpha")]))
+		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [mainRepo("/repos/beta", name: "beta")]))
+
+		await store.send(.refreshRepositories(.user))
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.send(.repositoryGroups(.element(id: "/repos/beta", action: .remove)))
+		await clock.advance(by: .seconds(5))
+		await store.finish()
+
+		#expect(statusReads.value == ["/repos/alpha"])
 	}
 
 	// MARK: - Debounced sort
