@@ -164,7 +164,8 @@ final class ClaudeStatusDetector {
 	}
 
 	/// Ends all reporting. Called when the pane's session is killed, before the shell is hung up:
-	/// the exit writes a last frame, and there is nobody left to hear what it looks like.
+	/// the exit writes a last frame, and there is nobody left to hear what it looks like. Also when
+	/// the shell exits on its own, whose session is `.failed` from then on.
 	func stop() {
 		isStopped = true
 		pendingCheck?.cancel()

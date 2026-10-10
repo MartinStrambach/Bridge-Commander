@@ -2,6 +2,7 @@ import AppKit
 import Darwin
 import Foundation
 import SwiftTerm
+import Synchronization
 import Testing
 
 @testable import TerminalFeature
@@ -72,6 +73,19 @@ private func firstChild(of pid: pid_t) async -> pid_t? {
 	return child
 }
 
+/// Set from the process delegate's callback, which is `@Sendable`.
+private final class LockedFlag: Sendable {
+	private let value = Mutex(false)
+
+	var isSet: Bool {
+		value.withLock { $0 }
+	}
+
+	func set() {
+		value.withLock { $0 = true }
+	}
+}
+
 /// Collects what a pane reported, in order.
 @MainActor
 private final class Reported {
@@ -114,6 +128,22 @@ struct TerminalViewStoreTests {
 		store.killSession(sessionId: session.id)
 
 		#expect(await eventually { !isRunning(pid) }, "shell should be gone after its session is killed")
+	}
+
+	/// Gone means reaped, not just exited. SwiftTerm waits for the shell only while the pane's
+	/// process object lives, and a killed pane is released within moments, so a shell slower to exit
+	/// than that — zsh taking Claude Code down with it — was left a zombie until the app quit. This
+	/// one ignores the hangup and exits a second later on its own. `exists` does not reap, unlike
+	/// `isRunning`.
+	@Test func killSessionReapsAShellThatIsSlowToExit() async throws {
+		let store = makeStore(shell: "/bin/sh", arguments: ["-c", "trap '' HUP; sleep 1"])
+		let (session, pid, _) = startSession(in: store)
+		try #require(pid > 0)
+
+		store.killSession(sessionId: session.id)
+
+		#expect(await eventually { !exists(pid) }, "the exited shell should not be left a zombie")
+		_ = isRunning(pid) // reaps it here when the store did not
 	}
 
 	@Test func killSessionReleasesThePseudoTerminal() async throws {
@@ -217,6 +247,53 @@ struct TerminalViewStoreTests {
 		store = nil
 
 		#expect(await eventually { !isRunning(first.pid) && !isRunning(second.pid) })
+	}
+
+	@Test func releasingTheStoreReapsEveryShell() async throws {
+		var store: TerminalViewStore? = makeStore()
+		let first = startSession(in: store!)
+		let second = startSession(in: store!)
+		try #require(first.pid > 0 && second.pid > 0)
+
+		store = nil
+
+		#expect(await eventually { !exists(first.pid) && !exists(second.pid) })
+		_ = isRunning(first.pid)
+		_ = isRunning(second.pid)
+	}
+
+	/// A shell that exits on its own leaves its session `.failed`, with a Retry. Claude's input box
+	/// or a `❯` prompt theme can still be on screen, and an idle check judging that screen after the
+	/// exit reported the dead pane as waiting: Retry vanished and "Claude is waiting" was posted.
+	@Test func shellExitSilencesStatusReports() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let exited = LockedFlag()
+		let delegate = TerminalProcessDelegate(onFailed: { _ in exited.set() })
+		let view = store.view(
+			for: session,
+			foregroundColor: .white,
+			backgroundColor: .black,
+			processDelegate: delegate,
+			onStatusChange: { _, status in
+				MainActor.assumeIsolated { reported.statuses.append(status) }
+			},
+			onNotification: { _, _ in }
+		)
+		let pid = view.process.shellPid
+		try #require(pid > 0)
+
+		// A last frame with the prompt glyph at column 0 arms an idle check, and the shell exits
+		// before it runs.
+		view.dataReceived(slice: Array("❯ ".utf8)[...])
+		let reportedBeforeExit = reported.statuses
+		kill(pid, SIGTERM)
+		#expect(await eventually { exited.isSet })
+		try await Task.sleep(for: .seconds(2)) // past the detector's idle threshold
+
+		#expect(reported.statuses == reportedBeforeExit, "an exited shell has nothing more to say")
+		store.killSession(sessionId: session.id)
 	}
 
 	/// The real shell is zsh with a job in the foreground, typically Claude Code. Killing the
