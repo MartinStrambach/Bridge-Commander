@@ -98,6 +98,66 @@ struct GitStatusDetectorTests {
 	}
 
 	@Test
+	func detachedHeadIsOnNoBranch() async throws {
+		let repository = try await Repository()
+		defer { repository.remove() }
+
+		try await repository.commit("one")
+		let head = try await repository.git("rev-parse", "HEAD")
+		try await repository.git("checkout", "--detach")
+
+		let status = await GitStatusDetector.getStatus(at: repository.path)
+
+		#expect(status.isDetached)
+		#expect(status.branch == nil)
+		#expect(status.headOid == head)
+	}
+
+	/// Both backends: the merge one (the default) keeps its state in `rebase-merge`, `--apply` in
+	/// `rebase-apply`.
+	@Test(arguments: [["rebase"], ["rebase", "--apply"]])
+	func rebaseStaysOnTheBranchBeingRebased(rebase: [String]) async throws {
+		let repository = try await Repository()
+		defer { repository.remove() }
+
+		// Both branches change the same file, so the rebase stops on a conflict with HEAD detached.
+		try await repository.git("checkout", "-b", "feature")
+		try await repository.git("branch", "--set-upstream-to=origin/main")
+		try "feature".write(toFile: repository.path + "/file", atomically: true, encoding: .utf8)
+		try await repository.git("add", "file")
+		try await repository.commit("feature")
+		try await repository.git("checkout", "main")
+		try "main".write(toFile: repository.path + "/file", atomically: true, encoding: .utf8)
+		try await repository.git("add", "file")
+		try await repository.commit("main")
+		try await repository.git("checkout", "feature")
+		_ = await ProcessRunner.runGit(arguments: rebase + ["main"], at: repository.path)
+
+		let status = await GitStatusDetector.getStatus(at: repository.path)
+
+		#expect(GitMergeDetector.isGitOperationInProgress(at: repository.path))
+		#expect(!status.isDetached)
+		#expect(status.branch == "feature")
+		#expect(status.hasRemoteBranch)
+	}
+
+	@Test
+	func parsingDetachedHead() {
+		let status = GitPorcelainStatus(parsing: "# branch.oid abc\n# branch.head (detached)\n")
+		#expect(status.isDetached)
+		#expect(status.branch == nil)
+		#expect(status.headOid == "abc")
+	}
+
+	@Test
+	func parsingUnbornBranchHasNoHead() {
+		let status = GitPorcelainStatus(parsing: "# branch.oid (initial)\n# branch.head main\n")
+		#expect(!status.isDetached)
+		#expect(status.branch == "main")
+		#expect(status.headOid == nil)
+	}
+
+	@Test
 	func parsingAloneLeavesNoUpstreamAtZero() {
 		let status = GitPorcelainStatus(parsing: "# branch.oid abc\n# branch.head feature\n")
 		#expect(status.branch == "feature")

@@ -26,6 +26,7 @@ Design notes and gotchas for this package. Project-wide conventions are in the r
 ### Status model
 - `ScannedRepository` holds only what a scan finds (path, name, directory, isWorktree, branchName)
 - `GitPorcelainStatus` is the live status: branch, hasRemoteBranch, unpushedCount, behindCount, staged/unstaged file lists (`stagedCount`/`unstagedCount`), didSucceed. The row copies it onto `RepositoryRowReducer.State` (`stagedChangesCount`, `unstagedChangesCount`, `unpushedCommitCount`, `commitsBehindCount`, `hasRemoteBranch`)
+- A detached HEAD is on no branch: `branch` is nil and `isDetached` true, with `headOid` naming the commit — the scan (`GitWorktreeScanner`) reports it as nil too, and the two must agree or the row flips between them on every refresh. A rebase is the exception: git detaches HEAD until it finishes, so both read the branch being rebased from `rebase-merge/head-name` or `rebase-apply/head-name` (`GitMergeDetector.branchBeingRebased`), and `getStatus` looks up that branch's upstream itself, since `git status` reports none while detached
 - A merge/rebase in progress is a filesystem check, `GitMergeDetector.isGitOperationInProgress`, not part of the status call
 
 ### Git status is fetched in one call
