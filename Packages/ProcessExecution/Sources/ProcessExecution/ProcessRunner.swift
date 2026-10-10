@@ -2,7 +2,7 @@ import Foundation
 import Synchronization
 
 /// Result of a process execution with captured output and error streams
-public nonisolated struct ProcessResult {
+public nonisolated struct ProcessResult: Sendable {
 	public let exitCode: Int32
 	public let output: Data
 	public let error: Data
@@ -67,41 +67,35 @@ public nonisolated enum ProcessRunner {
 
 		let outputCollector = PipeDataCollector()
 		let errorCollector = PipeDataCollector()
+		let completion = ProcessCompletion(output: outputCollector, error: errorCollector)
 
-		// Continuously read from output pipe in background to prevent buffer overflow
-		outputPipe.fileHandleForReading.readabilityHandler = { fileHandle in
-			let data = fileHandle.availableData
-			outputCollector.append(data)
-		}
+		// Each pipe is read as data arrives, so a chatty process never fills its buffer and blocks.
+		// A handle's handler calls run one at a time, in order, so the empty read that marks end of
+		// file comes after every chunk before it has been appended.
+		for (pipe, collector) in [(outputPipe, outputCollector), (errorPipe, errorCollector)] {
+			pipe.fileHandleForReading.readabilityHandler = { fileHandle in
+				let data = fileHandle.availableData
+				guard !data.isEmpty else {
+					fileHandle.readabilityHandler = nil
+					try? fileHandle.close()
+					completion.pipeReachedEndOfFile()
+					return
+				}
 
-		// Continuously read from error pipe in background to prevent buffer overflow
-		errorPipe.fileHandleForReading.readabilityHandler = { fileHandle in
-			let data = fileHandle.availableData
-			errorCollector.append(data)
+				collector.append(data)
+			}
 		}
 
 		return await withTaskCancellationHandler {
 			await withCheckedContinuation { continuation in
+				completion.resume(with: continuation)
+
+				// The result waits for both pipes' end of file as well as the exit. Building it on
+				// exit, as this used to, raced a handler that had already read the last chunk but not
+				// appended it yet: under load a `git status` succeeded with empty output (a row lost
+				// its changes and showed "No remote"), and longer output lost a chunk from the middle.
 				process.terminationHandler = { proc in
-					// Stop reading from pipes
-					outputPipe.fileHandleForReading.readabilityHandler = nil
-					errorPipe.fileHandleForReading.readabilityHandler = nil
-
-					// Read any remaining data
-					let remainingOutput = (try? outputPipe.fileHandleForReading.readToEnd()) ?? Data()
-					let remainingError = (try? errorPipe.fileHandleForReading.readToEnd()) ?? Data()
-
-					// Combine all output
-					outputCollector.append(remainingOutput)
-					errorCollector.append(remainingError)
-
-					let result = ProcessResult(
-						exitCode: proc.terminationStatus,
-						output: outputCollector.getData(),
-						error: errorCollector.getData()
-					)
-
-					continuation.resume(returning: result)
+					completion.processExited(with: proc.terminationStatus)
 				}
 
 				do {
@@ -120,12 +114,11 @@ public nonisolated enum ProcessRunner {
 						try? pipe.fileHandleForWriting.close()
 					}
 
-					let result = ProcessResult(
+					completion.launchFailed(with: ProcessResult(
 						exitCode: -1,
 						output: Data(),
 						error: "Failed to start process: \(error.localizedDescription)".data(using: .utf8) ?? Data()
-					)
-					continuation.resume(returning: result)
+					))
 				}
 			}
 		} onCancel: {
@@ -218,5 +211,71 @@ nonisolated final class ResolvedExecutable: Sendable {
 			}
 			return await replacement.value
 		}
+	}
+}
+
+/// Resumes a `ProcessRunner.run` call once, when the process has exited and both of its pipes have
+/// reached end of file.
+nonisolated final class ProcessCompletion: Sendable {
+	private struct State {
+		var continuation: CheckedContinuation<ProcessResult, Never>?
+		var exitCode: Int32?
+		var openPipes = 2
+	}
+
+	private let output: PipeDataCollector
+	private let error: PipeDataCollector
+	private let state = Mutex(State())
+
+	init(output: PipeDataCollector, error: PipeDataCollector) {
+		self.output = output
+		self.error = error
+	}
+
+	func resume(with continuation: CheckedContinuation<ProcessResult, Never>) {
+		state.withLock { $0.continuation = continuation }
+	}
+
+	func pipeReachedEndOfFile() {
+		finish { state in
+			state.openPipes -= 1
+			return state.openPipes == 0 && state.exitCode != nil
+		}
+	}
+
+	func processExited(with exitCode: Int32) {
+		finish { state in
+			state.exitCode = exitCode
+			return state.openPipes == 0
+		}
+	}
+
+	func launchFailed(with result: ProcessResult) {
+		let continuation = state.withLock { state in
+			defer { state.continuation = nil }
+			return state.continuation
+		}
+		continuation?.resume(returning: result)
+	}
+
+	/// Applies `update` and resumes when it reports the call is complete — only the first time.
+	private func finish(_ update: (inout State) -> Bool) {
+		let ready: (CheckedContinuation<ProcessResult, Never>, Int32)? = state.withLock { state in
+			guard update(&state), let continuation = state.continuation, let exitCode = state.exitCode else {
+				return nil
+			}
+
+			state.continuation = nil
+			return (continuation, exitCode)
+		}
+		guard let (continuation, exitCode) = ready else {
+			return
+		}
+
+		continuation.resume(returning: ProcessResult(
+			exitCode: exitCode,
+			output: output.getData(),
+			error: error.getData()
+		))
 	}
 }
