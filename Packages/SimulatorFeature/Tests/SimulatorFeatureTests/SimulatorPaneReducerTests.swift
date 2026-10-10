@@ -181,6 +181,40 @@ struct SimulatorPaneReducerTests {
 		}
 	}
 
+	/// A Home press or a rotation is not a transition: its failure is reported without ending the
+	/// fold, boot or shutdown running meanwhile, whose spinner keeps the other controls hidden.
+	@Test
+	func aFailedButtonPressOrRotationLeavesARunningTransition() async {
+		struct PressFailure: LocalizedError {
+			var errorDescription: String? { "Unable to press" }
+		}
+		struct RotationFailure: LocalizedError {
+			var errorDescription: String? { "Unable to rotate" }
+		}
+
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		// A fold is running.
+		initial.transitioningDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].pressButton = { _, _ in throw PressFailure() }
+			$0[SimulatorClient.self].rotate = { _, _ in throw RotationFailure() }
+		}
+
+		await store.send(.hardwareButtonTapped(.home))
+		await store.receive(.featureFinished(nil, errorMessage: "Unable to press")) {
+			$0.errorMessage = "Unable to press"
+		}
+		await store.send(.rotateButtonTapped(clockwise: true))
+		await store.receive(.featureFinished(nil, errorMessage: "Unable to rotate")) {
+			$0.errorMessage = "Unable to rotate"
+		}
+		#expect(store.state.transitioningDeviceId == "A")
+	}
+
 	@Test
 	func rotatingReloadsTheDevicesSoThePaneTakesTheNewShape() async {
 		let booted = Self.device("A", state: .booted)

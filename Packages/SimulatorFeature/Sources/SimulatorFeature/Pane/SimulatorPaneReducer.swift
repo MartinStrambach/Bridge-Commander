@@ -119,7 +119,8 @@ public struct SimulatorPaneReducer {
 		/// Asks to confirm, then erases the device's content and settings.
 		case eraseButtonTapped
 		case alert(PresentationAction<Alert>)
-		/// A feature (memory warning, location) did its thing, or failed with a message.
+		/// A feature (memory warning, location) did its thing, or failed with a message. Anything
+		/// that is not a boot, shutdown, fold or erase reports here, leaving `transitioningDeviceId`.
 		case featureFinished(Notice?, errorMessage: String?)
 		case showNoticeFileInFinderTapped
 		case noticeDismissed
@@ -323,7 +324,8 @@ public struct SimulatorPaneReducer {
 						try await simulatorClient.pressButton(device.id, button)
 					}
 					catch {
-						await send(.transitionFinished(errorMessage: error.localizedDescription))
+						// Not `transitionFinished`: that would end a fold or boot running meanwhile.
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
 					}
 				}
 
@@ -349,7 +351,7 @@ public struct SimulatorPaneReducer {
 						}
 					}
 					catch {
-						await send(.transitionFinished(errorMessage: error.localizedDescription))
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
 					}
 				}
 
