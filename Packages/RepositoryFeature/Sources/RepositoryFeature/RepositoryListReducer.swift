@@ -128,6 +128,8 @@ struct RepositoryListReducer {
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
 		case refreshRepositories(RefreshTrigger)
+		/// One row's turn in `refreshRepositories`. Does nothing for a row that is gone by then.
+		case refreshRow(path: String)
 		/// Rows' repositories changed on disk; see `GitRepositoryWatcherClient`.
 		case repositoriesChangedOnDisk([GitRepositoryChange])
 		/// Reopens the tabs saved when the window last closed. Once per launch.
@@ -204,10 +206,14 @@ struct RepositoryListReducer {
 		}
 	}
 
+	/// The pause between two rows' refreshes in a full refresh; see `refreshRepositories`.
+	static let rowRefreshSpacing: Duration = .milliseconds(50)
+
 	private nonisolated enum CancellableId: Hashable {
 		case terminalNotificationTaps
 		case simulatorActivity
 		case periodicRefresh
+		case refreshFanOut
 		case repositoryWatch
 		case scan
 		case sortAfterFetch
@@ -735,30 +741,38 @@ struct RepositoryListReducer {
 					return .none
 				}
 
-				// Capture only the ids (Sendable) and rebuild the actions inside the effect.
-				let refreshTargets = state.repositoryGroups.map { group in
-					(groupId: group.id, worktreeIds: group.worktrees.map(\.id))
-				}
-				let rowCount = refreshTargets.reduce(0) { $0 + 1 + $1.worktreeIds.count }
-				// Send the refreshes sequentially instead of merging to stagger row refreshes.
-				// Merging all effects at once spawns 7×N git processes simultaneously (thundering herd).
-				// Sequencing them means git load ramps up gradually.
+				// Each group's header goes before its worktrees.
+				let rowPaths = state.repositoryGroups.flatMap { [$0.header.path] + $0.worktrees.map(\.path) }
+				let rowCount = rowPaths.count
+
+				@Dependency(\.continuousClock)
+				var clock
+
+				// Each row's refresh starts its git processes (status, the menu's checks, then the
+				// remote) at once, and `await send` returns as soon as the row has *started* them, not
+				// when they finish. Sent back to back, every row's processes would start together, so
+				// the rows are spaced out instead and the git load ramps up. That spreads the starts
+				// but does not cap how many run at once: a row slower than the spacing still overlaps
+				// the next. A refresh arriving meanwhile (⌘R during a periodic one) takes over rather
+				// than running alongside; the rows the older one already reached were asked anyway.
 				return .run { send in
 					ActivityLog.shared.record(
 						.refresh,
 						"Refresh of \(rowCount) \(rowCount == 1 ? "repository" : "repositories") (\(trigger.activityLogDescription))"
 					)
 					await send(.startScan)
-					for target in refreshTargets {
-						await send(.repositoryGroups(.element(id: target.groupId, action: .header(.refresh))))
-						for worktreeId in target.worktreeIds {
-							await send(.repositoryGroups(.element(
-								id: target.groupId,
-								action: .worktrees(.element(id: worktreeId, action: .refresh))
-							)))
+					for (index, path) in rowPaths.enumerated() {
+						if index > 0 {
+							try await clock.sleep(for: Self.rowRefreshSpacing)
 						}
+						await send(.refreshRow(path: path))
 					}
 				}
+				.cancellable(id: CancellableId.refreshFanOut, cancelInFlight: true)
+
+			case let .refreshRow(path):
+				// The row may be gone by its turn: removed, or the list cleared, mid-refresh.
+				return refreshRow(for: path, in: state)
 
 			case .startPeriodicRefresh:
 				let interval = state.periodicRefreshInterval
