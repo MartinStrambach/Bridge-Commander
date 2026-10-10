@@ -46,7 +46,7 @@ struct RepositoryRowYouTrackButtonTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions)))
+		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions), ticketId: "MOB-4432"))
 
 		#expect(store.state.youtrackButton?.ticketId == "MOB-4432")
 		#expect(store.state.youtrackButton?.stateFieldId == "84-950")
@@ -65,7 +65,7 @@ struct RepositoryRowYouTrackButtonTests {
 		await store.send(.didFetchYouTrack(makeDetails(
 			stateFieldId: hasFieldId ? "84-950" : nil,
 			transitions: hasFieldId ? [] : transitions
-		)))
+		), ticketId: "MOB-4432"))
 
 		#expect(store.state.youtrackButton == nil)
 	}
@@ -86,7 +86,7 @@ struct RepositoryRowYouTrackButtonTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didFetchYouTrack(nil))
+		await store.send(.didFetchYouTrack(nil, ticketId: "MOB-4432"))
 
 		#expect(store.state.youtrackButton == nil)
 	}
@@ -133,7 +133,7 @@ struct RepositoryRowYouTrackButtonTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions)))
+		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions), ticketId: "MOB-4432"))
 
 		// Otherwise the progress indicator vanishes and a second transition becomes tappable.
 		#expect(store.state.youtrackButton?.isApplying == true)
@@ -167,5 +167,61 @@ struct RepositoryRowYouTrackButtonTests {
 
 		// The menu now reflects the transitions reachable from the new state.
 		#expect(store.state.youtrackButton?.transitions == updated.stateTransitions)
+	}
+
+	@Test("a newer read of the ticket wins over an older one still under way")
+	@MainActor
+	func newerFetchWinsOverOlder() async {
+		let clock = TestClock()
+		let calls = LockIsolated(0)
+		let stale = makeDetails(transitions: transitions)
+		let updated = makeDetails(transitions: [
+			TicketStateTransition(eventId: "reopen", presentation: "Open"),
+		])
+		var state = makeRow()
+		state.youtrackButton = .init(
+			ticketId: "MOB-4432",
+			baseURL: "https://youtrack.example.com",
+			stateFieldId: "84-950",
+			currentState: .open,
+			transitions: transitions
+		)
+		let store = TestStore(initialState: state) {
+			RepositoryRowReducer()
+		} withDependencies: {
+			$0[GitClient.self].getOriginRemote = { _ in nil }
+			// The refresh's read is slow and answers with the state from before the transition.
+			$0[YouTrackClient.self].fetchIssueDetails = { _, _, _ in
+				let call = calls.withValue { $0 += 1
+					return $0
+				}
+				guard call > 1 else {
+					try await clock.sleep(for: .seconds(5))
+					return stale
+				}
+				return updated
+			}
+		}
+		store.exhaustivity = .off
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head MOB-4432_feature"), false))
+		await store.send(.youtrackButton(.delegate(.stateChanged)))
+		await store.receive(\.didFetchYouTrack)
+		await clock.advance(by: .seconds(5))
+		await store.finish()
+		await store.skipReceivedActions(strict: false)
+
+		#expect(store.state.youtrackButton?.transitions == updated.stateTransitions)
+	}
+
+	@Test("an answer for another ticket than the row's is dropped")
+	@MainActor
+	func answerForAnotherTicketIsDropped() async {
+		let store = TestStore(initialState: makeRow()) {
+			RepositoryRowReducer()
+		}
+
+		// Exhaustive: any state write fails here.
+		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions), ticketId: "MOB-1"))
 	}
 }

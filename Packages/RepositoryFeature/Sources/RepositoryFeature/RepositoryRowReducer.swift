@@ -238,9 +238,11 @@ struct RepositoryRowReducer {
 		case didFetchStatus(GitPorcelainStatus, Bool)
 		/// `didFetchStatus` for a fetch started by `changedOnDisk`.
 		case didFetchStatusAfterChangeOnDisk(GitPorcelainStatus, Bool)
-		case didFetchYouTrack(IssueDetails?)
-		case didFetchPullRequest(PullRequestDetails?)
-		case didFetchPullRequestFailed(String)
+		/// Each fetch result names the ticket or branch it was asked about: one that no longer
+		/// matches the row (a checkout or a newer fetch overtook it) is dropped.
+		case didFetchYouTrack(IssueDetails?, ticketId: String?)
+		case didFetchPullRequest(PullRequestDetails?, branch: String?)
+		case didFetchPullRequestFailed(String, branch: String)
 		case openRepositoryDetail
 		case openTerminalForRepo
 		case repositoryIconTapped
@@ -266,6 +268,8 @@ struct RepositoryRowReducer {
 
 	private nonisolated enum CancelID: Hashable {
 		case statusFetch(String)
+		case youTrackFetch(String)
+		case pullRequestFetch(String)
 	}
 
 	@Dependency(GitClient.self)
@@ -376,7 +380,11 @@ struct RepositoryRowReducer {
 			case let .didFetchStatusAfterChangeOnDisk(status, isMerge):
 				return applyStatus(status, isMerge: isMerge, afterChangeOnDisk: true, to: &state)
 
-			case let .didFetchYouTrack(details):
+			case let .didFetchYouTrack(details, ticketId):
+				guard ticketId == state.ticketId else {
+					return .none
+				}
+
 				state.androidCR = details?.androidCR
 				state.iosCR = details?.iosCR
 				state.androidReviewerName = details?.androidReviewerName
@@ -390,7 +398,11 @@ struct RepositoryRowReducer {
 				)
 				return .none
 
-			case let .didFetchPullRequest(details):
+			case let .didFetchPullRequest(details, branch):
+				guard branch == state.branchName else {
+					return .none
+				}
+
 				state.prUrl = details?.url
 				state.prState = details?.state
 				state.prProvider = details?.provider
@@ -410,7 +422,11 @@ struct RepositoryRowReducer {
 				state.shareButton.updatePRURL(details?.url)
 				return .none
 
-			case let .didFetchPullRequestFailed(message):
+			case let .didFetchPullRequestFailed(message, branch):
+				guard branch == state.branchName else {
+					return .none
+				}
+
 				state.prFetchError = message
 				return .none
 
@@ -657,12 +673,16 @@ struct RepositoryRowReducer {
 		.cancellable(id: CancelID.statusFetch(state.path), cancelInFlight: true)
 	}
 
+	/// Asks YouTrack about the row's ticket, cancelling a fetch still under way: a refresh racing
+	/// a state transition's re-read would otherwise let the older answer land last and bring back
+	/// the previous state and transitions. On a slow network it also keeps refreshes from piling up.
 	private func fetchYouTrack(for state: State) -> EffectOf<RepositoryRowReducer> {
 		// No configured instance = integration disabled; report nil so stale CR
 		// state and the state menu clear on the next refresh.
 		let baseURL = YouTrackURLBuilder.normalizedBase(state.youtrackBaseURL)
 		guard let ticketId = state.ticketId, !baseURL.isEmpty else {
-			return .send(.didFetchYouTrack(nil))
+			return .send(.didFetchYouTrack(nil, ticketId: state.ticketId))
+				.cancellable(id: CancelID.youTrackFetch(state.path), cancelInFlight: true)
 		}
 
 		@Shared(.youtrackAuthToken)
@@ -675,7 +695,7 @@ struct RepositoryRowReducer {
 					baseURL: baseURL,
 					authToken: authToken
 				)
-				await send(.didFetchYouTrack(details))
+				await send(.didFetchYouTrack(details, ticketId: ticketId))
 			}
 			catch {
 				// YouTrack unreachable or unauthorized — the answer is unknown, so keep
@@ -683,8 +703,12 @@ struct RepositoryRowReducer {
 				print("Failed to fetch YouTrack details for \(ticketId): \(error.localizedDescription)")
 			}
 		}
+		.cancellable(id: CancelID.youTrackFetch(state.path), cancelInFlight: true)
 	}
 
+	/// Asks the PR provider about the row's branch, cancelling a fetch still under way: after a
+	/// checkout, the previous branch's answer landing last would show its PR, pipeline and
+	/// approvals (or its error) under the new branch.
 	private func fetchPullRequest(for state: State) -> EffectOf<RepositoryRowReducer> {
 		.run { [
 			path = state.path,
@@ -696,17 +720,17 @@ struct RepositoryRowReducer {
 				let branchName,
 				!DefaultBranchResolver.isDefaultBranch(branchName, configured: defaultBranch)
 			else {
-				await send(.didFetchPullRequest(nil))
+				await send(.didFetchPullRequest(nil, branch: branchName))
 				return
 			}
 			guard let remote = await gitClient.getOriginRemote(at: path) else {
-				await send(.didFetchPullRequest(nil))
+				await send(.didFetchPullRequest(nil, branch: branchName))
 				return
 			}
 
 			do {
 				let details = try await pullRequestClient.fetchDetails(remote: remote, branch: branchName)
-				await send(.didFetchPullRequest(details))
+				await send(.didFetchPullRequest(details, branch: branchName))
 			}
 			catch GitHostingError.missingToken {
 				// No token is a deliberate absence (PR integration not set up), not a
@@ -717,9 +741,13 @@ struct RepositoryRowReducer {
 				// the last-known PR state instead of clearing it like a confirmed "no PR",
 				// and surface the reason on the row.
 				print("Failed to fetch PR details for \(branchName): \(error)")
-				await send(.didFetchPullRequestFailed(fetchErrorMessage(for: error, host: remote.host)))
+				await send(.didFetchPullRequestFailed(
+					fetchErrorMessage(for: error, host: remote.host),
+					branch: branchName
+				))
 			}
 		}
+		.cancellable(id: CancelID.pullRequestFetch(state.path), cancelInFlight: true)
 	}
 
 	/// Condenses a provider fetch error into row-tooltip text; the raw error still
