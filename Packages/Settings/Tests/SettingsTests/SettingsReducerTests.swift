@@ -458,6 +458,101 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Token test cancellation
+
+	@Test("editing the GitHub token cancels a test still in flight for the old one")
+	func gitHubTokenEditCancelsTest() async {
+		let clock = TestClock()
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitHubToken = { _ in
+				try await clock.sleep(for: .seconds(1))
+				return "old-login"
+			}
+		}
+		await store.send(.testGitHubTokenButtonTapped) {
+			$0.githubTokenTest = .testing
+		}
+		await store.send(.setGitHubToken("ghp_new")) {
+			$0.$githubToken.withLock { $0 = "ghp_new" }
+			$0.githubTokenTest = .idle
+		}
+		// Had the old run survived, it would now deliver "authenticated as old-login" for the new token.
+		await clock.advance(by: .seconds(1))
+		#expect(store.state.githubTokenTest == .idle)
+	}
+
+	@Test("clearing the GitLab token cancels a test still in flight")
+	func gitLabTokenClearCancelsTest() async {
+		let clock = TestClock()
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitLabToken = { _ in
+				try await clock.sleep(for: .seconds(1))
+				return "old-user"
+			}
+		}
+		await store.send(.setGitLabToken("glpat-old")) {
+			$0.$gitlabToken.withLock { $0 = "glpat-old" }
+		}
+		await store.send(.testGitLabTokenButtonTapped) {
+			$0.gitlabTokenTest = .testing
+		}
+		await store.send(.clearGitLabToken) {
+			$0.$gitlabToken.withLock { $0 = "" }
+			$0.gitlabTokenTest = .idle
+		}
+		await clock.advance(by: .seconds(1))
+		#expect(store.state.gitlabTokenTest == .idle)
+	}
+
+	@Test("changing the YouTrack token, a group's URL, or clearing the token cancels a test in flight")
+	func youTrackEditsCancelTest() async {
+		let clock = TestClock()
+		var state = SettingsReducer.State()
+		state.alert = AlertState { TextState("Clear Token") }
+		let store = TestStore(initialState: state) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[YouTrackClient.self].verifyToken = { _, _ in
+				try await clock.sleep(for: .seconds(1))
+				return "jdoe"
+			}
+		}
+		seedYouTrack(urls: ["/repo": "https://org.youtrack.cloud"])
+
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.send(.setGroupYouTrackBaseURL(groupId: "/repo", value: "https://new.youtrack.cloud")) {
+			$0.$groupSettings.withLock { $0["/repo"] = RepoGroupSettings(youtrackBaseURL: "https://new.youtrack.cloud") }
+			$0.youtrackTokenTest = .idle
+		}
+		await clock.advance(by: .seconds(1))
+
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.send(.setYouTrackToken("perm:new")) {
+			$0.$youtrackAuthToken.withLock { $0 = "perm:new" }
+			$0.youtrackTokenTest = .idle
+		}
+		await clock.advance(by: .seconds(1))
+
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.send(.alert(.presented(.confirmClearToken))) {
+			$0.$youtrackAuthToken.withLock { $0 = "" }
+			$0.youtrackTokenTest = .idle
+			$0.alert = nil
+		}
+		await clock.advance(by: .seconds(1))
+		#expect(store.state.youtrackTokenTest == .idle)
+	}
+
 	// MARK: - Group default insertion
 
 	@Test("mutating an unknown group inserts a default RepoGroupSettings with only that field changed")
