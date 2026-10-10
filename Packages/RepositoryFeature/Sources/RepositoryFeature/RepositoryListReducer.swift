@@ -536,7 +536,6 @@ struct RepositoryListReducer {
 				}
 				state.terminalLayout = layout
 				state.terminalLayout?.activate(session)
-				syncTerminalButtons(for: session.repositoryPath, in: &state)
 				return .none
 
 			// MARK: - Add Repository
@@ -650,7 +649,7 @@ struct RepositoryListReducer {
 				state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
 				if state.terminalLayout?.activeRepositoryPath == worktreePath {
 					if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
+						state.terminalLayout?.activate(next)
 					}
 					else {
 						state.terminalLayout = nil
@@ -681,16 +680,6 @@ struct RepositoryListReducer {
 						sortGroupsByTrackedOrder(in: &state)
 					}
 				}
-				// Tabs restored at launch open the panel before the scan has found their rows, so
-				// the toolbar's button copies start out empty. Fill them in once the row is there —
-				// only then, so a rescan never overwrites a copy that may have an operation running.
-				if
-					let path = state.terminalLayout?.activeRepositoryPath,
-					state.terminalLayout?.gitActionsMenu == nil,
-					findRowState(for: path, in: state) != nil
-				{
-					syncTerminalButtons(for: path, in: &state)
-				}
 				return .none
 
 			case .scanCompleted,
@@ -714,16 +703,6 @@ struct RepositoryListReducer {
 					let rowKinds = change.kinds.subtracting(.worktreeList)
 					if !rowKinds.isEmpty {
 						effects.append(sendToRow(.changedOnDisk(rowKinds), for: change.repositoryPath, in: state))
-					}
-					// The toolbar's copy of the git menu re-checks its stash whenever a status read
-					// syncs it (`syncTerminalGitMenu`). A stash that moved alone (`git stash drop`
-					// in that very terminal) brings no status read, so it is told directly.
-					if
-						rowKinds == .stash,
-						state.terminalLayout?.activeRepositoryPath == change.repositoryPath,
-						state.terminalLayout?.gitActionsMenu != nil
-					{
-						effects.append(.send(.terminalLayout(.gitActionsMenu(.refresh))))
 					}
 				}
 				return .merge(effects)
@@ -831,19 +810,18 @@ struct RepositoryListReducer {
 				sortGroupsInState(in: &state)
 				return .none
 
-			// MARK: - Terminal git menu sync
+			// MARK: - Terminal Finish Merge
 
-			// Fired once per row status fetch (see RepositoryRowReducer.didFetchStatus), by which
-			// point the row's own menu state is already updated — copy it into the terminal header's
-			// menu when that row is the one opened in the terminal.
-			case let .repositoryGroups(.element(id: groupId, action: .header(.gitActionsMenu(.didCheckGitStatus)))):
-				guard let path = state.repositoryGroups[id: groupId]?.header.path else {
-					return .none
+			// The terminal panel's Finish Merge runs on the row (`RepositoryRowReducer.finishMergeTapped`),
+			// which has no alert of its own; it refreshes itself on success.
+			case let .repositoryGroups(.element(_, .header(.finishMergeCompleted(error?)))),
+			     let .repositoryGroups(.element(_, .worktrees(.element(_, .finishMergeCompleted(error?))))):
+				state.alert = AlertState {
+					TextState("Finish Merge Failed")
+				} message: {
+					TextState(error.localizedDescription)
 				}
-				return syncTerminalGitMenu(for: path, in: &state)
-
-			case let .repositoryGroups(.element(_, .worktrees(.element(id: path, .gitActionsMenu(.didCheckGitStatus))))):
-				return syncTerminalGitMenu(for: path, in: &state)
+				return .none
 
 			// MARK: - Terminal Layout
 
@@ -869,7 +847,6 @@ struct RepositoryListReducer {
 					state.terminalSessions.append(session)
 					state.terminalLayout?.activate(session)
 				}
-				syncTerminalButtons(for: repositoryPath, in: &state)
 				return .none
 
 			case .terminalLayout(.hideTerminalMode):
@@ -987,7 +964,7 @@ struct RepositoryListReducer {
 						state.terminalLayout?.activate(neighbour)
 					}
 					else if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
+						state.terminalLayout?.activate(next)
 					}
 					else {
 						state.terminalLayout = nil
@@ -1039,7 +1016,7 @@ struct RepositoryListReducer {
 				state.terminalLayout?.lastActiveSessionByRepo[repositoryPath] = nil
 				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
 					if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
+						state.terminalLayout?.activate(next)
 					}
 					else {
 						state.terminalLayout = nil
@@ -1113,34 +1090,6 @@ struct RepositoryListReducer {
 				state.terminalLayout?.activate(newSession)
 				return .none
 
-			case let .terminalLayout(.finishMergeCompleted(repositoryPath, error)):
-				if let error {
-					state.alert = AlertState {
-						TextState("Finish Merge Failed")
-					} message: {
-						TextState(error.localizedDescription)
-					}
-					return .none
-				}
-				return refreshRow(for: repositoryPath, in: state)
-
-			case let .terminalLayout(.pushCompleted(_, error)):
-				// The toolbar's Push button is the one git operation in the panel that doesn't go
-				// through the header's actions menu, so it needs the same completion routing: the
-				// unpushed count it renders comes from the row, and nothing else re-reads it.
-				if let error {
-					state.alert = AlertState {
-						TextState("Push Failed")
-					} message: {
-						TextState(error.localizedDescription)
-					}
-					return .none
-				}
-				guard let path = state.terminalLayout?.activeRepositoryPath else {
-					return .none
-				}
-				return refreshRow(for: path, in: state)
-
 			case .terminalLayout(.stagingDetail(.dismiss)):
 				// Parity with RepositoryRowReducer.repositoryDetail(.dismiss), which covers the
 				// same sheet opened from a row: a commit or push made inside it changes the row's
@@ -1183,30 +1132,6 @@ struct RepositoryListReducer {
 					},
 					refreshRow(for: path, in: state)
 				)
-
-			case let .terminalLayout(.gitActionsMenu(menuAction)):
-				// Same completion routing as RepositoryRowReducer.gitActionsMenu: a finished
-				// operation re-runs the row's status fetch, which then syncs back into this copy.
-				switch menuAction {
-				case .abortMergeButton(.abortMergeCompleted),
-				     .checkoutDefaultBranchButton(.checkoutCompleted),
-				     .discardButton(.discardCompleted),
-				     .fetchButton(.fetchCompleted),
-				     .mergeMasterButton(.mergeMasterCompleted),
-				     .pullButton(.pullCompleted),
-				     .pushButton(.pushCompleted),
-				     .stashButton(.stashApplyCompleted),
-				     .stashButton(.stashClearCompleted),
-				     .stashButton(.stashCompleted),
-				     .stashButton(.stashPopCompleted):
-					guard let path = state.terminalLayout?.activeRepositoryPath else {
-						return .none
-					}
-					return refreshRow(for: path, in: state)
-
-				default:
-					return .none
-				}
 
 			case .terminalLayout:
 				return .none
@@ -1483,7 +1408,6 @@ private func restoreTerminalTabs(
 	layout.lastActiveSessionByRepo = currentTabByRepo
 	state.terminalLayout = layout
 	state.terminalLayout?.activate(onScreen)
-	syncTerminalButtons(for: onScreen.repositoryPath, in: &state)
 }
 
 /// Opens the built-in terminal on every worktree of the group that was created with a terminal
@@ -1543,7 +1467,6 @@ private func openTerminal(
 		state.terminalSessions.append(session)
 	}
 	state.terminalLayout?.activate(session)
-	syncTerminalButtons(for: repositoryPath, in: &state)
 	return .none
 }
 
@@ -1741,61 +1664,6 @@ private func reopenedTerminalLayout(in state: inout RepositoryListReducer.State)
 /// recently, or the first one when none of the remaining tabs has been on screen yet.
 private func mostRecentRemainingSession(in state: RepositoryListReducer.State) -> TerminalSession? {
 	state.terminalLayout?.mostRecent(among: state.terminalSessions) ?? state.terminalSessions.first
-}
-
-/// Switch the panel to a session of a different repository after the active repository's last
-/// tab went away. The toolbar buttons are copies of the row's state, so they have to be re-synced
-/// too — `activate` alone left them pointing at the closed repository (the Xcode button kept
-/// opening the old repository's project).
-private func activateOtherRepository(
-	_ session: TerminalSession,
-	in state: inout RepositoryListReducer.State
-) {
-	state.terminalLayout?.activate(session)
-	syncTerminalButtons(for: session.repositoryPath, in: &state)
-}
-
-private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {
-	guard let rowState = findRowState(for: path, in: state) else {
-		state.terminalLayout?.androidStudioButton = nil
-		state.terminalLayout?.webButton = nil
-		state.terminalLayout?.ticketButton = nil
-		state.terminalLayout?.gitActionsMenu = nil
-		return
-	}
-	state.terminalLayout?.androidStudioButton = rowState.supportsAndroid ? rowState.androidStudioButton : nil
-	state.terminalLayout?.webButton = rowState.webButton
-	state.terminalLayout?.ticketButton = rowState.ticketButton
-	state.terminalLayout?.gitActionsMenu = rowState.gitActionsMenu
-}
-
-/// The terminal header's git menu is a copy of the row's state (see `syncTerminalButtons`),
-/// synced only when a repo is opened or selected. The fields gating which menu items show
-/// (remote branch, unpushed count, stash/discard flags, merge status) must be re-copied
-/// whenever the row's status fetch lands, or the copy drifts from reality.
-private func syncTerminalGitMenu(
-	for path: String,
-	in state: inout RepositoryListReducer.State
-) -> EffectOf<RepositoryListReducer> {
-	guard
-		state.terminalLayout?.activeRepositoryPath == path,
-		state.terminalLayout?.gitActionsMenu != nil,
-		let rowState = findRowState(for: path, in: state)
-	else {
-		return .none
-	}
-
-	let rowMenu = rowState.gitActionsMenu
-	state.terminalLayout?.gitActionsMenu?.setCurrentBranch(rowMenu.currentBranch)
-	state.terminalLayout?.gitActionsMenu?.isMergeInProgress = rowMenu.isMergeInProgress
-	state.terminalLayout?.gitActionsMenu?.hasRemoteBranch = rowMenu.hasRemoteBranch
-	state.terminalLayout?.gitActionsMenu?.unpushedCommitsCount = rowMenu.unpushedCommitsCount
-	state.terminalLayout?.gitActionsMenu?.stashButton.hasChanges = rowMenu.stashButton.hasChanges
-	state.terminalLayout?.gitActionsMenu?.discardButton.hasTrackedChanges = rowMenu.discardButton.hasTrackedChanges
-	state.terminalLayout?.gitActionsMenu?.discardButton.hasUntrackedFiles = rowMenu.discardButton.hasUntrackedFiles
-	state.terminalLayout?.gitActionsMenu?.setDefaultBranch(rowMenu.defaultBranch)
-	// The stash-list state is internal to the menu, so the copy re-checks it itself.
-	return .send(.terminalLayout(.gitActionsMenu(.refresh)))
 }
 
 private func findRowState(

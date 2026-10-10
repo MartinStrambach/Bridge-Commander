@@ -8,9 +8,9 @@ import ToolsIntegration
 @testable import RepositoryFeature
 
 // The terminal panel's tab actions as `RepositoryListReducer` applies them — the paths around the
-// ones the close-tab, persistence and re-sync suites already cover: closing what is *not* on
-// screen, closing the last of everything, retrying a tab, hiding the panel, and the toolbar's
-// Finish Merge completion.
+// ones the close-tab and persistence suites already cover: closing what is *not* on screen,
+// closing the last of everything, retrying a tab, hiding the panel, and where a repository's
+// first tab starts.
 @Suite("Terminal tab lifecycle")
 @MainActor
 struct TerminalTabLifecycleTests {
@@ -163,54 +163,7 @@ struct TerminalTabLifecycleTests {
 		#expect(store.state.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] == retried.id)
 	}
 
-	// MARK: - Toolbar Finish Merge
-
-	@Test("a finished merge from the toolbar refreshes the opened repository's row")
-	func finishMergeRefreshesRow() async {
-		let store = await makeStoreShowingAlpha()
-
-		await store.send(.terminalLayout(.finishMergeCompleted(repositoryPath: "/repos/alpha", error: nil)))
-		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
-		await store.finish()
-		#expect(store.state.alert == nil)
-	}
-
-	@Test("a failed merge from the toolbar alerts instead of refreshing")
-	func finishMergeFailureAlerts() async {
-		let store = await makeStoreShowingAlpha()
-		store.exhaustivity = .on
-
-		await store.send(.terminalLayout(.finishMergeCompleted(
-			repositoryPath: "/repos/alpha",
-			error: .mergeFailed("CONFLICT in App.swift")
-		))) {
-			$0.alert = AlertState {
-				TextState("Finish Merge Failed")
-			} message: {
-				TextState(GitError.mergeFailed("CONFLICT in App.swift").localizedDescription)
-			}
-		}
-	}
-
-	// MARK: - Toolbar buttons
-
-	@Test("the toolbar shows Android Studio only for a repository that supports Android")
-	func androidStudioButtonFollowsSupport() async {
-		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
-		$groupSettings.withLock {
-			$0 = ["/repos/alpha": RepoGroupSettings(supportsAndroid: true)]
-		}
-		let store = await makeStoreShowingAlpha()
-
-		#expect(store.state.terminalLayout?.androidStudioButton != nil)
-		#expect(
-			store.state.terminalLayout?.androidStudioButton
-				== store.state.repositoryGroups[id: "/repos/alpha"]?.header.androidStudioButton
-		)
-
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
-		#expect(store.state.terminalLayout?.androidStudioButton == nil)
-	}
+	// MARK: - Opening a repository
 
 	@Test("a repository supporting iOS and Android opens its first terminal in the mobile subfolder")
 	func firstTabStartsInMobileSubfolder() async {
@@ -274,12 +227,5 @@ struct TerminalTabLifecycleTests {
 			isWorktree: false,
 			branchName: "master"
 		)
-	}
-
-	private func isHeaderRefresh(_ action: RepositoryListReducer.Action, groupId: String) -> Bool {
-		guard case let .repositoryGroups(.element(id: id, action: .header(.refresh))) = action else {
-			return false
-		}
-		return id == groupId
 	}
 }

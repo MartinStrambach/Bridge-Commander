@@ -17,6 +17,9 @@ public struct GitClient: Sendable {
 	public var checkoutDefaultBranch: @Sendable (_ at: String, _ baseBranch: String) async throws -> String
 	public var pull: @Sendable (_ at: String) async throws -> GitPullHelper.PullResult
 	public var fetch: @Sendable (_ at: String) async throws -> GitFetchHelper.FetchResult
+	public var push: @Sendable (_ at: String) async throws -> GitPushHelper.PushResult
+	/// Concludes a merge whose conflicts are resolved (`git commit --no-edit`).
+	public var finishMerge: @Sendable (_ at: String) async throws -> Void
 }
 
 extension GitClient: DependencyKey {
@@ -39,6 +42,12 @@ extension GitClient: DependencyKey {
 			},
 			fetch: { at in
 				try await GitFetchHelper.fetch(at: at)
+			},
+			push: { at in
+				try await GitPushHelper.push(at: at)
+			},
+			finishMerge: { at in
+				try await GitMergeHelper.finishMerge(at: at)
 			}
 		)
 	}

@@ -51,8 +51,7 @@ struct TerminalSharedXcodeButtonTests {
 
 	@Test("the terminal toolbar keeps no Xcode button state of its own")
 	func terminalLayoutHoldsNoXcodeCopy() async throws {
-		// Opening a repository in the terminal re-syncs the toolbar's copied buttons. The Xcode
-		// button must not be among them, or progress shown in one view would not show in the other.
+		// A copy of the Xcode button here would show progress in one view and not the other.
 		let store = await makeStoreShowingAlpha { _ in }
 		let layout = try #require(store.state.terminalLayout)
 

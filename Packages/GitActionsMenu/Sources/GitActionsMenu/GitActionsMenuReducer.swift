@@ -32,6 +32,12 @@ public struct GitActionsMenuReducer {
 
 		fileprivate var isLoaded = false
 
+		/// A push started from the menu, or from outside it with `.pushButton(.pushTapped)` (the
+		/// terminal toolbar's Push button), is under way.
+		public var isPushing: Bool {
+			pushButton.isPushing
+		}
+
 		public init(repositoryPath: String, currentBranch: String, defaultBranch: String = "") {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch

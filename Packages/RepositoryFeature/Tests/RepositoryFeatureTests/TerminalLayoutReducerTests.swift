@@ -8,8 +8,7 @@ import Testing
 @testable import RepositoryFeature
 
 // The layout reducer on its own, without the list that handles most of its actions: the
-// per-repository tab memory, the sheets it presents, and the in-flight flags behind the
-// toolbar's Push and Finish Merge buttons.
+// per-repository tab memory and the sheets it presents.
 @Suite("Terminal layout reducer")
 @MainActor
 struct TerminalLayoutReducerTests {
@@ -84,37 +83,6 @@ struct TerminalLayoutReducerTests {
 		}
 		await store.send(.gitGraph(.dismiss)) {
 			$0.gitGraph = nil
-		}
-	}
-
-	// MARK: - In-flight flags
-
-	@Test("a push completion stops the spinner whether it succeeded or failed", arguments: [true, false])
-	func pushCompletionClearsFlag(failed: Bool) async {
-		var layout = TerminalLayoutReducer.State()
-		layout.isPushing = true
-		let store = TestStore(initialState: layout) {
-			TerminalLayoutReducer()
-		}
-
-		await store.send(.pushCompleted(result: nil, error: failed ? .pushFailed("rejected") : nil)) {
-			$0.isPushing = false
-		}
-	}
-
-	@Test("a finish-merge completion stops the spinner whether it succeeded or failed", arguments: [true, false])
-	func finishMergeCompletionClearsFlag(failed: Bool) async {
-		var layout = TerminalLayoutReducer.State()
-		layout.isFinishingMerge = true
-		let store = TestStore(initialState: layout) {
-			TerminalLayoutReducer()
-		}
-
-		await store.send(.finishMergeCompleted(
-			repositoryPath: "/repos/alpha",
-			error: failed ? .mergeFailed("conflict") : nil
-		)) {
-			$0.isFinishingMerge = false
 		}
 	}
 }

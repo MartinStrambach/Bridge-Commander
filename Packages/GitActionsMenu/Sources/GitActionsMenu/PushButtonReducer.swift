@@ -17,14 +17,17 @@ public struct PushButtonReducer {
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
 	}
 
+	@Dependency(GitClient.self)
+	private var gitClient
+
 	public var body: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
 			case .pushTapped:
 				state.isPushing = true
-				return .run { [path = state.repositoryPath] send in
+				return .run { [path = state.repositoryPath, gitClient] send in
 					do {
-						let result = try await GitPushHelper.push(at: path)
+						let result = try await gitClient.push(at: path)
 						await send(.pushCompleted(result: result, error: nil))
 					}
 					catch let error as GitError {
