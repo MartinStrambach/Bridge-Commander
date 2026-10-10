@@ -61,7 +61,7 @@ struct TerminalToolbarResyncTests {
 	private func makeStore() -> TestStoreOf<RepositoryListReducer> {
 		var initialState = RepositoryListReducer.State()
 		initialState.terminalLayout = TerminalLayoutReducer.State()
-		return TestStore(initialState: initialState) {
+		let store = TestStore(initialState: initialState) {
 			RepositoryListReducer()
 		} withDependencies: {
 			$0.continuousClock = ImmediateClock()
@@ -72,6 +72,8 @@ struct TerminalToolbarResyncTests {
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
 			$0[LastOpenedDirectoryClient.self].load = { nil }
 		}
+		store.track("/repos/alpha", "/repos/beta")
+		return store
 	}
 
 	private func mainRepo(_ path: String, name: String) -> ScannedRepository {

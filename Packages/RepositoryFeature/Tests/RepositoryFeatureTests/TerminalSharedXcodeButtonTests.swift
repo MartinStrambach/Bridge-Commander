@@ -92,6 +92,7 @@ struct TerminalSharedXcodeButtonTests {
 			dependencies(&$0)
 		}
 		store.exhaustivity = .off
+		store.track("/repos/alpha")
 		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
 			ScannedRepository(
 				path: "/repos/alpha",

@@ -24,7 +24,12 @@ struct RepositoryListReducer {
 	@ObservableState
 	struct State: Equatable {
 		fileprivate(set) var repositoryGroups: IdentifiedArrayOf<RepoGroupReducer.State> = []
-		fileprivate(set) var isScanning = false
+		/// Scans overlap — a group rescan while a repository is being added, say — so each is
+		/// tracked by itself, and one finishing does not end another's spinner.
+		fileprivate(set) var runningScans: Set<Scan> = []
+		var isScanning: Bool {
+			!runningScans.isEmpty
+		}
 		fileprivate(set) var sortMode: SortMode = .state
 
 		/// Hides rows without a live terminal session. Deliberately not persisted — like `sortMode`,
@@ -93,6 +98,18 @@ struct RepositoryListReducer {
 		}
 	}
 
+	/// A scan of repositories for their worktrees. Each kind runs under its own cancel id, so that
+	/// starting one never cancels another: a full scan once cancelled an in-flight add, and the
+	/// added repository was never tracked.
+	enum Scan: Hashable, Sendable {
+		/// Every tracked repository (`startScan`).
+		case all
+		/// A repository being added.
+		case addRepository(String)
+		/// One group, after one of its worktrees was added or removed.
+		case group(String)
+	}
+
 	/// What started a refresh of every row; the activity log says which.
 	enum RefreshTrigger: Equatable {
 		/// The refresh button or ⌘R.
@@ -133,13 +150,14 @@ struct RepositoryListReducer {
 		/// Reopens the tabs saved when the window last closed. Once per launch.
 		case restoreTerminalTabs
 		case repositoryGroups(IdentifiedActionOf<RepoGroupReducer>)
-		case scanCompleted
-		case scanFailed
+		case scanCompleted(Scan)
 		case performDebouncedSort
 		case startPeriodicRefresh
 		case startScan
 		case stopPeriodicRefresh
 		case terminalLayout(TerminalLayoutReducer.Action)
+		/// A worktree is gone, but its branch or DerivedData could not be cleaned up.
+		case worktreeRemovedWithWarnings(String)
 
 		enum ViewAction {
 			case activeTerminalFilterChanged(Bool)
@@ -209,7 +227,7 @@ struct RepositoryListReducer {
 		case simulatorActivity
 		case periodicRefresh
 		case repositoryWatch
-		case scan
+		case scan(Scan)
 		case sortAfterFetch
 	}
 
@@ -472,11 +490,14 @@ struct RepositoryListReducer {
 				state.repositoryGroups.removeAll()
 				state.$trackedRepoPaths.withLock { $0.removeAll() }
 				state.$collapsedRepoPaths.withLock { $0.removeAll() }
-				state.isScanning = false
+				let scans = state.runningScans
+				state.runningScans = []
 				state.watchedRepositoryPaths = []
+				// The periodic refresh keeps running: it does nothing over an empty list, and a
+				// repository added next would otherwise never be refreshed again this session.
 				return .merge(
-					.cancel(id: CancellableId.periodicRefresh),
-					.cancel(id: CancellableId.repositoryWatch)
+					scans.map { Effect<Action>.cancel(id: CancellableId.scan($0)) }
+						+ [.cancel(id: CancellableId.repositoryWatch)]
 				)
 
 			case let .view(.addRepository(path)):
@@ -543,11 +564,12 @@ struct RepositoryListReducer {
 
 			case let .addRepository(path):
 				let normalized = normalizePath(path)
-				guard !state.trackedRepoPaths.contains(normalized) else {
+				let scan = Scan.addRepository(normalized)
+				guard !state.trackedRepoPaths.contains(normalized), !state.runningScans.contains(scan) else {
 					return .none
 				}
 
-				state.isScanning = true
+				state.runningScans.insert(scan)
 				return .run { [normalized] send in
 					let rows = await GitWorktreeScanner.listWorktrees(forRepo: normalized)
 					if rows.isEmpty {
@@ -557,10 +579,10 @@ struct RepositoryListReducer {
 						await send(.addRepositorySucceeded(rootPath: normalized, scanned: rows))
 					}
 				}
-				.cancellable(id: CancellableId.scan)
+				.cancellable(id: CancellableId.scan(scan))
 
 			case let .addRepositoryFailed(path):
-				state.isScanning = false
+				state.runningScans.remove(.addRepository(path))
 				let name = URL(fileURLWithPath: path).lastPathComponent
 				state.alert = AlertState {
 					TextState("Not a Valid Git Repository")
@@ -570,9 +592,14 @@ struct RepositoryListReducer {
 				return .none
 
 			case let .addRepositorySucceeded(rootPath, scanned):
-				state.isScanning = false
-				state.$trackedRepoPaths.withLock { $0.append(rootPath) }
+				state.runningScans.remove(.addRepository(rootPath))
+				// Checked again: the path may have become tracked while this scan ran, and a
+				// duplicate in `trackedRepoPaths` would be persisted and read back at every launch.
+				if !state.trackedRepoPaths.contains(rootPath) {
+					state.$trackedRepoPaths.withLock { $0.append(rootPath) }
+				}
 				if
+					state.repositoryGroups[id: rootPath] == nil,
 					let group = buildGroup(
 						rootPath: rootPath,
 						scanned: scanned,
@@ -589,11 +616,11 @@ struct RepositoryListReducer {
 			// MARK: - Full Scan (all tracked repos)
 
 			case .startScan:
-				// Don't interrupt an in-flight scan — let it complete.
-				// A concurrent second scan would cancel the first mid-flight via cancelInFlight:true,
-				// leaving some repos' groups never added. The cancelled scan also orphans git processes
-				// (withCheckedContinuation can't be cancelled), which compete with the new scan.
-				guard !state.isScanning else {
+				// Don't interrupt an in-flight full scan — let it complete. Restarting it would throw
+				// away the groups it has yet to report and start every repository's git over, for a
+				// result no fresher than the one already on its way. Other scans (an add, a group
+				// rescan) run under their own ids and do not hold this one back.
+				guard !state.runningScans.contains(.all) else {
 					return .none
 				}
 
@@ -608,7 +635,7 @@ struct RepositoryListReducer {
 					return .none
 				}
 
-				state.isScanning = true
+				state.runningScans.insert(.all)
 				let paths = Array(state.trackedRepoPaths)
 				// Permission checks deliberately don't hang off the scan: refreshRepositories
 				// routes through here, so every ⌘R used to re-run them (see .checkPermissions).
@@ -625,9 +652,9 @@ struct RepositoryListReducer {
 								await send(.didScanGroup(rootPath: rootPath, rows: rows))
 							}
 						}
-						await send(.scanCompleted)
+						await send(.scanCompleted(.all))
 					}
-					.cancellable(id: CancellableId.scan, cancelInFlight: true)
+					.cancellable(id: CancellableId.scan(.all), cancelInFlight: true)
 				)
 
 			// MARK: - Per-group scan (worktree added/removed)
@@ -639,63 +666,83 @@ struct RepositoryListReducer {
 				}
 				return rescanGroup(groupId, in: &state)
 
-			case let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(id: worktreePath, .worktreeDeleted)))):
-				let toRemove = state.terminalSessions
-					.filter { $0.repositoryPath == worktreePath }
-					.map(\.id)
-				for sessionId in toRemove {
-					state.terminalSessions.remove(id: sessionId)
-					state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: worktreePath)
-				}
-				state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
-				if state.terminalLayout?.activeRepositoryPath == worktreePath {
-					if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
+			case let .repositoryGroups(.element(
+				id: groupId,
+				action: .worktrees(.element(id: worktreePath, .worktreeDeleted(cleanup)))
+			)):
+				closeTerminalSessions(of: worktreePath, in: &state)
+				return .merge(
+					rescanGroup(groupId, in: &state),
+					// Not cancellable, and run here rather than in the row, which the rescan drops.
+					.run { send in
+						let warnings = await cleanup.run()
+						if !warnings.isEmpty {
+							await send(.worktreeRemovedWithWarnings(warnings.joined(separator: "\n\n")))
+						}
 					}
-					else {
-						state.terminalLayout = nil
-					}
+				)
+
+			case let .worktreeRemovedWithWarnings(message):
+				state.alert = AlertState {
+					TextState("Worktree Removed")
+				} actions: {
+					ButtonState(role: .cancel, action: .dismiss) { TextState("OK") }
+				} message: {
+					TextState("Worktree was removed successfully, but:\n\n\(message)")
 				}
-				return rescanGroup(groupId, in: &state)
+				return .none
 
 			// MARK: - Scan Results
 
 			case let .didScanGroup(rootPath, scanned):
-				if state.repositoryGroups[id: rootPath] != nil {
-					// Existing group: merge rows, preserving cached PR/ticket data
-					mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
-					openPendingWorktreeTerminals(inGroup: rootPath, state: &state)
-				}
-				else if !scanned.isEmpty {
-					// New group (e.g., from migration path on first launch)
-					if
-						let group = buildGroup(
-							rootPath: rootPath,
-							scanned: scanned,
-							collapsedPaths: Set(state.collapsedRepoPaths),
-							sortMode: state.sortMode,
-							groupSettings: state.groupSettings
-						)
-					{
-						state.repositoryGroups.append(group)
-						sortGroupsByTrackedOrder(in: &state)
+				if let group = state.repositoryGroups[id: rootPath] {
+					// A scan that finds no main repository failed; the merge keeps the rows then.
+					guard scanned.contains(where: { !$0.isWorktree }) else {
+						return .none
 					}
+
+					// A worktree the scan no longer lists is gone, removed from its row or in a
+					// terminal, and so is the directory its tabs' shells sit in.
+					let scannedPaths = Set(scanned.map(\.path))
+					for row in group.worktrees where !scannedPaths.contains(row.path) {
+						closeTerminalSessions(of: row.path, in: &state)
+					}
+					// Existing group: merge rows, preserving cached PR/ticket data
+					return .send(.repositoryGroups(.element(
+						id: rootPath,
+						action: .applyScannedRows(
+							scanned,
+							sortMode: state.sortMode,
+							settings: state.groupSettings[rootPath] ?? RepoGroupSettings()
+						)
+					)))
 				}
-				// Tabs restored at launch open the panel before the scan has found their rows, so
-				// the toolbar's button copies start out empty. Fill them in once the row is there —
-				// only then, so a rescan never overwrites a copy that may have an operation running.
+				// New group (e.g., from migration path on first launch). Only a tracked one: a scan
+				// still running when its group was removed or the list cleared must not bring it back.
 				if
-					let path = state.terminalLayout?.activeRepositoryPath,
-					state.terminalLayout?.gitActionsMenu == nil,
-					findRowState(for: path, in: state) != nil
+					state.trackedRepoPaths.contains(rootPath),
+					let group = buildGroup(
+						rootPath: rootPath,
+						scanned: scanned,
+						collapsedPaths: Set(state.collapsedRepoPaths),
+						sortMode: state.sortMode,
+						groupSettings: state.groupSettings
+					)
 				{
-					syncTerminalButtons(for: path, in: &state)
+					state.repositoryGroups.append(group)
+					sortGroupsByTrackedOrder(in: &state)
 				}
+				fillTerminalButtonsOnceRowIsScanned(in: &state)
 				return .none
 
-			case .scanCompleted,
-			     .scanFailed:
-				state.isScanning = false
+			case let .repositoryGroups(.element(id: groupId, action: .applyScannedRows)):
+				// The group has merged the rows by now: `forEach` runs it before this reducer.
+				openPendingWorktreeTerminals(inGroup: groupId, state: &state)
+				fillTerminalButtonsOnceRowIsScanned(in: &state)
+				return .none
+
+			case let .scanCompleted(scan):
+				state.runningScans.remove(scan)
 				return watchRepositories(in: &state)
 
 			case let .repositoriesChangedOnDisk(changes):
@@ -1310,15 +1357,17 @@ struct RepositoryListReducer {
 	}
 
 	/// Re-lists one group's worktrees, for a worktree added or removed. The rows are merged, so
-	/// their loaded state survives.
+	/// their loaded state survives. A rescan of the same group still running is cancelled: this
+	/// one lists the worktrees later, and the two would otherwise end each other's `runningScans`.
 	private func rescanGroup(_ groupId: String, in state: inout State) -> EffectOf<RepositoryListReducer> {
-		state.isScanning = true
+		let scan = Scan.group(groupId)
+		state.runningScans.insert(scan)
 		return .run { send in
 			let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
 			await send(.didScanGroup(rootPath: groupId, rows: rows))
-			await send(.scanCompleted)
+			await send(.scanCompleted(scan))
 		}
-		.cancellable(id: CancellableId.scan)
+		.cancellable(id: CancellableId.scan(scan), cancelInFlight: true)
 	}
 
 	/// Posts a notification when a session starts waiting at Claude's prompt, and withdraws it once
@@ -1389,8 +1438,11 @@ struct RepositoryListReducer {
 /// completion order, which is otherwise arbitrary. A group whose path isn't tracked (it cannot
 /// normally happen) sorts last, alphabetically, rather than silently jumping to the front.
 private func sortGroupsByTrackedOrder(in state: inout RepositoryListReducer.State) {
+	// Tolerates a path tracked twice, which two adds of the same repository in flight used to
+	// persist: the first place wins.
 	let rank = Dictionary(
-		uniqueKeysWithValues: state.trackedRepoPaths.enumerated().map { ($0.element, $0.offset) }
+		state.trackedRepoPaths.enumerated().map { ($0.element, $0.offset) },
+		uniquingKeysWith: { first, _ in first }
 	)
 	state.repositoryGroups.sort { lhs, rhs in
 		let lhsRank = rank[lhs.id] ?? .max
@@ -1592,21 +1644,18 @@ private func buildGroup(
 	)
 }
 
-private func mergeGroupRows(
-	into state: inout RepositoryListReducer.State,
-	rootPath: String,
-	scanned: [ScannedRepository]
+/// Run by `RepoGroupReducer.Action.applyScannedRows`, so its `forEach` sees the rows that went.
+func mergeGroupRows(
+	into group: inout RepoGroupReducer.State,
+	scanned: [ScannedRepository],
+	sortMode: SortMode,
+	rowSettings: RepoGroupSettings
 ) {
-	guard let group = state.repositoryGroups[id: rootPath] else {
-		return
-	}
-
 	var currentByPath: [String: RepositoryRowReducer.State] = [group.header.path: group.header]
 	for row in group.worktrees {
 		currentByPath[row.path] = row
 	}
 
-	let rowSettings = state.groupSettings[rootPath] ?? RepoGroupSettings()
 	let effectiveMobileSubfolder = (rowSettings.supportsIOS && rowSettings.supportsAndroid)
 		? rowSettings.mobileSubfolderPath
 		: ""
@@ -1645,9 +1694,9 @@ private func mergeGroupRows(
 		return
 	}
 
-	let worktrees = sortRepositories(updated.filter(\.isWorktree), sortMode: state.sortMode)
-	state.repositoryGroups[id: rootPath]?.header = newHeader
-	state.repositoryGroups[id: rootPath]?.worktrees = IdentifiedArrayOf(uniqueElements: worktrees)
+	let worktrees = sortRepositories(updated.filter(\.isWorktree), sortMode: sortMode)
+	group.header = newHeader
+	group.worktrees = IdentifiedArrayOf(uniqueElements: worktrees)
 }
 
 // MARK: - Sorting
@@ -1741,6 +1790,43 @@ private func reopenedTerminalLayout(in state: inout RepositoryListReducer.State)
 /// recently, or the first one when none of the remaining tabs has been on screen yet.
 private func mostRecentRemainingSession(in state: RepositoryListReducer.State) -> TerminalSession? {
 	state.terminalLayout?.mostRecent(among: state.terminalSessions) ?? state.terminalSessions.first
+}
+
+/// Closes the tabs of a worktree that is gone: their shells sit in a directory that no longer
+/// exists. The panel moves to another repository's tab, or hides when none is left.
+private func closeTerminalSessions(
+	of repositoryPath: String,
+	in state: inout RepositoryListReducer.State
+) {
+	let toRemove = state.terminalSessions
+		.filter { $0.repositoryPath == repositoryPath }
+		.map(\.id)
+	for sessionId in toRemove {
+		state.terminalSessions.remove(id: sessionId)
+		state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: repositoryPath)
+	}
+	state.terminalLayout?.lastActiveSessionByRepo[repositoryPath] = nil
+	if state.terminalLayout?.activeRepositoryPath == repositoryPath {
+		if let next = mostRecentRemainingSession(in: state) {
+			activateOtherRepository(next, in: &state)
+		}
+		else {
+			state.terminalLayout = nil
+		}
+	}
+}
+
+/// Tabs restored at launch open the panel before the scan has found their rows, so the toolbar's
+/// button copies start out empty. Fill them in once the row is there — only then, so a rescan
+/// never overwrites a copy that may have an operation running.
+private func fillTerminalButtonsOnceRowIsScanned(in state: inout RepositoryListReducer.State) {
+	if
+		let path = state.terminalLayout?.activeRepositoryPath,
+		state.terminalLayout?.gitActionsMenu == nil,
+		findRowState(for: path, in: state) != nil
+	{
+		syncTerminalButtons(for: path, in: &state)
+	}
 }
 
 /// Switch the panel to a session of a different repository after the active repository's last

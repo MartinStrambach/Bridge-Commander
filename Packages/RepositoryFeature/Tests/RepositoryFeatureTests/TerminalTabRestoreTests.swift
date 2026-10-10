@@ -297,6 +297,7 @@ struct TerminalTabRestoreTests {
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
 		}
 		store.exhaustivity = .off
+		store.track("/repos/alpha", "/repos/beta")
 		return store
 	}
 }

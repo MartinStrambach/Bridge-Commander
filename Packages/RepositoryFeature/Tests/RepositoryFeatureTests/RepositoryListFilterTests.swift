@@ -132,6 +132,7 @@ struct RepositoryListFilterTests {
 			$0[LastOpenedDirectoryClient.self].load = { nil }
 		}
 		store.exhaustivity = .off
+		store.track("/repos/alpha", "/repos/beta")
 
 		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),

@@ -252,6 +252,7 @@ struct TerminalStartupCommandTests {
 			$0[LastOpenedDirectoryClient.self].load = { nil }
 		}
 		store.exhaustivity = .off
+		store.track("/repos/alpha", "/repos/beta", "/repos/gamma")
 		return store
 	}
 
