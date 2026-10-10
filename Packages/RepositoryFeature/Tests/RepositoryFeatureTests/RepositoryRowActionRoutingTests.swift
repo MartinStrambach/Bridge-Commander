@@ -100,35 +100,22 @@ struct RepositoryRowActionRoutingTests {
 
 	// MARK: - Worktree lifecycle
 
-	@Test("a removed worktree tells the list to rescan")
+	@Test("a removed worktree hands its cleanup to the list at once")
 	func removedWorktreeReportsDeletion() async {
 		let store = makeStore(worktreeRow())
-
-		await store.send(.deleteWorktreeButton(.didRemoveSuccessfully))
-		await store.receive(\.worktreeDeleted)
-		await store.finish()
-	}
-
-	@Test("a removal with warnings rescans only once its alert is dismissed")
-	func removalWarningWaitsForDismissal() async {
-		let store = makeStore(worktreeRow())
 		store.exhaustivity = .on
+		let cleanup = WorktreeRemovalCleanup(
+			path: "/repos/worktrees/app/feature",
+			branchToDelete: nil,
+			deletesDerivedData: true
+		)
 
-		// Rescanning now would rebuild the rows and take the alert down before it is read.
-		await store.send(.deleteWorktreeButton(.didRemoveSuccessfullyWithWarning("branch kept"))) {
-			$0.deleteWorktreeButton.removalWarningAlert = AlertState {
-				TextState("Worktree Removed")
-			} actions: {
-				ButtonState(role: .cancel) { TextState("OK") }
-			} message: {
-				TextState("Worktree was removed successfully, but:\n\nbranch kept")
-			}
+		// No alert on the row: the watch's rescan may drop the row while one is up.
+		await store.send(.deleteWorktreeButton(.didRemove(cleanup)))
+		await store.receive {
+			guard case let .worktreeDeleted(reported) = $0 else { return false }
+			return reported == cleanup
 		}
-
-		await store.send(.deleteWorktreeButton(.removalWarningAlert(.dismiss))) {
-			$0.deleteWorktreeButton.removalWarningAlert = nil
-		}
-		await store.receive(\.worktreeDeleted)
 	}
 
 	@Test("a failed removal does not rescan")

@@ -258,7 +258,8 @@ struct RepositoryRowReducer {
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
 		case createWorktreeButton(CreateWorktreeButtonReducer.Action)
 		case gitActionsMenu(GitActionsMenuReducer.Action)
-		case worktreeDeleted
+		/// The list closes the worktree's terminal tabs, rescans the group and runs `cleanup`.
+		case worktreeDeleted(WorktreeRemovalCleanup)
 		/// The list rescans the group, then opens `path` in the built-in terminal when `launch`
 		/// asks for it.
 		case worktreeCreated(path: String, launch: WorktreeTerminalLaunch?)
@@ -415,15 +416,12 @@ struct RepositoryRowReducer {
 				return .none
 
 			case let .deleteWorktreeButton(action):
-				switch action {
-				// On the warning path the rescan waits for the alert's dismissal —
-				// refreshing immediately would rebuild the rows and destroy the
-				// alert before the user can read it.
-				case .didRemoveSuccessfully, .removalWarningAlert(.dismiss):
-					return .send(.worktreeDeleted)
-				default:
-					return .none
+				// Reported at once, before the watch's rescan takes this row (and anything it
+				// would present) away: the list cleans up and shows any warning itself.
+				if case let .didRemove(cleanup) = action {
+					return .send(.worktreeDeleted(cleanup))
 				}
+				return .none
 
 			case let .createWorktreeButton(action):
 				if case let .didCreateSuccessfully(_, worktreePath, launch) = action {

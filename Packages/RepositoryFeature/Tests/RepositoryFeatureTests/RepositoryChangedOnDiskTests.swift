@@ -194,10 +194,10 @@ struct RepositoryChangedOnDiskTests {
 		let store = makeListStore(changes: changes, watched: watched)
 
 		await scanAlpha(store)
-		await store.send(.scanCompleted)
+		await store.send(.scanCompleted(.all))
 		await waitUntil { !watched.value.isEmpty }
 		await scanAlpha(store)
-		await store.send(.scanCompleted)
+		await store.send(.scanCompleted(.all))
 
 		#expect(store.state.watchedRepositoryPaths == ["/repos/alpha", "/repos/alpha-one"])
 		await store.send(.view(.onDisappear))
@@ -212,10 +212,10 @@ struct RepositoryChangedOnDiskTests {
 		let store = makeListStore(changes: changes, watched: watched)
 
 		await scanAlpha(store)
-		await store.send(.scanCompleted)
+		await store.send(.scanCompleted(.all))
 		await waitUntil { watched.value.count == 1 }
 		await scanAlpha(store, extraWorktree: "/repos/alpha-two")
-		await store.send(.scanCompleted)
+		await store.send(.scanCompleted(.all))
 		await waitUntil { watched.value.count == 2 }
 
 		#expect(watched.value == [
@@ -242,7 +242,7 @@ struct RepositoryChangedOnDiskTests {
 				branchName: "main"
 			),
 		]))
-		await store.send(.scanCompleted)
+		await store.send(.scanCompleted(.all))
 		await waitUntil { watched.value.count == 1 }
 
 		await store.send(.repositoryGroups(.element(id: "/repos/alpha", action: .remove)))
@@ -262,7 +262,7 @@ struct RepositoryChangedOnDiskTests {
 		let store = makeListStore(changes: changes, watched: LockIsolated([]))
 
 		await scanAlpha(store)
-		await store.send(.scanCompleted)
+		await store.send(.scanCompleted(.all))
 		continuation.yield([GitRepositoryChange(repositoryPath: "/repos/alpha-one", kinds: [.status, .stash])])
 
 		await store.receive(\.repositoriesChangedOnDisk)
@@ -325,7 +325,7 @@ struct RepositoryChangedOnDiskTests {
 		let store = makeListStore(changes: changes, watched: LockIsolated([]))
 
 		await scanAlpha(store)
-		await store.send(.scanCompleted)
+		await store.send(.scanCompleted(.all))
 		continuation.yield([GitRepositoryChange(repositoryPath: "/repos/alpha", kinds: .worktreeList)])
 
 		await store.receive(\.repositoriesChangedOnDisk)
@@ -393,6 +393,7 @@ struct RepositoryChangedOnDiskTests {
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
 		}
 		store.exhaustivity = .off
+		store.track("/repos/alpha", "/repos/beta")
 		return store
 	}
 

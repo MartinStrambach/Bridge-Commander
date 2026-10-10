@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import GitCore
 import Settings
 import TerminalFeature
 
@@ -22,6 +23,10 @@ struct RepoGroupReducer {
 		case toggleCollapse
 		/// Signals intent to remove this group. RepositoryListReducer intercepts and handles removal.
 		case remove
+		/// A scan's rows, merged into the loaded ones. Done here rather than by the list writing
+		/// `worktrees`: only a change made in this reducer lets `forEach` cancel the effects of the
+		/// rows the scan dropped.
+		case applyScannedRows([ScannedRepository], sortMode: SortMode, settings: RepoGroupSettings)
 		/// Delegates to the header row reducer.
 		case header(RepositoryRowReducer.Action)
 		/// Delegates to child worktree row reducers.
@@ -36,6 +41,10 @@ struct RepoGroupReducer {
 			switch action {
 			case .toggleCollapse:
 				state.isCollapsed.toggle()
+				return .none
+
+			case let .applyScannedRows(scanned, sortMode, settings):
+				mergeGroupRows(into: &state, scanned: scanned, sortMode: sortMode, rowSettings: settings)
 				return .none
 
 			case .header,

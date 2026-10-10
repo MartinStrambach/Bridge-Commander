@@ -99,6 +99,7 @@ struct CreatedWorktreeTerminalTests {
 			$0[LastOpenedDirectoryClient.self].load = { nil }
 		}
 		store.exhaustivity = .off
+		store.track("/repos/alpha")
 		return store
 	}
 
@@ -112,6 +113,8 @@ struct CreatedWorktreeTerminalTests {
 			rootPath: "/repos/alpha",
 			rows: [scanned("/repos/alpha", isWorktree: false)] + worktrees.map { scanned($0, isWorktree: true) }
 		))
+		// A rescan's rows reach the group in an action of its own (`applyScannedRows`).
+		await store.skipReceivedActions(strict: false)
 	}
 
 	private func scanned(_ path: String, isWorktree: Bool) -> ScannedRepository {

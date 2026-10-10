@@ -19,21 +19,17 @@ struct DeleteWorktreeButtonReducer {
 		var confirmationSheet: DeleteWorktreeConfirmationReducer.State?
 		@Presents
 		var errorAlert: AlertState<Action.ErrorAlert>?
-		@Presents
-		var removalWarningAlert: AlertState<Action.RemovalWarningAlert>?
 	}
 
 	enum Action {
 		case showConfirmation
 		case confirmationSheet(PresentationAction<DeleteWorktreeConfirmationReducer.Action>)
 		case errorAlert(PresentationAction<ErrorAlert>)
-		case removalWarningAlert(PresentationAction<RemovalWarningAlert>)
-		case didRemoveSuccessfully
-		case didRemoveSuccessfullyWithWarning(String)
+		/// `git worktree remove` succeeded; the row hands what is left to clean up to the list.
+		case didRemove(WorktreeRemovalCleanup)
 		case didFailWithError(String)
 
 		enum ErrorAlert: Equatable {}
-		enum RemovalWarningAlert: Equatable {}
 	}
 
 	var body: some Reducer<State, Action> {
@@ -69,29 +65,11 @@ struct DeleteWorktreeButtonReducer {
 						await send(.didFailWithError(error.localizedDescription))
 						return
 					}
-					var warnings: [String] = []
-					if let branchToDelete {
-						do {
-							try await GitLocalBranchDeleter.deleteBranch(branchToDelete)
-						}
-						catch {
-							warnings.append(error.localizedDescription)
-						}
-					}
-					if deleteDerivedData {
-						do {
-							try XcodeDerivedDataHelper.deleteDerivedData(forWorktreePath: path)
-						}
-						catch {
-							warnings.append("DerivedData cleanup failed: \(error.localizedDescription)")
-						}
-					}
-					if warnings.isEmpty {
-						await send(.didRemoveSuccessfully)
-					}
-					else {
-						await send(.didRemoveSuccessfullyWithWarning(warnings.joined(separator: "\n\n")))
-					}
+					await send(.didRemove(WorktreeRemovalCleanup(
+						path: path,
+						branchToDelete: branchToDelete,
+						deletesDerivedData: deleteDerivedData
+					)))
 				}
 
 			case .confirmationSheet(.presented(.cancelTapped)):
@@ -101,19 +79,8 @@ struct DeleteWorktreeButtonReducer {
 			case .confirmationSheet:
 				return .none
 
-			case .didRemoveSuccessfully:
+			case .didRemove:
 				state.isRemoving = false
-				return .none
-
-			case let .didRemoveSuccessfullyWithWarning(message):
-				state.isRemoving = false
-				state.removalWarningAlert = AlertState {
-					TextState("Worktree Removed")
-				} actions: {
-					ButtonState(role: .cancel) { TextState("OK") }
-				} message: {
-					TextState("Worktree was removed successfully, but:\n\n\(message)")
-				}
 				return .none
 
 			case let .didFailWithError(error):
@@ -131,15 +98,44 @@ struct DeleteWorktreeButtonReducer {
 
 			case .errorAlert:
 				return .none
-
-			case .removalWarningAlert:
-				return .none
 			}
 		}
 		.ifLet(\.$confirmationSheet, action: \.confirmationSheet) {
 			DeleteWorktreeConfirmationReducer()
 		}
 		.ifLet(\.$errorAlert, action: \.errorAlert)
-		.ifLet(\.$removalWarningAlert, action: \.removalWarningAlert)
+	}
+}
+
+/// What is left once `git worktree remove` has succeeded: the local branch and DerivedData. The
+/// list runs it (`RepositoryRowReducer.Action.worktreeDeleted`), not the row: git deleting the
+/// worktree's admin directory makes the watch rescan the group, and the rescan drops the row and
+/// cancels its effects, possibly before a slow DerivedData removal is done.
+struct WorktreeRemovalCleanup: Equatable, Sendable {
+	let path: String
+	/// Resolved before the removal, while the worktree still existed; nil keeps the branch.
+	let branchToDelete: GitLocalBranchDeleter.ResolvedBranch?
+	let deletesDerivedData: Bool
+
+	/// What could not be cleaned up, as messages for the user; empty when all of it was.
+	func run() async -> [String] {
+		var warnings: [String] = []
+		if let branchToDelete {
+			do {
+				try await GitLocalBranchDeleter.deleteBranch(branchToDelete)
+			}
+			catch {
+				warnings.append(error.localizedDescription)
+			}
+		}
+		if deletesDerivedData {
+			do {
+				try XcodeDerivedDataHelper.deleteDerivedData(forWorktreePath: path)
+			}
+			catch {
+				warnings.append("DerivedData cleanup failed: \(error.localizedDescription)")
+			}
+		}
+		return warnings
 	}
 }
