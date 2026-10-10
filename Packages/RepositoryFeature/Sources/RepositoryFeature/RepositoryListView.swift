@@ -19,6 +19,11 @@ public extension SharedReaderKey where Self == AppStorageKey<AppSection> {
 
 /// Public wrapper that self-initialises the stores. Used by BridgeCommanderApp.
 ///
+/// The stores live as long as the window, like the terminal panes beside them: closing the
+/// window saves the tabs and hangs up their shells, and the window opened next starts afresh and
+/// restores them. They are `@State`, so a re-created view keeps its window's stores; the app
+/// allows one main window at a time, since each one's stores would scan and write the same files.
+///
 /// Hosts the window's two sections, switched by the `AppSectionSwitcher` that heads each one.
 /// The repository list stays mounted while the Homer console is shown — like it does under the
 /// terminal overlay — so switching back costs no rescan and its terminals keep running; it is
@@ -28,8 +33,16 @@ public extension SharedReaderKey where Self == AppStorageKey<AppSection> {
 /// restored at launch) brings the repositories back, so the console never sits over a terminal
 /// that still has keyboard focus.
 public struct RootRepositoryView: View {
-	private let store: StoreOf<RepositoryListReducer>
-	private let homerStore: StoreOf<HomerConsoleReducer>
+	@State
+	private var store = Store(
+		initialState: RepositoryListReducer.State(),
+		reducer: { RepositoryListReducer() }
+	)
+	@State
+	private var homerStore = Store(
+		initialState: HomerConsoleReducer.State(),
+		reducer: { HomerConsoleReducer() }
+	)
 
 	@Shared(.selectedAppSection)
 	private var section = AppSection.repositories
@@ -38,16 +51,7 @@ public struct RootRepositoryView: View {
 	@Environment(\.uiFontScale)
 	private var uiFontScale
 
-	public init() {
-		self.store = Store(
-			initialState: RepositoryListReducer.State(),
-			reducer: { RepositoryListReducer() }
-		)
-		self.homerStore = Store(
-			initialState: HomerConsoleReducer.State(),
-			reducer: { HomerConsoleReducer() }
-		)
-	}
+	public init() {}
 
 	public var body: some View {
 		ZStack {
