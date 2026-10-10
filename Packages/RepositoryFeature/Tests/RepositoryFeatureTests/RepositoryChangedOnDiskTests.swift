@@ -233,7 +233,7 @@ struct RepositoryChangedOnDiskTests {
 		let store = makeListStore(changes: changes, watched: watched)
 
 		await scanAlpha(store)
-		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+		await store.sendScan(rootPath: "/repos/beta", rows: [
 			ScannedRepository(
 				path: "/repos/beta",
 				name: "beta",
@@ -241,7 +241,7 @@ struct RepositoryChangedOnDiskTests {
 				isWorktree: false,
 				branchName: "main"
 			),
-		]))
+		])
 		await store.send(.scanCompleted)
 		await waitUntil { watched.value.count == 1 }
 
@@ -429,7 +429,7 @@ struct RepositoryChangedOnDiskTests {
 				branchName: "feature-two"
 			)
 		}
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			ScannedRepository(
 				path: "/repos/alpha",
 				name: "alpha",
@@ -444,6 +444,6 @@ struct RepositoryChangedOnDiskTests {
 				isWorktree: true,
 				branchName: "feature-one"
 			),
-		] + (extra.map { [$0] } ?? [])))
+		] + (extra.map { [$0] } ?? []))
 	}
 }

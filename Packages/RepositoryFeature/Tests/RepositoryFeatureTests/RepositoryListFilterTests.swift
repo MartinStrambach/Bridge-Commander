@@ -133,17 +133,17 @@ struct RepositoryListFilterTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-fix", name: "alpha-fix", branch: "MOB-123_fix"),
 			worktree("/repos/alpha-other", name: "alpha-other", branch: "MOB-999_other"),
 			worktree("/repos/alpha-release", name: "alpha-release", branch: "release-1"),
-		]))
-		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+		])
+		await store.sendScan(rootPath: "/repos/beta", rows: [
 			mainRepo("/repos/beta", name: "beta"),
 			worktree("/repos/beta-cleanup", name: "beta-cleanup", branch: "cleanup"),
 			worktree("/repos/beta-release", name: "beta-release", branch: "release-2"),
-		]))
+		])
 
 		return store
 	}

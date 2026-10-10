@@ -257,12 +257,12 @@ struct TerminalStartupCommandTests {
 
 	/// alpha (with one worktree), beta, and gamma — gamma has no settings at all.
 	private func scanGroups(_ store: TestStoreOf<RepositoryListReducer>) async {
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			scanned("/repos/alpha", isWorktree: false),
 			scanned("/repos/alpha-fix", isWorktree: true),
-		]))
-		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [scanned("/repos/beta", isWorktree: false)]))
-		await store.send(.didScanGroup(rootPath: "/repos/gamma", rows: [scanned("/repos/gamma", isWorktree: false)]))
+		])
+		await store.sendScan(rootPath: "/repos/beta", rows: [scanned("/repos/beta", isWorktree: false)])
+		await store.sendScan(rootPath: "/repos/gamma", rows: [scanned("/repos/gamma", isWorktree: false)])
 	}
 
 	/// Opens the terminal panel on a group's root, the way the row's terminal button does.

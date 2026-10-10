@@ -128,10 +128,10 @@ struct RepositoryListTerminalFilterTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			scanned("/repos/alpha", name: "alpha", branch: "master", isWorktree: false),
 			scanned("/repos/alpha-fix", name: "alpha-fix", branch: "MOB-123_fix", isWorktree: true),
-		]))
+		])
 		let before = store.state.repositoryGroups
 		#expect(!store.state.showsActiveTerminalsOnly)
 

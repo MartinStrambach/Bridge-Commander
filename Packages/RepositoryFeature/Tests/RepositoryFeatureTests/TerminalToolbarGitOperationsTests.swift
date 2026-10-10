@@ -274,7 +274,7 @@ struct TerminalToolbarGitOperationsTests {
 		}
 		store.exhaustivity = .off
 		for name in ["alpha", "beta"] {
-			await store.send(.didScanGroup(rootPath: "/repos/\(name)", rows: [
+			await store.sendScan(rootPath: "/repos/\(name)", rows: [
 				ScannedRepository(
 					path: "/repos/\(name)",
 					name: name,
@@ -282,7 +282,7 @@ struct TerminalToolbarGitOperationsTests {
 					isWorktree: false,
 					branchName: "master"
 				),
-			]))
+			])
 		}
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
 		return store

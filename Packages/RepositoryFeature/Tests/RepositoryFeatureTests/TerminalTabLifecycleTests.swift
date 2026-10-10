@@ -212,8 +212,8 @@ struct TerminalTabLifecycleTests {
 			$0[LastOpenedDirectoryClient.self].load = { nil }
 		}
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [mainRepo("/repos/alpha")]))
-		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [mainRepo("/repos/beta")]))
+		await store.sendScan(rootPath: "/repos/alpha", rows: [mainRepo("/repos/alpha")])
+		await store.sendScan(rootPath: "/repos/beta", rows: [mainRepo("/repos/beta")])
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
 		return store
