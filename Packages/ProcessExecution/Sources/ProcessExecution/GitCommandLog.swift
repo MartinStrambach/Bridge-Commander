@@ -6,23 +6,54 @@ import Foundation
 /// Rows poll status, log and diff for every repository on each refresh, so read-only commands are
 /// recorded only when they fail — unless Settings asks for all of them. Commands that change
 /// something (push, pull, fetch, merge, checkout, stash, commit, worktree add, …) are always
-/// recorded, with their exit code, and stderr when they fail.
+/// recorded, with their exit code, and stderr when they fail. A cancelled command is not a failure:
+/// it is how a superseded refresh ends.
 nonisolated enum GitCommandLog {
 	private static let maximumArgumentLength = 200
 	private static let maximumErrorLength = 2000
 
+	struct Entry: Equatable {
+		let category: ActivityLogCategory
+		let message: String
+		let details: String?
+	}
+
 	static func record(arguments: [String], repositoryPath: String, result: ProcessResult, duration: Duration) {
-		let readOnly = isReadOnly(arguments)
-		// Exit code 1 is how read-only probes answer "no" (`rev-parse --verify --quiet`,
-		// `merge-base --is-ancestor`, `config --get`, `check-ignore`); git's own failures are 128.
-		let failed = readOnly ? !(0 ... 1).contains(result.exitCode) : !result.success
-		guard !readOnly || failed || ActivityLog.includesReadOnlyGitCommands else {
+		guard let entry = entry(
+			arguments: arguments,
+			repositoryPath: repositoryPath,
+			result: result,
+			duration: duration,
+			includesReadOnly: ActivityLog.includesReadOnlyGitCommands
+		) else {
 			return
 		}
 
-		ActivityLog.shared.record(
-			failed ? .error : .git,
-			"git \(commandLine(arguments)) (in \(repositoryPath)) → exit \(result.exitCode) in \(duration.activityLogDescription)",
+		ActivityLog.shared.record(entry.category, entry.message, details: entry.details)
+	}
+
+	/// What `record` writes, or nil when the command is not recorded.
+	static func entry(
+		arguments: [String],
+		repositoryPath: String,
+		result: ProcessResult,
+		duration: Duration,
+		includesReadOnly: Bool
+	) -> Entry? {
+		let readOnly = isReadOnly(arguments)
+		// Exit code 1 is how read-only probes answer "no" (`rev-parse --verify --quiet`,
+		// `merge-base --is-ancestor`, `config --get`, `check-ignore`); git's own failures are 128.
+		// A cancelled command exits with SIGTERM's 15: counted as a failure, every superseded
+		// refresh left an error in the log.
+		let failed = !result.wasCancelled && (readOnly ? !(0 ... 1).contains(result.exitCode) : !result.success)
+		guard !readOnly || failed || includesReadOnly else {
+			return nil
+		}
+
+		let outcome = result.wasCancelled ? "cancelled" : "exit \(result.exitCode)"
+		return Entry(
+			category: failed ? .error : .git,
+			message: "git \(commandLine(arguments)) (in \(repositoryPath)) → \(outcome) in \(duration.activityLogDescription)",
 			details: failed ? truncated(result.trimmedError, to: maximumErrorLength) : nil
 		)
 	}

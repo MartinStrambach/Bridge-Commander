@@ -7,6 +7,9 @@ public nonisolated struct ProcessResult: Sendable {
 	public let exitCode: Int32
 	public let output: Data
 	public let error: Data
+	/// The task was cancelled and the process was never launched, or was terminated for it
+	/// (`ProcessCancellation.terminate`). Its exit code and output say nothing about the command.
+	public let wasCancelled: Bool
 
 	public var outputString: String {
 		String(data: output, encoding: .utf8) ?? ""
@@ -33,6 +36,18 @@ public nonisolated extension ProcessResult {
 	}
 }
 
+/// What `ProcessRunner.run` does with its process when the calling task is cancelled.
+public nonisolated enum ProcessCancellation: Sendable {
+	/// A task already cancelled does not launch it; one cancelled while it runs terminates it
+	/// (SIGTERM). Either way the result is `wasCancelled`. For commands that only read: a
+	/// superseded refresh should not keep running, competing with the next one.
+	case terminate
+	/// Launched and run to the end whether or not the task is cancelled. For commands that change
+	/// something: terminated half-way, `stash -u`, a pull or a merge can leave the repository half
+	/// done, and an `--abort` run as cleanup after a cancellation must still happen.
+	case finish
+}
+
 /// Helper for running shell processes with proper pipe handling to prevent buffer overflow
 public nonisolated enum ProcessRunner {
 
@@ -42,13 +57,21 @@ public nonisolated enum ProcessRunner {
 	///   - arguments: Command line arguments
 	///   - currentDirectory: Working directory (optional)
 	///   - environment: Environment variables (optional)
+	///   - cancellation: What a cancellation of the calling task does to the process
 	/// - Returns: ProcessResult containing exit code and captured streams
 	public static func run(
 		executableURL: URL,
 		arguments: [String],
 		currentDirectory: URL? = nil,
-		environment: [String: String]? = nil
+		environment: [String: String]? = nil,
+		cancellation: ProcessCancellation = .terminate
 	) async -> ProcessResult {
+		// `withTaskCancellationHandler` calls `onCancel` at once in a task already cancelled, before
+		// the process is launched, so it found nothing running and the process then ran to the end.
+		if cancellation == .terminate, Task.isCancelled {
+			return ProcessResult(exitCode: SIGTERM, output: Data(), error: Data(), wasCancelled: true)
+		}
+
 		let process = Process()
 		process.executableURL = executableURL
 		process.arguments = arguments
@@ -96,7 +119,10 @@ public nonisolated enum ProcessRunner {
 				// appended it yet: under load a `git status` succeeded with empty output (a row lost
 				// its changes and showed "No remote"), and longer output lost a chunk from the middle.
 				process.terminationHandler = { proc in
-					completion.processExited(with: proc.terminationStatus)
+					completion.processExited(
+						with: proc.terminationStatus,
+						bySignal: proc.terminationReason == .uncaughtSignal
+					)
 					// A child the process left running can hold a pipe open long after it exits; the
 					// result then goes without what it writes. Only `completion` is captured: holding
 					// the pipes here kept every read end open for the whole timeout, hundreds of
@@ -118,6 +144,11 @@ public nonisolated enum ProcessRunner {
 
 				do {
 					try process.run()
+					// A cancellation that landed after the check above but before the launch found
+					// nothing to terminate.
+					if completion.processLaunched() {
+						process.terminate()
+					}
 				}
 				catch {
 					// A launch that fails (e.g. the working directory of a just-deleted worktree is gone)
@@ -135,7 +166,8 @@ public nonisolated enum ProcessRunner {
 					completion.launchFailed(with: ProcessResult(
 						exitCode: -1,
 						output: Data(),
-						error: "Failed to start process: \(error.localizedDescription)".data(using: .utf8) ?? Data()
+						error: "Failed to start process: \(error.localizedDescription)".data(using: .utf8) ?? Data(),
+						wasCancelled: false
 					))
 				}
 			}
@@ -143,7 +175,7 @@ public nonisolated enum ProcessRunner {
 			// When the Swift task is cancelled, terminate the process immediately.
 			// Without this, the process runs to completion as an orphan, competing
 			// with subsequent scans for system resources and causing git failures.
-			guard process.isRunning else {
+			guard cancellation == .terminate, completion.terminationRequested(), process.isRunning else {
 				return
 			}
 
@@ -175,6 +207,9 @@ public nonisolated enum ProcessRunner {
 	}
 
 	/// Convenience method for running git commands
+	///
+	/// A read-only command is terminated when the task is cancelled; one that changes something
+	/// runs to the end (`ProcessCancellation`).
 	/// - Parameters:
 	///   - arguments: Git command arguments (e.g., ["status", "--short"])
 	///   - repositoryPath: Path to the repository
@@ -188,7 +223,8 @@ public nonisolated enum ProcessRunner {
 			executableURL: resolvedGitExecutable.url,
 			arguments: arguments,
 			currentDirectory: URL(filePath: repositoryPath),
-			environment: EnvironmentHelper.setupEnvironment()
+			environment: EnvironmentHelper.setupEnvironment(),
+			cancellation: GitCommandLog.isReadOnly(arguments) ? .terminate : .finish
 		)
 		GitCommandLog.record(
 			arguments: arguments,
@@ -241,7 +277,10 @@ nonisolated final class ProcessCompletion: Sendable {
 	private struct State {
 		var continuation: CheckedContinuation<ProcessResult, Never>?
 		var exitCode: Int32?
+		var exitedBySignal = false
 		var openPipes = 2
+		var launched = false
+		var terminationRequested = false
 	}
 
 	private let output: PipeDataCollector
@@ -264,10 +303,29 @@ nonisolated final class ProcessCompletion: Sendable {
 		}
 	}
 
-	func processExited(with exitCode: Int32) {
+	func processExited(with exitCode: Int32, bySignal: Bool = false) {
 		finish { state in
 			state.exitCode = exitCode
+			state.exitedBySignal = bySignal
 			return state.openPipes == 0
+		}
+	}
+
+	/// The task was cancelled. Returns whether the process has been launched, so terminating it is
+	/// up to the caller; otherwise `processLaunched()` reports it.
+	func terminationRequested() -> Bool {
+		state.withLock { state in
+			state.terminationRequested = true
+			return state.launched
+		}
+	}
+
+	/// Returns whether the task was cancelled before the launch, so the process has to be terminated
+	/// now. Exactly one of this and `terminationRequested()` sees the other's flag.
+	func processLaunched() -> Bool {
+		state.withLock { state in
+			state.launched = true
+			return state.terminationRequested
 		}
 	}
 
@@ -289,22 +347,24 @@ nonisolated final class ProcessCompletion: Sendable {
 	/// Returns whether this call resumed.
 	@discardableResult
 	private func finish(_ update: (inout State) -> Bool) -> Bool {
-		let ready: (CheckedContinuation<ProcessResult, Never>, Int32)? = state.withLock { state in
+		let ready: (CheckedContinuation<ProcessResult, Never>, Int32, Bool)? = state.withLock { state in
 			guard update(&state), let continuation = state.continuation, let exitCode = state.exitCode else {
 				return nil
 			}
 
 			state.continuation = nil
-			return (continuation, exitCode)
+			// A process that exited by itself before the termination reached it has a real result.
+			return (continuation, exitCode, state.terminationRequested && state.exitedBySignal)
 		}
-		guard let (continuation, exitCode) = ready else {
+		guard let (continuation, exitCode, wasCancelled) = ready else {
 			return false
 		}
 
 		continuation.resume(returning: ProcessResult(
 			exitCode: exitCode,
 			output: output.getData(),
-			error: error.getData()
+			error: error.getData(),
+			wasCancelled: wasCancelled
 		))
 		return true
 	}
