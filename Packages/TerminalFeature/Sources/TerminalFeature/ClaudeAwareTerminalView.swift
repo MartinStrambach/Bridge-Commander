@@ -1,54 +1,59 @@
 import AppKit
 import Foundation
 import SwiftTerm
+import Synchronization
 
-/// A terminal pane that reports whether it is waiting for the user at Claude Code's prompt.
+/// A terminal pane that reports whether the program in it — Claude Code, or anything else that
+/// reports its status — is waiting for the user, and knows the Claude conversation it runs.
 ///
-/// The judgement lives in `ClaudeStatusDetector`. This type owns the pane, forwards the two events
-/// the detector listens to, and supplies the screen reads it needs through `PromptScreen`.
+/// The judgement lives in `ProgramStatusDetector`. This type owns the pane and forwards it what
+/// the program reports (OSC 7501) and when output arrives. Notifications the program asks for go
+/// straight up to the session.
 public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	public let repositoryPath: String
 	public let sessionId: UUID
 
-	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	private let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 	private let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 
-	/// Built on first use, since it takes this view as its screen and `self` isn't available until
+	/// Built on first use, since it reads this view's process and `self` isn't available until
 	/// `super.init` has run.
-	private let statusSource: ClaudeStatusSource
-
-	private lazy var detector = ClaudeStatusDetector(
+	private lazy var detector = ProgramStatusDetector(
 		label: repositoryPath,
-		screen: self,
-		source: statusSource,
-		onStatusChange: { [weak self] status in
+		isShellInForeground: { [weak self] in
+			guard let process = self?.process else {
+				return nil
+			}
+
+			return PtyForegroundProcess.isInForeground(processGroup: process.shellPid, ptyDescriptor: process.childfd)
+		},
+		onStatusChange: { [weak self] status, report in
 			guard let self else {
 				return
 			}
 
-			onStatusChange(sessionId, status)
+			onStatusChange(sessionId, status, report)
 		}
 	)
 
 	public init(
 		repositoryPath: String,
 		sessionId: UUID,
-		statusSource: ClaudeStatusSource = .progressAndScreen,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
 		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId
-		self.statusSource = statusSource
 		self.onStatusChange = onStatusChange
 		self.onNotification = onNotification
 		self.onOpenFile = onOpenFile
 		super.init(frame: .zero)
 		cellGridScale = Self.currentBackingScale(of: nil)
 		registerForDraggedTypes([.fileURL])
-		registerNotificationHandlers()
+		observeNotifications()
+		observeProcessOutput()
 	}
 
 	/// Unsupported: a pane is only ever built in code, for the session it belongs to.
@@ -148,7 +153,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 					modifiers: event.modifierFlags,
 					charactersIgnoringModifiers: event.charactersIgnoringModifiers,
 					optionIsMeta: optionAsMetaKey,
-					kittyProtocolActive: !terminal.keyboardEnhancementFlags.isEmpty
+					kittyProtocolActive: !keyboardEnhancementFlags.isEmpty
 				)
 			else {
 				return event
@@ -161,41 +166,57 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	// MARK: - Notifications
 
+	/// Keeps the OSC observation below alive for as long as the pane.
+	private var oscObservation: TerminalOscObservation?
+
 	/// Handles OSC 9 and OSC 777 the way Ghostty does. SwiftTerm parses OSC 777 but hands it to a
 	/// delegate method its Mac view never implements, and treats OSC 9 as a progress report only,
-	/// so both are taken over here. A registered handler replaces SwiftTerm's own for that code,
-	/// which is why a `9;4` progress report is passed back to SwiftTerm's progress bar by hand.
-	private func registerNotificationHandlers() {
-		let terminal = getTerminal()
-		terminal.registerOscHandler(code: 9) { [weak self] data in
-			guard let self else {
+	/// so both are watched here. The observation is passive — SwiftTerm still handles every
+	/// sequence itself, so a `9;4` progress report still reaches its progress bar — and its events
+	/// arrive on a private serial queue, in the order they were parsed.
+	private func observeNotifications() {
+		oscObservation = observeOscEvents { [weak self] event in
+			guard event.code == 9 || event.code == 777 else {
 				return
 			}
 
-			switch OSC9Payload(data) {
-			case let .notification(notification):
-				notificationReceived(notification)
-			case let .progress(report):
-				// `remove` is what Claude sends when a turn is done; `error` also ends one.
-				detector.progressReported(isWorking: report.state != .remove && report.state != .error)
-				progressReport(source: terminal, report: report)
-			case .ignored:
-				break
-			}
-		}
-		terminal.registerOscHandler(code: 777) { [weak self] data in
-			if let notification = TerminalNotification(osc777: data) {
-				self?.notificationReceived(notification)
+			DispatchQueue.main.async {
+				self?.oscEventReceived(code: event.code, payload: event.payload[...])
 			}
 		}
 	}
 
-	/// A program asking for the user is the plainest sign the pane is waiting, so the detector is
-	/// told before the notification goes up: it holds the pane at waiting until the user types.
-	private func notificationReceived(_ notification: TerminalNotification) {
-		guard detector.attentionRequested() else {
+	private func oscEventReceived(code: Int, payload: ArraySlice<UInt8>) {
+		if code == 777 {
+			if let notification = TerminalNotification(osc777: payload) {
+				notificationReceived(notification)
+			}
 			return
 		}
+
+		if case let .notification(notification) = OSC9Payload(payload) {
+			notificationReceived(notification)
+		}
+	}
+
+	/// OSC 7501 reports, as SwiftTerm stores them: all of the pane's current records, on the main
+	/// thread, possibly several updates folded into one call. SwiftTerm answers a program's
+	/// `OSC 7501 ; ?` probe itself, which is what makes Claude Code report at all.
+	override public func programStatusChanged(source: TerminalView, records: [TerminalProgramStatus]) {
+		super.programStatusChanged(source: source, records: records)
+		detector.statusReported(TerminalProgramReport(records: records))
+	}
+
+	/// Passes a notification up, unless the pane's session is being killed, marked with whether the
+	/// program reports its status. The pane's status is left to the program's reports: a
+	/// notification alone does not say the program is waiting.
+	private func notificationReceived(_ notification: TerminalNotification) {
+		guard !detector.isStopped else {
+			return
+		}
+
+		var notification = notification
+		notification.isFromStatusReportingProgram = detector.isReportStanding
 
 		onNotification(sessionId, notification)
 	}
@@ -365,10 +386,12 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// Puts the current selection on the pasteboard, if `SelectionCopyDecider` judges there is one
 	/// worth copying. Internal so a test can drive it without synthesizing a mouse event.
 	func copySelectionToPasteboard() {
+		// `nil` while no selection is active.
+		let selectedText = getSelection()
 		guard
 			let text = copyDecider.textToCopy(
-				selectionIsActive: selection?.active == true,
-				selectedText: selection?.getSelectedText() ?? ""
+				selectionIsActive: selectedText != nil,
+				selectedText: selectedText ?? ""
 			)
 		else {
 			return
@@ -386,19 +409,47 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// the prompt; a startup file that prints something first costs at most that stray echo.
 	var pendingStartupCommand: String?
 
-	/// Called by LocalProcess whenever the child process writes bytes to the terminal.
-	override public func dataReceived(slice: ArraySlice<UInt8>) {
-		super.dataReceived(slice: slice)
-		detector.outputReceived(slice)
+	/// Has the main thread told about the child's output.
+	///
+	/// SwiftTerm parses the child's output on its IO thread and calls the handler there after
+	/// each batch, with no bytes (since 1.99 `dataReceived(slice:)` is no longer called). A burst
+	/// of output is many batches, so a hop already queued is not queued again.
+	private func observeProcessOutput() {
+		let hop = PendingMainHop()
+		setProcessOutputHandler { [weak self] in
+			guard hop.claim() else {
+				return
+			}
+
+			DispatchQueue.main.async {
+				hop.release()
+				self?.processOutputReceived()
+			}
+		}
+	}
+
+	/// Internal so a test can stand in for the child writing output, which it cannot do once killed.
+	func processOutputReceived() {
+		detector.outputReceived()
 		if let command = pendingStartupCommand {
 			pendingStartupCommand = nil
 			send(txt: command + "\r")
 		}
 	}
+}
 
-	/// Called when bytes are sent to the child process, whether typed, pasted or dropped.
-	override public func send(source: TerminalView, data: ArraySlice<UInt8>) {
-		super.send(source: source, data: data)
-		detector.inputSent(data)
+/// Whether a hop to the main thread is already queued, claimed from SwiftTerm's IO thread and
+/// released on the main thread. Internal for its tests.
+final class PendingMainHop: Sendable {
+	private let isPending = Atomic(false)
+
+	/// Whether the caller should queue the hop: `false` while one is already queued.
+	func claim() -> Bool {
+		isPending.compareExchange(expected: false, desired: true, ordering: .acquiringAndReleasing).exchanged
+	}
+
+	/// Released before the hop does its work, so output that arrives meanwhile queues another.
+	func release() {
+		isPending.store(false, ordering: .releasing)
 	}
 }

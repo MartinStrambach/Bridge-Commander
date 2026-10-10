@@ -135,6 +135,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("terminal notifications come from whichever channel a program speaks until changed")
+	func terminalNotificationSourceDefaultsToAutomatic() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalNotificationSource == .automatic)
+
+		await store.send(.setTerminalNotificationSource(.statusReports)) {
+			$0.$terminalNotificationSource.withLock { $0 = .statusReports }
+		}
+		await store.send(.setTerminalNotificationSource(.programNotifications)) {
+			$0.$terminalNotificationSource.withLock { $0 = .programNotifications }
+		}
+	}
+
 	@Test("terminal notifications are on until the user turns them off")
 	func terminalNotificationsDefaultToOn() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {
@@ -147,21 +162,6 @@ struct SettingsReducerTests {
 		}
 		await store.send(.setTerminalNotifications(true)) {
 			$0.$terminalNotifications.withLock { $0 = true }
-		}
-	}
-
-	@Test("Claude status detection uses progress reports and the screen until changed")
-	func terminalClaudeStatusDetectionDefaultsToBoth() async {
-		let store = TestStore(initialState: SettingsReducer.State()) {
-			SettingsReducer()
-		}
-		#expect(store.state.terminalClaudeStatusDetection == .progressAndScreen)
-
-		await store.send(.setTerminalClaudeStatusDetection(.progressOnly)) {
-			$0.$terminalClaudeStatusDetection.withLock { $0 = .progressOnly }
-		}
-		await store.send(.setTerminalClaudeStatusDetection(.screenOnly)) {
-			$0.$terminalClaudeStatusDetection.withLock { $0 = .screenOnly }
 		}
 	}
 

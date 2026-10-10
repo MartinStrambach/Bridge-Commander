@@ -72,6 +72,9 @@ struct RepositoryListReducer {
 		@Shared(.terminalNotifications)
 		fileprivate(set) var terminalNotifications = true
 
+		@Shared(.terminalNotificationSource)
+		fileprivate(set) var terminalNotificationSource = TerminalNotificationSource.default
+
 		@Presents
 		var alert: AlertState<Action.Alert>?
 
@@ -164,11 +167,20 @@ struct RepositoryListReducer {
 			case searchTextChanged(String)
 			case showTerminalsRequested
 			case sortModeButtonTapped
-			case terminalSessionStatusChanged(sessionId: UUID, status: TerminalSessionStatus)
+			/// `report` is what the program said about itself (OSC 7501), sent along with a change to
+			/// `.waitingForInput` that its report caused.
+			case terminalSessionStatusChanged(
+				sessionId: UUID,
+				status: TerminalSessionStatus,
+				report: TerminalProgramReport? = nil
+			)
 			/// A ⌘-clicked link in a pane named a file.
 			case terminalFileLinkClicked(sessionId: UUID, link: TerminalFileLink)
 			/// The program in a pane asked for a notification (OSC 9 / OSC 777).
 			case terminalNotificationReceived(sessionId: UUID, notification: TerminalNotification)
+			/// The program in a pane set the terminal title (OSC 0/2), already cleaned for display;
+			/// `nil` for an empty one.
+			case terminalSessionTitleChanged(sessionId: UUID, title: String?)
 		}
 
 		enum Alert: Equatable {
@@ -233,7 +245,7 @@ struct RepositoryListReducer {
 			switch action {
 			// MARK: - View Actions
 
-			case let .view(.terminalSessionStatusChanged(sessionId, status)):
+			case let .view(.terminalSessionStatusChanged(sessionId, status, report)):
 				// Reported by the pane itself, and kept on the session list rather than on the
 				// terminal panel: the panel can be closed while a session keeps running, and the
 				// dots in the repository list still have to move. A late report from a session
@@ -250,17 +262,21 @@ struct RepositoryListReducer {
 					state.terminalSessions[id: sessionId]?.awaitsStartupPrompt = false
 					return .none
 				}
-				return claudeNotificationEffect(for: session, changingTo: status, in: state)
+				return waitingNotificationEffect(for: session, changingTo: status, report: report, in: state)
 
 			case let .view(.terminalNotificationReceived(sessionId, notification)):
-				// The pane already holds itself at waiting until the user types; this is the
-				// session learning it, and the reason the status-change path posts nothing more.
-				guard let session = state.terminalSessions[id: sessionId] else {
+				// Only posted: the session's status is the program's reports to set. Whether it is
+				// posted at all depends on the program: one that reports its status has already said
+				// what this says, and the setting picks which of the two to show.
+				guard
+					let session = state.terminalSessions[id: sessionId],
+					state.terminalNotificationSource.postsProgramNotification(
+						fromStatusReportingProgram: notification.isFromStatusReportingProgram
+					)
+				else {
 					return .none
 				}
 
-				state.terminalSessions[id: sessionId]?.status = .waitingForInput
-				state.terminalSessions[id: sessionId]?.awaitsStartupPrompt = false
 				let location = notificationLocation(for: session, in: state)
 				let title = notification.title ?? location
 				return postNotification(
@@ -273,6 +289,15 @@ struct RepositoryListReducer {
 					for: session,
 					in: state
 				)
+
+			case let .view(.terminalSessionTitleChanged(sessionId, title)):
+				// Programs set the same title over and over (a shell theme sets it before every
+				// prompt); writing only a change keeps that from invalidating the views that observe
+				// the session list.
+				if state.terminalSessions[id: sessionId]?.title != title {
+					state.terminalSessions[id: sessionId]?.title = title
+				}
+				return .none
 
 			case let .view(.terminalFileLinkClicked(sessionId, link)):
 				// Opened the way the staging panel's "Open in IDE" opens a file, with the tab's own
@@ -1321,11 +1346,14 @@ struct RepositoryListReducer {
 		.cancellable(id: CancellableId.scan)
 	}
 
-	/// Posts a notification when a session starts waiting at Claude's prompt, and withdraws it once
-	/// the session is back at work — by then the user has answered it.
-	private func claudeNotificationEffect(
+	/// Posts a notification when the program in a session starts waiting for the user, and withdraws
+	/// it once the session is back at work — by then the user has answered it, whichever channel
+	/// posted it. The program is named as it reports itself, with what it says it is waiting for
+	/// when it says.
+	private func waitingNotificationEffect(
 		for session: TerminalSession,
 		changingTo status: TerminalSessionStatus,
+		report: TerminalProgramReport?,
 		in state: State
 	) -> Effect<Action> {
 		let wasWaiting = session.status == .waitingForInput
@@ -1340,11 +1368,15 @@ struct RepositoryListReducer {
 			return .run { _ in await client.remove(sessionId) }
 		}
 
+		guard state.terminalNotificationSource.postsStatusReports else {
+			return .none
+		}
+
 		return postNotification(
 			TerminalNotificationContent(
 				sessionId: sessionId,
 				title: notificationLocation(for: session, in: state),
-				body: "Claude is waiting for your input."
+				body: report?.notificationBody ?? "A program is waiting for your input."
 			),
 			for: session,
 			in: state
@@ -1372,12 +1404,13 @@ struct RepositoryListReducer {
 		}
 	}
 
-	/// Names the tab: the repository, and which tab when it has more than one.
+	/// Names the tab: the repository, and the tab's own name when it has a title or the repository
+	/// has more than one tab.
 	private func notificationLocation(for session: TerminalSession, in state: State) -> String {
 		let name = findRowState(for: session.repositoryPath, in: state)?.name
 			?? URL(fileURLWithPath: session.repositoryPath).lastPathComponent
 		let tabCount = state.terminalSessions.filter { $0.repositoryPath == session.repositoryPath }.count
-		return tabCount > 1 ? "\(name) · Terminal \(session.tabIndex)" : name
+		return tabCount > 1 || session.title != nil ? "\(name) · \(session.tabTitle)" : name
 	}
 }
 
@@ -1464,6 +1497,7 @@ private func restoreTerminalTabs(
 			startingDirectory: tab.directory,
 			startupCommand: tab.startupCommand,
 			resumingClaudeSession: tab.claudeSessionId,
+			title: tab.title,
 			tabIndex: tab.tabIndex
 		)
 		state.terminalSessions.append(session)

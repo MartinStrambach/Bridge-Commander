@@ -16,8 +16,9 @@ struct TerminalLayoutView: View {
 	let activeRowStore: StoreOf<RepositoryRowReducer>?
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let terminalViewStore: TerminalViewStore
-	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	let onTitleChange: @Sendable (UUID, String?) -> Void
 	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 
 	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
@@ -55,6 +56,7 @@ struct TerminalLayoutView: View {
 				activeSessionId: store.activeSessionId,
 				onStatusChange: onStatusChange,
 				onNotification: onNotification,
+				onTitleChange: onTitleChange,
 				onOpenFile: onOpenFile,
 				onRetry: { sessionId in
 					terminalViewStore.killSession(sessionId: sessionId)

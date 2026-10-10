@@ -1,5 +1,4 @@
 import Foundation
-import SwiftTerm
 
 /// A desktop notification a program asked for with an escape sequence, as Ghostty, iTerm2 and
 /// WezTerm understand them: OSC 9 (`ESC ] 9 ; body BEL`) and OSC 777
@@ -9,10 +8,16 @@ public struct TerminalNotification: Equatable, Sendable {
 	/// `nil` for OSC 9, which carries a body only.
 	public let title: String?
 	public let body: String
+	/// Whether the pane's program stood behind an OSC 7501 status report when it asked. Such a
+	/// program has already said it is waiting, so the notification may repeat what the report's own
+	/// notification says (Claude Code sends both once its notification channel is Ghostty); the
+	/// `terminalNotificationSource` setting decides which one is shown.
+	public var isFromStatusReportingProgram: Bool
 
-	public init(title: String?, body: String) {
+	public init(title: String?, body: String, isFromStatusReportingProgram: Bool = false) {
 		self.title = title
 		self.body = body
+		self.isFromStatusReportingProgram = isFromStatusReportingProgram
 	}
 }
 
@@ -20,8 +25,7 @@ public struct TerminalNotification: Equatable, Sendable {
 /// first (`9;4;1;50` is a progress report), so a payload like that is not a notification body.
 enum OSC9Payload: Equatable {
 	case notification(TerminalNotification)
-	case progress(Terminal.ProgressReport)
-	/// A ConEmu subcommand other than progress, or nothing to show.
+	/// A ConEmu subcommand (SwiftTerm draws the progress bar of `9;4` itself), or nothing to show.
 	case ignored
 
 	/// The ConEmu subcommand numbers. Ghostty reads a payload that starts with one of these, then
@@ -36,38 +40,11 @@ enum OSC9Payload: Equatable {
 
 		let parts = text.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
 		if let subcommand = Int(parts[0]), Self.conEmuSubcommands.contains(subcommand) {
-			self = subcommand == 4 ? Self.progress(parts.count > 1 ? parts[1] : "") : .ignored
+			self = .ignored
 			return
 		}
 
 		self = text.isEmpty ? .ignored : .notification(TerminalNotification(title: nil, body: text))
-	}
-
-	/// `state;progress` after the `4;`, parsed the way SwiftTerm does before it draws its bar.
-	private static func progress(_ text: Substring) -> OSC9Payload {
-		let parts = text.split(separator: ";", omittingEmptySubsequences: false)
-		guard
-			let rawState = Int(parts[0]),
-			let state = Terminal.ProgressReportState(rawValue: rawState)
-		else {
-			return .ignored
-		}
-
-		var progress: UInt8?
-		if parts.count > 1, !parts[1].isEmpty {
-			guard let value = Int(parts[1]) else {
-				return .ignored
-			}
-
-			progress = UInt8(max(0, min(value, 100)))
-		}
-		else if state == .set {
-			progress = 0
-		}
-		if state == .remove {
-			progress = nil
-		}
-		return .progress(Terminal.ProgressReport(state: state, progress: progress))
 	}
 }
 

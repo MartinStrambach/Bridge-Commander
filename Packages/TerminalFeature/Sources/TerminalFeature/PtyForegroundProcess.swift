@@ -2,10 +2,27 @@ import Darwin
 
 /// Identifies the process holding the foreground of a pseudo-terminal.
 ///
-/// Used to gate the Claude prompt scan: a `❯` on screen only means "Claude is waiting" when Claude
-/// Code actually owns the pane. In a plain shell the same glyph is a prompt theme, a line of command
-/// output, or leftover scrollback.
+/// Used to set aside a status report a program left behind (its OSC 7501 records outlive a program
+/// that crashed or was suspended without clearing them), and to find the Claude Code conversation
+/// in a pane.
 enum PtyForegroundProcess {
+	/// Whether `pid`'s process group holds the foreground of the terminal behind `descriptor` — for
+	/// a pane's shell, which leads its own group, whether it is at its prompt with no job running.
+	///
+	/// Returns `nil` when the foreground can't be read (closed descriptor, no foreground group).
+	static func isInForeground(processGroup pid: pid_t, ptyDescriptor descriptor: Int32) -> Bool? {
+		guard descriptor >= 0, pid > 0 else {
+			return nil
+		}
+
+		let foreground = tcgetpgrp(descriptor)
+		guard foreground > 0 else {
+			return nil
+		}
+
+		return foreground == pid
+	}
+
 	/// Whether Claude Code holds the foreground of the terminal behind `descriptor`.
 	///
 	/// Returns `nil` when the foreground process can't be identified (closed descriptor, no

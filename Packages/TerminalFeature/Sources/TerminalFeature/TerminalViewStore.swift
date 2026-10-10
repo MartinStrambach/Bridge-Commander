@@ -39,8 +39,6 @@ public final class TerminalViewStore {
 	/// - Parameter cursorColor: The caret color, or `nil` to keep SwiftTerm's default. Most
 	///   Terminal profiles set no cursor color, so `nil` is the usual case.
 	/// - Parameter selectionColor: The selection background, or `nil` to keep SwiftTerm's default.
-	/// - Parameter statusSource: What the pane's waiting/active status is based on. Only read when
-	///   the pane is created.
 	public func view(
 		for session: TerminalSession,
 		foregroundColor: NSColor,
@@ -48,9 +46,8 @@ public final class TerminalViewStore {
 		ansiPalette: [NSColor]? = nil,
 		cursorColor: NSColor? = nil,
 		selectionColor: NSColor? = nil,
-		statusSource: ClaudeStatusSource = .progressAndScreen,
 		processDelegate: TerminalProcessDelegate,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
+		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
 		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
 	) -> ClaudeAwareTerminalView {
@@ -61,7 +58,6 @@ public final class TerminalViewStore {
 		let terminalView = ClaudeAwareTerminalView(
 			repositoryPath: session.repositoryPath,
 			sessionId: session.id,
-			statusSource: statusSource,
 			onStatusChange: onStatusChange,
 			onNotification: onNotification,
 			onOpenFile: onOpenFile
@@ -90,7 +86,7 @@ public final class TerminalViewStore {
 			// profile's author picked a selection color that works behind exactly that text.
 			terminalView.selectedTextForegroundColor = foregroundColor
 		}
-		terminalView.terminal.changeHistorySize(3000)
+		terminalView.changeScrollback(3000)
 
 		terminalView.processDelegate = processDelegate
 		terminalView.pendingStartupCommand = session.commandToType
@@ -98,7 +94,7 @@ public final class TerminalViewStore {
 		terminalView.startProcess(
 			executable: shellExecutable,
 			args: shellArguments,
-			environment: TerminalEnvironment.variables(requestingProgress: statusSource.requestsProgress)
+			environment: TerminalEnvironment.variables
 				+ additionalEnvironment(session),
 			execName: nil,
 			currentDirectory: session.startingDirectory
@@ -110,7 +106,7 @@ public final class TerminalViewStore {
 		// ClaudeAwareTerminalView would be created for the same session.
 		views[session.id] = terminalView
 
-		onStatusChange(session.id, .active)
+		onStatusChange(session.id, .active, nil)
 
 		return terminalView
 	}

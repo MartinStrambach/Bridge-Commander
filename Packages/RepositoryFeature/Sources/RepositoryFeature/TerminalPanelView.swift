@@ -29,22 +29,6 @@ struct TerminalPanelView: View {
 	@Shared(.terminalMouseReporting)
 	private var terminalMouseReporting = true
 
-	@Shared(.terminalClaudeStatusDetection)
-	private var terminalClaudeStatusDetection = ClaudeStatusDetection.default
-
-	/// The setting in TerminalFeature's terms, mapped here so that package needs no Settings
-	/// dependency.
-	private var claudeStatusSource: ClaudeStatusSource {
-		switch terminalClaudeStatusDetection {
-		case .progressAndScreen:
-			.progressAndScreen
-		case .progressOnly:
-			.progressOnly
-		case .screenOnly:
-			.screenOnly
-		}
-	}
-
 	/// Read here like its sibling settings; the ⌘+/⌘−/⌘0 shortcuts write it through
 	/// `TerminalLayoutReducer` so the zoom actions stay testable.
 	@Shared(.terminalFontSize)
@@ -70,8 +54,9 @@ struct TerminalPanelView: View {
 	let terminalViewStore: TerminalViewStore
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let activeSessionId: UUID?
-	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
+	let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	let onTitleChange: @Sendable (UUID, String?) -> Void
 	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
 	let onRetry: (UUID) -> Void
 	let onNewTab: () -> Void
@@ -453,10 +438,10 @@ struct TerminalPanelView: View {
 				selectionColor: resolvedTheme.selection,
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
-				statusSource: claudeStatusSource,
 				font: terminalFont,
 				onStatusChange: onStatusChange,
 				onNotification: onNotification,
+				onTitleChange: onTitleChange,
 				onOpenFile: onOpenFile
 			)
 
@@ -600,9 +585,15 @@ struct TerminalPanelView: View {
 					.fontWeight(isActive ? .semibold : .regular)
 			}
 			else {
-				Text("Terminal \(session.tabIndex)")
+				// A program's title can be a sentence (Claude's summary of the conversation), so it
+				// is cut to keep the bar from growing a tab per screen; the tooltip has all of it.
+				Text(session.tabTitle)
 					.scaledFont(.caption)
 					.fontWeight(isActive ? .semibold : .regular)
+					.lineLimit(1)
+					.truncationMode(.tail)
+					.frame(maxWidth: 200)
+					.help(session.tabTitle)
 			}
 
 			if totalCount > 1 {
