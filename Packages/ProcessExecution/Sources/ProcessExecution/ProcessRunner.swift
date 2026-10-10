@@ -1,3 +1,4 @@
+import ActivityLog
 import Foundation
 import Synchronization
 
@@ -101,7 +102,17 @@ public nonisolated enum ProcessRunner {
 					// the pipes here kept every read end open for the whole timeout, hundreds of
 					// descriptors during a refresh, against a GUI app's limit of 256.
 					DispatchQueue.global().asyncAfter(deadline: .now() + pipeDrainTimeout) { [completion] in
-						completion.pipeDrainTimedOut()
+						// Recorded, because a cut-short result otherwise looks like a command that printed less.
+						guard completion.pipeDrainTimedOut() else {
+							return
+						}
+
+						let command = GitCommandLog.commandLine([executableURL.lastPathComponent] + arguments)
+						let directory = currentDirectory.map { " (in \($0.path))" } ?? ""
+						ActivityLog.shared.record(
+							.error,
+							"\(command)\(directory) exited, but a process it started kept its output open; returned without waiting for it"
+						)
 					}
 				}
 
@@ -260,7 +271,9 @@ nonisolated final class ProcessCompletion: Sendable {
 		}
 	}
 
-	func pipeDrainTimedOut() {
+	/// Whether this cut the wait short: the process had exited and a pipe was still open.
+	@discardableResult
+	func pipeDrainTimedOut() -> Bool {
 		finish { $0.exitCode != nil }
 	}
 
@@ -273,7 +286,9 @@ nonisolated final class ProcessCompletion: Sendable {
 	}
 
 	/// Applies `update` and resumes when it reports the call is complete — only the first time.
-	private func finish(_ update: (inout State) -> Bool) {
+	/// Returns whether this call resumed.
+	@discardableResult
+	private func finish(_ update: (inout State) -> Bool) -> Bool {
 		let ready: (CheckedContinuation<ProcessResult, Never>, Int32)? = state.withLock { state in
 			guard update(&state), let continuation = state.continuation, let exitCode = state.exitCode else {
 				return nil
@@ -283,7 +298,7 @@ nonisolated final class ProcessCompletion: Sendable {
 			return (continuation, exitCode)
 		}
 		guard let (continuation, exitCode) = ready else {
-			return
+			return false
 		}
 
 		continuation.resume(returning: ProcessResult(
@@ -291,5 +306,6 @@ nonisolated final class ProcessCompletion: Sendable {
 			output: output.getData(),
 			error: error.getData()
 		))
+		return true
 	}
 }
