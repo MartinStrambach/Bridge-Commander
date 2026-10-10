@@ -51,6 +51,8 @@ nonisolated enum SimulatorSliderTool {
 		// slider that moves in steps ends exactly on one.
 		var steps = 0
 		while abs(current - target) > tolerance, steps < maximumSteps {
+			// Accessibility actions do not check for cancellation.
+			try Task.checkCancellation()
 			let action: SimulatorElementAction = target > current ? .increment : .decrement
 			let outcome: SimulatorElementOutcome
 			do {

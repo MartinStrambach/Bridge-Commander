@@ -959,6 +959,87 @@ struct SimulatorMCPHandlerTests {
 		#expect(checked.calls.withLock { $0 }.isEmpty)
 		#expect(try await callText(checked, "batch", ["steps": []]).isError)
 	}
+
+	// MARK: - Cancellation
+
+	/// Starts `arguments` of tool `name` as request `id` from `session`, and returns once the tool
+	/// has read the tree once, so it is under way. `loadedAfterReads` is the fake's.
+	private func startCall(
+		_ handler: SimulatorMCPHandler,
+		_ actions: FakeActions,
+		id: Int,
+		session: String,
+		_ name: String,
+		_ arguments: JSONValue,
+		loadedAfterReads: Int
+	) async throws -> Task<HTTPResponse, Never> {
+		actions.loadedAfterReads.withLock { $0 = loadedAfterReads }
+		let request = try post(
+			["jsonrpc": "2.0", "id": .number(Double(id)), "method": "tools/call", "params": ["name": .string(name), "arguments": arguments]],
+			headers: [SimulatorMCPHandler.sessionHeader: session]
+		)
+		let call = Task { await handler.response(to: request) }
+		while actions.loadedAfterReads.withLock({ $0 }) == loadedAfterReads {
+			try await Task.sleep(for: .milliseconds(10))
+		}
+		return call
+	}
+
+	private func cancel(_ handler: SimulatorMCPHandler, id: Int, session: String) async throws -> HTTPResponse {
+		await handler.response(to: try post(
+			["jsonrpc": "2.0", "method": "notifications/cancelled", "params": ["requestId": .number(Double(id)), "reason": "User interrupted"]],
+			headers: [SimulatorMCPHandler.sessionHeader: session]
+		))
+	}
+
+	@Test
+	func aCancelledCallStopsAndIsNotAnswered() async throws {
+		let actions = FakeActions()
+		let handler = handler(actions)
+		let session = UUID().uuidString
+		let call = try await startCall(handler, actions, id: 7, session: session, "wait_for_element", ["label": "Loaded", "timeout_ms": 3000], loadedAfterReads: 1000)
+
+		let clock = ContinuousClock()
+		let start = clock.now
+		#expect(try await cancel(handler, id: 7, session: session).status == 202)
+		let response = await call.value
+		#expect(clock.now - start < .seconds(1))
+		#expect(response.status == 202)
+		#expect(response.body.isEmpty)
+		#expect(handler.requests.count == 0)
+	}
+
+	@Test
+	func aCancellationNamingAnotherRequestIsIgnored() async throws {
+		let actions = FakeActions()
+		let handler = handler(actions)
+		let session = UUID().uuidString
+		let call = try await startCall(handler, actions, id: 7, session: session, "wait_for_element", ["label": "Loaded", "timeout_ms": 3000], loadedAfterReads: 2)
+
+		// Same id from another terminal; another id from this one.
+		#expect(try await cancel(handler, id: 7, session: UUID().uuidString).status == 202)
+		#expect(try await cancel(handler, id: 8, session: session).status == 202)
+		let response = await call.value
+		#expect(response.status == 200)
+		#expect(try decode(response)["result"]?["content"]?.firstText?.hasPrefix("Found Button \"Loaded\"") == true)
+		#expect(handler.requests.count == 0)
+	}
+
+	@Test
+	func aCancelledBatchRunsNoMoreSteps() async throws {
+		let actions = FakeActions()
+		let handler = handler(actions)
+		let session = UUID().uuidString
+		let steps: JSONValue = [
+			["tool": "wait_for_element", "label": "Loaded", "timeout_ms": 3000],
+			["tool": "tap", "x": 1, "y": 1, "wait_for_settle": false],
+		]
+		let call = try await startCall(handler, actions, id: 9, session: session, "batch", ["steps": steps, "continue_on_error": true], loadedAfterReads: 1000)
+
+		_ = try await cancel(handler, id: 9, session: session)
+		#expect(await call.value.status == 202)
+		#expect(actions.calls.withLock { $0 }.isEmpty)
+	}
 }
 
 

@@ -39,6 +39,8 @@ public final class SimulatorMCPServer: @unchecked Sendable {
 	private let state = OSAllocatedUnfairLock<State>(uncheckedState: State())
 	private let queue = DispatchQueue(label: "com.bridgecommander.simulator.mcp")
 	private let logger = Logger(subsystem: "com.bridgecommander", category: "SimulatorMCP")
+	/// Every connection's requests, so a cancellation sent on one reaches a request on another.
+	private let requests = SimulatorMCPRequests()
 
 	private init() {}
 
@@ -142,7 +144,8 @@ public final class SimulatorMCPServer: @unchecked Sendable {
 			},
 			onActivity: { [weak self] activity in
 				self?.publish(activity)
-			}
+			},
+			requests: requests
 		)
 		let session = HTTPConnectionSession(connection: connection, handler: handler, port: { [weak self] in
 			self?.state.withLock { $0.port } ?? Self.preferredPort

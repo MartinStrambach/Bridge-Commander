@@ -69,6 +69,9 @@ struct SimulatorMCPHandler: Sendable {
 	/// device is that session's repository's.
 	let actions: @Sendable (_ sessionId: UUID?) -> any SimulatorToolActions
 	let onActivity: @Sendable (SimulatorActivity) -> Void
+	/// Shared by every connection (the server passes its own), so a cancellation reaches a request
+	/// made on another.
+	var requests = SimulatorMCPRequests()
 
 	func response(to request: HTTPRequest) async -> HTTPResponse {
 		let path = request.path.split(separator: "?", maxSplits: 1).first.map(String.init) ?? request.path
@@ -83,13 +86,26 @@ struct SimulatorMCPHandler: Sendable {
 		guard let message = try? JSONDecoder().decode(JSONValue.self, from: request.body), case .object = message else {
 			return .json(Self.encode(Self.error(id: .null, code: -32700, message: "Parse error")), status: 400)
 		}
+		let session = request.header(Self.sessionHeader)
+		let method = message["method"]?.stringValue ?? ""
 		// A notification (no id) — `notifications/initialized`, a cancellation — needs no answer.
 		guard let id = message["id"], id != .null else {
+			if method == "notifications/cancelled", let requestId = message["params"]?["requestId"] {
+				requests.cancel(id: requestId, session: session, reason: message["params"]?["reason"]?.stringValue)
+			}
 			return HTTPResponse(status: 202)
 		}
 
-		let sessionId = request.header(Self.sessionHeader).flatMap { UUID(uuidString: $0) }
-		let reply = await handle(method: message["method"]?.stringValue ?? "", params: message["params"], id: id, sessionId: sessionId)
+		let sessionId = session.flatMap { UUID(uuidString: $0) }
+		let params = message["params"]
+		guard let reply = await requests.run(id: id, session: session, { [self] in
+			await handle(method: method, params: params, id: id, sessionId: sessionId)
+		})
+		else {
+			// Cancelled: no JSON-RPC response, just the connection freed for the next request. The
+			// client has forgotten the id, and a 202 is what its transport takes without a body.
+			return HTTPResponse(status: 202)
+		}
 		return .json(Self.encode(reply))
 	}
 

@@ -494,9 +494,13 @@ public final class SimulatorHost: @unchecked Sendable {
 		let point = try normalized(device: device, x: x, y: y)
 		let connection = try await hidConnection(udid: device.id)
 		let target = device.screenID ?? 0
+		try Task.checkCancellation()
 		connection.touch(point, phase: .began, target: target)
-		try await Task.sleep(for: duration)
-		connection.touch(point, phase: .ended, target: target)
+		do {
+			// Lifted however the wait ends: a cancelled tool call must not leave the finger down.
+			defer { connection.touch(point, phase: .ended, target: target) }
+			try await Task.sleep(for: duration)
+		}
 		try await drain()
 	}
 
@@ -518,23 +522,25 @@ public final class SimulatorHost: @unchecked Sendable {
 
 		let interval = Duration.milliseconds(16)
 		let steps = max(2, Int(duration / interval))
+		try Task.checkCancellation()
 		connection.touch(from, phase: .began, target: target)
-		if hold > .zero {
-			try await Task.sleep(for: hold)
+		var position = from
+		do {
+			// A cancelled swipe lifts the finger where it got to.
+			defer { connection.touch(position, phase: .ended, target: target) }
+			if hold > .zero {
+				try await Task.sleep(for: hold)
+			}
+			for step in 1...steps {
+				try await Task.sleep(for: interval)
+				let progress = CGFloat(step) / CGFloat(steps)
+				position = step == steps ? to : CGPoint(x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress)
+				connection.touch(position, phase: .moved, target: target)
+			}
+			if hold > .zero {
+				try await Task.sleep(for: hold)
+			}
 		}
-		for step in 1...steps {
-			try await Task.sleep(for: interval)
-			let progress = CGFloat(step) / CGFloat(steps)
-			connection.touch(
-				CGPoint(x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress),
-				phase: .moved,
-				target: target
-			)
-		}
-		if hold > .zero {
-			try await Task.sleep(for: hold)
-		}
-		connection.touch(to, phase: .ended, target: target)
 		try await drain()
 	}
 
@@ -568,20 +574,28 @@ public final class SimulatorHost: @unchecked Sendable {
 
 	public func press(udid: String, button: SimulatorHardwareButton, holdFor duration: Duration = .milliseconds(100)) async throws {
 		let connection = try await hidConnection(udid: udid)
+		try Task.checkCancellation()
 		connection.button(button, isDown: true)
+		// Released however the wait ends: Power held down brings up Siri or the power-off slider.
+		defer { connection.button(button, isDown: false) }
 		try await Task.sleep(for: duration)
-		connection.button(button, isDown: false)
 	}
 
 	private func press(_ stroke: SimulatorKeyStroke, on connection: SimulatorHIDConnection) async throws {
+		try Task.checkCancellation()
 		for modifier in stroke.modifiers {
 			connection.key(usage: modifier, isDown: true)
 		}
 		connection.key(usage: stroke.usage, isDown: true)
-		try await Task.sleep(for: .milliseconds(15))
-		connection.key(usage: stroke.usage, isDown: false)
-		for modifier in stroke.modifiers.reversed() {
-			connection.key(usage: modifier, isDown: false)
+		do {
+			// Released however the wait ends: a Shift left down would capitalise the guest's typing.
+			defer {
+				connection.key(usage: stroke.usage, isDown: false)
+				for modifier in stroke.modifiers.reversed() {
+					connection.key(usage: modifier, isDown: false)
+				}
+			}
+			try await Task.sleep(for: .milliseconds(15))
 		}
 		try await Task.sleep(for: .milliseconds(15))
 	}
