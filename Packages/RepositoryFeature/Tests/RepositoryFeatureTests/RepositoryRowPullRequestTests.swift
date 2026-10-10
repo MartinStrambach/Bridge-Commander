@@ -35,7 +35,7 @@ struct RepositoryRowPullRequestTests {
 			pipeline: PipelineStatus(state: .running, url: "https://gitlab.com/g/app/-/pipelines/42"),
 			unresolvedDiscussionsCount: 3
 		)
-		await store.send(.didFetchPullRequest(details))
+		await store.send(.didFetchPullRequest(details, branch: "LS-1234_feature"))
 
 		#expect(store.state.prUrl == "https://gitlab.com/g/app/-/merge_requests/7")
 		#expect(store.state.prState == .ready)
@@ -55,7 +55,7 @@ struct RepositoryRowPullRequestTests {
 			state: .draft,
 			provider: .github,
 			unresolvedDiscussionsCount: 2
-		)))
+		), branch: "LS-1234_feature"))
 
 		#expect(store.state.prUnresolvedDiscussions == 2)
 	}
@@ -73,7 +73,7 @@ struct RepositoryRowPullRequestTests {
 				state: state,
 				provider: .gitlab,
 				unresolvedDiscussionsCount: 3
-			)))
+			), branch: "LS-1234_feature"))
 
 			#expect(store.state.prState == state)
 			#expect(store.state.prUnresolvedDiscussions == nil)
@@ -93,7 +93,7 @@ struct RepositoryRowPullRequestTests {
 		row.prApprovals = ApprovalStatus(decision: .approved, approvedBy: [Self.astrid])
 		let store = makeStore(state: row)
 
-		await store.send(.didFetchPullRequest(nil))
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
 
 		#expect(store.state.prUrl == nil)
 		#expect(store.state.prState == nil)
@@ -227,7 +227,7 @@ struct RepositoryRowPullRequestTests {
 		row.prFetchError = "GitLab MR fetch failed: HTTP 500"
 		let store = makeStore(state: row)
 
-		await store.send(.didFetchPullRequest(nil))
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
 
 		#expect(store.state.prFetchError == nil)
 	}
@@ -268,7 +268,7 @@ struct RepositoryRowPullRequestTests {
 			state: state,
 			provider: .gitlab,
 			approvals: approvals
-		)))
+		), branch: "LS-1234_feature"))
 	}
 
 	@Test("an open PR keeps its approval status and shows it in the slot")
