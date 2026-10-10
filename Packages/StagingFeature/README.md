@@ -12,3 +12,4 @@ Design notes and gotchas for this package. Project-wide conventions are in the r
 - `CommitReducer` / `CommitView` — commit sheet
 - `MergeStatus` (reducer, `MergeStatusReducer.swift`) / `MergeStatusBannerView` — merge-in-progress banner
 - Display models come from the `DiffModelMapping` target in the AppUI package (`import DiffModelMapping`)
+- When "Commit & Push" commits but the push fails, the commit has still landed: the commit sheet tells the panel at once (`commitSucceeded`, so the panel reloads and the committed files leave the staged list), shows the push error over itself like a commit error, and closes when that alert is acknowledged rather than staying open with a message that would commit again (`hasCommitted` also makes `CommitReducer` refuse a second commit). The panel's own Push button is the retry. Commit taps while a commit runs are ignored by the reducer, not only by the disabled buttons

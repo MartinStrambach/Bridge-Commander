@@ -7,7 +7,7 @@ Design notes and gotchas for this package. Project-wide conventions are in the r
 ## Notes
 
 - `ScannedRepository` — what a scan finds: path, name, directory, `isWorktree`, `branchName`. Live status is not on it (see below)
-- `GitClient` (in `GitService.swift`) — the row's git dependency: status (`getCurrentBranch`), origin remote, merge/checkout the default branch, pull, fetch. Other operations have their own clients (`GitStagingClient`, `GitLogClient`, `GitCommitActionClient`, …)
+- `GitClient` (in `GitService.swift`) — the row's git dependency: status (`getCurrentBranch`), origin remote, merge/checkout the default branch, pull, push, fetch. Only the commit sheet's "Commit & Push" goes through `push` so far (its tests need to fail a push); the other push buttons still call `GitPushHelper.push` directly. Other operations have their own clients (`GitStagingClient`, `GitLogClient`, `GitCommitActionClient`, …)
 - `GitStatusDetector.getStatus` — all of a row's status in one git call, as a `GitPorcelainStatus`
 - `GitDirectoryResolver.resolveGitDirectory` resolves a relative `gitdir:` pointer against the worktree: git 2.48+ writes one with `worktree.useRelativePaths`. Taken verbatim, it named a path relative to the app's working directory: such a worktree never showed the merge/rebase banner (`GitMergeDetector`), its main repository (`resolveMainRepositoryPath`: where a worktree made from its graph goes, the graph's group) came out relative, and its stash and remote caches were keyed on a relative path. Every caller gets an absolute path now; the watcher used to make it absolute on its own
 - `GitStagingClient` / `GitStagingHelper` — staging operations
