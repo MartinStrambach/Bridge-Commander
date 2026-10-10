@@ -41,6 +41,8 @@ struct ProcessCompletionTests {
 			output.append(Data("out\n".utf8))
 			completion.pipeReachedEndOfFile()
 			completion.pipeReachedEndOfFile()
+			// A timeout before the exit has nothing to report yet.
+			completion.pipeDrainTimedOut()
 			completion.processExited(with: 3)
 		}
 
@@ -48,7 +50,23 @@ struct ProcessCompletionTests {
 		#expect(result.outputString == "out\n")
 	}
 
-	/// Resuming a continuation twice traps, so a late exit or end of file must do nothing.
+	/// A timeout that cuts the wait short is recorded in the activity log; one after the result
+	/// went is not.
+	@Test
+	func timeoutReportsWhetherItCutTheWaitShort() async {
+		let completion = ProcessCompletion(output: output, error: error)
+
+		_ = await withCheckedContinuation { continuation in
+			completion.resume(with: continuation)
+			completion.processExited(with: 0)
+			completion.pipeReachedEndOfFile()
+			#expect(completion.pipeDrainTimedOut())
+		}
+
+		#expect(!completion.pipeDrainTimedOut())
+	}
+
+	/// Resuming a continuation twice traps, so a late timeout or end of file must do nothing.
 	@Test
 	func resumesOnlyOnce() async {
 		let completion = ProcessCompletion(output: output, error: error)
@@ -57,11 +75,11 @@ struct ProcessCompletionTests {
 			completion.resume(with: continuation)
 			completion.processExited(with: 0)
 			completion.pipeReachedEndOfFile()
-			completion.pipeReachedEndOfFile()
+			completion.pipeDrainTimedOut()
 			output.append(Data("ignored\n".utf8))
 			completion.pipeReachedEndOfFile()
 		}
-		completion.processExited(with: 0)
+		completion.pipeDrainTimedOut()
 
 		#expect(result.outputString == "")
 	}
