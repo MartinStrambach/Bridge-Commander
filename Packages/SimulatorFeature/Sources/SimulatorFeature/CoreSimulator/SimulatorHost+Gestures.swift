@@ -68,14 +68,18 @@ extension SimulatorHost {
 
 		let interval = Duration.milliseconds(16)
 		let steps = max(2, Int(duration / interval))
+		try Task.checkCancellation()
 		connection.touch(normalized(start.first), normalized(start.second), phase: .began, target: target)
-		for step in 1...steps {
-			try await Task.sleep(for: interval)
-			let progress = CGFloat(step) / CGFloat(steps)
-			let fingers = Self.interpolate(start, end, progress)
-			connection.touch(normalized(fingers.first), normalized(fingers.second), phase: .moved, target: target)
+		var fingers = start
+		do {
+			// A cancelled gesture lifts both fingers where they got to.
+			defer { connection.touch(normalized(fingers.first), normalized(fingers.second), phase: .ended, target: target) }
+			for step in 1...steps {
+				try await Task.sleep(for: interval)
+				fingers = step == steps ? end : Self.interpolate(start, end, CGFloat(step) / CGFloat(steps))
+				connection.touch(normalized(fingers.first), normalized(fingers.second), phase: .moved, target: target)
+			}
 		}
-		connection.touch(normalized(end.first), normalized(end.second), phase: .ended, target: target)
 		try await drain()
 	}
 

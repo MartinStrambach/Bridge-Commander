@@ -55,6 +55,9 @@ nonisolated enum SimulatorBatchTool {
 		var images: [JSONValue] = []
 		var failures = 0
 		for (offset, step) in steps.enumerated() {
+			// A cancelled call stops here even with `continue_on_error`: its steps fail fast but
+			// would not all fail (a screenshot does not wait), and the user wants it to stop.
+			try Task.checkCancellation()
 			let number = offset + 1
 			if step.tool == "sleep" {
 				let requested = step.arguments["duration_ms"]?.doubleValue ?? 500
