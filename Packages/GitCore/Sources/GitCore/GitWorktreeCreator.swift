@@ -127,7 +127,9 @@ public nonisolated enum GitWorktreeCreator {
 				folder.path
 			],
 			currentDirectory: URL(fileURLWithPath: repositoryPath),
-			environment: EnvironmentHelper.setupEnvironment()
+			environment: EnvironmentHelper.setupEnvironment(),
+			// The script fetches and adds a worktree; terminated half-way it leaves a half-made one.
+			cancellation: .finish
 		)
 		// The script's git calls bypass `runGit`, so the step is recorded here, with the script's
 		// own account of which base it picked.

@@ -81,6 +81,108 @@ struct ProcessRunnerTests {
 		#expect(ContinuousClock.now - start < .seconds(5))
 	}
 
+	/// `withTaskCancellationHandler` calls `onCancel` at once in a task already cancelled, when
+	/// nothing is running yet, and the process used to be launched after it and run to the end.
+	@Test
+	func anAlreadyCancelledTaskDoesNotLaunchTheProcess() async throws {
+		let marker = FileManager.default.temporaryDirectory.appending(path: "ProcessRunnerTests-\(UUID())")
+		defer { try? FileManager.default.removeItem(at: marker) }
+
+		let result = await Task {
+			withUnsafeCurrentTask { $0?.cancel() }
+			return await ProcessRunner.run(executableURL: URL(filePath: "/usr/bin/touch"), arguments: [marker.path])
+		}.value
+
+		#expect(result.wasCancelled)
+		#expect(!result.success)
+		#expect(!FileManager.default.fileExists(atPath: marker.path))
+	}
+
+	@Test
+	func cancellingTheTaskTerminatesTheProcess() async {
+		let start = ContinuousClock.now
+		let task = Task {
+			await ProcessRunner.run(executableURL: URL(filePath: "/bin/sleep"), arguments: ["10"])
+		}
+		try? await Task.sleep(for: .milliseconds(200))
+		task.cancel()
+		let result = await task.value
+
+		#expect(result.wasCancelled)
+		#expect(result.exitCode == SIGTERM)
+		#expect(ContinuousClock.now - start < .seconds(5))
+	}
+
+	/// Only a termination the cancellation asked for is reported as cancelled, not any death by SIGTERM.
+	@Test
+	func aProcessThatExitsByItselfIsNotCancelled() async {
+		let result = await ProcessRunner.run(
+			executableURL: URL(filePath: "/bin/sh"),
+			arguments: ["-c", "kill -TERM $$"]
+		)
+
+		#expect(result.exitCode == SIGTERM)
+		#expect(!result.wasCancelled)
+	}
+
+	/// A command that changes something is not cut short by a cancellation, and still runs in a task
+	/// already cancelled — cleanup such as `--abort` runs exactly then.
+	@Test
+	func finishRunsTheProcessToTheEndDespiteCancellation() async throws {
+		let directory = FileManager.default.temporaryDirectory.appending(path: "ProcessRunnerTests-\(UUID())")
+		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		defer { try? FileManager.default.removeItem(at: directory) }
+		let late = directory.appending(path: "late")
+		let cancelledBefore = directory.appending(path: "cancelled-before")
+
+		let running = Task {
+			await ProcessRunner.run(
+				executableURL: URL(filePath: "/bin/sh"),
+				arguments: ["-c", "sleep 0.5; touch \"$0\"", late.path],
+				cancellation: .finish
+			)
+		}
+		try await Task.sleep(for: .milliseconds(100))
+		running.cancel()
+		let runningResult = await running.value
+
+		let alreadyCancelled = await Task {
+			withUnsafeCurrentTask { $0?.cancel() }
+			return await ProcessRunner.run(
+				executableURL: URL(filePath: "/usr/bin/touch"),
+				arguments: [cancelledBefore.path],
+				cancellation: .finish
+			)
+		}.value
+
+		#expect(runningResult.success)
+		#expect(!runningResult.wasCancelled)
+		#expect(FileManager.default.fileExists(atPath: late.path))
+		#expect(alreadyCancelled.success)
+		#expect(FileManager.default.fileExists(atPath: cancelledBefore.path))
+	}
+
+	/// `runGit` terminates a read-only command on cancellation and lets one that changes something
+	/// finish.
+	@Test
+	func runGitLetsOnlyACommandThatChangesSomethingRunWhenCancelled() async throws {
+		let directory = FileManager.default.temporaryDirectory.appending(path: "ProcessRunnerTests-\(UUID())")
+		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		defer { try? FileManager.default.removeItem(at: directory) }
+
+		let (version, initialize) = await Task {
+			withUnsafeCurrentTask { $0?.cancel() }
+			return (
+				await ProcessRunner.runGit(arguments: ["version"], at: directory.path),
+				await ProcessRunner.runGit(arguments: ["init", "--quiet"], at: directory.path)
+			)
+		}.value
+
+		#expect(version.wasCancelled)
+		#expect(initialize.success)
+		#expect(FileManager.default.fileExists(atPath: directory.appending(path: ".git").path))
+	}
+
 	/// An Xcode update deletes the git binary the app resolved at launch; every git call then failed
 	/// to launch until the app restarted.
 	@Test

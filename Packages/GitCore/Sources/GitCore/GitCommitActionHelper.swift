@@ -39,7 +39,22 @@ public nonisolated enum GitCommitActionHelper {
 	/// Stopping on conflicts is an outcome, not an error. Stopping for any other reason (the
 	/// commit's changes are already there, so the result would be empty) unwinds the operation
 	/// before throwing, so a failure never leaves a half-done cherry-pick or revert behind.
+	///
+	/// It runs to the end even when the caller is cancelled (the graph closed): the probes that
+	/// decide whether to unwind are read-only, and a cancelled task does not run those
+	/// (`ProcessCancellation`), so the unwinding would be skipped. An unstructured task does not
+	/// inherit the cancellation.
 	public static func apply(
+		_ operation: GitSequencerOperation,
+		commit: GitLogCommit,
+		at path: String
+	) async throws -> GitSequencerOutcome {
+		try await Task {
+			try await applyToEnd(operation, commit: commit, at: path)
+		}.value
+	}
+
+	private static func applyToEnd(
 		_ operation: GitSequencerOperation,
 		commit: GitLogCommit,
 		at path: String

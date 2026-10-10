@@ -29,7 +29,9 @@ public nonisolated enum GitWorktreeRemover {
 			executableURL: URL(filePath: "/bin/sh"),
 			arguments: ["-c", script],
 			currentDirectory: URL(filePath: path),
-			environment: EnvironmentHelper.setupEnvironment()
+			environment: EnvironmentHelper.setupEnvironment(),
+			// Like `runGit` for a command that changes something: a removal is not cut short.
+			cancellation: .finish
 		)
 		// The script's git calls bypass `runGit`, so the removal is recorded here.
 		ActivityLog.shared.record(

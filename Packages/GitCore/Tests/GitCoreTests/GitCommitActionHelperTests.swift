@@ -146,6 +146,25 @@ struct GitCommitActionHelperTests {
 		#expect(try await repository.git("log", "-1", "--format=%s") == "already here")
 	}
 
+	/// A cancelled task does not run read-only git commands, and the probes deciding whether to
+	/// unwind are read-only: the graph closing mid-apply would leave the cherry-pick in progress.
+	@Test
+	func aCancelledApplyStillLeavesNothingInProgress() async throws {
+		let repository = try await Repository()
+		defer { repository.remove() }
+
+		let onMain = try await repository.commit("more\n", to: "base.txt", message: "already here")
+
+		let attempt = Task {
+			withUnsafeCurrentTask { $0?.cancel() }
+			return try await GitCommitActionHelper.apply(.cherryPick, commit: onMain, at: repository.path)
+		}
+		await #expect(throws: GitError.self) {
+			try await attempt.value
+		}
+		#expect(!(await repository.exists("CHERRY_PICK_HEAD")))
+	}
+
 	@Test
 	func revertAddsACommitUndoingTheChange() async throws {
 		let repository = try await Repository()
