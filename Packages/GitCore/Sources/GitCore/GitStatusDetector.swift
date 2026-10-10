@@ -6,8 +6,14 @@ public nonisolated struct GitPorcelainStatus {
 
 	// MARK: - Branch (populated only when run with --branch)
 
-	public let branch: String?
-	public let hasRemoteBranch: Bool
+	/// The checked-out branch, or — during a rebase, when git reports HEAD as detached — the
+	/// branch being rebased (`GitStatusDetector.getStatus` fills that in). Nil when detached.
+	public internal(set) var branch: String?
+	/// HEAD is detached and no rebase is under way, so the worktree is on no branch at all.
+	public internal(set) var isDetached: Bool
+	/// The commit HEAD points at; nil on an unborn branch.
+	public let headOid: String?
+	public internal(set) var hasRemoteBranch: Bool
 	/// Ahead of the upstream, or — for a branch with no upstream — commits on no remote-tracking
 	/// branch at all (`GitStatusDetector.getStatus` fills that in; parsing alone leaves it 0).
 	public internal(set) var unpushedCount: Int
@@ -33,6 +39,8 @@ public nonisolated struct GitPorcelainStatus {
 
 	public init(parsing output: String, didSucceed: Bool = true) {
 		var branch: String?
+		var isDetached = false
+		var headOid: String?
 		var hasRemoteBranch = false
 		var unpushedCount = 0
 		var behindCount = 0
@@ -40,9 +48,18 @@ public nonisolated struct GitPorcelainStatus {
 		var unstaged: [FileChange] = []
 
 		for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
-			if line.hasPrefix("# branch.head ") {
+			if line.hasPrefix("# branch.oid ") {
+				let oid = String(line.dropFirst("# branch.oid ".count))
+				if oid != "(initial)" {
+					headOid = oid
+				}
+			}
+			else if line.hasPrefix("# branch.head ") {
 				let name = String(line.dropFirst("# branch.head ".count))
-				if name != "(detached)" {
+				if name == "(detached)" {
+					isDetached = true
+				}
+				else {
 					branch = name
 				}
 			}
@@ -135,6 +152,8 @@ public nonisolated struct GitPorcelainStatus {
 		}
 
 		self.branch = branch
+		self.isDetached = isDetached
+		self.headOid = headOid
 		self.hasRemoteBranch = hasRemoteBranch
 		self.unpushedCount = unpushedCount
 		self.behindCount = behindCount
@@ -158,12 +177,32 @@ public nonisolated enum GitStatusDetector {
 			at: path
 		)
 		var status = GitPorcelainStatus(parsing: result.outputString, didSucceed: result.success)
+		// A rebase detaches HEAD until it finishes; the row should stay on the branch being rebased.
+		if
+			status.didSucceed,
+			status.isDetached,
+			let rebasing = GitMergeDetector.branchBeingRebased(at: path)
+		{
+			status.branch = rebasing
+			status.isDetached = false
+			status.hasRemoteBranch = await hasUpstream(branch: rebasing, at: path)
+		}
 		// git reports ahead/behind only against an upstream, so a branch that was never pushed
 		// would read as having nothing to push.
 		if status.didSucceed, status.branch != nil, !status.hasRemoteBranch {
 			status.unpushedCount = await countCommitsOnNoRemote(at: path)
 		}
 		return status
+	}
+
+	/// `git status` reports no upstream while HEAD is detached, so a rebasing branch's own is
+	/// looked up in its config.
+	private static func hasUpstream(branch: String, at path: String) async -> Bool {
+		let result = await ProcessRunner.runGit(
+			arguments: ["for-each-ref", "--format=%(upstream)", "refs/heads/\(branch)"],
+			at: path
+		)
+		return result.success && !result.trimmedOutput.isEmpty
 	}
 
 	/// Commits reachable from HEAD but from no remote-tracking branch. 0 when the repository has

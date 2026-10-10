@@ -22,7 +22,10 @@ struct RepositoryRowReducer {
 
 		var name: String
 		var isWorktree: Bool
+		/// Nil when HEAD is detached (`detachedHead` then names the commit) or not read yet.
 		var branchName: String?
+		/// The commit a detached HEAD points at, from the last status read.
+		var detachedHead: String?
 
 		var unstagedChangesCount: Int
 		var stagedChangesCount: Int
@@ -96,6 +99,10 @@ struct RepositoryRowReducer {
 		var formattedBranchName: String {
 			@Shared(.branchNameRegex)
 			var regex = "[a-zA-Z]+-\\d+[_/]"
+
+			guard let branchName else {
+				return name
+			}
 
 			return BranchNameFormatter.format(branchName, ticketId: ticketId, branchNameRegex: regex)
 		}
@@ -534,7 +541,10 @@ struct RepositoryRowReducer {
 			return .merge(syncMergeStatus, pendingStashCheck)
 		}
 
-		let branch = status.branch ?? state.branchName ?? state.name
+		// A detached HEAD is on no branch, as the scan reports it too. Falling back to the folder
+		// name there made the scan and each status read disagree, so every refresh flipped the
+		// row's title and branch line, and looked up a PR for a branch named like the folder.
+		let branch = status.isDetached ? nil : status.branch ?? state.branchName ?? state.name
 		let branchChanged = branch != state.branchName
 		let upstreamMoved = status.hasRemoteBranch != state.hasRemoteBranch
 			|| status.behindCount != state.commitsBehindCount
@@ -557,9 +567,10 @@ struct RepositoryRowReducer {
 			state.shareButton.updatePRURL(nil)
 		}
 		state.branchName = branch
+		state.detachedHead = status.isDetached ? status.headOid : nil
 		let newTicketId = state.ticketIdRegex.isEmpty
 			? nil
-			: GitBranchDetector.extractTicketId(from: branch, pattern: state.ticketIdRegex)
+			: GitBranchDetector.extractTicketId(from: branch ?? state.name, pattern: state.ticketIdRegex)
 		if newTicketId != state.ticketId {
 			state.androidCR = nil
 			state.iosCR = nil
@@ -576,7 +587,7 @@ struct RepositoryRowReducer {
 		state.shareButton.updateTicketURL(state.ticketButton?.ticketURL ?? "")
 		state.unstagedChangesCount = unstaged
 		state.stagedChangesCount = staged
-		state.gitActionsMenu.setCurrentBranch(branch)
+		state.gitActionsMenu.setCurrentBranch(branch ?? state.name)
 		state.commitsBehindCount = status.behindCount
 		state.hasRemoteBranch = status.hasRemoteBranch
 		state.unpushedCommitCount = status.unpushedCount
@@ -677,10 +688,14 @@ struct RepositoryRowReducer {
 	private func fetchPullRequest(for state: State) -> EffectOf<RepositoryRowReducer> {
 		.run { [
 			path = state.path,
-			branchName = state.branchName ?? state.name,
+			branchName = state.branchName,
 			defaultBranch = state.defaultBranch
 		] send in
-			guard !DefaultBranchResolver.isDefaultBranch(branchName, configured: defaultBranch) else {
+			// A detached HEAD has no branch a PR could come from.
+			guard
+				let branchName,
+				!DefaultBranchResolver.isDefaultBranch(branchName, configured: defaultBranch)
+			else {
 				await send(.didFetchPullRequest(nil))
 				return
 			}

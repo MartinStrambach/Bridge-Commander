@@ -211,6 +211,18 @@ struct RepositoryRowView: View {
 							}
 						}
 					}
+					else if let detachedHead = store.detachedHead {
+						// No "No remote" here: a detached HEAD can have no upstream.
+						HStack(spacing: 4) {
+							Image(systemName: "smallcircle.filled.circle")
+								.scaledFont(.caption)
+								.foregroundColor(.secondary)
+							Text("Detached at \(detachedHead.prefix(8))")
+								.scaledFont(.caption)
+								.foregroundColor(.secondary)
+								.lineLimit(1)
+						}
+					}
 				}
 
 				Spacer()

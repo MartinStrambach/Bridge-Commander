@@ -188,6 +188,83 @@ struct RepositoryRowStatusFetchTests {
 		#expect(askedForRemote.value)
 	}
 
+	// MARK: - Detached HEAD
+
+	private static let detachedPorcelain = """
+	# branch.oid 1e4e821e3ee698593fbe441282399a7e55fe6e78
+	# branch.head (detached)
+	"""
+
+	/// `getOriginRemote` and `fetchDetails` are left unimplemented: a PR lookup fails the test.
+	@Test("a detached HEAD stays on no branch, as the scan reports it, and looks up no PR")
+	func detachedHeadStaysOnNoBranch() async {
+		let row = RepositoryRowReducer.State(path: "/repos/app", name: "app", branchName: nil)
+		let store = TestStore(initialState: row) {
+			RepositoryRowReducer()
+		}
+		store.exhaustivity = .off
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: Self.detachedPorcelain), false))
+		await store.receive(\.didFetchPullRequest)
+		await store.finish()
+
+		// Not the folder name: the next scan sets nil again, and the row flipped on every refresh.
+		#expect(store.state.branchName == nil)
+		#expect(store.state.detachedHead == "1e4e821e3ee698593fbe441282399a7e55fe6e78")
+		#expect(store.state.formattedBranchName == "app")
+	}
+
+	@Test("checking out a commit drops the branch and its PR")
+	func detachingClearsBranchAndPullRequest() async {
+		var row = makeRow(branchName: "feature")
+		row.prUrl = "https://github.com/o/app/pull/1"
+		row.prState = .ready
+		let store = TestStore(initialState: row) {
+			RepositoryRowReducer()
+		}
+		store.exhaustivity = .off
+
+		await store.send(.didFetchStatusAfterChangeOnDisk(GitPorcelainStatus(parsing: Self.detachedPorcelain), false))
+		await store.finish()
+
+		#expect(store.state.branchName == nil)
+		#expect(store.state.prUrl == nil)
+		#expect(store.state.prState == nil)
+	}
+
+	@Test("checking a branch out again clears the detached commit")
+	func attachingClearsDetachedHead() async {
+		var row = RepositoryRowReducer.State(path: "/repos/app", name: "app", branchName: nil)
+		row.detachedHead = "1e4e821e3ee698593fbe441282399a7e55fe6e78"
+		let store = makeStore(row, remote: nil)
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head feature"), false))
+		await store.finish()
+
+		#expect(store.state.branchName == "feature")
+		#expect(store.state.detachedHead == nil)
+	}
+
+	/// The worktree folder is named after its branch, so a detached one keeps the ticket and the
+	/// stash menu it had before (as the row's initializer does), just without a PR.
+	@Test("a detached HEAD keys its ticket and git menu on the folder name")
+	func detachedHeadFallsBackToFolderName() async {
+		let row = RepositoryRowReducer.State(
+			path: "/repos/LS-1234_feature",
+			name: "LS-1234_feature",
+			branchName: nil,
+			ticketIdRegex: "[A-Z]+-\\d+"
+		)
+		let store = makeStore(row, remote: nil)
+
+		await store.send(.didFetchStatusAfterChangeOnDisk(GitPorcelainStatus(parsing: Self.detachedPorcelain), false))
+		await store.finish()
+
+		#expect(store.state.branchName == nil)
+		#expect(store.state.ticketId == "LS-1234")
+		#expect(store.state.gitActionsMenu.currentBranch == "LS-1234_feature")
+	}
+
 	// MARK: - Helpers
 
 	/// Branch `feature-two`, 3 ahead and 2 behind its upstream, with one staged change, one
