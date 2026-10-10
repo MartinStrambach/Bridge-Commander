@@ -142,15 +142,22 @@ public final class SimulatorAppLauncher: @unchecked Sendable {
 		console.terminationHandler = { [weak self] process in
 			self?.consoleExited(key: key, capture: capture, status: process.terminationStatus)
 		}
+		// A capture of an earlier launch ends on its own: --terminate-running-process ends its app.
+		// Registered before the launch runs: a simctl that exits at once would otherwise run
+		// `consoleExited` first and leave this dead capture behind for `terminate` to report.
+		captures.withLock { $0[key] = capture }
 		do {
 			try console.run()
 		}
 		catch {
+			captures.withLock { captures in
+				if captures[key] === capture {
+					captures[key] = nil
+				}
+			}
 			logStream.terminate()
 			throw SimulatorError.launchFailed("could not run `simctl launch`: \(error.localizedDescription)")
 		}
-		// A capture of an earlier launch ends on its own: --terminate-running-process ends its app.
-		captures.withLock { $0[key] = capture }
 
 		try? await Task.sleep(for: .milliseconds(500))
 		guard console.isRunning else {

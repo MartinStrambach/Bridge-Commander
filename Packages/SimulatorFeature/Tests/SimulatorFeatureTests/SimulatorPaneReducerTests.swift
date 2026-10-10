@@ -29,7 +29,7 @@ struct SimulatorPaneReducerTests {
 
 		let shutdown = Self.device("A", state: .shutdown)
 		let booted = Self.device("B", state: .booted)
-		await store.send(.devicesLoaded([shutdown, booted], storedSelection: nil)) {
+		await store.send(.devicesLoaded([shutdown, booted], storedSelection: nil, repositoryPath: nil)) {
 			$0.devices = [shutdown, booted]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "B"
@@ -45,7 +45,7 @@ struct SimulatorPaneReducerTests {
 
 		let shutdown = Self.device("A", state: .shutdown)
 		let booted = Self.device("B", state: .booted)
-		await store.send(.devicesLoaded([shutdown, booted], storedSelection: "A")) {
+		await store.send(.devicesLoaded([shutdown, booted], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [shutdown, booted]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "A"
@@ -111,7 +111,7 @@ struct SimulatorPaneReducerTests {
 			$0.repositoryPath = "/repos/app"
 		}
 		await store.receive(.claudeCodeStatusChecked(true))
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", repositoryPath: "/repos/app")) {
 			$0.devices = [iPhone, iPad]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "A"
@@ -123,7 +123,7 @@ struct SimulatorPaneReducerTests {
 			$0.selectedDeviceId = nil
 		}
 		await store.receive(.claudeCodeStatusChecked(true))
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B")) {
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", repositoryPath: "/repos/app-ipad")) {
 			$0.selectedDeviceId = "B"
 		}
 
@@ -211,10 +211,58 @@ struct SimulatorPaneReducerTests {
 		}
 
 		await store.send(.rotateButtonTapped(clockwise: false))
-		await store.receive(.devicesLoaded([rotated], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([rotated], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [rotated]
 		}
 		#expect(turns.value == [false])
+	}
+
+	/// A rotation can take seconds; when it ends after the pane moved to another repository, its
+	/// device list carries the first repository's device and must not replace the one shown.
+	@Test
+	func aRotationFinishingAfterARepositorySwitchLeavesTheNewRepositorysDevice() async {
+		let iPhone = Self.device("A", state: .booted)
+		let iPad = Self.device("B", state: .booted)
+		let choices = ["/repos/app": "A", "/repos/app-ipad": "B"]
+		let (rotationGate, finishRotation) = AsyncStream<Void>.makeStream()
+		let clock = TestClock()
+
+		var initial = SimulatorPaneReducer.State()
+		initial.repositoryPath = "/repos/app"
+		initial.devices = [iPhone, iPad]
+		initial.selectedDeviceId = "A"
+		initial.hasLoadedDevices = true
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].rotate = { _, _ in
+				for await _ in rotationGate {
+					break
+				}
+				return SimulatorRotation(orientation: .landscapeLeft, interfaceRotation: .counterclockwise, interfaceFollowed: true)
+			}
+			$0[SimulatorClient.self].devices = { [iPhone, iPad] }
+			$0[SimulatorClient.self].selectedDeviceId = { path in path.flatMap { choices[$0] } }
+			$0[SimulatorClient.self].isClaudeCodeConnected = { true }
+			$0[SimulatorClient.self].prepareInput = { _ in }
+			$0[SimulatorClient.self].recordingDeviceIds = { .finished }
+			$0.continuousClock = clock
+		}
+
+		await store.send(.rotateButtonTapped(clockwise: false))
+		let iPadTask = await store.send(.task(repositoryPath: "/repos/app-ipad")) {
+			$0.repositoryPath = "/repos/app-ipad"
+			$0.selectedDeviceId = nil
+		}
+		await store.receive(.claudeCodeStatusChecked(true))
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", repositoryPath: "/repos/app-ipad")) {
+			$0.selectedDeviceId = "B"
+		}
+
+		finishRotation.yield()
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", repositoryPath: "/repos/app"))
+		#expect(store.state.selectedDeviceId == "B")
+		await iPadTask.cancel()
 	}
 
 	/// The device turns but the app stays put: without a word the button would seem broken.
@@ -239,7 +287,7 @@ struct SimulatorPaneReducerTests {
 		}
 
 		await store.send(.rotateButtonTapped(clockwise: true))
-		await store.receive(.devicesLoaded([booted], storedSelection: "A"))
+		await store.receive(.devicesLoaded([booted], storedSelection: "A", repositoryPath: nil))
 		let notice = SimulatorPaneReducer.Notice(
 			icon: "rotate.right",
 			title: "Turned to landscape right",
@@ -293,7 +341,7 @@ struct SimulatorPaneReducerTests {
 		await store.send(.foldButtonTapped) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([open], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([open], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [open]
 		}
 		await store.receive(.transitionFinished(errorMessage: nil)) {
@@ -342,7 +390,7 @@ struct SimulatorPaneReducerTests {
 		await store.send(.foldSelected(.partiallyOpen)) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [partlyOpen]
 		}
 		await store.receive(.transitionFinished(errorMessage: nil)) {
@@ -354,7 +402,7 @@ struct SimulatorPaneReducerTests {
 		await store.send(.foldButtonTapped) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A"))
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", repositoryPath: nil))
 		await store.receive(.transitionFinished(errorMessage: nil)) {
 			$0.transitioningDeviceId = nil
 		}

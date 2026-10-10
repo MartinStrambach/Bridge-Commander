@@ -92,7 +92,9 @@ public struct SimulatorPaneReducer {
 		/// The pane is on screen beside `repositoryPath`'s terminal; runs until it leaves or shows
 		/// another repository.
 		case task(repositoryPath: String)
-		case devicesLoaded([SimulatorDevice], storedSelection: String?)
+		/// The device list and `repositoryPath`'s stored device, read for that repository. A read
+		/// for another one (a fold or rotation that finished after the pane moved on) is dropped.
+		case devicesLoaded([SimulatorDevice], storedSelection: String?, repositoryPath: String?)
 		case devicesFailed(String)
 		case deviceSelected(String)
 		case bootButtonTapped
@@ -190,7 +192,11 @@ public struct SimulatorPaneReducer {
 			do {
 				try await simulatorClient.setFold(device, fold)
 				let devices = try await simulatorClient.devices()
-				await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
+				await send(.devicesLoaded(
+					devices,
+					storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+					repositoryPath: repositoryPath
+				))
 				await send(.transitionFinished(errorMessage: nil))
 			}
 			catch {
@@ -223,7 +229,8 @@ public struct SimulatorPaneReducer {
 								let devices = try await simulatorClient.devices()
 								await send(.devicesLoaded(
 									devices,
-									storedSelection: simulatorClient.selectedDeviceId(repositoryPath)
+									storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+									repositoryPath: repositoryPath
 								))
 							}
 							catch {
@@ -241,7 +248,12 @@ public struct SimulatorPaneReducer {
 					.cancellable(id: CancelId.recordings, cancelInFlight: true)
 				)
 
-			case let .devicesLoaded(devices, storedSelection):
+			case let .devicesLoaded(devices, storedSelection, repositoryPath):
+				// The selection read is the other repository's; storing a fallback would even give
+				// this one that repository's device. The next poll brings this one's.
+				guard repositoryPath == state.repositoryPath else {
+					return .none
+				}
 				let previouslyBooted = state.selectedDevice?.isBooted ?? false
 				state.devices = devices
 				state.hasLoadedDevices = true
@@ -338,7 +350,11 @@ public struct SimulatorPaneReducer {
 					do {
 						let rotation = try await simulatorClient.rotate(device.id, clockwise)
 						let devices = try await simulatorClient.devices()
-						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
+						await send(.devicesLoaded(
+							devices,
+							storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+							repositoryPath: repositoryPath
+						))
 						if !rotation.interfaceFollowed {
 							let notice = Notice(
 								icon: clockwise ? "rotate.right" : "rotate.left",
