@@ -148,7 +148,7 @@ struct FileDiffViewerDisplayTests {
 		await store.receive(\.loadResponse)
 		#expect(store.state.displayDiff != nil)
 
-		await store.send(.loadResponse(nil))
+		await store.send(.loadResponse(fileId: file.id, isStaged: false, nil))
 
 		#expect(store.state.fileDiff == nil)
 		#expect(store.state.displayDiff == nil)
@@ -187,6 +187,7 @@ struct FileDiffViewerDisplayTests {
 		store.exhaustivity = .off
 
 		await store.send(.unstaged(.updateSelection([])))
+		await store.receive(\.diffViewer.clear)
 
 		#expect(store.state.diffViewer.displayDiff == nil)
 		#expect(store.state.diffViewer.fileDiff == nil)
