@@ -52,6 +52,20 @@ struct ProcessRunnerTests {
 		#expect(result.trimmedError == "err")
 	}
 
+	/// The result waits for the pipes' end of file, not just the exit: a child still holding the
+	/// pipe writes after the process is gone.
+	@Test
+	func outputWrittenAfterTheExitIsKept() async {
+		let result = await ProcessRunner.run(
+			executableURL: URL(filePath: "/bin/sh"),
+			arguments: ["-c", "echo first; (sleep 0.3; echo late; echo late-err >&2) & exit 0"]
+		)
+
+		#expect(result.success)
+		#expect(result.outputString == "first\nlate\n")
+		#expect(result.errorString == "late-err\n")
+	}
+
 	/// An Xcode update deletes the git binary the app resolved at launch; every git call then failed
 	/// to launch until the app restarted.
 	@Test
