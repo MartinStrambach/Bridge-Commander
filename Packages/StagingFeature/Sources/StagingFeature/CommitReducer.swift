@@ -90,7 +90,9 @@ public struct CommitReducer: Sendable {
 					message: error.localizedDescription,
 					isError: true
 				)
-				return .none
+				// The commit went through, so the panel must still drop the files it took. The
+				// sheet stays open to show the alert.
+				return .send(.delegate(.commitSucceeded))
 
 			case let .commitCompleted(.failure(error)):
 				state.isCommitting = false

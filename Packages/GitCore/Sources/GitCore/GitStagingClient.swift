@@ -39,6 +39,7 @@ public struct GitFileChanges: Equatable {
 // MARK: - Live Implementation
 
 extension GitStagingClient: DependencyKey {
+	/// Every write goes through `GitIndexWriteQueue`, so writes to one working tree never overlap.
 	public static var liveValue: GitStagingClient {
 		GitStagingClient(
 			fetchFileChanges: { at in
@@ -48,31 +49,49 @@ extension GitStagingClient: DependencyKey {
 				await GitStagingHelper.fetchFileDiff(at: at, file: file, isStaged: isStaged)
 			},
 			stageFiles: { at, filePaths in
-				try await GitStagingHelper.stageFiles(at: at, filePaths: filePaths)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.stageFiles(at: at, filePaths: filePaths)
+				}
 			},
 			unstageFiles: { at, filePaths in
-				try await GitStagingHelper.unstageFiles(at: at, filePaths: filePaths)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.unstageFiles(at: at, filePaths: filePaths)
+				}
 			},
 			stageHunk: { at, file, hunk in
-				try await GitStagingHelper.stageHunk(at: at, file: file, hunk: hunk)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.stageHunk(at: at, file: file, hunk: hunk)
+				}
 			},
 			unstageHunk: { at, file, hunk in
-				try await GitStagingHelper.unstageHunk(at: at, file: file, hunk: hunk)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.unstageHunk(at: at, file: file, hunk: hunk)
+				}
 			},
 			discardHunk: { at, file, hunk in
-				try await GitStagingHelper.discardHunk(at: at, file: file, hunk: hunk)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.discardHunk(at: at, file: file, hunk: hunk)
+				}
 			},
 			discardFileChanges: { at, filePaths in
-				try await GitStagingHelper.discardFileChanges(at: at, filePaths: filePaths)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.discardFileChanges(at: at, filePaths: filePaths)
+				}
 			},
 			deleteUntrackedFiles: { at, filePaths in
-				try await GitStagingHelper.deleteUntrackedFiles(at: at, filePaths: filePaths)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.deleteUntrackedFiles(at: at, filePaths: filePaths)
+				}
 			},
 			deleteConflictedFiles: { at, filePaths in
-				try await GitStagingHelper.deleteConflictedFiles(at: at, filePaths: filePaths)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.deleteConflictedFiles(at: at, filePaths: filePaths)
+				}
 			},
 			commit: { at, message in
-				try await GitStagingHelper.commit(at: at, message: message)
+				try await GitIndexWriteQueue.shared.run(at: at) {
+					try await GitStagingHelper.commit(at: at, message: message)
+				}
 			}
 		)
 	}

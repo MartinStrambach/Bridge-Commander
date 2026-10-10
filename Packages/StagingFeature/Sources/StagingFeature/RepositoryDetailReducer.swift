@@ -103,7 +103,11 @@ public struct RepositoryDetail: Sendable {
 
 		Reduce { state, action in
 			switch action {
+			// The refresh after a stage/unstage shares the cancel ID with every other refresh, so an
+			// older snapshot (window focus, ⌘R) can never land after the newer one.
 			case .loadChanges,
+			     .stageFilesCompleted,
+			     .unstageFilesCompleted,
 			     .operationCompleted(.success):
 				state.isLoadingChanges = true
 				return .merge(
@@ -166,12 +170,6 @@ public struct RepositoryDetail: Sendable {
 					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case .stageFilesCompleted:
-				return .run { [path = state.repositoryPath] send in
-					let changes = await gitStagingClient.fetchFileChanges(path)
-					await send(.loadChangesResponse(changes))
-				}
-
 			case let .staged(.delegate(.toggleAll(files))):
 				guard !files.isEmpty else {
 					return .none
@@ -186,12 +184,6 @@ public struct RepositoryDetail: Sendable {
 						await send(.unstageFilesCompleted)
 					}
 					catch { await send(.operationCompleted(.failure(error))) }
-				}
-
-			case .unstageFilesCompleted:
-				return .run { [path = state.repositoryPath] send in
-					let changes = await gitStagingClient.fetchFileChanges(path)
-					await send(.loadChangesResponse(changes))
 				}
 
 			case let .unstaged(.delegate(.discardChanges(files))):
@@ -301,6 +293,9 @@ public struct RepositoryDetail: Sendable {
 				return .send(.operationCompleted(result))
 
 			case let .operationCompleted(.failure(error)):
+				// No reload follows a failure, so the diff viewer would otherwise ignore hunk
+				// actions for good.
+				state.diffViewer.isApplyingHunk = false
 				let title: String
 				if let gitError = error as? GitError, case .mergeFailed = gitError {
 					title = "Finish Merge Failed"
