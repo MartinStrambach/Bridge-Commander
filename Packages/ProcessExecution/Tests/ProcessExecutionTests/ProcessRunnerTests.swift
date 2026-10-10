@@ -66,6 +66,21 @@ struct ProcessRunnerTests {
 		#expect(result.errorString == "late-err\n")
 	}
 
+	/// A child that keeps a pipe open past `pipeDrainTimeout` does not hold the result back. The
+	/// exit used to block in `readToEnd()` until that child exited too.
+	@Test
+	func pipeHeldOpenByAChildTimesOut() async {
+		let start = ContinuousClock.now
+		let result = await ProcessRunner.run(
+			executableURL: URL(filePath: "/bin/sh"),
+			arguments: ["-c", "echo first; sleep 10 & exit 0"]
+		)
+
+		#expect(result.success)
+		#expect(result.outputString == "first\n")
+		#expect(ContinuousClock.now - start < .seconds(5))
+	}
+
 	/// An Xcode update deletes the git binary the app resolved at launch; every git call then failed
 	/// to launch until the app restarted.
 	@Test

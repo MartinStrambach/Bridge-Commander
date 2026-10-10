@@ -96,6 +96,13 @@ public nonisolated enum ProcessRunner {
 				// its changes and showed "No remote"), and longer output lost a chunk from the middle.
 				process.terminationHandler = { proc in
 					completion.processExited(with: proc.terminationStatus)
+					// A child the process left running can hold a pipe open long after it exits; the
+					// result then goes without what it writes. Only `completion` is captured: holding
+					// the pipes here kept every read end open for the whole timeout, hundreds of
+					// descriptors during a refresh, against a GUI app's limit of 256.
+					DispatchQueue.global().asyncAfter(deadline: .now() + pipeDrainTimeout) { [completion] in
+						completion.pipeDrainTimedOut()
+					}
 				}
 
 				do {
@@ -214,8 +221,11 @@ nonisolated final class ResolvedExecutable: Sendable {
 	}
 }
 
+/// How long a result waits, after the process exits, for its pipes to reach end of file.
+let pipeDrainTimeout: DispatchTimeInterval = .seconds(2)
+
 /// Resumes a `ProcessRunner.run` call once, when the process has exited and both of its pipes have
-/// reached end of file.
+/// reached end of file — or `pipeDrainTimeout` after the exit, with what has arrived by then.
 nonisolated final class ProcessCompletion: Sendable {
 	private struct State {
 		var continuation: CheckedContinuation<ProcessResult, Never>?
@@ -248,6 +258,10 @@ nonisolated final class ProcessCompletion: Sendable {
 			state.exitCode = exitCode
 			return state.openPipes == 0
 		}
+	}
+
+	func pipeDrainTimedOut() {
+		finish { $0.exitCode != nil }
 	}
 
 	func launchFailed(with result: ProcessResult) {
