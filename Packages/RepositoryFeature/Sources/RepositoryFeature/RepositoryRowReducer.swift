@@ -65,6 +65,9 @@ struct RepositoryRowReducer {
 		var deleteWorktreeButton: DeleteWorktreeButtonReducer.State
 		var createWorktreeButton: CreateWorktreeButtonReducer.State
 		var gitActionsMenu: GitActionsMenuReducer.State
+		/// `git commit --no-edit` started from the terminal toolbar's merge banner is running. Held by
+		/// the row, not the panel: hiding the panel drops its state and cancels its effects.
+		var isFinishingMerge = false
 
 		var isLoaded = false
 		/// A status fetch for `onAppear`/`refresh` is under way. A change on disk cancels it and
@@ -258,6 +261,10 @@ struct RepositoryRowReducer {
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
 		case createWorktreeButton(CreateWorktreeButtonReducer.Action)
 		case gitActionsMenu(GitActionsMenuReducer.Action)
+		/// The terminal toolbar's merge banner: conclude the merge in progress.
+		case finishMergeTapped
+		/// A failure is alerted by `RepositoryListReducer`, the row has no presenter of its own.
+		case finishMergeCompleted(GitError?)
 		case worktreeDeleted
 		/// The list rescans the group, then opens `path` in the built-in terminal when `launch`
 		/// asks for it.
@@ -449,6 +456,26 @@ struct RepositoryRowReducer {
 				default:
 					return .none
 				}
+
+			case .finishMergeTapped:
+				guard !state.isFinishingMerge else {
+					return .none
+				}
+
+				state.isFinishingMerge = true
+				return .run { [path = state.path] send in
+					do {
+						try await GitMergeHelper.finishMerge(at: path)
+						await send(.finishMergeCompleted(nil))
+					}
+					catch {
+						await send(.finishMergeCompleted(error as? GitError ?? .mergeFailed(error.localizedDescription)))
+					}
+				}
+
+			case let .finishMergeCompleted(error):
+				state.isFinishingMerge = false
+				return error == nil ? .send(.refresh) : .none
 
 			case .youtrackButton(.delegate(.stateChanged)):
 				// Re-read the issue: the state chip and the set of reachable transitions both

@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 import GitCore
+import Settings
 import TerminalFeature
 import Testing
 import ToolsIntegration
@@ -239,11 +240,15 @@ struct TerminalTabRestoreTests {
 
 	@Test("the toolbar picks up the restored repository's buttons once the scan finds its row")
 	func toolbarSyncsAfterScan() async {
+		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
+		$groupSettings.withLock {
+			$0 = ["/repos/alpha": RepoGroupSettings(supportsAndroid: true)]
+		}
 		let store = makeStore(loading: SavedTerminalTabs(tabs: [
 			tab("/repos/alpha", directory: "/repos/alpha", isRepositoryCurrentTab: true, isOnScreen: true),
 		]))
 		await store.send(.restoreTerminalTabs)
-		#expect(store.state.terminalLayout?.gitActionsMenu == nil)
+		#expect(store.state.terminalLayout?.androidStudioButton == nil)
 
 		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
 			ScannedRepository(
@@ -257,7 +262,8 @@ struct TerminalTabRestoreTests {
 
 		let row = store.state.repositoryGroups[id: "/repos/alpha"]?.header
 		#expect(row != nil)
-		#expect(store.state.terminalLayout?.gitActionsMenu == row?.gitActionsMenu)
+		#expect(row?.androidStudioButton != nil)
+		#expect(store.state.terminalLayout?.androidStudioButton == row?.androidStudioButton)
 	}
 
 	// MARK: - Helpers

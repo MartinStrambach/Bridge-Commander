@@ -38,7 +38,6 @@ struct TerminalToolbarResyncTests {
 		let row = state.repositoryGroups[id: path]?.header
 		#expect(state.terminalLayout?.activeRepositoryPath == path)
 		#expect(row != nil)
-		#expect(state.terminalLayout?.gitActionsMenu == row?.gitActionsMenu)
 		#expect(state.terminalLayout?.webButton == row?.webButton)
 		#expect(state.terminalLayout?.ticketButton == row?.ticketButton)
 	}

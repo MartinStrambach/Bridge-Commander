@@ -163,35 +163,6 @@ struct TerminalTabLifecycleTests {
 		#expect(store.state.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] == retried.id)
 	}
 
-	// MARK: - Toolbar Finish Merge
-
-	@Test("a finished merge from the toolbar refreshes the opened repository's row")
-	func finishMergeRefreshesRow() async {
-		let store = await makeStoreShowingAlpha()
-
-		await store.send(.terminalLayout(.finishMergeCompleted(repositoryPath: "/repos/alpha", error: nil)))
-		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
-		await store.finish()
-		#expect(store.state.alert == nil)
-	}
-
-	@Test("a failed merge from the toolbar alerts instead of refreshing")
-	func finishMergeFailureAlerts() async {
-		let store = await makeStoreShowingAlpha()
-		store.exhaustivity = .on
-
-		await store.send(.terminalLayout(.finishMergeCompleted(
-			repositoryPath: "/repos/alpha",
-			error: .mergeFailed("CONFLICT in App.swift")
-		))) {
-			$0.alert = AlertState {
-				TextState("Finish Merge Failed")
-			} message: {
-				TextState(GitError.mergeFailed("CONFLICT in App.swift").localizedDescription)
-			}
-		}
-	}
-
 	// MARK: - Toolbar buttons
 
 	@Test("the toolbar shows Android Studio only for a repository that supports Android")
@@ -274,12 +245,5 @@ struct TerminalTabLifecycleTests {
 			isWorktree: false,
 			branchName: "master"
 		)
-	}
-
-	private func isHeaderRefresh(_ action: RepositoryListReducer.Action, groupId: String) -> Bool {
-		guard case let .repositoryGroups(.element(id: id, action: .header(.refresh))) = action else {
-			return false
-		}
-		return id == groupId
 	}
 }

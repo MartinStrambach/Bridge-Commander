@@ -88,12 +88,10 @@ struct TerminalPanelView: View {
 		VStack(spacing: 0) {
 			toolbar
 			Divider()
-			// The flag comes from the panel's own menu copy, which is the state the menu view
-			// beside this banner acts on, and which is re-synced on every merge-status report
-			// from the opened row. `activeRowStore?.gitActionsMenu` would be equivalent now
-			// that the row is a store — this keeps banner and menu on one source.
-			if store.gitActionsMenu?.isMergeInProgress == true {
-				mergeStatusBanner
+			// The opened row's own merge status, the same state the git menu beside this banner
+			// gates its items on.
+			if let rowStore = activeRowStore, rowStore.gitActionsMenu.isMergeInProgress {
+				mergeStatusBanner(rowStore)
 			}
 			if store.activeRepositoryPath != nil {
 				tabBar
@@ -164,12 +162,13 @@ struct TerminalPanelView: View {
 
 			Spacer()
 
-			if let gitActionsStore = store.scope(\.gitActionsMenu, action: \.gitActionsMenu) {
+			// The row's own stores, not copies, so an operation shows the same progress here and in
+			// the list, stays with its repository when the panel switches to another, and survives
+			// the panel being hidden. Gated the same way as in the row.
+			if let gitActionsStore = activeRowStore?.scope(\.gitActionsMenu, action: \.gitActionsMenu) {
 				GitActionsMenuView(store: gitActionsStore)
 			}
 
-			// The row's own stores, not copies, so a generate shows the same progress here and in
-			// the list and survives the panel being hidden. Gated the same way as in the row.
 			if let rowStore = activeRowStore, rowStore.supportsIOS, rowStore.supportsTuist {
 				TuistButtonView(store: rowStore.scope(\.tuistButton, action: \.tuistButton))
 			}
@@ -181,13 +180,13 @@ struct TerminalPanelView: View {
 				YouTrackButtonView(store: youtrackStore)
 			}
 
-			if let rowStore = activeRowStore, rowStore.unpushedCommitCount > 0 || store.isPushing {
+			// The git menu's own push, so the menu shows it running (and offers nothing else) while
+			// it does, and the other way round.
+			if let rowStore = activeRowStore, rowStore.unpushedCommitCount > 0 || rowStore.gitActionsMenu.isPushing {
 				Button {
-					if let path = store.activeRepositoryPath {
-						store.send(.pushButtonTapped(repositoryPath: path))
-					}
+					rowStore.send(.gitActionsMenu(.pushButton(.pushTapped)))
 				} label: {
-					if store.isPushing {
+					if rowStore.gitActionsMenu.isPushing {
 						HStack(spacing: 4) {
 							ProgressView()
 								.controlSize(.mini)
@@ -201,7 +200,7 @@ struct TerminalPanelView: View {
 				.buttonStyle(.scaledBordered)
 				.controlSize(.small)
 				.tint(.orange)
-				.disabled(store.isPushing)
+				.disabled(rowStore.gitActionsMenu.isOperationRunning)
 			}
 
 			// PR/MR fetch failure (conditional) — same indicator, in the same position, as
@@ -337,18 +336,16 @@ struct TerminalPanelView: View {
 
 	// MARK: - Merge Status Banner
 
-	private var mergeStatusBanner: some View {
+	private func mergeStatusBanner(_ rowStore: StoreOf<RepositoryRowReducer>) -> some View {
 		BannerView(
 			icon: "arrow.triangle.merge",
 			title: "Merge in Progress",
 			actionLabel: "Finish Merge",
 			actionSystemImage: "checkmark.circle",
 			actionHelp: "Complete merge with git commit --no-edit",
-			isLoading: store.isFinishingMerge,
+			isLoading: rowStore.isFinishingMerge,
 			onAction: {
-				if let path = store.activeRepositoryPath {
-					store.send(.finishMergeButtonTapped(repositoryPath: path))
-				}
+				rowStore.send(.finishMergeTapped)
 			}
 		)
 	}
