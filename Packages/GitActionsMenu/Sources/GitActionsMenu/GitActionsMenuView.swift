@@ -128,18 +128,27 @@ private struct GitActionsMenuPresentations: ViewModifier {
 	@Bindable
 	var store: StoreOf<GitActionsMenuReducer>
 
+	/// Off on the repository list while the terminal toolbar, which shows the same row's menu,
+	/// covers it — see `presentsButtonAlerts`.
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	func body(content: Content) -> some View {
 		content
-			.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
+			.sheet(item: presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil)) { alertStore in
 				ScrollableAlertView(store: alertStore)
 			}
 			.confirmationDialog(
-				$store.scope(\.discardButton.$confirmationDialog, action: \.discardButton.confirmationDialog)
+				presentsAlerts
+					? $store.scope(\.discardButton.$confirmationDialog, action: \.discardButton.confirmationDialog)
+					: .constant(nil)
 			)
 			// Presented here rather than on the menu item, for the same reason as the discard
 			// dialog above: dialogs attached inside a macOS `Menu` do not present reliably.
 			.confirmationDialog(
-				$store.scope(\.stashButton.$confirmationDialog, action: \.stashButton.confirmationDialog)
+				presentsAlerts
+					? $store.scope(\.stashButton.$confirmationDialog, action: \.stashButton.confirmationDialog)
+					: .constant(nil)
 			)
 	}
 }
@@ -149,6 +158,18 @@ struct GitRunningOperation {
 	let text: String
 	let color: Color
 	let helpText: String
+}
+
+public extension GitActionsMenuReducer.State {
+	/// Read by the terminal toolbar's Push button, which starts this menu's push.
+	var isPushing: Bool {
+		pushButton.isPushing
+	}
+
+	/// Whether an operation is in flight, during which the menu offers nothing else.
+	var isOperationRunning: Bool {
+		runningOperation != nil
+	}
 }
 
 extension GitActionsMenuReducer.State {

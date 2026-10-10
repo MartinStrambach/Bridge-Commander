@@ -6,277 +6,212 @@ import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
 
-// The terminal header's Git Actions menu is a copy of the opened row's menu state.
-// Covers the three legs that keep the copy honest: it is taken when a repo is selected,
-// its finished operations re-run the row's status fetch, and the row's status fetch
-// feeds the gating fields back into the copy so menu items don't show based on stale counts.
-@Suite("Terminal header git actions menu")
+// The terminal toolbar's Git Actions menu, Push button and merge banner act on the opened row's own
+// state. The menu used to be a copy held in `TerminalLayoutReducer.State` (and Push and Finish Merge
+// ran there too): hiding the panel nils that state, so `ifLet` cancelled a running push, pull or
+// checkout, SIGTERMing git with no error shown; and switching repositories replaced the copy, so
+// the operation finished into the next repository's copy while its own row never showed it running.
+@Suite("Terminal toolbar git actions act on the opened row")
 @MainActor
 struct TerminalGitActionsMenuTests {
-	// MARK: - Sync on selection
+	// MARK: - Operations belong to the row
 
-	@Test("selecting a repo copies the row's git menu into the header")
-	func selectRepoCopiesRowMenu() async {
-		let store = makeStore()
-		store.exhaustivity = .off
+	@Test("a git operation keeps running and lands on its row after the terminal is hidden")
+	func operationSurvivesHidingTerminal() async {
+		let (gate, release) = AsyncStream.makeStream(of: Void.self)
+		let store = await makeStoreShowingAlpha {
+			$0[GitClient.self].fetch = { _ in
+				// Held here until the terminal has been hidden.
+				for await _ in gate { break }
+				return GitFetchHelper.FetchResult(fetchedBranches: 1, isAlreadyUpToDate: false)
+			}
+		}
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+		await store.send(menuAction(.fetchButton(.fetchTapped), on: "/repos/alpha"))
+		#expect(menu(of: "/repos/alpha", in: store)?.isOperationRunning == true)
 
-		let rowMenu = store.state.repositoryGroups[id: "/repos/alpha"]?.header.gitActionsMenu
-		#expect(rowMenu != nil)
-		#expect(store.state.terminalLayout?.gitActionsMenu == rowMenu)
-	}
+		await store.send(.terminalLayout(.hideTerminalMode))
+		#expect(store.state.terminalLayout == nil)
+		#expect(menu(of: "/repos/alpha", in: store)?.isOperationRunning == true)
 
-	@Test("selecting the home-directory session clears the header git menu")
-	func homeDirectorySelectionClearsMenu() async {
-		let store = makeStore()
-		store.exhaustivity = .off
-
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
-		#expect(store.state.terminalLayout?.gitActionsMenu != nil)
-
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: NSHomeDirectory())))
-		#expect(store.state.terminalLayout?.gitActionsMenu == nil)
-	}
-
-	// MARK: - Completion routing
-
-	@Test("a finished git operation in the header refreshes the opened repo's row")
-	func menuCompletionRefreshesActiveRow() async {
-		let store = makeStore()
-		store.exhaustivity = .off
-
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
-
-		await store.send(.terminalLayout(.gitActionsMenu(
-			.fetchButton(.fetchCompleted(result: nil, error: nil))
-		)))
-
-		// Same routing the row's own menu gets: the completion re-runs the row's status fetch.
+		release.yield()
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.fetchButton.fetchCompleted)
 		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		#expect(menu(of: "/repos/alpha", in: store)?.isOperationRunning == false)
 		await store.finish()
 	}
 
-	@Test("checking out the default branch from the header refreshes the opened repo's row")
-	func checkoutCompletionRefreshesActiveRow() async {
-		let store = makeStore()
-		store.exhaustivity = .off
+	@Test("a git operation stays with its repository when the panel switches to another")
+	func operationStaysWithItsRepository() async {
+		let (gate, release) = AsyncStream.makeStream(of: Void.self)
+		let store = await makeStoreShowingAlpha {
+			$0[GitClient.self].fetch = { _ in
+				for await _ in gate { break }
+				return GitFetchHelper.FetchResult(fetchedBranches: 1, isAlreadyUpToDate: false)
+			}
+		}
+		store.exhaustivity = .off(showSkippedAssertions: false)
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+		await store.send(menuAction(.fetchButton(.fetchTapped), on: "/repos/alpha"))
+		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
+		// Alpha's own menu shows the fetch, so it offers no second git write on top of it.
+		#expect(menu(of: "/repos/alpha", in: store)?.isOperationRunning == true)
+		#expect(menu(of: "/repos/beta", in: store)?.isOperationRunning == false)
 
-		await store.send(.terminalLayout(.gitActionsMenu(
-			.checkoutDefaultBranchButton(.checkoutCompleted(result: .success("master")))
-		)))
-
-		// The new branch only reaches the header copy through the row's status fetch; without
-		// it the Merge/Checkout items stayed in the menu after switching to the default branch.
+		release.yield()
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.fetchButton.fetchCompleted)
+		// The completion refreshes alpha, the row it ran on, not the one now on screen.
 		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		#expect(menu(of: "/repos/alpha", in: store)?.isOperationRunning == false)
 		await store.finish()
 	}
 
-	@Test("non-completion menu actions in the header do not refresh the row")
-	func nonCompletionMenuActionDoesNotRefresh() async {
-		let store = makeStore()
-		store.exhaustivity = .off
+	@Test("the terminal toolbar keeps no git state of its own")
+	func terminalLayoutHoldsNoGitCopy() async throws {
+		let store = await makeStoreShowingAlpha { _ in }
+		let layout = try #require(store.state.terminalLayout)
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+		let labels = Mirror(reflecting: layout).children.compactMap(\.label)
+		#expect(!labels.contains { $0.localizedCaseInsensitiveContains("gitActions") })
+		#expect(!labels.contains { $0.localizedCaseInsensitiveContains("push") })
+		#expect(!labels.contains { $0.localizedCaseInsensitiveContains("merge") })
+	}
+
+	// MARK: - Finish Merge
+
+	@Test("a finished merge refreshes the row it ran on")
+	func finishMergeRefreshesRow() async {
+		let store = await makeStoreShowingAlpha { _ in }
+
+		await store.send(.repositoryGroups(.element(id: "/repos/alpha", action: .header(.finishMergeCompleted(nil)))))
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
+		await store.finish()
+		#expect(store.state.alert == nil)
+	}
+
+	@Test("a failed merge alerts instead of refreshing")
+	func finishMergeFailureAlerts() async {
+		let store = await makeStoreShowingAlpha { _ in }
 		store.exhaustivity = .on
 
-		// Exhaustive: a row refresh — or any other emission — fails here. The stash status
-		// answer is the menu action closest to a completion without being one.
-		await store.send(.terminalLayout(.gitActionsMenu(
-			.stashButton(.didFindStash(nil))
-		)))
-		await store.finish()
-	}
-
-	// MARK: - Re-sync on row status fetch
-
-	@Test("the opened repo's status fetch re-syncs the header menu's gating fields")
-	func statusFetchResyncsHeaderMenu() async {
-		let store = makeStore()
-		store.exhaustivity = .off
-
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
-		#expect(store.state.terminalLayout?.gitActionsMenu?.hasRemoteBranch == false)
-		#expect(store.state.terminalLayout?.gitActionsMenu?.unpushedCommitsCount == 0)
-
-		// A remote-tracking branch 3 ahead, with one tracked change and one untracked file.
-		let porcelain = """
-		# branch.head master
-		# branch.upstream origin/master
-		# branch.ab +3 -1
-		1 .M N... 100644 100644 100644 abc1234 def5678 Sources/App.swift
-		? Untracked.swift
-		"""
 		await store.send(.repositoryGroups(.element(
 			id: "/repos/alpha",
-			action: .header(.didFetchStatus(GitPorcelainStatus(parsing: porcelain), false))
-		)))
-
-		// The stash-list state is internal to the menu, so the copy re-checks it itself.
-		await store.receive(\.terminalLayout.gitActionsMenu.refresh)
-
-		let menu = store.state.terminalLayout?.gitActionsMenu
-		#expect(menu?.currentBranch == "master")
-		#expect(menu?.hasRemoteBranch == true)
-		#expect(menu?.unpushedCommitsCount == 3)
-		#expect(menu?.stashButton.hasChanges == true)
-		#expect(menu?.discardButton.hasTrackedChanges == true)
-		#expect(menu?.discardButton.hasUntrackedFiles == true)
-		await store.finish()
+			action: .header(.finishMergeCompleted(.mergeFailed("CONFLICT in App.swift")))
+		))) {
+			$0.alert = AlertState {
+				TextState("Finish Merge Failed")
+			} message: {
+				TextState(GitError.mergeFailed("CONFLICT in App.swift").localizedDescription)
+			}
+		}
 	}
 
-	@Test("a worktree's status fetch re-syncs the header menu the same way")
-	func worktreeStatusFetchResyncsHeaderMenu() async {
-		let store = makeStore()
-		store.exhaustivity = .off
-
+	@Test("a worktree's failed merge alerts the same way")
+	func worktreeFinishMergeFailureAlerts() async {
+		let store = await makeStoreShowingAlpha { _ in }
 		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
+			repository("/repos/alpha", isWorktree: false),
+			repository("/repos/alpha-one", isWorktree: true),
 		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha-one")))
-		#expect(store.state.terminalLayout?.gitActionsMenu?.hasRemoteBranch == false)
+		store.exhaustivity = .on
 
-		let porcelain = """
-		# branch.head feature-one
-		# branch.upstream origin/feature-one
-		# branch.ab +2 -0
-		"""
 		await store.send(.repositoryGroups(.element(
 			id: "/repos/alpha",
 			action: .worktrees(.element(
 				id: "/repos/alpha-one",
-				action: .didFetchStatus(GitPorcelainStatus(parsing: porcelain), false)
+				action: .finishMergeCompleted(.mergeFailed("CONFLICT"))
 			))
-		)))
-
-		await store.receive(\.terminalLayout.gitActionsMenu.refresh)
-
-		let menu = store.state.terminalLayout?.gitActionsMenu
-		#expect(menu?.currentBranch == "feature-one")
-		#expect(menu?.hasRemoteBranch == true)
-		#expect(menu?.unpushedCommitsCount == 2)
-		#expect(menu?.stashButton.hasChanges == false)
-		await store.finish()
+		))) {
+			$0.alert = AlertState {
+				TextState("Finish Merge Failed")
+			} message: {
+				TextState(GitError.mergeFailed("CONFLICT").localizedDescription)
+			}
+		}
 	}
 
-	@Test("the header menu's merge flag follows the row's just-reported merge status")
-	func statusFetchSyncsHeaderMenuMergeFlag() async {
-		let store = makeStore()
-		store.exhaustivity = .off
+	@Test("Finish Merge does nothing while one is already running")
+	func finishMergeIgnoredWhileRunning() async {
+		var row = RepositoryRowReducer.State(path: "/repos/alpha", name: "alpha", branchName: "master")
+		row.isFinishingMerge = true
+		let store = TestStore(initialState: row) {
+			RepositoryRowReducer()
+		}
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
-		#expect(store.state.terminalLayout?.gitActionsMenu?.isMergeInProgress == false)
-
-		// Unlike the other gating fields — set by the row reducer before it reports the status
-		// — the merge flag is set by the row's *menu* while handling this very action. The copy
-		// still sees it because `forEach` runs the row before the parent; a sync moved ahead of
-		// the child (or a merge probe of its own) would lag a refresh behind and fail here.
-		await store.send(.repositoryGroups(.element(
-			id: "/repos/alpha",
-			action: .header(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: true)))
-		)))
-
-		#expect(store.state.terminalLayout?.gitActionsMenu?.isMergeInProgress == true)
-
-		// And back: the terminal's merge banner renders from this copy, so the flag clearing
-		// (Finish Merge completion or the menu's own polling) must reach it the same way.
-		await store.send(.repositoryGroups(.element(
-			id: "/repos/alpha",
-			action: .header(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: false)))
-		)))
-
-		#expect(store.state.terminalLayout?.gitActionsMenu?.isMergeInProgress == false)
-		await store.finish()
+		// Exhaustive: a second `git commit --no-edit` starting here fails the test.
+		await store.send(.finishMergeTapped)
 	}
 
-	@Test("another row's status fetch leaves the header menu alone")
-	func otherRowStatusFetchIsIgnored() async {
-		let store = makeStore()
+	@Test("a finish-merge completion stops the spinner whether it succeeded or failed", arguments: [true, false])
+	func finishMergeCompletionClearsFlag(failed: Bool) async {
+		var row = RepositoryRowReducer.State(path: "/repos/alpha", name: "alpha", branchName: "master")
+		row.isFinishingMerge = true
+		let store = TestStore(initialState: row) {
+			RepositoryRowReducer()
+		} withDependencies: {
+			// What the refresh after a success asks; a failed status short-circuits the rest.
+			$0[GitClient.self].getCurrentBranch = { _ in
+				GitPorcelainStatus(parsing: "", didSucceed: false)
+			}
+			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
+		}
 		store.exhaustivity = .off
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
-			mainRepo("/repos/beta", name: "beta"),
-		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
-		store.exhaustivity = .on
-
-		// Exhaustive: the stash re-check sent for the opened repo's own fetches — or any
-		// field copy — failing to be guarded on the acting row shows up here. This is the
-		// path every row hits on each periodic refresh, so it must stay a no-op.
-		await store.send(.repositoryGroups(.element(
-			id: "/repos/beta",
-			action: .header(.gitActionsMenu(.didCheckGitStatus(isMergeInProgress: false)))
-		)))
-		await store.finish()
+		await store.send(.finishMergeCompleted(failed ? .mergeFailed("conflict") : nil)) {
+			$0.isFinishingMerge = false
+		}
 	}
 
 	// MARK: - Helpers
 
-	private func makeStore() -> TestStoreOf<RepositoryListReducer> {
+	private func menuAction(
+		_ action: GitActionsMenuReducer.Action,
+		on groupId: String
+	) -> RepositoryListReducer.Action {
+		.repositoryGroups(.element(id: groupId, action: .header(.gitActionsMenu(action))))
+	}
+
+	private func menu(
+		of groupId: String,
+		in store: TestStoreOf<RepositoryListReducer>
+	) -> GitActionsMenuReducer.State? {
+		store.state.repositoryGroups[id: groupId]?.header.gitActionsMenu
+	}
+
+	/// Two scanned repositories, alpha opened in the terminal panel.
+	private func makeStoreShowingAlpha(
+		_ dependencies: @escaping (inout DependencyValues) -> Void
+	) async -> TestStoreOf<RepositoryListReducer> {
 		var initialState = RepositoryListReducer.State()
 		initialState.terminalLayout = TerminalLayoutReducer.State()
-		return TestStore(initialState: initialState) {
+		let store = TestStore(initialState: initialState) {
 			RepositoryListReducer()
 		} withDependencies: {
-			// The debounced re-sort scheduled after each YouTrack answer needs a clock.
 			$0.continuousClock = ImmediateClock()
-			// A row refresh fans out to git, Xcode and PR lookups of its own. Only the
-			// header-menu plumbing is under test, so stub the leaves: a failed status
-			// short-circuits the row's follow-up fetches, and a missing origin remote
-			// short-circuits the pull request lookup on feature branches.
+			// A row refresh fans out to git, Xcode and PR lookups of its own: a failed status
+			// short-circuits the row's follow-up fetches, and a missing origin remote the PR lookup.
 			$0[GitClient.self].getCurrentBranch = { _ in
 				GitPorcelainStatus(parsing: "", didSucceed: false)
 			}
 			$0[GitClient.self].getOriginRemote = { _ in nil }
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
 			$0[LastOpenedDirectoryClient.self].load = { nil }
+			dependencies(&$0)
 		}
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [repository("/repos/alpha", isWorktree: false)]))
+		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [repository("/repos/beta", isWorktree: false)]))
+		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+		return store
 	}
 
-	private func mainRepo(_ path: String, name: String) -> ScannedRepository {
+	private func repository(_ path: String, isWorktree: Bool) -> ScannedRepository {
 		ScannedRepository(
 			path: path,
-			name: name,
+			name: (path as NSString).lastPathComponent,
 			directory: path,
-			isWorktree: false,
-			branchName: "master"
-		)
-	}
-
-	private func worktree(_ path: String, name: String, branch: String) -> ScannedRepository {
-		ScannedRepository(
-			path: path,
-			name: name,
-			directory: path,
-			isWorktree: true,
-			branchName: branch
+			isWorktree: isWorktree,
+			branchName: isWorktree ? "feature-one" : "master"
 		)
 	}
 

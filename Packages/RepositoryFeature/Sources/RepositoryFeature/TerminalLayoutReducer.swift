@@ -2,8 +2,6 @@ import ActionButtons
 import ComposableArchitecture
 import Foundation
 import TerminalFeature
-import GitActionsMenu
-import GitCore
 import GitGraphFeature
 import Settings
 import SimulatorFeature
@@ -15,8 +13,6 @@ struct TerminalLayoutReducer {
 	struct State: Equatable {
 		var activeRepositoryPath: String?
 		var activeSessionId: UUID?
-		var isPushing = false
-		var isFinishingMerge = false
 
 		/// Written by the ⌘+/⌘−/⌘0 zoom actions. The panel view reads the same setting through its
 		/// own `@Shared`, alongside the other terminal settings it resolves for the pane.
@@ -77,13 +73,21 @@ struct TerminalLayoutReducer {
 			return nil
 		}
 
-		// The Xcode and Tuist buttons are deliberately not copied here: the toolbar scopes the
-		// opened row's own stores, so a generate started from either view shows its progress in
-		// both, and hiding the panel (which nils this state and cancels its effects) cannot kill it.
+		// The Xcode, Tuist, YouTrack and git menu buttons, and Push and Finish Merge, are deliberately
+		// not copied here: the toolbar scopes the opened row's own stores, so an operation started
+		// from either view shows its progress in both, belongs to its own repository whichever one
+		// the panel switches to, and hiding the panel (which nils this state and cancels its
+		// effects) cannot kill it.
 		var androidStudioButton: AndroidStudioButtonReducer.State?
 		var webButton: WebButtonReducer.State?
 		var ticketButton: TicketButtonReducer.State?
-		var gitActionsMenu: GitActionsMenuReducer.State?
+
+		/// Whether any button above has been copied from a row. None is either a panel whose row the
+		/// scan has not found yet (tabs restored at launch) or a row with none of these buttons, for
+		/// which copying again changes nothing.
+		var hasButtonCopies: Bool {
+			androidStudioButton != nil || webButton != nil || ticketButton != nil
+		}
 
 		/// The iOS simulator beside the terminal. Which repositories show it is a stored setting, so it survives
 		/// this state being dropped when the panel hides.
@@ -101,10 +105,6 @@ struct TerminalLayoutReducer {
 		case hideTerminalMode
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case gitGraphButtonTapped(repositoryPath: String, repositoryName: String)
-		case pushButtonTapped(repositoryPath: String)
-		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
-		case finishMergeButtonTapped(repositoryPath: String)
-		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
 		case killTab(sessionId: UUID)
@@ -124,7 +124,6 @@ struct TerminalLayoutReducer {
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
 		case webButton(WebButtonReducer.Action)
 		case ticketButton(TicketButtonReducer.Action)
-		case gitActionsMenu(GitActionsMenuReducer.Action)
 		case simulatorPane(SimulatorPaneReducer.Action)
 	}
 
@@ -140,9 +139,6 @@ struct TerminalLayoutReducer {
 			}
 			.ifLet(\.$gitGraph, action: \.gitGraph) {
 				GitGraphReducer()
-			}
-			.ifLet(\.gitActionsMenu, action: \.gitActionsMenu) {
-				GitActionsMenuReducer()
 			}
 	}
 
@@ -176,43 +172,6 @@ struct TerminalLayoutReducer {
 
 			case let .gitGraphButtonTapped(repositoryPath, repositoryName):
 				state.gitGraph = .forRepository(path: repositoryPath, name: repositoryName)
-				return .none
-
-			case let .pushButtonTapped(repositoryPath):
-				state.isPushing = true
-				return .run { send in
-					do {
-						let result = try await GitPushHelper.push(at: repositoryPath)
-						await send(.pushCompleted(result: result, error: nil))
-					}
-					catch let error as GitError {
-						await send(.pushCompleted(result: nil, error: error))
-					}
-					catch {
-						await send(.pushCompleted(result: nil, error: nil))
-					}
-				}
-
-			case .pushCompleted:
-				state.isPushing = false
-				return .none
-
-			case let .finishMergeButtonTapped(repositoryPath):
-				state.isFinishingMerge = true
-				return .run { send in
-					do {
-						try await GitMergeHelper.finishMerge(at: repositoryPath)
-						await send(.finishMergeCompleted(repositoryPath: repositoryPath, error: nil))
-					}
-					catch {
-						let gitError = error as? GitError ?? .mergeFailed(error.localizedDescription)
-						await send(.finishMergeCompleted(repositoryPath: repositoryPath, error: gitError))
-					}
-				}
-
-			case .finishMergeCompleted:
-				state.isFinishingMerge = false
-				// Alert and row refresh are handled by RepositoryListReducer
 				return .none
 
 			case .stagingDetail(.dismiss):
@@ -283,10 +242,6 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .ticketButton:
-				return .none
-
-			case .gitActionsMenu:
-				// Completions are routed to a row refresh by RepositoryListReducer
 				return .none
 
 			case .simulatorPane:

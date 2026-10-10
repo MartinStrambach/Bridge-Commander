@@ -86,35 +86,4 @@ struct TerminalLayoutReducerTests {
 			$0.gitGraph = nil
 		}
 	}
-
-	// MARK: - In-flight flags
-
-	@Test("a push completion stops the spinner whether it succeeded or failed", arguments: [true, false])
-	func pushCompletionClearsFlag(failed: Bool) async {
-		var layout = TerminalLayoutReducer.State()
-		layout.isPushing = true
-		let store = TestStore(initialState: layout) {
-			TerminalLayoutReducer()
-		}
-
-		await store.send(.pushCompleted(result: nil, error: failed ? .pushFailed("rejected") : nil)) {
-			$0.isPushing = false
-		}
-	}
-
-	@Test("a finish-merge completion stops the spinner whether it succeeded or failed", arguments: [true, false])
-	func finishMergeCompletionClearsFlag(failed: Bool) async {
-		var layout = TerminalLayoutReducer.State()
-		layout.isFinishingMerge = true
-		let store = TestStore(initialState: layout) {
-			TerminalLayoutReducer()
-		}
-
-		await store.send(.finishMergeCompleted(
-			repositoryPath: "/repos/alpha",
-			error: failed ? .mergeFailed("conflict") : nil
-		)) {
-			$0.isFinishingMerge = false
-		}
-	}
 }
