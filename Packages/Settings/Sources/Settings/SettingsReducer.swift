@@ -202,6 +202,15 @@ public struct SettingsReducer {
 	@Dependency(TerminalProfileImportClient.self)
 	private var profileImport
 
+	/// One per provider. Every action that resets a verdict to `.idle` also cancels its test:
+	/// `.idle` re-enables the Test button, and a run still in flight would otherwise land its
+	/// verdict on a token or URL it was never run against.
+	private enum CancelID {
+		case youTrackTest
+		case gitHubTest
+		case gitLabTest
+	}
+
 	public init() {}
 
 	/// Adds imported profiles to the stored list, replacing any with the same name.
@@ -398,29 +407,29 @@ public struct SettingsReducer {
 			case let .setYouTrackToken(token):
 				state.$youtrackAuthToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
 				state.youtrackTokenTest = .idle
-				return .none
+				return .cancel(id: CancelID.youTrackTest)
 
 			case let .setGitHubToken(token):
 				state.$githubToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
 				// A verdict describes the token it was run against — a different token
 				// must not inherit it.
 				state.githubTokenTest = .idle
-				return .none
+				return .cancel(id: CancelID.gitHubTest)
 
 			case let .setGitLabToken(token):
 				state.$gitlabToken.withLock { $0 = token.trimmingCharacters(in: .whitespacesAndNewlines) }
 				state.gitlabTokenTest = .idle
-				return .none
+				return .cancel(id: CancelID.gitLabTest)
 
 			case .clearGitHubToken:
 				state.$githubToken.withLock { $0 = "" }
 				state.githubTokenTest = .idle
-				return .none
+				return .cancel(id: CancelID.gitHubTest)
 
 			case .clearGitLabToken:
 				state.$gitlabToken.withLock { $0 = "" }
 				state.gitlabTokenTest = .idle
-				return .none
+				return .cancel(id: CancelID.gitLabTest)
 
 			case .testYouTrackTokenButtonTapped:
 				guard !state.youtrackAuthToken.isEmpty else {
@@ -455,6 +464,7 @@ public struct SettingsReducer {
 					}
 					await send(.youTrackTokenTestFinished(Self.youTrackTokenTestOutcome(results)))
 				}
+				.cancellable(id: CancelID.youTrackTest, cancelInFlight: true)
 
 			case let .youTrackTokenTestFinished(outcome):
 				state.youtrackTokenTest = outcome
@@ -467,6 +477,7 @@ public struct SettingsReducer {
 						try await tokenVerification.verifyGitHubToken(token)
 					}))
 				}
+				.cancellable(id: CancelID.gitHubTest, cancelInFlight: true)
 
 			case .testGitLabTokenButtonTapped:
 				state.gitlabTokenTest = .testing
@@ -475,6 +486,7 @@ public struct SettingsReducer {
 						try await tokenVerification.verifyGitLabToken(token)
 					}))
 				}
+				.cancellable(id: CancelID.gitLabTest, cancelInFlight: true)
 
 			case let .gitHubTokenTestFinished(outcome):
 				state.githubTokenTest = outcome
@@ -543,7 +555,7 @@ public struct SettingsReducer {
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].youtrackBaseURL = trimmedURL }
 				// The verdict names the instances it ran against; a changed URL is a different one.
 				state.youtrackTokenTest = .idle
-				return .none
+				return .cancel(id: CancelID.youTrackTest)
 
 			case let .setGroupTerminalStartupCommand(groupId, value):
 				// Stored untrimmed: the TextField binding writes on every keystroke, and trimming
@@ -762,7 +774,7 @@ public struct SettingsReducer {
 			case .alert(.presented(.confirmClearToken)):
 				state.$youtrackAuthToken.withLock { $0 = "" }
 				state.youtrackTokenTest = .idle
-				return .none
+				return .cancel(id: CancelID.youTrackTest)
 
 			case .alert:
 				return .none
