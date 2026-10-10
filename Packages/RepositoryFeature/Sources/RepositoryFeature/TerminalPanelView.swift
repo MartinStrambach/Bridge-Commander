@@ -179,10 +179,11 @@ struct TerminalPanelView: View {
 			}
 
 			// The git menu's own push, so a push from either shows in both and is not run twice.
+			// Quiet: the count dropping is the confirmation, so only a failure is alerted.
 			if let rowStore = activeRowStore,
 			   rowStore.unpushedCommitCount > 0 || rowStore.gitActionsMenu.isPushing {
 				Button {
-					rowStore.send(.gitActionsMenu(.pushButton(.pushTapped)))
+					rowStore.send(.gitActionsMenu(.pushButton(.quietPushTapped)))
 				} label: {
 					if rowStore.gitActionsMenu.isPushing {
 						HStack(spacing: 4) {

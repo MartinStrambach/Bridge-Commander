@@ -14,7 +14,12 @@ public struct PushButtonReducer {
 
 	public enum Action: Equatable {
 		case pushTapped
-		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
+		/// A push whose success is not alerted (the terminal toolbar's Push button: the count it
+		/// shows dropping is the confirmation). Failures still are.
+		case quietPushTapped
+		/// `quiet` rides along from the tap rather than living in the state, so it cannot outlast
+		/// the push it was asked for.
+		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?, quiet: Bool = false)
 	}
 
 	@Dependency(GitClient.self)
@@ -24,24 +29,31 @@ public struct PushButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .pushTapped:
-				state.isPushing = true
-				return .run { [path = state.repositoryPath, gitClient] send in
-					do {
-						let result = try await gitClient.push(at: path)
-						await send(.pushCompleted(result: result, error: nil))
-					}
-					catch let error as GitError {
-						await send(.pushCompleted(result: nil, error: error))
-					}
-					catch {
-						print("Unexpected error during push: \(error)")
-						await send(.pushCompleted(result: nil, error: nil))
-					}
-				}
+				return push(&state, quiet: false)
+
+			case .quietPushTapped:
+				return push(&state, quiet: true)
 
 			case .pushCompleted:
 				state.isPushing = false
 				return .none
+			}
+		}
+	}
+
+	private func push(_ state: inout State, quiet: Bool) -> Effect<Action> {
+		state.isPushing = true
+		return .run { [path = state.repositoryPath, gitClient] send in
+			do {
+				let result = try await gitClient.push(at: path)
+				await send(.pushCompleted(result: result, error: nil, quiet: quiet))
+			}
+			catch let error as GitError {
+				await send(.pushCompleted(result: nil, error: error, quiet: quiet))
+			}
+			catch {
+				print("Unexpected error during push: \(error)")
+				await send(.pushCompleted(result: nil, error: nil, quiet: quiet))
 			}
 		}
 	}

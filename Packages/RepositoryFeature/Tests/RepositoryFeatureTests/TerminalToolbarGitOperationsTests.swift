@@ -1,6 +1,8 @@
+import AppUI
 import ComposableArchitecture
 import Foundation
-import GitActionsMenu
+// Testable for the menu's alert, which only its own views read.
+@testable import GitActionsMenu
 import GitCore
 import Testing
 import ToolsIntegration
@@ -55,6 +57,34 @@ struct TerminalToolbarGitOperationsTests {
 		release.yield()
 		await store.receive { isRowRefresh($0, path: "/repos/alpha") }
 		#expect(pushed.value == ["/repos/alpha"])
+		await store.finish()
+	}
+
+	@Test("a successful push from the toolbar refreshes its row without an alert")
+	func toolbarPushSuccessIsSilent() async {
+		let store = await makeStoreShowingAlpha {
+			$0[GitClient.self].push = { _ in GitPushHelper.PushResult(isUpToDate: false, message: "") }
+		}
+
+		await tapToolbarPush(store)
+		await store.receive { isRowRefresh($0, path: "/repos/alpha") }
+		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.header.gitActionsMenu.alert == nil)
+		await store.finish()
+	}
+
+	@Test("a failed push from the toolbar alerts, and refreshes its row")
+	func toolbarPushFailureAlerts() async {
+		let error = GitError.pushFailed("rejected: non-fast-forward")
+		let store = await makeStoreShowingAlpha {
+			$0[GitClient.self].push = { _ in throw error }
+		}
+
+		await tapToolbarPush(store)
+		await store.receive { isRowRefresh($0, path: "/repos/alpha") }
+		#expect(
+			store.state.repositoryGroups[id: "/repos/alpha"]?.header.gitActionsMenu.alert
+				== ScrollableAlertReducer.State(title: "Push Failed", message: error.localizedDescription, isError: true)
+		)
 		await store.finish()
 	}
 
@@ -179,7 +209,7 @@ struct TerminalToolbarGitOperationsTests {
 	// repository the panel shows. Every repository here is its group's header row.
 
 	private func tapToolbarPush(_ store: TestStoreOf<RepositoryListReducer>) async {
-		await sendToActiveRow(.gitActionsMenu(.pushButton(.pushTapped)), store)
+		await sendToActiveRow(.gitActionsMenu(.pushButton(.quietPushTapped)), store)
 	}
 
 	private func tapToolbarPull(_ store: TestStoreOf<RepositoryListReducer>) async {
