@@ -35,7 +35,7 @@ struct RepositoryRowPullRequestTests {
 			pipeline: PipelineStatus(state: .running, url: "https://gitlab.com/g/app/-/pipelines/42"),
 			unresolvedDiscussionsCount: 3
 		)
-		await store.send(.didFetchPullRequest(details))
+		await store.send(.didFetchPullRequest(details, branch: "LS-1234_feature"))
 
 		#expect(store.state.prUrl == "https://gitlab.com/g/app/-/merge_requests/7")
 		#expect(store.state.prState == .ready)
@@ -55,7 +55,7 @@ struct RepositoryRowPullRequestTests {
 			state: .draft,
 			provider: .github,
 			unresolvedDiscussionsCount: 2
-		)))
+		), branch: "LS-1234_feature"))
 
 		#expect(store.state.prUnresolvedDiscussions == 2)
 	}
@@ -73,7 +73,7 @@ struct RepositoryRowPullRequestTests {
 				state: state,
 				provider: .gitlab,
 				unresolvedDiscussionsCount: 3
-			)))
+			), branch: "LS-1234_feature"))
 
 			#expect(store.state.prState == state)
 			#expect(store.state.prUnresolvedDiscussions == nil)
@@ -93,7 +93,7 @@ struct RepositoryRowPullRequestTests {
 		row.prApprovals = ApprovalStatus(decision: .approved, approvedBy: [Self.astrid])
 		let store = makeStore(state: row)
 
-		await store.send(.didFetchPullRequest(nil))
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
 
 		#expect(store.state.prUrl == nil)
 		#expect(store.state.prState == nil)
@@ -227,7 +227,7 @@ struct RepositoryRowPullRequestTests {
 		row.prFetchError = "GitLab MR fetch failed: HTTP 500"
 		let store = makeStore(state: row)
 
-		await store.send(.didFetchPullRequest(nil))
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
 
 		#expect(store.state.prFetchError == nil)
 	}
@@ -246,6 +246,85 @@ struct RepositoryRowPullRequestTests {
 		await store.skipReceivedActions(strict: false)
 
 		#expect(store.state.prFetchError == nil)
+	}
+
+	// MARK: - Stale responses
+
+	private static func details(for branch: String) -> PullRequestDetails {
+		PullRequestDetails(
+			url: "https://gitlab.com/g/app/-/merge_requests/\(branch)",
+			state: .ready,
+			provider: .gitlab
+		)
+	}
+
+	/// The previous branch's lookup is slow, the new branch's answers at once: a refresh caught
+	/// by a checkout in the terminal.
+	@MainActor
+	private func makeCheckoutRaceStore(
+		previousBranchFetch: @escaping @Sendable (TestClock<Duration>) async throws -> PullRequestDetails?
+	) -> (TestStoreOf<RepositoryRowReducer>, TestClock<Duration>) {
+		let clock = TestClock()
+		let store = TestStore(initialState: makeRow()) {
+			RepositoryRowReducer()
+		} withDependencies: {
+			$0[GitClient.self].getOriginRemote = { _ in GitRemote(host: "gitlab.com", owner: "g", repo: "app") }
+			$0[PullRequestClient.self].fetchDetails = { _, branch in
+				branch == "LS-1234_feature" ? try await previousBranchFetch(clock) : Self.details(for: branch)
+			}
+		}
+		store.exhaustivity = .off
+		return (store, clock)
+	}
+
+	@Test("the previous branch's PR landing after a checkout is not shown under the new branch")
+	@MainActor
+	func previousBranchPullRequestLandingLastIsDropped() async {
+		let (store, clock) = makeCheckoutRaceStore { clock in
+			try await clock.sleep(for: .seconds(5))
+			return Self.details(for: "LS-1234_feature")
+		}
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-9999_other"), false))
+		await store.receive(\.didFetchPullRequest)
+		await clock.advance(by: .seconds(5))
+		await store.finish()
+		await store.skipReceivedActions(strict: false)
+
+		#expect(store.state.branchName == "LS-9999_other")
+		#expect(store.state.prUrl == "https://gitlab.com/g/app/-/merge_requests/LS-9999_other")
+	}
+
+	@Test("the previous branch's failed PR fetch puts no error on the new branch")
+	@MainActor
+	func previousBranchFailureLandingLastIsDropped() async {
+		let (store, clock) = makeCheckoutRaceStore { clock in
+			try await clock.sleep(for: .seconds(5))
+			throw GitHostingError.httpFailure(statusCode: 500)
+		}
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-9999_other"), false))
+		await store.receive(\.didFetchPullRequest)
+		await clock.advance(by: .seconds(5))
+		await store.finish()
+		await store.skipReceivedActions(strict: false)
+
+		#expect(store.state.prFetchError == nil)
+		#expect(store.state.prUrl == "https://gitlab.com/g/app/-/merge_requests/LS-9999_other")
+	}
+
+	@Test("an answer for another branch than the row's is dropped")
+	@MainActor
+	func answerForAnotherBranchIsDropped() async {
+		let store = makeStore(state: makePopulatedRow())
+
+		await store.send(.didFetchPullRequest(Self.details(for: "LS-9999_other"), branch: "LS-9999_other"))
+		await store.send(.didFetchPullRequest(nil, branch: "LS-9999_other"))
+		await store.send(.didFetchPullRequestFailed("GitLab MR fetch failed: HTTP 500", branch: "LS-9999_other"))
+
+		#expect(store.state == makePopulatedRow())
 	}
 
 	// MARK: - Approvals
@@ -268,7 +347,7 @@ struct RepositoryRowPullRequestTests {
 			state: state,
 			provider: .gitlab,
 			approvals: approvals
-		)))
+		), branch: "LS-1234_feature"))
 	}
 
 	@Test("an open PR keeps its approval status and shows it in the slot")
