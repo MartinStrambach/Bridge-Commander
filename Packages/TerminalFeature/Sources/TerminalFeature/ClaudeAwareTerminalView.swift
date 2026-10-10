@@ -288,6 +288,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// Stops the pane reporting Claude's status. Called when its session is killed, before the
 	/// shell is hung up: the exit writes a last frame, and the session it would be judged for is
 	/// already gone. Left running, that judgement could land after the terminal panel has closed.
+	/// Also called when the shell exits on its own (`processTerminated`).
 	public func stopReportingStatus() {
 		detector.stop()
 	}
@@ -301,15 +302,34 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// the app quit. SwiftTerm's own `terminate()` would not do either, since it sends SIGTERM and
 	/// interactive zsh ignores that.
 	///
-	/// Safe to call more than once and after the shell has already exited: `running` goes false
-	/// as soon as SwiftTerm reaps the child, and a pid that was never assigned is refused so the
-	/// signal can never go to this process's own group.
+	/// The shell is then handed to `ShellReaper`, since the pane is usually released before the
+	/// shell has exited, and with it the only code in SwiftTerm that would collect its exit status.
+	///
+	/// Safe to call more than once and after the shell has already exited: only the first call acts
+	/// (the second comes from the deinit of a pane `killSession` already hung up, and by then the
+	/// pid may belong to another process), `running` goes false as soon as SwiftTerm reaps the
+	/// child, and a pid that was never assigned is refused so the signal can never go to this
+	/// process's own group.
 	public func hangUp() {
-		guard let process, process.running, process.shellPid > 0 else {
+		guard !hasHungUp, let process, process.running, process.shellPid > 0 else {
 			return
 		}
 
+		hasHungUp = true
 		kill(process.shellPid, SIGHUP)
+		ShellReaper.reap(process.shellPid)
+	}
+
+	private var hasHungUp = false
+
+	/// The shell exited on its own — `exit`, a crash — and its session is about to turn `.failed`
+	/// through the process delegate. An idle check still pending from the last output would then
+	/// judge the dead pane's screen, find Claude's input box or a `❯` prompt theme on it and report
+	/// waiting, taking the session out of `.failed` (and its Retry with it) and posting "Claude is
+	/// waiting" for a shell that is gone.
+	override public func processTerminated(_ source: LocalProcess, exitCode: Int32?) {
+		stopReportingStatus()
+		super.processTerminated(source, exitCode: exitCode)
 	}
 
 	/// The directory the pane's shell is in now, or `nil` once it has exited.

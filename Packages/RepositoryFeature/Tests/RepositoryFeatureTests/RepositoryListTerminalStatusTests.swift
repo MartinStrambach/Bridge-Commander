@@ -36,4 +36,19 @@ struct RepositoryListTerminalStatusTests {
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: UUID(), status: .active)))
 	}
+
+	/// The shell exited, so the session is `.failed` and offers Retry. A status judged from the dead
+	/// pane's screen afterwards must not bring it back as waiting, nor post a notification for it.
+	@Test("ignores a late report from a session whose shell has exited")
+	func ignoresReportForFailedSession() async {
+		var session = TerminalSession(repositoryPath: "/repos/alpha")
+		session.status = .failed("Terminal process exited (code 0)")
+		var state = RepositoryListReducer.State()
+		state.terminalSessions = [session]
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		}
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput)))
+	}
 }
