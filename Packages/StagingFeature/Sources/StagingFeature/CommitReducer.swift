@@ -11,6 +11,9 @@ public struct CommitReducer: Sendable {
 		var message: String = ""
 		var isCommitting: Bool = false
 		var shouldPushAfterCommit: Bool = false
+		/// The commit landed but the push after it failed: the sheet stays only to show the push
+		/// error, takes no second commit, and closes once the error is acknowledged.
+		var hasCommitted: Bool = false
 		@Presents
 		var alert: ScrollableAlertReducer.State?
 	}
@@ -25,6 +28,7 @@ public struct CommitReducer: Sendable {
 		case alert(PresentationAction<ScrollableAlertReducer.Action>)
 		case delegate(Delegate)
 
+		@CasePathable
 		public enum Delegate {
 			case commitSucceeded
 		}
@@ -32,6 +36,9 @@ public struct CommitReducer: Sendable {
 
 	@Dependency(GitStagingClient.self)
 	private var gitStagingClient
+
+	@Dependency(GitClient.self)
+	private var gitClient
 
 	@Dependency(\.dismiss)
 	private var dismiss
@@ -41,7 +48,11 @@ public struct CommitReducer: Sendable {
 		Reduce { state, action in
 			switch action {
 			case .commitTapped:
-				guard !state.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+				guard
+					!state.isCommitting,
+					!state.hasCommitted,
+					!state.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				else {
 					return .none
 				}
 
@@ -52,7 +63,11 @@ public struct CommitReducer: Sendable {
 				}
 
 			case .commitAndPushTapped:
-				guard !state.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+				guard
+					!state.isCommitting,
+					!state.hasCommitted,
+					!state.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+				else {
 					return .none
 				}
 
@@ -66,7 +81,7 @@ public struct CommitReducer: Sendable {
 				if state.shouldPushAfterCommit {
 					return .run { [path = state.repositoryPath] send in
 						await send(.pushCompleted(Result {
-							_ = try await GitPushHelper.push(at: path)
+							_ = try await gitClient.push(path)
 						}))
 					}
 				}
@@ -84,13 +99,15 @@ public struct CommitReducer: Sendable {
 				}
 
 			case let .pushCompleted(.failure(error)):
+				// The commit is in, so the panel must refresh now, not only after a successful push.
 				state.isCommitting = false
+				state.hasCommitted = true
 				state.alert = ScrollableAlertReducer.State(
 					title: "Push Failed",
 					message: error.localizedDescription,
 					isError: true
 				)
-				return .none
+				return .send(.delegate(.commitSucceeded))
 
 			case let .commitCompleted(.failure(error)):
 				state.isCommitting = false
@@ -103,6 +120,9 @@ public struct CommitReducer: Sendable {
 				return .none
 
 			case .cancelTapped:
+				return .run { _ in await dismiss() }
+
+			case .alert(.dismiss) where state.hasCommitted:
 				return .run { _ in await dismiss() }
 
 			case .alert,
