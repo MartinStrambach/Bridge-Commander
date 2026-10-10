@@ -132,4 +132,60 @@ struct GitStashListParserTests {
 
 		#expect(GitStashListParser.newestEntry(on: "", in: entries) == nil)
 	}
+
+	// MARK: - Finding an entry again
+
+	private static let first = String(repeating: "a", count: 40)
+	private static let second = String(repeating: "b", count: 40)
+
+	@Test("the list format's leading commit is kept apart from the reference")
+	func parsesLeadingCommit() {
+		let entries = GitStashListParser.parse("""
+		\(Self.first) stash@{0}: WIP on main: abc1234 Work
+		\(String(repeating: "c", count: 64)) stash@{1}: On main: sha-256 repository
+		""")
+
+		#expect(entries == [
+			GitStashEntry(reference: "stash@{0}", commit: Self.first, branch: "main", message: "abc1234 Work"),
+			GitStashEntry(
+				reference: "stash@{1}",
+				commit: String(repeating: "c", count: 64),
+				branch: "main",
+				message: "sha-256 repository"
+			),
+		])
+	}
+
+	@Test("an entry is found by its commit after a newer stash shifted its index")
+	func entryIsFoundAfterShift() {
+		let found = GitStashListParser.parse("\(Self.first) stash@{0}: WIP on main: abc1234 Work")[0]
+		let now = GitStashListParser.parse("""
+		\(Self.second) stash@{0}: WIP on other: def5678 Pushed in another worktree
+		\(Self.first) stash@{1}: WIP on main: abc1234 Work
+		""")
+
+		#expect(GitStashListParser.entry(matching: found, in: now)?.reference == "stash@{1}")
+	}
+
+	@Test("an entry applied or dropped elsewhere is not mistaken for the one now in its slot")
+	func goneEntryMatchesNothing() {
+		let found = GitStashListParser.parse("\(Self.first) stash@{0}: WIP on main: abc1234 Work")[0]
+		let now = GitStashListParser.parse("\(Self.second) stash@{0}: WIP on main: abc1234 Work")
+
+		#expect(GitStashListParser.entry(matching: found, in: now) == nil)
+	}
+
+	@Test("an entry read without its commit matches only its own, unchanged slot")
+	func entryWithoutCommitMatchesItsSlot() {
+		let found = GitStashEntry(reference: "stash@{0}", branch: "main", message: "abc1234 Work")
+
+		#expect(GitStashListParser.entry(
+			matching: found,
+			in: GitStashListParser.parse("stash@{0}: WIP on main: abc1234 Work")
+		)?.reference == "stash@{0}")
+		#expect(GitStashListParser.entry(
+			matching: found,
+			in: GitStashListParser.parse("stash@{0}: WIP on other: def5678 Other")
+		) == nil)
+	}
 }

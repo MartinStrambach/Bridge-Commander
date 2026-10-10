@@ -265,6 +265,26 @@ struct RepositoryRowStatusFetchTests {
 		#expect(store.state.gitActionsMenu.currentBranch == "LS-1234_feature")
 	}
 
+	// MARK: - Stash
+
+	/// A checkout from the git menu or the graph refreshes the row, and the refresh's own stash
+	/// check runs alongside the status read, under the branch the row knew before it.
+	@Test("a refresh that finds another branch drops the old branch's stash and checks the new one's")
+	func refreshOnAnotherBranchRechecksStash() async {
+		let store = makeStore(makeRow(branchName: "feature"), remote: nil)
+		await store.send(.gitActionsMenu(.stashButton(.didFindStash(
+			GitStashEntry(reference: "stash@{0}", branch: "feature", message: "abc1234 Work"),
+			branch: "feature"
+		))))
+		#expect(store.state.gitActionsMenu.stashButton.hasStash)
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head master"), false))
+		// Gone before any check answers: Pop on master must not restore feature's work.
+		#expect(store.state.gitActionsMenu.stashButton.hasStash == false)
+		await store.receive(\.gitActionsMenu.refresh)
+		await store.finish()
+	}
+
 	// MARK: - Helpers
 
 	/// Branch `feature-two`, 3 ahead and 2 behind its upstream, with one staged change, one
