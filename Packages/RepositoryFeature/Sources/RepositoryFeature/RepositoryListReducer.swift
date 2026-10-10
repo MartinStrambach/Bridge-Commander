@@ -1617,7 +1617,12 @@ private func mergeGroupRows(
 			// Preserve cached data; update only git-derived fields
 			existing.name = repo.name
 			existing.isWorktree = repo.isWorktree
-			existing.branchName = repo.branchName
+			// A loaded row's branch comes from its own status reads, which compare against it
+			// to tell a checkout happened. Taking a scan's newer branch first hid that change
+			// from the read, so the old PR, ticket and stash stayed on the row.
+			if !existing.isLoaded {
+				existing.branchName = repo.branchName
+			}
 			updated.append(existing)
 		}
 		else {

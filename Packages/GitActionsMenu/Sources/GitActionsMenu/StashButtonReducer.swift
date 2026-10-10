@@ -80,11 +80,18 @@ public struct StashButtonReducer {
 		case stashPopCompleted(success: Bool, error: String?)
 		case stashClearCompleted(success: Bool, error: String?)
 		case checkStashStatus
-		case didFindStash(GitStashEntry?)
+		/// What a check found for `branch`, the branch the check looked under.
+		case didFindStash(GitStashEntry?, branch: String)
 
 		public enum ConfirmAction: Equatable {
-			case confirmClear
+			/// Carries the entry the dialog named, so a check landing while it is open
+			/// cannot swap in another stash to drop.
+			case confirmClear(GitStashEntry)
 		}
+	}
+
+	private enum CancelID: Hashable {
+		case stashCheck(String)
 	}
 
 	public var body: some Reducer<State, Action> {
@@ -103,14 +110,16 @@ public struct StashButtonReducer {
 				}
 
 			case .stashApplyTapped:
-				guard let reference = state.stash?.reference else {
+				// The helpers look the entry up again by its commit before acting: its
+				// `stash@{n}` is from the last check, and the list is shared by every worktree.
+				guard let stash = state.stash else {
 					return .none
 				}
 
 				state.operation = .applying
 				return .run { [path = state.repositoryPath] send in
 					do {
-						try await GitStashHelper.stashApply(at: path, reference: reference)
+						try await GitStashHelper.stashApply(at: path, entry: stash)
 						await send(.stashApplyCompleted(success: true, error: nil))
 					}
 					catch {
@@ -119,14 +128,14 @@ public struct StashButtonReducer {
 				}
 
 			case .stashPopTapped:
-				guard let reference = state.stash?.reference else {
+				guard let stash = state.stash else {
 					return .none
 				}
 
 				state.operation = .popping
 				return .run { [path = state.repositoryPath] send in
 					do {
-						try await GitStashHelper.stashPop(at: path, reference: reference)
+						try await GitStashHelper.stashPop(at: path, entry: stash)
 						await send(.stashPopCompleted(success: true, error: nil))
 					}
 					catch {
@@ -144,15 +153,11 @@ public struct StashButtonReducer {
 				state.confirmationDialog = Self.clearConfirmation(for: stash)
 				return .none
 
-			case .confirmationDialog(.presented(.confirmClear)):
-				guard let reference = state.stash?.reference else {
-					return .none
-				}
-
+			case let .confirmationDialog(.presented(.confirmClear(stash))):
 				state.operation = .clearing
 				return .run { [path = state.repositoryPath] send in
 					do {
-						try await GitStashHelper.stashDrop(at: path, reference: reference)
+						try await GitStashHelper.stashDrop(at: path, entry: stash)
 						await send(.stashClearCompleted(success: true, error: nil))
 					}
 					catch {
@@ -171,11 +176,21 @@ public struct StashButtonReducer {
 				return .none
 
 			case .checkStashStatus:
+				// A newer check supersedes one still running: around a checkout, checks under
+				// the old and the new branch overlap, and the older one must not land last.
 				return .run { [path = state.repositoryPath, currentBranch = state.currentBranch] send in
-					await send(.didFindStash(GitStashHelper.findStash(at: path, branch: currentBranch)))
+					let stash = await GitStashHelper.findStash(at: path, branch: currentBranch)
+					await send(.didFindStash(stash, branch: currentBranch))
+				}
+				.cancellable(id: CancelID.stashCheck(state.repositoryPath), cancelInFlight: true)
+
+			case let .didFindStash(stash, branch):
+				// A check started before the branch changed answers for the old branch;
+				// offering that stash would pop one branch's work onto another.
+				guard branch == state.currentBranch else {
+					return .none
 				}
 
-			case let .didFindStash(stash):
 				state.stash = stash
 				return .none
 			}
@@ -189,7 +204,7 @@ public struct StashButtonReducer {
 		ConfirmationDialogState {
 			TextState("Clear stash?")
 		} actions: {
-			ButtonState(role: .destructive, action: .confirmClear) {
+			ButtonState(role: .destructive, action: .confirmClear(stash)) {
 				TextState("Clear Stash")
 			}
 			ButtonState(role: .cancel) {

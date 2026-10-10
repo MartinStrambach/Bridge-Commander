@@ -6,8 +6,12 @@ import Foundation
 public struct GitStashEntry: Equatable, Sendable {
 	/// The `stash@{n}` reference this entry can be applied or dropped by. Indices shift
 	/// whenever an entry is added or removed, so a reference is only good for as long as
-	/// the list it was parsed from.
+	/// the list it was parsed from — `GitStashHelper` looks the entry up again by `commit`
+	/// right before acting on it.
 	public let reference: String
+	/// The stash commit, which unlike `reference` stays put while other entries come and go.
+	/// Nil when the list was read without it (`git stash list`'s default format).
+	public let commit: String?
 	/// The branch the stash was taken on, or nil when git recorded no usable branch
 	/// (a detached HEAD stashes as `(no branch)`).
 	public let branch: String?
@@ -15,8 +19,9 @@ public struct GitStashEntry: Equatable, Sendable {
 	/// custom text for `git stash push -m`.
 	public let message: String
 
-	public init(reference: String, branch: String?, message: String) {
+	public init(reference: String, commit: String? = nil, branch: String?, message: String) {
 		self.reference = reference
+		self.commit = commit
 		self.branch = branch
 		self.message = message
 	}
@@ -34,9 +39,13 @@ public struct GitStashEntry: Equatable, Sendable {
 /// instead of assuming it is `stash@{0}`.
 public nonisolated enum GitStashListParser {
 
-	/// Parses the output of `git stash list`.
+	/// The `git stash list` format `parse(_:)` reads the stash commit from: git's default
+	/// (`%gd: %gs`) led by the commit, so an entry can be found again after its index shifted.
+	public static let listFormat = "--format=%H %gd: %gs"
+
+	/// Parses the output of `git stash list`, in its default format or in `listFormat`.
 	///
-	/// Every line is `<reference>: <subject>`, where the subject is `WIP on <branch>: <sha> <text>`
+	/// Every line is `[<commit> ]<reference>: <subject>`, where the subject is `WIP on <branch>: <sha> <text>`
 	/// for a plain `git stash` and `On <branch>: <text>` for `git stash push -m`. Branch names
 	/// cannot contain `:` (git rejects them), so the first colon after the prefix always ends
 	/// the branch. Lines that don't fit the shape are kept with a nil branch rather than dropped,
@@ -66,10 +75,30 @@ public nonisolated enum GitStashListParser {
 		return entries.first { $0.branch == branch }
 	}
 
+	/// `entry` as it stands in a newer read of the list, under its current `stash@{n}`.
+	///
+	/// Matched by commit, so a stash pushed or dropped in another worktree since `entry` was
+	/// read cannot make apply, pop or drop act on a different one. An entry read without its
+	/// commit can only be matched where it was, and only if that slot still holds the same stash.
+	/// - Returns: The entry, or nil when it is no longer in the list.
+	public static func entry(matching entry: GitStashEntry, in entries: [GitStashEntry]) -> GitStashEntry? {
+		guard let commit = entry.commit else {
+			return entries.first {
+				$0.reference == entry.reference && $0.branch == entry.branch && $0.message == entry.message
+			}
+		}
+
+		return entries.first { $0.commit == commit }
+	}
+
 	// MARK: - Private
 
 	private static func parseLine(_ line: String) -> GitStashEntry? {
-		let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+		var trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+		let commit = leadingCommit(of: trimmed)
+		if let commit {
+			trimmed = String(trimmed.dropFirst(commit.count + 1))
+		}
 		guard
 			!trimmed.isEmpty,
 			let separator = trimmed.range(of: ": ")
@@ -84,7 +113,22 @@ public nonisolated enum GitStashListParser {
 
 		let subject = String(trimmed[separator.upperBound...])
 		let (branch, message) = splitBranch(from: subject)
-		return GitStashEntry(reference: reference, branch: branch, message: message)
+		return GitStashEntry(reference: reference, commit: commit, branch: branch, message: message)
+	}
+
+	/// The object name `listFormat` puts before the reference: 40 hex digits, or 64 in a
+	/// SHA-256 repository. A reference starts with `stash@{`, so the two cannot be confused.
+	private static func leadingCommit(of line: String) -> String? {
+		guard let space = line.firstIndex(of: " ") else {
+			return nil
+		}
+
+		let candidate = line[line.startIndex ..< space]
+		guard candidate.count == 40 || candidate.count == 64, candidate.allSatisfy(\.isHexDigit) else {
+			return nil
+		}
+
+		return String(candidate)
 	}
 
 	/// Splits `WIP on <branch>: <rest>` / `On <branch>: <rest>` into its two halves.

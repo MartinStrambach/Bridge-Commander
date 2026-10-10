@@ -58,7 +58,14 @@ public struct GitActionsMenuReducer {
 		/// and the real branch only arrives with the status fetch. The stash button looks its
 		/// entry up by branch name, so leaving its copy behind made every lookup miss and the
 		/// apply/clear items never appeared.
+		///
+		/// A different branch also drops the stash found for the old one, until a check under
+		/// the new one says otherwise: left in place, Pop would restore one branch's work onto
+		/// another. The caller re-checks (`refresh`) after a change.
 		public mutating func setCurrentBranch(_ branch: String) {
+			if branch != stashButton.currentBranch {
+				stashButton.stash = nil
+			}
 			currentBranch = branch
 			stashButton.currentBranch = branch
 		}

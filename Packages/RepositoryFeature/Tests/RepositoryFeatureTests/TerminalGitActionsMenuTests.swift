@@ -100,7 +100,7 @@ struct TerminalGitActionsMenuTests {
 		// Exhaustive: a row refresh — or any other emission — fails here. The stash status
 		// answer is the menu action closest to a completion without being one.
 		await store.send(.terminalLayout(.gitActionsMenu(
-			.stashButton(.didFindStash(nil))
+			.stashButton(.didFindStash(nil, branch: "master"))
 		)))
 		await store.finish()
 	}

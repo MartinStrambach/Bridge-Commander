@@ -22,10 +22,48 @@ struct StashButtonTests {
 
 		#expect(store.state.hasStash == false)
 
-		await store.send(.didFindStash(Self.entry)) {
+		await store.send(.didFindStash(Self.entry, branch: "feature")) {
 			$0.stash = Self.entry
 		}
 		#expect(store.state.hasStash)
+	}
+
+	@Test("a check that looked under a branch the row has since left is ignored")
+	func resultForAnotherBranchIsIgnored() async {
+		// The check started on `feature`; the branch moved to `master` before it answered.
+		let store = TestStore(
+			initialState: StashButtonReducer.State(repositoryPath: "/tmp/repo", currentBranch: "master")
+		) {
+			StashButtonReducer()
+		}
+
+		// Exhaustive: setting the stash fails the test.
+		await store.send(.didFindStash(Self.entry, branch: "feature"))
+		#expect(store.state.hasStash == false)
+	}
+
+	@Test("confirming a clear drops the entry the dialog named, not whatever was found since")
+	func confirmClearCarriesTheNamedEntry() async {
+		let newer = GitStashEntry(reference: "stash@{0}", branch: "feature", message: "def5678 Newer work")
+		let store = TestStore(
+			initialState: StashButtonReducer.State(
+				repositoryPath: "/tmp/repo",
+				currentBranch: "feature",
+				stash: Self.entry
+			)
+		) {
+			StashButtonReducer()
+		}
+
+		await store.send(.stashClearTapped) {
+			$0.confirmationDialog = StashButtonReducer.clearConfirmation(for: Self.entry)
+		}
+		#expect(store.state.confirmationDialog?.buttons.first?.action.action == .confirmClear(Self.entry))
+		// A check landing while the dialog is open swaps the menu's entry, not the dialog's.
+		await store.send(.didFindStash(newer, branch: "feature")) {
+			$0.stash = newer
+		}
+		#expect(store.state.confirmationDialog?.buttons.first?.action.action == .confirmClear(Self.entry))
 	}
 
 	@Test("an empty stash list hides the apply items again")
@@ -40,7 +78,7 @@ struct StashButtonTests {
 			StashButtonReducer()
 		}
 
-		await store.send(.didFindStash(nil)) {
+		await store.send(.didFindStash(nil, branch: "feature")) {
 			$0.stash = nil
 		}
 		#expect(store.state.hasStash == false)
@@ -138,6 +176,19 @@ struct GitActionsMenuStashWiringTests {
 
 		#expect(state.currentBranch == "feature/login")
 		#expect(state.stashButton.currentBranch == "feature/login")
+	}
+
+	@Test("switching branch drops the old branch's stash; the same branch keeps it")
+	func branchSwitchDropsTheStash() {
+		var state = GitActionsMenuReducer.State(repositoryPath: "/tmp/repo", currentBranch: "feature")
+		state.stashButton.stash = GitStashEntry(reference: "stash@{0}", branch: "feature", message: "work")
+
+		state.setCurrentBranch("feature")
+		#expect(state.stashButton.hasStash)
+
+		// Left in place, Pop on `master` would restore `feature`'s work there.
+		state.setCurrentBranch("master")
+		#expect(state.stashButton.hasStash == false)
 	}
 
 	@Test("a successful apply keeps the stash and re-checks the list")

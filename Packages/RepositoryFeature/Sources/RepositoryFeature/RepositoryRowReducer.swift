@@ -587,6 +587,8 @@ struct RepositoryRowReducer {
 		state.shareButton.updateTicketURL(state.ticketButton?.ticketURL ?? "")
 		state.unstagedChangesCount = unstaged
 		state.stagedChangesCount = staged
+		// Drops the old branch's stash from the menu when the branch moved; the check below
+		// finds the new one's.
 		state.gitActionsMenu.setCurrentBranch(branch ?? state.name)
 		state.commitsBehindCount = status.behindCount
 		state.hasRemoteBranch = status.hasRemoteBranch
@@ -602,6 +604,12 @@ struct RepositoryRowReducer {
 		state.gitActionsMenu.discardButton.hasUntrackedFiles = hasUntracked
 		state.gitActionsMenu.unpushedCommitsCount = status.unpushedCount
 		state.gitActionsMenu.hasRemoteBranch = status.hasRemoteBranch
+		// The stash the menu offers is keyed on the branch, so a branch that moved is checked
+		// again under the new one — after a refresh too: the refresh's own check (and the one
+		// a checkout from the menu or the graph sends) ran alongside this read, under the old
+		// branch. Covers a pending stash check.
+		let stashCheck: EffectOf<RepositoryRowReducer> =
+			branchChanged ? .send(.gitActionsMenu(.refresh)) : pendingStashCheck
 		// YouTrack and PR fetches are keyed on the ticket/branch resolved
 		// above — running them in parallel with the status fetch would use
 		// the pre-refresh values and resurrect stale state after a branch switch.
@@ -610,7 +618,7 @@ struct RepositoryRowReducer {
 				syncMergeStatus,
 				fetchYouTrack(for: state),
 				fetchPullRequest(for: state),
-				pendingStashCheck
+				stashCheck
 			)
 		}
 
@@ -619,12 +627,11 @@ struct RepositoryRowReducer {
 		// keyed on it too), or its upstream — a push, a fetch or a pull can change what the PR
 		// shows. A local commit only adds to the unpushed count and asks nothing.
 		if branchChanged {
-			// Covers a pending stash check too.
 			return .merge(
 				syncMergeStatus,
 				fetchYouTrack(for: state),
 				fetchPullRequest(for: state),
-				.send(.gitActionsMenu(.refresh))
+				stashCheck
 			)
 		}
 		if upstreamMoved {

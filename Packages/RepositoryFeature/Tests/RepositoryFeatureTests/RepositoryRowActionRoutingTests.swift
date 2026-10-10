@@ -68,7 +68,7 @@ struct RepositoryRowActionRoutingTests {
 		store.exhaustivity = .on
 
 		// The stash lookup's answer is the menu action closest to a completion without being one.
-		await store.send(.gitActionsMenu(.stashButton(.didFindStash(nil))))
+		await store.send(.gitActionsMenu(.stashButton(.didFindStash(nil, branch: "main"))))
 		await store.finish()
 	}
 

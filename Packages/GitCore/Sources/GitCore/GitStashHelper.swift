@@ -20,12 +20,17 @@ public nonisolated enum GitStashHelper {
 	/// Restores a stash and leaves it in the stash list.
 	/// - Parameters:
 	///   - path: The path to the Git repository
-	///   - reference: The `stash@{n}` reference to apply. Passed explicitly rather than
-	///     letting git default to `stash@{0}`: the stash list is shared by every worktree
-	///     of a repository, so the newest entry often belongs to a different branch than
-	///     the one whose menu the user opened.
+	///   - entry: The stash to apply. Named explicitly rather than letting git default to
+	///     `stash@{0}`: the stash list is shared by every worktree of a repository, so the
+	///     newest entry often belongs to a different branch than the one whose menu the user
+	///     opened. Looked up again first (`currentReference(of:at:)`), as its index may have
+	///     moved since it was found.
 	/// - Throws: GitError if the operation fails
-	public static func stashApply(at path: String, reference: String) async throws {
+	public static func stashApply(at path: String, entry: GitStashEntry) async throws {
+		guard let reference = await currentReference(of: entry, at: path) else {
+			throw GitError.stashApplyFailed(stashGoneMessage)
+		}
+
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "apply", reference],
 			at: path
@@ -40,10 +45,13 @@ public nonisolated enum GitStashHelper {
 	/// Restores a stash and drops it from the stash list.
 	/// - Parameters:
 	///   - path: The path to the Git repository
-	///   - reference: The `stash@{n}` reference to pop — see `stashApply(at:reference:)`
-	///     for why it is never left implicit.
+	///   - entry: The stash to pop — see `stashApply(at:entry:)`.
 	/// - Throws: GitError if the operation fails
-	public static func stashPop(at path: String, reference: String) async throws {
+	public static func stashPop(at path: String, entry: GitStashEntry) async throws {
+		guard let reference = await currentReference(of: entry, at: path) else {
+			throw GitError.stashPopFailed(stashGoneMessage)
+		}
+
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "pop", reference],
 			at: path
@@ -62,9 +70,14 @@ public nonisolated enum GitStashHelper {
 	/// so clearing it would throw away work belonging to branches the user isn't looking at.
 	/// - Parameters:
 	///   - path: The path to the Git repository
-	///   - reference: The `stash@{n}` reference to drop
+	///   - entry: The stash to drop — see `stashApply(at:entry:)`. Dropping by a stale index
+	///     would throw away somebody else's stash.
 	/// - Throws: GitError if the operation fails
-	public static func stashDrop(at path: String, reference: String) async throws {
+	public static func stashDrop(at path: String, entry: GitStashEntry) async throws {
+		guard let reference = await currentReference(of: entry, at: path) else {
+			throw GitError.stashDropFailed(stashGoneMessage)
+		}
+
 		let result = await ProcessRunner.runGit(
 			arguments: ["stash", "drop", reference],
 			at: path
@@ -74,6 +87,27 @@ public nonisolated enum GitStashHelper {
 			let errorMessage = result.trimmedError
 			throw GitError.stashDropFailed(errorMessage.isEmpty ? "Unknown error" : errorMessage)
 		}
+	}
+
+	private static let stashGoneMessage =
+		"The stash is no longer in the stash list. It may have been applied or dropped in another worktree."
+
+	/// The `stash@{n}` reference `entry` goes by now. The list is shared by every worktree, so
+	/// a stash pushed or dropped in another one since `entry` was found shifts the indices, and
+	/// the old reference would name a different stash. Read fresh, not through `stashList`: a
+	/// coalesced run may have started before that change.
+	/// - Returns: The reference, or nil when the entry is gone (or the list could not be read)
+	static func currentReference(of entry: GitStashEntry, at path: String) async -> String? {
+		let result = await ProcessRunner.runGit(
+			arguments: ["stash", "list", GitStashListParser.listFormat],
+			at: path
+		)
+		guard result.success else {
+			return nil
+		}
+
+		return GitStashListParser.entry(matching: entry, in: GitStashListParser.parse(result.trimmedOutput))?
+			.reference
 	}
 
 	/// The stash store lives in the common git directory, shared by all worktrees of a
@@ -104,7 +138,8 @@ public nonisolated enum GitStashHelper {
 private actor StashListRunner {
 	private var inFlight: [String: Task<String?, Never>] = [:]
 
-	/// Returns the trimmed `git stash list` output, or nil when the command fails.
+	/// Returns the trimmed `git stash list` output (in `GitStashListParser.listFormat`), or nil
+	/// when the command fails.
 	func run(at path: String) async -> String? {
 		let key = GitDirectoryResolver.resolveCommonGitDirectory(at: path) ?? path
 		if let existing = inFlight[key] {
@@ -113,7 +148,7 @@ private actor StashListRunner {
 
 		let task = Task<String?, Never> { @concurrent in
 			let result = await ProcessRunner.runGit(
-				arguments: ["stash", "list"],
+				arguments: ["stash", "list", GitStashListParser.listFormat],
 				at: path
 			)
 			return result.success ? result.trimmedOutput : nil

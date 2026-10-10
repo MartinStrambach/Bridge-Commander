@@ -319,6 +319,54 @@ struct RepositoryChangedOnDiskTests {
 		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.stashButton.didFindStash)
 	}
 
+	@Test("a scan between a checkout and its status read leaves the branch change to the read")
+	func scanDoesNotHideCheckoutFromStatusRead() async {
+		let store = makeListStore(changes: AsyncStream { $0.finish() }, watched: LockIsolated([]))
+		store.dependencies[GitClient.self].getOriginRemote = { _ in nil }
+		// The list re-sorts after a row's status lands.
+		store.dependencies.continuousClock = ImmediateClock()
+		await scanAlpha(store)
+		await store.send(.repositoryGroups(.element(
+			id: "/repos/alpha",
+			action: .worktrees(.element(id: "/repos/alpha-one", action: .onAppear))
+		)))
+
+		// `git checkout other` in the terminal; a periodic scan lands before the row's read.
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			ScannedRepository(
+				path: "/repos/alpha",
+				name: "alpha",
+				directory: "/repos/alpha",
+				isWorktree: false,
+				branchName: "main"
+			),
+			ScannedRepository(
+				path: "/repos/alpha-one",
+				name: "alpha-one",
+				directory: "/repos/alpha-one",
+				isWorktree: true,
+				branchName: "other"
+			),
+		]))
+		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.worktrees[id: "/repos/alpha-one"]?.branchName
+			== "feature-one")
+		// A row not on screen yet has no read of its own, so it takes the scan's branch.
+		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.header.branchName == "main")
+
+		await store.send(.repositoryGroups(.element(
+			id: "/repos/alpha",
+			action: .worktrees(.element(
+				id: "/repos/alpha-one",
+				action: .didFetchStatusAfterChangeOnDisk(GitPorcelainStatus(parsing: "# branch.head other"), false)
+			))
+		)))
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"]
+			.gitActionsMenu.refresh)
+		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.worktrees[id: "/repos/alpha-one"]?.branchName
+			== "other")
+		await store.finish()
+	}
+
 	@Test("a worktree added in a terminal rescans its group")
 	func worktreeListChangeRescansGroup() async {
 		let (changes, continuation) = AsyncStream<[GitRepositoryChange]>.makeStream()
