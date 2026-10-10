@@ -65,6 +65,10 @@ struct RepositoryRowReducer {
 		var deleteWorktreeButton: DeleteWorktreeButtonReducer.State
 		var createWorktreeButton: CreateWorktreeButtonReducer.State
 		var gitActionsMenu: GitActionsMenuReducer.State
+		/// The terminal panel's merge banner is committing the merge (`finishMergeTapped`). On the
+		/// row, not the panel, so hiding the panel cannot cancel it and the spinner stays with
+		/// this repository when the panel switches to another.
+		var isFinishingMerge = false
 
 		var isLoaded = false
 		/// A status fetch for `onAppear`/`refresh` is under way. A change on disk cancels it and
@@ -258,6 +262,10 @@ struct RepositoryRowReducer {
 		case deleteWorktreeButton(DeleteWorktreeButtonReducer.Action)
 		case createWorktreeButton(CreateWorktreeButtonReducer.Action)
 		case gitActionsMenu(GitActionsMenuReducer.Action)
+		/// The terminal panel's Finish Merge (`git commit --no-edit`).
+		case finishMergeTapped
+		/// A failure is alerted by `RepositoryListReducer`; the row has no alert of its own.
+		case finishMergeCompleted(error: GitError?)
 		case worktreeDeleted
 		/// The list rescans the group, then opens `path` in the built-in terminal when `launch`
 		/// asks for it.
@@ -449,6 +457,27 @@ struct RepositoryRowReducer {
 				default:
 					return .none
 				}
+
+			case .finishMergeTapped:
+				guard !state.isFinishingMerge else {
+					return .none
+				}
+
+				state.isFinishingMerge = true
+				return .run { [path = state.path, gitClient] send in
+					do {
+						try await gitClient.finishMerge(at: path)
+						await send(.finishMergeCompleted(error: nil))
+					}
+					catch {
+						let gitError = error as? GitError ?? .mergeFailed(error.localizedDescription)
+						await send(.finishMergeCompleted(error: gitError))
+					}
+				}
+
+			case let .finishMergeCompleted(error):
+				state.isFinishingMerge = false
+				return error == nil ? .send(.refresh) : .none
 
 			case .youtrackButton(.delegate(.stateChanged)):
 				// Re-read the issue: the state chip and the set of reachable transitions both

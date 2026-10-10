@@ -237,29 +237,6 @@ struct TerminalTabRestoreTests {
 		#expect(store.state.terminalSessions.count == 1)
 	}
 
-	@Test("the toolbar picks up the restored repository's buttons once the scan finds its row")
-	func toolbarSyncsAfterScan() async {
-		let store = makeStore(loading: SavedTerminalTabs(tabs: [
-			tab("/repos/alpha", directory: "/repos/alpha", isRepositoryCurrentTab: true, isOnScreen: true),
-		]))
-		await store.send(.restoreTerminalTabs)
-		#expect(store.state.terminalLayout?.gitActionsMenu == nil)
-
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			ScannedRepository(
-				path: "/repos/alpha",
-				name: "alpha",
-				directory: "/repos/alpha",
-				isWorktree: false,
-				branchName: "master"
-			),
-		]))
-
-		let row = store.state.repositoryGroups[id: "/repos/alpha"]?.header
-		#expect(row != nil)
-		#expect(store.state.terminalLayout?.gitActionsMenu == row?.gitActionsMenu)
-	}
-
 	// MARK: - Helpers
 
 	private func tab(

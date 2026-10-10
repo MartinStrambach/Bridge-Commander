@@ -32,6 +32,12 @@ public struct GitActionsMenuReducer {
 
 		fileprivate var isLoaded = false
 
+		/// A push started from the menu, or from outside it with `.pushButton(.quietPushTapped)`
+		/// (the terminal toolbar's Push button), is under way.
+		public var isPushing: Bool {
+			pushButton.isPushing
+		}
+
 		public init(repositoryPath: String, currentBranch: String, defaultBranch: String = "") {
 			self.repositoryPath = repositoryPath
 			self.currentBranch = currentBranch
@@ -178,7 +184,7 @@ public struct GitActionsMenuReducer {
 				}
 				return refreshStashStatusEffect
 
-			case let .pushButton(.pushCompleted(result, error)):
+			case let .pushButton(.pushCompleted(result, error, quiet)):
 				if let error {
 					state.alert = ScrollableAlertReducer.State(
 						title: "Push Failed",
@@ -186,7 +192,7 @@ public struct GitActionsMenuReducer {
 						isError: true
 					)
 				}
-				else if let result {
+				else if let result, !quiet {
 					let message = result.isUpToDate
 						? "Everything is already up to date with the remote branch."
 						: "Successfully pushed commits to remote branch."

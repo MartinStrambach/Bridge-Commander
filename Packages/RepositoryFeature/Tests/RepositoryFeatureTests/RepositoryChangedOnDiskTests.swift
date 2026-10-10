@@ -282,41 +282,29 @@ struct RepositoryChangedOnDiskTests {
 		await store.finish()
 	}
 
-	@Test("a stash change in the terminal's repository reaches the toolbar's git menu too")
-	func stashChangeRefreshesTerminalGitMenu() async {
+	@Test("a stash change in the terminal's repository is checked by its row alone")
+	func stashChangeInTerminalRepositoryChecksItsRow() async {
 		let store = makeListStore(
 			terminalOpen(on: "/repos/alpha-one"),
 			changes: AsyncStream { $0.finish() },
 			watched: LockIsolated([])
 		)
-
 		await scanAlpha(store)
+
+		// Exhaustive from here: the toolbar shows the row's own git menu, so the row's stash
+		// check is all the change may cause — there is no toolbar copy to tell as well.
+		store.exhaustivity = .on
 		await store.send(.repositoriesChangedOnDisk([
 			GitRepositoryChange(repositoryPath: "/repos/alpha-one", kinds: .stash),
 		]))
-
-		await store.receive(\.terminalLayout.gitActionsMenu.refresh)
-		await store.finish()
-	}
-
-	@Test("a stash change in another repository leaves the toolbar's git menu alone")
-	func stashChangeElsewhereLeavesTerminalGitMenu() async {
-		let store = makeListStore(
-			terminalOpen(on: "/repos/alpha-one"),
-			changes: AsyncStream { $0.finish() },
-			watched: LockIsolated([])
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].changedOnDisk)
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].gitActionsMenu.refresh)
+		await store.receive(
+			\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].gitActionsMenu.stashButton.checkStashStatus
 		)
-		await scanAlpha(store)
-
-		// Exhaustive from here: the row's own stash check is all the change may cause.
-		store.exhaustivity = .on
-		await store.send(.repositoriesChangedOnDisk([
-			GitRepositoryChange(repositoryPath: "/repos/alpha", kinds: .stash),
-		]))
-		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.changedOnDisk)
-		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.refresh)
-		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.stashButton.checkStashStatus)
-		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.gitActionsMenu.stashButton.didFindStash)
+		await store.receive(
+			\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].gitActionsMenu.stashButton.didFindStash
+		)
 	}
 
 	@Test("a worktree added in a terminal rescans its group")
@@ -347,12 +335,10 @@ struct RepositoryChangedOnDiskTests {
 
 	// MARK: - Helpers
 
-	/// The terminal panel open on `path`, its toolbar showing that repository's git menu.
+	/// The terminal panel open on `path`.
 	private func terminalOpen(on path: String) -> RepositoryListReducer.State {
 		var state = RepositoryListReducer.State()
-		var layout = TerminalLayoutReducer.State(activeRepositoryPath: path)
-		layout.gitActionsMenu = GitActionsMenuReducer.State(repositoryPath: path, currentBranch: "feature-one")
-		state.terminalLayout = layout
+		state.terminalLayout = TerminalLayoutReducer.State(activeRepositoryPath: path)
 		return state
 	}
 

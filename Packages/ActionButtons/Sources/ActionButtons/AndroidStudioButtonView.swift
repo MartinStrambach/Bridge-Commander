@@ -15,6 +15,10 @@ public struct AndroidStudioButtonView: View {
 
 	public var style: Style = .tool
 
+	/// Off on the repository list while the terminal panel's toolbar shows this same store.
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	private var buttonTooltip: String {
 		if store.isOpening {
 			"Opening Android Studio..."
@@ -35,7 +39,7 @@ public struct AndroidStudioButtonView: View {
 				tint: store.isOpening ? .green : nil,
 				action: { store.send(.openAndroidStudioButtonTapped) }
 			)
-			.alert($store.scope(\.$alert, action: \.alert))
+			.alert(presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil))
 
 		case .compact:
 			ActionButton(
@@ -43,7 +47,7 @@ public struct AndroidStudioButtonView: View {
 				tooltip: buttonTooltip,
 				action: { store.send(.openAndroidStudioButtonTapped) }
 			)
-			.alert($store.scope(\.$alert, action: \.alert))
+			.alert(presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil))
 		}
 	}
 
@@ -89,8 +93,11 @@ private struct AndroidStudioPresentations: ViewModifier {
 	@Bindable
 	var store: StoreOf<AndroidStudioButtonReducer>
 
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	func body(content: Content) -> some View {
-		content.alert($store.scope(\.$alert, action: \.alert))
+		content.alert(presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil))
 	}
 }
 
