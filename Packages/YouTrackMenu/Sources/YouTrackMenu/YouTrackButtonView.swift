@@ -9,12 +9,6 @@ public struct YouTrackButtonView: View {
 	@Bindable
 	var store: StoreOf<YouTrackButtonReducer>
 
-	/// Read here and applied to the menu's label as a plain font: a `.borderlessButton` menu's
-	/// label is flattened by AppKit, which drops `scaledFont`'s environment lookup and keeps only
-	/// a font set directly on the `Text`.
-	@Environment(\.uiFontScale)
-	private var uiFontScale
-
 	public init(store: StoreOf<YouTrackButtonReducer>) {
 		self.store = store
 	}
@@ -29,13 +23,9 @@ public struct YouTrackButtonView: View {
 				)
 			}
 			else {
-				Menu {
-					YouTrackMenuItems(store: store)
-				} label: {
-					Text("YouTrack")
-						.font(.system(size: 12 * uiFontScale))
+				PopUpMenuButton("YouTrack") {
+					store.menuEntries
 				}
-				.menuStyle(.borderlessButton)
 				.help("Move \(store.ticketId) to a different state")
 			}
 		}
@@ -44,30 +34,19 @@ public struct YouTrackButtonView: View {
 	}
 }
 
-/// The YouTrack menu as a submenu of another menu (the repository row's "⋯" menu). While a move
-/// is being applied it is a disabled entry saying so instead.
-///
-/// A menu entry cannot present anything, so whoever shows this must also apply
-/// `youTrackMenuPresentations(store:)` to a view outside the menu.
-public struct YouTrackSubmenu: View {
-	let store: StoreOf<YouTrackButtonReducer>
-
-	public init(store: StoreOf<YouTrackButtonReducer>) {
-		self.store = store
-	}
-
-	public var body: some View {
-		if store.isApplying {
-			Button {} label: {
-				Label("Updating \(store.ticketId)...", systemImage: "list.bullet.rectangle")
-			}
-			.disabled(true)
+public extension Store where State == YouTrackButtonReducer.State, Action == YouTrackButtonReducer.Action {
+	/// The YouTrack menu as an entry of another menu (the repository row's "⋯" menu): a submenu,
+	/// or while a move is being applied a disabled entry saying so.
+	///
+	/// A menu entry cannot present anything, so whoever shows this must also apply
+	/// `youTrackMenuPresentations(store:)` to a view outside the menu.
+	var submenuEntry: PopUpMenuEntry {
+		if self.isApplying {
+			.action(PopUpMenuAction("Updating \(self.ticketId)...", systemImage: "list.bullet.rectangle", isEnabled: false) {})
 		}
 		else {
-			Menu {
-				YouTrackMenuItems(store: store)
-			} label: {
-				Label("YouTrack", systemImage: "list.bullet.rectangle")
+			.submenu("YouTrack", systemImage: "list.bullet.rectangle") {
+				self.menuEntries
 			}
 		}
 	}
@@ -75,7 +54,7 @@ public struct YouTrackSubmenu: View {
 
 public extension View {
 	/// The YouTrack menu's error alert. Applied by `YouTrackButtonView` itself; a
-	/// `YouTrackSubmenu` needs it on a view outside the menu it sits in.
+	/// `submenuEntry` needs it on a view outside the menu it sits in.
 	func youTrackMenuPresentations(store: StoreOf<YouTrackButtonReducer>) -> some View {
 		modifier(YouTrackMenuPresentations(store: store))
 	}
@@ -96,17 +75,14 @@ private struct YouTrackMenuPresentations: ViewModifier {
 	}
 }
 
-/// The menu's entries, shared by `YouTrackButtonView` and `YouTrackSubmenu`.
-private struct YouTrackMenuItems: View {
-	let store: StoreOf<YouTrackButtonReducer>
-
-	var body: some View {
-		Section(currentStateTitle) {
-			ForEach(store.transitions) { transition in
-				Button {
-					store.send(.transitionTapped(transition))
-				} label: {
-					Text(transition.presentation)
+/// The menu's entries, shared by `YouTrackButtonView` and `submenuEntry`.
+private extension Store where State == YouTrackButtonReducer.State, Action == YouTrackButtonReducer.Action {
+	@PopUpMenuBuilder
+	var menuEntries: [PopUpMenuEntry] {
+		PopUpMenuEntry.section(currentStateTitle) {
+			for transition in self.transitions {
+				PopUpMenuAction(transition.presentation) {
+					self.send(.transitionTapped(transition))
 				}
 			}
 		}
@@ -116,7 +92,7 @@ private struct YouTrackMenuItems: View {
 	/// sits inline above the options and reads like a sixth, selectable state, which makes the
 	/// menu look like a full state picker rather than the reachable subset it is.
 	private var currentStateTitle: String {
-		if let currentState = store.currentState {
+		if let currentState = self.currentState {
 			"Move from \(currentState.rawValue) to"
 		}
 		else {

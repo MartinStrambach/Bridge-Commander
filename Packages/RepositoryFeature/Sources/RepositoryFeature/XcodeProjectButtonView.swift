@@ -113,20 +113,28 @@ struct XcodeProjectButtonView: View {
 	}
 }
 
-/// The Xcode button as an entry of another menu (the repository row's "⋯" menu).
-///
-/// A menu entry cannot present anything, so whoever shows this must also apply
-/// `xcodeProjectPresentations(store:)` to a view outside the menu.
-struct XcodeProjectMenuItem: View {
-	let store: StoreOf<XcodeProjectButtonReducer>
+extension Store where State == XcodeProjectButtonReducer.State, Action == XcodeProjectButtonReducer.Action {
+	/// The button as an entry of the repository row's "⋯" menu.
+	var menuEntry: PopUpMenuAction {
+		PopUpMenuAction(
+			menuEntryTitle,
+			systemImage: self.projectPath == nil ? "exclamationmark.triangle" : "hammer.fill",
+			isEnabled: !(
+				self.projectState.isProcessing
+					|| (self.projectState == .idle && self.projectPath == nil && !self.usesTuist)
+			)
+		) {
+			self.send(.openProject)
+		}
+	}
 
-	private var title: String {
-		switch store.projectState {
+	private var menuEntryTitle: String {
+		switch self.projectState {
 		case .idle, .error:
-			if store.projectPath != nil {
+			if self.projectPath != nil {
 				"Open in Xcode"
 			}
-			else if store.usesTuist {
+			else if self.usesTuist {
 				"Install & Generate Xcode Project"
 			}
 			else {
@@ -134,20 +142,8 @@ struct XcodeProjectMenuItem: View {
 			}
 
 		default:
-			store.projectState.displayMessage
+			self.projectState.displayMessage
 		}
-	}
-
-	var body: some View {
-		Button {
-			store.send(.openProject)
-		} label: {
-			Label(title, systemImage: store.projectPath == nil ? "exclamationmark.triangle" : "hammer.fill")
-		}
-		.disabled(
-			store.projectState.isProcessing
-				|| (store.projectState == .idle && store.projectPath == nil && !store.usesTuist)
-		)
 	}
 }
 

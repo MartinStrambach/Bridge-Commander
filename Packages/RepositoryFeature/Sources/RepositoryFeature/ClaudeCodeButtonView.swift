@@ -31,20 +31,16 @@ struct ClaudeCodeButtonView: View {
 
 }
 
-/// The Claude Code button as an entry of another menu (the repository row's "⋯" menu).
-///
-/// A menu entry cannot present anything, so whoever shows this must also apply
-/// `claudeCodePresentations(store:)` to a view outside the menu.
-struct ClaudeCodeMenuItem: View {
-	let store: StoreOf<ClaudeCodeButtonReducer>
-
-	var body: some View {
-		Button {
-			store.send(.launchClaudeCodeButtonTapped)
-		} label: {
-			Label(store.isLaunching ? "Launching Claude Code..." : "Launch Claude Code", systemImage: "sparkles")
+extension Store where State == ClaudeCodeButtonReducer.State, Action == ClaudeCodeButtonReducer.Action {
+	/// The button as an entry of the repository row's "⋯" menu.
+	var menuEntry: PopUpMenuAction {
+		PopUpMenuAction(
+			self.isLaunching ? "Launching Claude Code..." : "Launch Claude Code",
+			systemImage: "sparkles",
+			isEnabled: !self.isLaunching
+		) {
+			self.send(.launchClaudeCodeButtonTapped)
 		}
-		.disabled(store.isLaunching)
 	}
 }
 

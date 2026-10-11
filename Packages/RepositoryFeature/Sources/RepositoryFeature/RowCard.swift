@@ -52,6 +52,16 @@ struct RowChip: View {
 	var help: String?
 
 	var body: some View {
+		// No tooltip modifier at all without help text: most chips have none.
+		if let help {
+			chip.help(help)
+		}
+		else {
+			chip
+		}
+	}
+
+	private var chip: some View {
 		HStack(spacing: 3) {
 			Image(systemName: systemImage)
 				.scaledFont(.caption2)
@@ -67,7 +77,6 @@ struct RowChip: View {
 		.padding(.vertical, 2)
 		.background(color.opacity(0.14), in: Capsule())
 		.fixedSize()
-		.help(help ?? "")
 	}
 }
 

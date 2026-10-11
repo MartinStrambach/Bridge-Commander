@@ -112,7 +112,12 @@ struct RepositoryRowView: View {
 		.background(RowCardBackground(isGroupHeader: isGroupCollapsed != nil, isHovered: isHovered))
 		.onHover { isHovered = $0 }
 		.task {
-			store.send(.onAppear)
+			// The List rebuilds a row each time it scrolls back into view, so this runs again and
+			// again. Checked here rather than left to the reducer's own guard: even an action that
+			// changes nothing goes through the root store and wakes every scoped store in the list.
+			if !store.isLoaded {
+				store.send(.onAppear)
+			}
 		}
 		.sheet(item: $store.scope(\.$repositoryDetail, action: \.repositoryDetail)) { detailStore in
 			RepositoryDetailView(store: detailStore)
