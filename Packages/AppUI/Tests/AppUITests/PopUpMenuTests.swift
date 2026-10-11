@@ -67,16 +67,30 @@ struct PopUpMenuTests {
 		#expect(menu.items[4].submenu?.items.map(\.isSeparatorItem) == [false, true, false])
 	}
 
-	@Test("an item's help becomes its tooltip; a share entry is the system's Share submenu, titled")
+	@Test("an item's help becomes its tooltip; a share entry is an item handing its text over, also in a submenu")
 	func tooltipsAndShare() {
-		let menu = NSMenu(entries: [
-			.action(PopUpMenuAction("Lookup Failed", isEnabled: false, help: "403 Forbidden") {}),
-			.share(title: "Share Branch", text: "Branch: main"),
-		])
+		var shared: [String] = []
+		let menu = NSMenu(
+			entries: [
+				.action(PopUpMenuAction("Lookup Failed", isEnabled: false, help: "403 Forbidden") {}),
+				.share(title: "Share Branch", text: "Branch: main"),
+				.submenu("More") {
+					PopUpMenuEntry.share(title: "Share Ticket", text: "Ticket: X-1")
+				},
+			],
+			share: { shared.append($0) }
+		)
 
 		#expect(menu.items[0].toolTip == "403 Forbidden")
 		#expect(menu.items[1].title == "Share Branch")
-		#expect(menu.items[1].representedObject is NSSharingServicePicker)
+		#expect(menu.items[1].submenu == nil)
+		#expect(menu.items[1].image != nil)
+
+		let share = menu.items[1]
+		_ = (share.target as? NSObject)?.perform(share.action)
+		let nested = menu.items[2].submenu!.items[0]
+		_ = (nested.target as? NSObject)?.perform(nested.action)
+		#expect(shared == ["Branch: main", "Ticket: X-1"])
 	}
 
 	@Test("an item or submenu with an icon asks for it to be shown (macOS 27 hides menu images otherwise)")

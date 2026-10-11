@@ -10,7 +10,8 @@ public enum PopUpMenuEntry {
 	/// A titled group of entries (a section header in the menu).
 	case section(String, [PopUpMenuEntry])
 	case submenu(title: String, systemImage: String?, [PopUpMenuEntry])
-	/// The system's Share submenu (Messages, Mail, AirDrop…) for `text`.
+	/// An item opening the system share picker (Messages, Mail, AirDrop…) for `text` under the
+	/// menu's button once the menu closes.
 	case share(title: String, text: String)
 	case divider
 
@@ -133,10 +134,18 @@ public struct PopUpMenuButton<Label: View>: View {
 		.buttonStyle(.plain)
 		.onHover { isHovered = $0 }
 		// Dropped from the button's bottom edge, as a pull-down's menu is. `popUp` runs the menu's
-		// tracking loop and returns once it closes.
+		// tracking loop and returns once it closes, after the chosen item's action has run.
 		.appKitPresentation(isPresented: $isMenuOpen) { anchor, ended in
-			NSMenu(entries: entries()).popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.maxY + 4 : -4), in: anchor)
-			ended()
+			var sharedText: String?
+			NSMenu(entries: entries(), share: { sharedText = $0 })
+				.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.maxY + 4 : -4), in: anchor)
+			// The button stays highlighted while the picker is open, as it is while the menu is.
+			if let sharedText {
+				SharePicker.show(sharedText, below: anchor, ended: ended)
+			}
+			else {
+				ended()
+			}
 		}
 		.accessibilityHint("Shows a menu")
 	}
@@ -171,14 +180,15 @@ public struct PopUpMenuTitle: View {
 // MARK: - NSMenu
 
 extension NSMenu {
-	/// A menu holding `entries`; an entry's action runs when it is chosen.
-	convenience init(entries: [PopUpMenuEntry]) {
+	/// A menu holding `entries`; an entry's action runs when it is chosen, and a share entry's
+	/// text goes to `share`.
+	convenience init(entries: [PopUpMenuEntry], share: @escaping @MainActor (String) -> Void = { _ in }) {
 		self.init()
 		autoenablesItems = false
-		addItems(for: entries)
+		addItems(for: entries, share: share)
 	}
 
-	private func addItems(for entries: [PopUpMenuEntry]) {
+	private func addItems(for entries: [PopUpMenuEntry], share: @escaping @MainActor (String) -> Void) {
 		for entry in entries {
 			switch entry {
 			case let .action(action):
@@ -189,21 +199,18 @@ extension NSMenu {
 					addItem(.separator())
 				}
 				addItem(.sectionHeader(title: title))
-				addItems(for: entries)
+				addItems(for: entries, share: share)
 
 			case let .submenu(title, systemImage, entries):
 				let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
 				item.setSymbol(systemImage)
-				item.submenu = NSMenu(entries: entries)
+				item.submenu = NSMenu(entries: entries, share: share)
 				addItem(item)
 
 			case let .share(title, text):
-				let picker = NSSharingServicePicker(items: [text])
-				let item = picker.standardShareMenuItem
-				item.title = title
-				// The item does not keep its picker, whose services the submenu's items run.
-				item.representedObject = picker
-				addItem(item)
+				// Not AppKit's Share submenu (`standardShareMenuItem`): the picker under the button
+				// is what the row's own Share button shows.
+				addItem(PopUpMenuItem(PopUpMenuAction(title, systemImage: "square.and.arrow.up") { share(text) }))
 
 			case .divider:
 				addItem(.separator())
