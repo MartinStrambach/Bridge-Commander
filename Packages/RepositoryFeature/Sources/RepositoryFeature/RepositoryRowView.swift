@@ -195,6 +195,7 @@ struct RepositoryRowView: View {
 									.scaledFont(.caption)
 								Text(branchName)
 									.scaledFont(.caption, design: .monospaced)
+									.tracking(-0.5)
 									.lineLimit(1)
 									.truncationMode(.middle)
 							}
@@ -222,6 +223,7 @@ struct RepositoryRowView: View {
 								.foregroundColor(.secondary)
 							Text("Detached at \(detachedHead.prefix(8))")
 								.scaledFont(.caption, design: .monospaced)
+								.tracking(-0.5)
 								.foregroundColor(.secondary)
 								.lineLimit(1)
 						}
