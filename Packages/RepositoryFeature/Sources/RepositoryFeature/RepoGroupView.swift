@@ -29,6 +29,12 @@ struct RepoGroupView: View {
 	@State
 	private var isDropTargeted = false
 
+	// Every row is a card (`RowCardBackground`) inset from the list's edges; worktrees sit indented
+	// under their repository's card, and groups are spaced apart by the header's top inset.
+	private static let headerInsets = EdgeInsets(top: 10, leading: 12, bottom: 3, trailing: 12)
+	private static let sectionHeaderInsets = EdgeInsets(top: 6, leading: 34, bottom: 2, trailing: 12)
+	private static let worktreeInsets = EdgeInsets(top: 3, leading: 32, bottom: 3, trailing: 12)
+
 	var body: some View {
 		let isExpanded = Binding(
 			get: { !store.isCollapsed },
@@ -52,16 +58,15 @@ struct RepoGroupView: View {
 					if visibility.includesWorktree(id: rowStore.id) {
 						if let sectionHeader = sectionHeaders[rowStore.id] {
 							RowSectionHeaderView(header: sectionHeader)
-								.padding(.leading, 20)
-								.listRowInsets(EdgeInsets())
+								.listRowInsets(Self.sectionHeaderInsets)
 								.listRowSeparator(.hidden)
 						}
 						RepositoryRowView(
 							store: rowStore,
 							terminalSessionStatus: statusByPath[rowStore.path]
 						)
-						.padding(.leading, 20)
-						.listRowInsets(EdgeInsets())
+						.listRowInsets(Self.worktreeInsets)
+						.listRowSeparator(.hidden)
 					}
 				}
 			} header: {
@@ -81,6 +86,7 @@ struct RepoGroupView: View {
 					insertionEdge: .top,
 					onDrop: { onRepositoryDropped?($0) }
 				)
+				.listRowInsets(Self.headerInsets)
 			}
 			.listSectionSeparator(.hidden)
 		}

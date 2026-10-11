@@ -54,8 +54,8 @@ enum TicketStateSection: Int, Comparable {
 	}
 
 	/// The tint this state used to paint whole rows with, back when the list colored rows instead of
-	/// heading them — now the background of its header. `nil` for the states that never had one;
-	/// those keep the neutral strip.
+	/// heading them — now the fill of its header pill. `nil` for the states that never had one;
+	/// those keep the neutral fill.
 	var background: Color? {
 		switch self {
 		case .done: Color.mint.opacity(0.1)
