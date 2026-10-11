@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MartinStrambach/Homer-console-mac-app",
       "state" : {
-        "revision" : "1bd1b0d43f74ac26e61ceba5eafc0bb08a3741b1",
-        "version" : "0.4.0"
+        "revision" : "c94829fbe357d9f646d01f23d067e90679a772cd",
+        "version" : "0.5.0"
       }
     },
     {
