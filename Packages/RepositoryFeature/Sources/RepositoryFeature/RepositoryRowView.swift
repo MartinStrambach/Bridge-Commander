@@ -463,6 +463,7 @@ struct RepositoryRowView: View {
 					))
 				}
 			}
+			.frame(width: 20, height: 20)
 			if let remove = onRemove {
 				ActionButton(
 					icon: .systemImage("xmark.circle"),
