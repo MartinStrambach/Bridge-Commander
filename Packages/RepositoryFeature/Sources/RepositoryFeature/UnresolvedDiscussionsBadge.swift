@@ -29,8 +29,8 @@ struct UnresolvedDiscussionsBadge: View {
 			// Stretch the pill to whatever width the enclosing VStack settles on,
 			// so the badge always matches the PR button's width above it.
 			.frame(maxWidth: .infinity)
-			.background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-			.contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+			.background(Color.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
+			.contentShape(RoundedRectangle(cornerRadius: 4))
 		}
 		.buttonStyle(.plain)
 		.help(tooltip)

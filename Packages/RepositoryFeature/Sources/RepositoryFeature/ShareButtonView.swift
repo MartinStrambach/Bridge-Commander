@@ -1,4 +1,3 @@
-import AppUI
 import ComposableArchitecture
 import SwiftUI
 
@@ -12,16 +11,13 @@ struct ShareButtonView: View {
 	var body: some View {
 		switch style {
 		case .button:
-			// Drawn like an `ActionButton`, which a ShareLink cannot be.
 			ShareLink(item: store.shareText) {
 				Image(systemName: "square.and.arrow.up")
 					.resizable()
 					.scaledToFit()
-					.padding(6)
-					.frame(width: 28, height: 28)
+					.frame(width: 20, height: 20)
 			}
-			.buttonStyle(.tile())
-			.foregroundStyle(.secondary)
+			.foregroundColor(.secondary)
 			.help("Share branch, ticket, and PR")
 
 		case .menuItem:

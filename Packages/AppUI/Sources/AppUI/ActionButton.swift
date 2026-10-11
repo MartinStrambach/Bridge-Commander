@@ -27,11 +27,11 @@ public struct ActionButton: View {
 				}
 			}
 			.scaledToFit()
-			.padding(6)
-			.frame(width: 28, height: 28)
+			.padding(4)
+			.frame(width: 25, height: 25)
 		}
-		.buttonStyle(.tile(tint: color))
-		.foregroundStyle(color ?? .secondary)
+//		.fixedSize()
+		.foregroundColor(color ?? .secondary)
 		.help(tooltip)
 	}
 
