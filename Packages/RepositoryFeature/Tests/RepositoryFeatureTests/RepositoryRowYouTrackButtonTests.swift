@@ -46,7 +46,7 @@ struct RepositoryRowYouTrackButtonTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions)))
+		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions), ticketId: "MOB-4432"))
 
 		#expect(store.state.youtrackButton?.ticketId == "MOB-4432")
 		#expect(store.state.youtrackButton?.stateFieldId == "84-950")
@@ -65,7 +65,7 @@ struct RepositoryRowYouTrackButtonTests {
 		await store.send(.didFetchYouTrack(makeDetails(
 			stateFieldId: hasFieldId ? "84-950" : nil,
 			transitions: hasFieldId ? [] : transitions
-		)))
+		), ticketId: "MOB-4432"))
 
 		#expect(store.state.youtrackButton == nil)
 	}
@@ -86,7 +86,7 @@ struct RepositoryRowYouTrackButtonTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didFetchYouTrack(nil))
+		await store.send(.didFetchYouTrack(nil, ticketId: "MOB-4432"))
 
 		#expect(store.state.youtrackButton == nil)
 	}
@@ -133,7 +133,7 @@ struct RepositoryRowYouTrackButtonTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions)))
+		await store.send(.didFetchYouTrack(makeDetails(transitions: transitions), ticketId: "MOB-4432"))
 
 		// Otherwise the progress indicator vanishes and a second transition becomes tappable.
 		#expect(store.state.youtrackButton?.isApplying == true)
