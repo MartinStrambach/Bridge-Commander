@@ -104,9 +104,8 @@ public struct PopUpMenuButton<Label: View>: View {
 	private let label: Label
 	private let entries: @MainActor () -> [PopUpMenuEntry]
 
-	/// The menu being shown.
 	@State
-	private var openMenu: NSMenu?
+	private var isMenuOpen = false
 	@State
 	private var isHovered = false
 
@@ -120,13 +119,13 @@ public struct PopUpMenuButton<Label: View>: View {
 
 	public var body: some View {
 		Button {
-			openMenu = NSMenu(entries: entries())
+			isMenuOpen = true
 		} label: {
 			label
 				.padding(.horizontal, 5)
 				.padding(.vertical, 2)
 				.background(
-					Color.primary.opacity(isHovered || openMenu != nil ? 0.08 : 0),
+					Color.primary.opacity(isHovered || isMenuOpen ? 0.08 : 0),
 					in: RoundedRectangle(cornerRadius: 5, style: .continuous)
 				)
 				.contentShape(Rectangle())
@@ -135,8 +134,8 @@ public struct PopUpMenuButton<Label: View>: View {
 		.onHover { isHovered = $0 }
 		// Dropped from the button's bottom edge, as a pull-down's menu is. `popUp` runs the menu's
 		// tracking loop and returns once it closes.
-		.appKitPresentation(item: $openMenu) { menu, anchor, ended in
-			menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.maxY + 4 : -4), in: anchor)
+		.appKitPresentation(isPresented: $isMenuOpen) { anchor, ended in
+			NSMenu(entries: entries()).popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.isFlipped ? anchor.bounds.maxY + 4 : -4), in: anchor)
 			ended()
 		}
 		.accessibilityHint("Shows a menu")

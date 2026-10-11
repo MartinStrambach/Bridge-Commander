@@ -2,77 +2,47 @@ import AppKit
 import SwiftUI
 
 public extension View {
-	/// Shows something AppKit draws relative to this view — a menu, a share picker — while `item`
-	/// is set, and clears `item` once it is gone.
+	/// Shows something AppKit draws relative to this view — a menu, a share picker — while
+	/// `isPresented` is true, and sets it back to false once it is gone.
 	///
 	/// An anchor `NSView` sits behind this view only meanwhile, so a view that offers such a thing
 	/// costs nothing extra until it is used: the repository list builds a row each time it scrolls
-	/// into view. `present` gets the item, the anchor (whose bounds are this view's frame) and a
-	/// closure to call when the presentation has ended. It runs after the SwiftUI update that
-	/// added the anchor, so it may run a tracking loop (`NSMenu.popUp`).
-	func appKitPresentation<Item>(
-		item: Binding<Item?>,
-		present: @escaping @MainActor (Item, NSView, _ ended: @escaping @MainActor () -> Void) -> Void
+	/// into view. `present` gets the anchor (whose bounds are this view's frame) and a closure to
+	/// call when the presentation has ended. It runs after the SwiftUI update that added the
+	/// anchor, so it may run a tracking loop (`NSMenu.popUp`).
+	func appKitPresentation(
+		isPresented: Binding<Bool>,
+		present: @escaping @MainActor (NSView, _ ended: @escaping @MainActor () -> Void) -> Void
 	) -> some View {
 		background {
-			if let value = item.wrappedValue {
-				AppKitPresentationAnchor { view, ended in
-					present(value, view, ended)
-				} onEnd: {
-					item.wrappedValue = nil
+			if isPresented.wrappedValue {
+				AppKitPresentationAnchor(present: present) {
+					isPresented.wrappedValue = false
 				}
 			}
-		}
-	}
-
-	/// `.help(text)`, left off when there is no text. An empty tooltip is not shown, but still
-	/// costs each view a tooltip modifier.
-	@ViewBuilder
-	func help(unlessEmpty text: String?) -> some View {
-		if let text, !text.isEmpty {
-			help(text)
-		}
-		else {
-			self
 		}
 	}
 }
 
+/// Presents once, when it is made: it is added when the presentation starts and removed when
+/// it ends.
 private struct AppKitPresentationAnchor: NSViewRepresentable {
 	let present: @MainActor (NSView, _ ended: @escaping @MainActor () -> Void) -> Void
 	let onEnd: @MainActor () -> Void
 
-	func makeNSView(context: Context) -> AnchorView {
-		AnchorView()
-	}
-
-	func updateNSView(_ view: AnchorView, context: Context) {
-		view.presentOnce(present, onEnd: onEnd)
-	}
-
-	final class AnchorView: NSView {
-		private var hasPresented = false
-
-		/// Each anchor presents once: it is created when the item is set and removed when the
-		/// presentation ends.
-		func presentOnce(
-			_ present: @escaping @MainActor (NSView, _ ended: @escaping @MainActor () -> Void) -> Void,
-			onEnd: @escaping @MainActor () -> Void
-		) {
-			guard !hasPresented else {
+	func makeNSView(context: Context) -> NSView {
+		let view = NSView()
+		// After the SwiftUI update that added the view, once it has a frame.
+		Task { @MainActor [weak view, present, onEnd] in
+			guard let view, view.window != nil else {
+				onEnd()
 				return
 			}
 
-			hasPresented = true
-			// After the SwiftUI update that added this view, once it has a frame.
-			Task { @MainActor [weak self] in
-				guard let self, window != nil else {
-					onEnd()
-					return
-				}
-
-				present(self, onEnd)
-			}
+			present(view, onEnd)
 		}
+		return view
 	}
+
+	func updateNSView(_ view: NSView, context: Context) {}
 }
