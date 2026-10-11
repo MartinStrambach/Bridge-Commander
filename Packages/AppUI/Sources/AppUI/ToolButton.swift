@@ -94,6 +94,7 @@ public struct ToolButton: View {
 
 					Text(label)
 						.scaledFont(.caption2)
+						.fontWeight(.medium)
 						.lineLimit(2)
 						// "Install & Generate" barely fits two lines at the medium width.
 						.minimumScaleFactor(0.8)
@@ -104,9 +105,8 @@ public struct ToolButton: View {
 			.padding(size.showsLabel ? 4 : 0)
 			.frame(width: buttonSize, height: buttonSize)
 		}
-		.buttonStyle(.scaledBordered)
+		.buttonStyle(.tile(tint: tint, cornerRadius: size.showsLabel ? 10 : 7))
 		.fixedSize()
-		.tint(tint)
 		.disabled(isProcessing)
 		.help(tooltip)
 	}

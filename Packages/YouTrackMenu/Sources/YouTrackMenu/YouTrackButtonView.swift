@@ -36,6 +36,7 @@ public struct YouTrackButtonView: View {
 						.font(.system(size: 12 * uiFontScale))
 				}
 				.menuStyle(.borderlessButton)
+				.menuTile()
 				.help("Move \(store.ticketId) to a different state")
 			}
 		}

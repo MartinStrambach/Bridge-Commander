@@ -1,5 +1,6 @@
 import ActionButtons
 import AppKit
+import AppUI
 import ComposableArchitecture
 import GitActionsMenu
 import GitHosting
@@ -19,12 +20,13 @@ extension RepositoryRowView {
 			}
 			.labelStyle(.titleAndIcon)
 		} label: {
-			Image(systemName: "ellipsis.circle")
+			Image(systemName: "ellipsis")
 		}
 		.menuStyle(.borderlessButton)
 		.menuIndicator(.hidden)
 		.fixedSize()
 		.foregroundColor(.secondary)
+		.menuTile()
 		.help("More actions")
 	}
 

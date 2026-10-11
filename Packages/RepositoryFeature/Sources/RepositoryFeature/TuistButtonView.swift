@@ -32,6 +32,7 @@ struct TuistButtonView: View {
 						.font(.system(size: 12 * uiFontScale))
 				}
 				.menuStyle(.borderlessButton)
+				.menuTile()
 			}
 		}
 		.fixedSize()

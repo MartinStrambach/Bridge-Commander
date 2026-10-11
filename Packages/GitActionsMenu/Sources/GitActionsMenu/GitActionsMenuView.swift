@@ -32,6 +32,7 @@ public struct GitActionsMenuView: View {
 						.font(.system(size: 12 * uiFontScale))
 				}
 				.menuStyle(.borderlessButton)
+				.menuTile()
 				.help("Quick Git Actions")
 			}
 		}
