@@ -401,6 +401,13 @@ public final class SimulatorHost: @unchecked Sendable {
 			throw SimulatorError.unsupportedCoreSimulator(version: version)
 		}
 
+		// The usual case, on every touch event of a drag: the connection is up, so the device
+		// lookup (a message to every simulator's proxy) is skipped. The version check above stays,
+		// so a swapped CoreSimulator still stops everything.
+		if let existing = state.withLock({ $0.hidConnections[udid] }), existing.isUsable {
+			return existing
+		}
+
 		let device = try ObjectBox(object: simDevice(udid: udid))
 		let task: Task<SimulatorHIDConnection, Error> = state.withLock { state in
 			if let existing = state.hidConnections[udid], existing.isUsable {
@@ -414,16 +421,25 @@ public final class SimulatorHost: @unchecked Sendable {
 			return task
 		}
 
+		// Only the waiters of the connect still pending settle it: one resuming late, after its
+		// connection went unusable and a newer connect started, must not clear that one (a second
+		// connect would race it to `dtuhidd`) or put its dead connection back.
 		do {
 			let connection = try await task.value
 			state.withLock {
-				$0.hidConnections[udid] = connection
-				$0.pendingConnections[udid] = nil
+				if $0.pendingConnections[udid] == task {
+					$0.hidConnections[udid] = connection
+					$0.pendingConnections[udid] = nil
+				}
 			}
 			return connection
 		}
 		catch {
-			state.withLock { $0.pendingConnections[udid] = nil }
+			state.withLock {
+				if $0.pendingConnections[udid] == task {
+					$0.pendingConnections[udid] = nil
+				}
+			}
 			throw error
 		}
 	}
