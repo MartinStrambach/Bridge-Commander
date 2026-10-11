@@ -55,7 +55,7 @@ extension RepositoryRowView {
 			}
 
 		case .share:
-			PopUpMenuEntry.share(title: "Share Branch, Ticket and PR", text: store.shareButton.shareText)
+			PopUpMenuEntry.share(title: "Share Branch, Ticket and PR…", text: store.shareButton.shareText)
 
 		case .pullRequest:
 			if let prFetchError = store.prFetchError {
