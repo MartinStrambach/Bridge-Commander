@@ -1,27 +1,36 @@
 import SwiftUI
 
-/// Reusable button component for header actions
+/// Icon button for the list header. Borderless, with a round highlight under the pointer, so a run
+/// of them reads as one control when the caller groups them (the list header puts them in glass
+/// capsules).
 public struct HeaderButton: View {
 	private let icon: String
 	private let tooltip: String
 	private let color: Color
 	private let action: () -> Void
 
+	@State
+	private var isHovered = false
+
 	public var body: some View {
 		Button(action: action) {
 			Image(systemName: icon)
-				.font(.system(size: 16))
-				.foregroundColor(color)
-				.frame(width: 24, height: 24)
+				.font(.system(size: 14, weight: .medium))
+				.foregroundStyle(color)
+				.frame(width: 28, height: 28)
+				.background(Color.primary.opacity(isHovered ? 0.1 : 0), in: Circle())
+				.contentShape(Circle())
 		}
-		.frame(width: 30, height: 30)
+		.buttonStyle(.plain)
+		.onHover { isHovered = $0 }
+		.animation(.easeOut(duration: 0.12), value: isHovered)
 		.help(tooltip)
 	}
 
 	public init(
 		icon: String,
 		tooltip: String,
-		color: Color = .gray,
+		color: Color = .secondary,
 		action: @escaping () -> Void
 	) {
 		self.icon = icon
@@ -33,7 +42,7 @@ public struct HeaderButton: View {
 }
 
 #Preview {
-	HStack(spacing: 8) {
+	HStack(spacing: 2) {
 		HeaderButton(
 			icon: "arrow.clockwise",
 			tooltip: "Refresh",
@@ -46,5 +55,7 @@ public struct HeaderButton: View {
 			action: {}
 		)
 	}
+	.padding(3)
+	.glassEffect(.regular, in: .capsule)
 	.padding()
 }

@@ -188,7 +188,6 @@ struct RepositoryListView: View {
 	private var repositoryContentView: some View {
 		VStack(spacing: 0) {
 			headerView
-			Divider()
 			if store.showPermissionDialog {
 				permissionWarningBanner
 			}
@@ -200,7 +199,6 @@ struct RepositoryListView: View {
 			}
 			else {
 				searchBarView
-				Divider()
 				repositoryListView
 			}
 		}
@@ -273,7 +271,7 @@ struct RepositoryListView: View {
 	// MARK: - Header View
 
 	private var headerView: some View {
-		HStack {
+		HStack(spacing: 12) {
 			// Title and the list filter read as one unit, set apart from the action buttons.
 			HStack(spacing: 12) {
 				sectionSwitcher
@@ -290,80 +288,77 @@ struct RepositoryListView: View {
 					)
 					.toggleStyle(.switch)
 					.controlSize(.small)
-					.padding(.horizontal, 10)
+					.padding(.horizontal, 12)
 					.padding(.vertical, 6)
-					// Opaque rather than a `.secondary.opacity(…)` tint, so the chip reads as one
-					// solid control against the window background.
-					.background(
-						Color(nsColor: .controlBackgroundColor),
-						in: RoundedRectangle(cornerRadius: 6)
-					)
+					.glassEffect(.regular, in: .capsule)
 					.help("Show only repositories with an open terminal (⌘A)")
 				}
 			}
 
-			HeaderButton(
-				icon: "terminal",
-				tooltip: "Open terminal in home directory (⌘T)",
-				action: { send(.openHomeTerminalButtonTapped) }
-			)
-			// Only own ⌘T while the terminal panel is closed. When it's open, the
-			// new-tab button in TerminalPanelView claims ⌘T instead. Both views stay
-			// in the hierarchy (this one is just opacity-0), and an invisible view
-			// keeps its keyboard shortcut — so without this gate both would register
-			// ⌘T and SwiftUI would dispatch to either one non-deterministically.
-			.commandShortcut("t", enabled: store.terminalLayout == nil)
+			HStack(spacing: 2) {
+				HeaderButton(
+					icon: "terminal",
+					tooltip: "Open terminal in home directory (⌘T)",
+					action: { send(.openHomeTerminalButtonTapped) }
+				)
+				// Only own ⌘T while the terminal panel is closed. When it's open, the
+				// new-tab button in TerminalPanelView claims ⌘T instead. Both views stay
+				// in the hierarchy (this one is just opacity-0), and an invisible view
+				// keeps its keyboard shortcut — so without this gate both would register
+				// ⌘T and SwiftUI would dispatch to either one non-deterministically.
+				.commandShortcut("t", enabled: store.terminalLayout == nil)
 
-			if !store.repositoryGroups.isEmpty {
-				HStack(spacing: 8) {
+				if !store.repositoryGroups.isEmpty {
 					HeaderButton(
 						icon: sortModeIcon,
 						tooltip: sortModeTooltip,
 						action: { send(.sortModeButtonTapped) }
 					)
-
-					Spacer()
-
-					HStack(spacing: 12) {
-						let repoCount = store.repositoryGroups.count
-						Text("\(repoCount) \(repoCount == 1 ? "repository" : "repositories")")
-							.scaledFont(.subheadline)
-							.foregroundColor(.secondary)
-
-						HeaderButton(
-							icon: "arrow.clockwise",
-							tooltip: "Refresh repository status (⌘R)",
-							color: .blue,
-							action: { send(.refreshButtonTapped) }
-						)
-						// Same handoff as ⌘T above: while the terminal panel is open,
-						// ⌘R belongs to TerminalLayoutView and refreshes only the opened repo.
-						.commandShortcut("r", enabled: store.terminalLayout == nil)
-						.opacity(store.isScanning ? 0 : 1)
-						.overlay {
-							if store.isScanning {
-								ProgressView()
-									.scaleEffect(0.55)
-							}
-						}
-						.disabled(store.isScanning)
-
-						HeaderButton(
-							icon: "plus",
-							tooltip: "Add repository",
-							action: addRepository
-						)
-
-						HeaderButton(
-							icon: "xmark.circle.fill",
-							tooltip: "Clear results",
-							action: { send(.clearButtonTapped) }
-						)
-					}
 				}
 			}
-			else {
-				Spacer()
+			.headerButtonCapsule()
+
+			Spacer()
+
+			if !store.repositoryGroups.isEmpty {
+				let repoCount = store.repositoryGroups.count
+				Text("\(repoCount) \(repoCount == 1 ? "repository" : "repositories")")
+					.scaledFont(.subheadline)
+					.foregroundStyle(.secondary)
+					.monospacedDigit()
+
+				HStack(spacing: 2) {
+					HeaderButton(
+						icon: "arrow.clockwise",
+						tooltip: "Refresh repository status (⌘R)",
+						color: .blue,
+						action: { send(.refreshButtonTapped) }
+					)
+					// Same handoff as ⌘T above: while the terminal panel is open,
+					// ⌘R belongs to TerminalLayoutView and refreshes only the opened repo.
+					.commandShortcut("r", enabled: store.terminalLayout == nil)
+					.opacity(store.isScanning ? 0 : 1)
+					.overlay {
+						if store.isScanning {
+							ProgressView()
+								.scaleEffect(0.55)
+						}
+					}
+					.disabled(store.isScanning)
+
+					HeaderButton(
+						icon: "plus",
+						tooltip: "Add repository",
+						action: addRepository
+					)
+
+					HeaderButton(
+						icon: "xmark.circle.fill",
+						tooltip: "Clear results",
+						action: { send(.clearButtonTapped) }
+					)
+				}
+				.headerButtonCapsule()
 			}
 		}
 		.padding()
@@ -399,8 +394,11 @@ struct RepositoryListView: View {
 	private var emptyStateView: some View {
 		VStack(spacing: 20) {
 			Image(systemName: "folder.badge.gearshape")
-				.scaledFont(size: 64)
-				.foregroundColor(.secondary)
+				.scaledFont(size: 44)
+				.symbolRenderingMode(.hierarchical)
+				.foregroundStyle(.green)
+				.frame(width: 96, height: 96)
+				.background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
 			VStack(spacing: 8) {
 				Text("No Repositories Found")
@@ -422,7 +420,6 @@ struct RepositoryListView: View {
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.padding()
-		.background(Color(.controlBackgroundColor))
 	}
 
 	// MARK: - Search Bar
@@ -484,8 +481,19 @@ struct RepositoryListView: View {
 				.buttonStyle(.plain)
 			}
 		}
-		.padding(.horizontal, 12)
-		.padding(.vertical, 7)
+		.padding(.horizontal, 10)
+		.padding(.vertical, 6)
+		.background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+		.overlay {
+			RoundedRectangle(cornerRadius: 8, style: .continuous)
+				.strokeBorder(
+					isSearchFocused ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.08),
+					lineWidth: isSearchFocused ? 1.5 : 1
+				)
+		}
+		.animation(.easeOut(duration: 0.15), value: isSearchFocused)
+		.padding(.horizontal, 16)
+		.padding(.bottom, 6)
 	}
 
 	// MARK: - Repository List View
@@ -539,6 +547,8 @@ struct RepositoryListView: View {
 				}
 			}
 			.listStyle(.plain)
+			// The rows are cards (`RowCard`) on the window background, not cells on a white table.
+			.scrollContentBackground(.hidden)
 			.onDrop(of: [UTType.folder], isTargeted: nil, perform: handleDrop)
 		}
 	}
@@ -585,6 +595,12 @@ struct RepositoryListView: View {
 }
 
 private extension View {
+	/// Groups a run of `HeaderButton`s into one glass capsule.
+	func headerButtonCapsule() -> some View {
+		padding(3)
+			.glassEffect(.regular, in: .capsule)
+	}
+
 	/// Applies a ⌘-modified keyboard shortcut only when `enabled`. Used to hand
 	/// shortcuts off to the terminal panel while it's open, since an opacity-0
 	/// view in the hierarchy would otherwise keep claiming the shortcut.

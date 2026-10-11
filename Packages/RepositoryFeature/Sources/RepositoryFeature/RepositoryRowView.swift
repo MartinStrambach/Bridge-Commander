@@ -38,28 +38,27 @@ struct RepositoryRowView: View {
 	/// Deliberately the full count, not the search-filtered one — it describes the repo, not the filter.
 	var worktreeCount: Int?
 
-	/// Ticket state deliberately doesn't colour the row at all — neither its background nor its
-	/// text. Sorting by state groups the rows under state headers, and in the other sort modes a
-	/// per-row tint only made the list noisy.
-	private var backgroundColor: Color {
-		isGroupCollapsed != nil
-			? Color.primary.opacity(0.1)
-			: Color(NSColor.controlBackgroundColor).opacity(0.5)
-	}
+	/// Outlines the row's card under the pointer.
+	@State
+	private var isHovered = false
+
+	// Ticket state deliberately doesn't colour the row at all — neither its card nor its text.
+	// Sorting by state groups the rows under state headers, and in the other sort modes a per-row
+	// tint only made the list noisy.
 
 	var body: some View {
-		HStack(alignment: .center, spacing: 16) {
+		HStack(alignment: .center, spacing: 12) {
 			if isGroupCollapsed != nil {
 				if let collapsed = isGroupCollapsed, let toggle = onToggleCollapse {
 					Button(action: toggle) {
 						Image(systemName: "chevron.right")
 							.scaledFont(.caption)
-							.foregroundColor(.secondary)
+							.fontWeight(.semibold)
+							.foregroundStyle(.secondary)
 							.rotationEffect(.degrees(collapsed ? 0 : 90))
 							.animation(.easeInOut(duration: 0.2), value: collapsed)
 							.frame(maxHeight: .infinity)
-							.padding(.horizontal, 8)
-							.background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+							.padding(.horizontal, 4)
 							.contentShape(Rectangle())
 					}
 					.buttonStyle(.plain)
@@ -68,13 +67,12 @@ struct RepositoryRowView: View {
 				else {
 					Image(systemName: "chevron.right")
 						.scaledFont(.caption)
-						.padding(.horizontal, 8)
+						.fontWeight(.semibold)
+						.padding(.horizontal, 4)
 						.padding(.vertical, 12)
 						.hidden()
 				}
 			}
-			TerminalStatusDotView(status: terminalSessionStatus, size: 18)
-				.padding(.vertical, 12)
 			// Outside the double-tap region below, like every other button in the row: a
 			// `TapGesture(count: 2)` above a button forces every click on that button to
 			// wait out the double-click interval before the gesture system can resolve
@@ -110,8 +108,9 @@ struct RepositoryRowView: View {
 			repositoryActions
 				.padding(.vertical, 12)
 		}
-		.padding(.horizontal, 16)
-		.background(backgroundColor)
+		.padding(.horizontal, 12)
+		.background(RowCardBackground(isGroupHeader: isGroupCollapsed != nil, isHovered: isHovered))
+		.onHover { isHovered = $0 }
 		.task {
 			store.send(.onAppear)
 		}
@@ -144,7 +143,8 @@ struct RepositoryRowView: View {
 
 	// MARK: - Graph Button
 
-	/// The repository type icon doubles as the commit graph's entry point.
+	/// The repository type icon doubles as the commit graph's entry point. The terminal's status
+	/// dot sits on its corner, like a presence badge, ringed in the card's colour.
 	private var graphButton: some View {
 		Button {
 			store.send(.repositoryIconTapped)
@@ -153,6 +153,15 @@ struct RepositoryRowView: View {
 				isWorktree: store.isWorktree,
 				isMergeInProgress: store.gitActionsMenu.isMergeInProgress
 			)
+			.overlay(alignment: .bottomTrailing) {
+				if let terminalSessionStatus, terminalSessionStatus.isLive {
+					TerminalStatusDotView(status: terminalSessionStatus, size: 10 * uiFontScale)
+						.padding(2)
+						.background(Circle().fill(RowCardBackground.fill(isGroupHeader: isGroupCollapsed != nil)))
+						.offset(x: 4, y: 4)
+						.help(terminalSessionStatus == .waitingForInput ? "Terminal waiting for input" : "Terminal open")
+				}
+			}
 			.contentShape(Rectangle())
 		}
 		.buttonStyle(.plain)
@@ -169,7 +178,8 @@ struct RepositoryRowView: View {
 						// Two lines rather than one: a ticket summary is often longer than the
 						// space a narrow window leaves, and its end is what tells tickets apart.
 						Text(isGroupCollapsed != nil ? store.name : store.formattedBranchName)
-							.scaledFont(.headline)
+							.scaledFont(isGroupCollapsed != nil ? .title3 : .headline)
+							.fontWeight(.semibold)
 							.lineLimit(2)
 						if let worktreeCount, worktreeCount > 0 {
 							worktreeCountBadge(worktreeCount)
@@ -179,35 +189,28 @@ struct RepositoryRowView: View {
 
 					// Branch with icon
 					if let branchName = store.branchName {
-						HStack(spacing: 4) {
-							Image(systemName: "arrow.trianglehead.branch")
-								.scaledFont(.caption)
-								.foregroundColor(.secondary)
-							Text(branchName)
-								.scaledFont(.caption)
-								.foregroundColor(.secondary)
-								.lineLimit(1)
-								.truncationMode(.middle)
+						HStack(spacing: 6) {
+							HStack(spacing: 4) {
+								Image(systemName: "arrow.trianglehead.branch")
+									.scaledFont(.caption)
+								Text(branchName)
+									.scaledFont(.caption, design: .monospaced)
+									.lineLimit(1)
+									.truncationMode(.middle)
+							}
+							.foregroundStyle(.secondary)
 
 							if store.gitActionsMenu.isMergeInProgress {
-								HStack(spacing: 4) {
-									Image(systemName: "arrow.triangle.merge")
-										.foregroundColor(.red)
-									Text("Merge")
-										.lineLimit(1)
-										.scaledFont(.caption)
-								}
+								RowChip(systemImage: "arrow.triangle.merge", text: "Merge", color: .red)
 							}
 
 							if !store.hasRemoteBranch {
-								HStack(spacing: 4) {
-									Image(systemName: "icloud.slash.fill")
-										.foregroundColor(.orange)
-									Text("No remote")
-										.lineLimit(1)
-										.scaledFont(.caption)
-										.foregroundColor(.orange)
-								}
+								RowChip(
+									systemImage: "icloud.slash.fill",
+									text: "No remote",
+									color: .orange,
+									help: "The branch has no remote counterpart"
+								)
 							}
 						}
 					}
@@ -218,7 +221,7 @@ struct RepositoryRowView: View {
 								.scaledFont(.caption)
 								.foregroundColor(.secondary)
 							Text("Detached at \(detachedHead.prefix(8))")
-								.scaledFont(.caption)
+								.scaledFont(.caption, design: .monospaced)
 								.foregroundColor(.secondary)
 								.lineLimit(1)
 						}
@@ -239,18 +242,12 @@ struct RepositoryRowView: View {
 
 	/// Matches the worktree row icon (`tree.fill`, blue) so the badge reads as "this repo has N worktrees".
 	private func worktreeCountBadge(_ count: Int) -> some View {
-		HStack(spacing: 3) {
-			Image(systemName: "tree.fill")
-				.scaledFont(.caption2)
-			Text("\(count)")
-				.scaledFont(.caption)
-				.lineLimit(1)
-		}
-		.foregroundColor(.blue)
-		.padding(.horizontal, 6)
-		.padding(.vertical, 2)
-		.background(Color.blue.opacity(0.15), in: Capsule())
-		.help(count == 1 ? "1 worktree" : "\(count) worktrees")
+		RowChip(
+			systemImage: "tree.fill",
+			text: "\(count)",
+			color: .blue,
+			help: count == 1 ? "1 worktree" : "\(count) worktrees"
+		)
 	}
 
 	// MARK: - Ticket Badge
@@ -281,9 +278,11 @@ struct RepositoryRowView: View {
 	private func ticketBadgeLabel(_ ticketId: String) -> some View {
 		Text(ticketId)
 			.scaledFont(.caption)
-			.padding(6)
-			.background(Color.blue.opacity(0.2))
-			.cornerRadius(4)
+			.fontWeight(.semibold)
+			.foregroundStyle(.blue)
+			.padding(.horizontal, 7)
+			.padding(.vertical, 3)
+			.background(Color.blue.opacity(0.14), in: Capsule())
 			.lineLimit(1)
 			// Never truncated: a bare "…" badge says nothing, and the code review states beside
 			// it can give up their width instead.
@@ -294,49 +293,41 @@ struct RepositoryRowView: View {
 	// MARK: - Changes Indicator
 
 	private var changesIndicator: some View {
-		HStack(spacing: 12) {
-			// Staged changes
+		HStack(spacing: 4) {
 			if store.stagedChangesCount > 0 {
-				HStack(spacing: 4) {
-					Image(systemName: "checkmark.circle.fill")
-						.foregroundColor(.green)
-					Text("\(store.stagedChangesCount)")
-						.lineLimit(1)
-						.scaledFont(.caption)
-				}
+				RowChip(
+					systemImage: "checkmark",
+					text: "\(store.stagedChangesCount)",
+					color: .green,
+					help: "Staged changes"
+				)
 			}
 
-			// Unstaged changes
 			if store.unstagedChangesCount > 0 {
-				HStack(spacing: 4) {
-					Image(systemName: "pencil.circle.fill")
-						.foregroundColor(.orange)
-					Text("\(store.unstagedChangesCount)")
-						.lineLimit(1)
-						.scaledFont(.caption)
-				}
+				RowChip(
+					systemImage: "pencil",
+					text: "\(store.unstagedChangesCount)",
+					color: .orange,
+					help: "Unstaged changes"
+				)
 			}
 
-			// Unpushed commits
 			if store.unpushedCommitCount > 0 {
-				HStack(spacing: 4) {
-					Image(systemName: "arrow.up.circle.fill")
-						.foregroundColor(.red)
-					Text("\(store.unpushedCommitCount)")
-						.lineLimit(1)
-						.scaledFont(.caption)
-				}
+				RowChip(
+					systemImage: "arrow.up",
+					text: "\(store.unpushedCommitCount)",
+					color: .red,
+					help: "Commits to push"
+				)
 			}
 
-			// Commits behind (need to pull)
 			if store.commitsBehindCount > 0 {
-				HStack(spacing: 4) {
-					Image(systemName: "arrow.down.circle.fill")
-						.foregroundColor(.blue)
-					Text("\(store.commitsBehindCount)")
-						.lineLimit(1)
-						.scaledFont(.caption)
-				}
+				RowChip(
+					systemImage: "arrow.down",
+					text: "\(store.commitsBehindCount)",
+					color: .blue,
+					help: "Commits to pull"
+				)
 			}
 		}
 	}
@@ -344,7 +335,7 @@ struct RepositoryRowView: View {
 	// MARK: - Code Review Section
 
 	private var codeReviewSection: some View {
-		HStack(spacing: 8) {
+		HStack(spacing: 6) {
 			if let ticketId = store.ticketId {
 				ticketBadge(ticketId)
 			}
@@ -369,8 +360,9 @@ struct RepositoryRowView: View {
 							.lineLimit(1)
 					}
 				}
-				.padding(6)
-				.cornerRadius(4)
+				.padding(.horizontal, 7)
+				.padding(.vertical, 3)
+				.background(color.opacity(0.1), in: Capsule())
 			}
 
 			if let iosCR = store.iosCR {
@@ -390,8 +382,9 @@ struct RepositoryRowView: View {
 							.lineLimit(1)
 					}
 				}
-				.padding(6)
-				.cornerRadius(4)
+				.padding(.horizontal, 7)
+				.padding(.vertical, 3)
+				.background(color.opacity(0.1), in: Capsule())
 			}
 		}
 	}
