@@ -79,6 +79,17 @@ struct PopUpMenuTests {
 		#expect(menu.items[1].representedObject is NSSharingServicePicker)
 	}
 
+	@Test("an item or submenu with an icon asks for it to be shown (macOS 27 hides menu images otherwise)")
+	@available(macOS 27.0, *)
+	func iconsAreVisible() {
+		let menu = NSMenu(entries: [
+			.action(PopUpMenuAction("Push", systemImage: "arrow.up.circle") {}),
+			.action(PopUpMenuAction("Stash") {}),
+			.submenu("Clean", systemImage: "paintbrush") {},
+		])
+		#expect(menu.items.map(\.preferredImageVisibility) == [.visible, .automatic, .visible])
+	}
+
 	@Test("a section at the top of the menu gets no separator above it")
 	func leadingSection() {
 		let menu = NSMenu(entries: [.section("Move to") { PopUpMenuAction("Done") {} }])

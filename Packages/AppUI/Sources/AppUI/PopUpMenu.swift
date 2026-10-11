@@ -191,7 +191,7 @@ extension NSMenu {
 
 			case let .submenu(title, systemImage, entries):
 				let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-				item.image = systemImage.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+				item.setSymbol(systemImage)
 				item.submenu = NSMenu(entries: entries)
 				addItem(item)
 
@@ -210,6 +210,17 @@ extension NSMenu {
 	}
 }
 
+private extension NSMenuItem {
+	/// Shows the SF Symbol `name` beside the title. macOS 27 hides menu item images unless asked
+	/// to show them, as it does a `Label`'s icon in a SwiftUI `Menu` without `.titleAndIcon`.
+	func setSymbol(_ name: String?) {
+		image = name.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+		if #available(macOS 27.0, *), image != nil {
+			preferredImageVisibility = .visible
+		}
+	}
+}
+
 /// A menu item that runs its entry's action.
 private final class PopUpMenuItem: NSMenuItem {
 	private let handler: @MainActor () -> Void
@@ -220,7 +231,7 @@ private final class PopUpMenuItem: NSMenuItem {
 		target = self
 		isEnabled = entry.isEnabled
 		toolTip = entry.help
-		image = entry.systemImage.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+		setSymbol(entry.systemImage)
 		if entry.isDestructive, entry.isEnabled {
 			attributedTitle = NSAttributedString(
 				string: entry.title,
