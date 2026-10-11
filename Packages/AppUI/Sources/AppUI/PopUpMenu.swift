@@ -163,6 +163,9 @@ public struct PopUpMenuTitle: View {
 				.scaledFont(size: 8, weight: .bold)
 				.foregroundStyle(.secondary)
 		}
+		// The label colour whatever surrounds it, as the pull-down's AppKit-drawn title had: a
+		// `List` section header (the repository group's row) would make it secondary.
+		.foregroundStyle(Color.primary)
 	}
 }
 

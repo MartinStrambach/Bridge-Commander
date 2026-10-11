@@ -17,7 +17,10 @@ extension RepositoryRowView {
 				moreMenuEntries(item)
 			}
 		} label: {
+			// The system font's size, as the pull-down's AppKit-drawn icon had: a `List` section
+			// header (the repository group's row) would make it smaller.
 			Image(systemName: "ellipsis.circle")
+				.scaledFont(size: 13)
 				.foregroundColor(.secondary)
 		}
 		.help("More actions")
