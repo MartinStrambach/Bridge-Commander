@@ -91,7 +91,7 @@ struct TerminalSharedXcodeButtonTests {
 			dependencies(&$0)
 		}
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			ScannedRepository(
 				path: "/repos/alpha",
 				name: "alpha",
@@ -99,7 +99,7 @@ struct TerminalSharedXcodeButtonTests {
 				isWorktree: false,
 				branchName: "master"
 			),
-		]))
+		])
 		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
 		return store
 	}

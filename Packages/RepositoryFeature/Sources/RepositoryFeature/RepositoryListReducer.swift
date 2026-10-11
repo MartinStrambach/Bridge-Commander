@@ -474,9 +474,11 @@ struct RepositoryListReducer {
 				state.$collapsedRepoPaths.withLock { $0.removeAll() }
 				state.isScanning = false
 				state.watchedRepositoryPaths = []
+				// A scan under way would add its groups back (an added repository even re-tracks).
 				return .merge(
 					.cancel(id: CancellableId.periodicRefresh),
-					.cancel(id: CancellableId.repositoryWatch)
+					.cancel(id: CancellableId.repositoryWatch),
+					.cancel(id: CancellableId.scan)
 				)
 
 			case let .view(.addRepository(path)):
@@ -590,8 +592,8 @@ struct RepositoryListReducer {
 			case .startScan:
 				// Don't interrupt an in-flight scan — let it complete.
 				// A concurrent second scan would cancel the first mid-flight via cancelInFlight:true,
-				// leaving some repos' groups never added. The cancelled scan also orphans git processes
-				// (withCheckedContinuation can't be cancelled), which compete with the new scan.
+				// leaving some repos' groups never added. (The cancelled scan's git processes do not
+				// linger: `ProcessRunner` terminates a process whose task is cancelled.)
 				guard !state.isScanning else {
 					return .none
 				}
@@ -665,8 +667,10 @@ struct RepositoryListReducer {
 					mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
 					openPendingWorktreeTerminals(inGroup: rootPath, state: &state)
 				}
-				else if !scanned.isEmpty {
-					// New group (e.g., from migration path on first launch)
+				else if !scanned.isEmpty, state.trackedRepoPaths.contains(rootPath) {
+					// New group (e.g., from migration path on first launch). Only a tracked one: a scan
+					// reports each group as it finishes, so one can land after the group was removed or
+					// the list cleared, and it came back on screen without being tracked.
 					if
 						let group = buildGroup(
 							rootPath: rootPath,

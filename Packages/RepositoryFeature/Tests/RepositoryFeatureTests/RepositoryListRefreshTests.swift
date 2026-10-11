@@ -19,15 +19,15 @@ struct RepositoryListRefreshTests {
 		let store = makeStore()
 		store.exhaustivity = .off
 
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
 			worktree("/repos/alpha-two", name: "alpha-two", branch: "feature-two"),
-		]))
-		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+		])
+		await store.sendScan(rootPath: "/repos/beta", rows: [
 			mainRepo("/repos/beta", name: "beta"),
 			worktree("/repos/beta-one", name: "beta-one", branch: "feature-three"),
-		]))
+		])
 
 		// Groups are kept sorted by header name, but the worktree order within a group is
 		// whatever the active sort mode produced — read it back instead of assuming it.
@@ -70,10 +70,10 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(clock: clock)
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
-		]))
+		])
 		store.exhaustivity = .on
 
 		await store.send(.repositoryGroups(.element(
@@ -92,10 +92,10 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(clock: clock)
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
-		]))
+		])
 		store.exhaustivity = .on
 
 		// Two fetches land 200ms apart, inside the 300ms window: the first pending sort is
@@ -122,10 +122,10 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(clock: clock)
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
-		]))
+		])
 		await store.send(.view(.sortModeButtonTapped))
 		#expect(store.state.sortMode == .ticket)
 		store.exhaustivity = .on
@@ -147,13 +147,13 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
-		]))
-		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+		])
+		await store.sendScan(rootPath: "/repos/beta", rows: [
 			mainRepo("/repos/beta", name: "beta"),
-		]))
+		])
 		store.exhaustivity = .on
 
 		await store.send(.terminalLayout(.refreshActiveRepoRequested))
@@ -175,11 +175,11 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha-one")
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
 			worktree("/repos/alpha-two", name: "alpha-two", branch: "feature-two"),
-		]))
+		])
 		store.exhaustivity = .on
 
 		await store.send(.terminalLayout(.refreshActiveRepoRequested))
@@ -210,9 +210,9 @@ struct RepositoryListRefreshTests {
 		}
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
-		]))
+		])
 		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.header.unpushedCommitCount == 0)
 
 		await store.send(.terminalLayout(.refreshActiveRepoRequested))
@@ -248,10 +248,10 @@ struct RepositoryListRefreshTests {
 		}
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
 			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
-		]))
+		])
 		#expect(store.state.repositoryGroups[id: "/repos/alpha"]?.worktrees[id: "/repos/alpha-one"]?.prUrl == nil)
 
 		await store.send(.terminalLayout(.refreshActiveRepoRequested))
@@ -274,9 +274,9 @@ struct RepositoryListRefreshTests {
 		}
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
-		]))
+		])
 
 		await store.send(.terminalLayout(.refreshActiveRepoRequested))
 		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") }
@@ -296,9 +296,9 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(terminalActiveRepositoryPath: NSHomeDirectory())
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
-		]))
+		])
 		store.exhaustivity = .on
 
 		// Exhaustive: any row refresh — or a fall-through to the full refresh — fails here.
@@ -311,9 +311,9 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(terminalActiveRepositoryPath: nil, terminalLayoutOpen: true)
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
-		]))
+		])
 		store.exhaustivity = .on
 
 		await store.send(.terminalLayout(.refreshActiveRepoRequested))
@@ -327,9 +327,9 @@ struct RepositoryListRefreshTests {
 		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
 
 		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+		await store.sendScan(rootPath: "/repos/alpha", rows: [
 			mainRepo("/repos/alpha", name: "alpha"),
-		]))
+		])
 		await store.send(.terminalLayout(.stagingButtonTapped(
 			repositoryPath: "/repos/alpha",
 			iosSubfolderPath: ""

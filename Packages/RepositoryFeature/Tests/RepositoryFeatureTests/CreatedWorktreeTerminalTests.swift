@@ -108,10 +108,10 @@ struct CreatedWorktreeTerminalTests {
 	}
 
 	private func scanAlpha(_ store: TestStoreOf<RepositoryListReducer>, worktrees: [String]) async {
-		await store.send(.didScanGroup(
+		await store.sendScan(
 			rootPath: "/repos/alpha",
 			rows: [scanned("/repos/alpha", isWorktree: false)] + worktrees.map { scanned($0, isWorktree: true) }
-		))
+		)
 	}
 
 	private func scanned(_ path: String, isWorktree: Bool) -> ScannedRepository {
