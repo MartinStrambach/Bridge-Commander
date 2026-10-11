@@ -88,7 +88,7 @@ TCA throughout. Dependencies are `@DependencyClient` structs of closures, confor
 - Write `.scaledFont(.caption)` / `.scaledFont(size: 12)` instead of `.font(...)`, and `.buttonStyle(.scaledBordered)` / `.scaledBorderedProminent` / `.scaledAutomatic` on text buttons, so text follows Settings ▸ General ▸ Appearance. Exceptions and the reasons behind them are in `Packages/AppUI/README.md`
 
 **Menus with icons:**
-- macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `GitActionsMenuView`, `TuistButtonView`). A nested `Menu`'s content does not inherit it and needs its own
+- macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `PopUpMenuContent`, `moreActionsMenu`). A nested `Menu`'s content does not inherit it and needs its own
 
 ## Build, Test & Run
 

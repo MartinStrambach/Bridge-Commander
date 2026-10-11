@@ -9,12 +9,6 @@ public struct GitActionsMenuView: View {
 	@Bindable
 	var store: StoreOf<GitActionsMenuReducer>
 
-	/// Read here and applied to the menu's label as a plain font: a `.borderlessButton` menu's
-	/// label is flattened by AppKit, which drops `scaledFont`'s environment lookup and keeps only
-	/// a font set directly on the `Text`.
-	@Environment(\.uiFontScale)
-	private var uiFontScale
-
 	public var body: some View {
 		Group {
 			if let operation = store.runningOperation {
@@ -25,13 +19,9 @@ public struct GitActionsMenuView: View {
 				)
 			}
 			else {
-				Menu {
-					GitActionsMenuItems(store: store)
-				} label: {
-					Text("Git Actions")
-						.font(.system(size: 12 * uiFontScale))
+				PopUpMenuButton("Git Actions") {
+					store.menuEntries
 				}
-				.menuStyle(.borderlessButton)
 				.help("Quick Git Actions")
 			}
 		}
@@ -65,7 +55,9 @@ public struct GitActionsSubmenu: View {
 		}
 		else {
 			Menu {
-				GitActionsMenuItems(store: store)
+				PopUpMenuContent {
+					store.menuEntries
+				}
 			} label: {
 				Label("Git Actions", systemImage: "arrow.triangle.branch")
 			}
@@ -74,44 +66,96 @@ public struct GitActionsSubmenu: View {
 }
 
 /// The menu's entries, shared by `GitActionsMenuView` and `GitActionsSubmenu`.
-struct GitActionsMenuItems: View {
-	let store: StoreOf<GitActionsMenuReducer>
-
-	var body: some View {
-		Group {
-			if store.isMergeInProgress {
-				AbortMergeButtonView(store: store.scope(\.abortMergeButton, action: \.abortMergeButton))
-			}
-
-			if store.hasRemoteBranch {
-				FetchButtonView(store: store.scope(\.fetchButton, action: \.fetchButton))
-				PullButtonView(store: store.scope(\.pullButton, action: \.pullButton))
-			}
-
-			if store.unpushedCommitsCount > 0 || !store.hasRemoteBranch {
-				PushButtonView(store: store.scope(\.pushButton, action: \.pushButton))
-			}
-
-			if !store.isMergeInProgress {
-				StashButtonView(store: store.scope(\.stashButton, action: \.stashButton))
-				DiscardButtonView(store: store.scope(\.discardButton, action: \.discardButton))
-			}
-
-			if !DefaultBranchResolver.isDefaultBranch(store.currentBranch, configured: store.defaultBranch),
-			   !store.isMergeInProgress
-			{
-				MergeMasterButtonView(store: store.scope(
-					\.mergeMasterButton,
-					action: \.mergeMasterButton
-				))
-				CheckoutDefaultBranchButtonView(store: store.scope(
-					\.checkoutDefaultBranchButton,
-					action: \.checkoutDefaultBranchButton
-				))
+extension Store where State == GitActionsMenuReducer.State, Action == GitActionsMenuReducer.Action {
+	@PopUpMenuBuilder
+	var menuEntries: [PopUpMenuEntry] {
+		if self.isMergeInProgress {
+			PopUpMenuAction("Abort Merge", systemImage: "xmark.circle", isDestructive: true) {
+				self.send(.abortMergeButton(.abortMergeTapped))
 			}
 		}
-		// macOS 27 no longer draws a menu item's icon for a bare `Label`; ask for it explicitly.
-		.labelStyle(.titleAndIcon)
+
+		if self.hasRemoteBranch {
+			PopUpMenuAction("Fetch", systemImage: "arrow.down.circle.dotted") {
+				self.send(.fetchButton(.fetchTapped))
+			}
+			PopUpMenuAction("Pull", systemImage: "arrow.down.circle") {
+				self.send(.pullButton(.pullTapped))
+			}
+		}
+
+		if self.unpushedCommitsCount > 0 || !self.hasRemoteBranch {
+			PopUpMenuAction("Push", systemImage: "arrow.up.circle") {
+				self.send(.pushButton(.pushTapped))
+			}
+		}
+
+		if !self.isMergeInProgress {
+			stashEntries
+			discardEntries
+		}
+
+		if !DefaultBranchResolver.isDefaultBranch(self.currentBranch, configured: self.defaultBranch), !self.isMergeInProgress {
+			PopUpMenuAction("Merge \(Self.branchTitle(self.mergeMasterButton.defaultBranch))", systemImage: "arrow.triangle.merge") {
+				self.send(.mergeMasterButton(.mergeMasterTapped))
+			}
+			PopUpMenuAction(
+				"Checkout \(Self.branchTitle(self.checkoutDefaultBranchButton.defaultBranch))",
+				systemImage: "arrow.triangle.branch"
+			) {
+				self.send(.checkoutDefaultBranchButton(.checkoutTapped))
+			}
+		}
+	}
+
+	/// Restoring the work and keeping the entry are separate decisions, so each combination gets
+	/// its own item: apply restores and keeps, pop restores and drops, clear only drops. Clear
+	/// confirms first — see StashButtonReducer.
+	@PopUpMenuBuilder
+	private var stashEntries: [PopUpMenuEntry] {
+		let isProcessing = self.stashButton.isProcessing
+		if self.stashButton.hasChanges {
+			PopUpMenuAction("Stash", systemImage: "tray.and.arrow.down", isEnabled: !isProcessing) {
+				self.send(.stashButton(.stashTapped))
+			}
+		}
+
+		if self.stashButton.hasStash {
+			PopUpMenuAction("Apply Stash", systemImage: "tray.and.arrow.up", isEnabled: !isProcessing) {
+				self.send(.stashButton(.stashApplyTapped))
+			}
+			PopUpMenuAction("Pop Stash", systemImage: "tray.and.arrow.up.fill", isEnabled: !isProcessing) {
+				self.send(.stashButton(.stashPopTapped))
+			}
+			PopUpMenuAction("Clear Stash", systemImage: "trash", isDestructive: true, isEnabled: !isProcessing) {
+				self.send(.stashButton(.stashClearTapped))
+			}
+		}
+	}
+
+	@PopUpMenuBuilder
+	private var discardEntries: [PopUpMenuEntry] {
+		let isProcessing = self.discardButton.isProcessing
+		if self.discardButton.hasTrackedChanges {
+			PopUpMenuAction(
+				"Discard Tracked Changes",
+				systemImage: "arrow.uturn.backward",
+				isDestructive: true,
+				isEnabled: !isProcessing
+			) {
+				self.send(.discardButton(.discardTrackedTapped))
+			}
+		}
+
+		if self.discardButton.hasUntrackedFiles {
+			PopUpMenuAction("Discard All Changes", systemImage: "trash", isDestructive: true, isEnabled: !isProcessing) {
+				self.send(.discardButton(.discardAllTapped))
+			}
+		}
+	}
+
+	private static func branchTitle(_ defaultBranch: String) -> String {
+		defaultBranch.isEmpty ? "default branch" : defaultBranch
 	}
 }
 

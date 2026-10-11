@@ -9,12 +9,6 @@ public struct YouTrackButtonView: View {
 	@Bindable
 	var store: StoreOf<YouTrackButtonReducer>
 
-	/// Read here and applied to the menu's label as a plain font: a `.borderlessButton` menu's
-	/// label is flattened by AppKit, which drops `scaledFont`'s environment lookup and keeps only
-	/// a font set directly on the `Text`.
-	@Environment(\.uiFontScale)
-	private var uiFontScale
-
 	public init(store: StoreOf<YouTrackButtonReducer>) {
 		self.store = store
 	}
@@ -29,13 +23,9 @@ public struct YouTrackButtonView: View {
 				)
 			}
 			else {
-				Menu {
-					YouTrackMenuItems(store: store)
-				} label: {
-					Text("YouTrack")
-						.font(.system(size: 12 * uiFontScale))
+				PopUpMenuButton("YouTrack") {
+					store.menuEntries
 				}
-				.menuStyle(.borderlessButton)
 				.help("Move \(store.ticketId) to a different state")
 			}
 		}
@@ -65,7 +55,9 @@ public struct YouTrackSubmenu: View {
 		}
 		else {
 			Menu {
-				YouTrackMenuItems(store: store)
+				PopUpMenuContent {
+					store.menuEntries
+				}
 			} label: {
 				Label("YouTrack", systemImage: "list.bullet.rectangle")
 			}
@@ -97,16 +89,13 @@ private struct YouTrackMenuPresentations: ViewModifier {
 }
 
 /// The menu's entries, shared by `YouTrackButtonView` and `YouTrackSubmenu`.
-private struct YouTrackMenuItems: View {
-	let store: StoreOf<YouTrackButtonReducer>
-
-	var body: some View {
-		Section(currentStateTitle) {
-			ForEach(store.transitions) { transition in
-				Button {
-					store.send(.transitionTapped(transition))
-				} label: {
-					Text(transition.presentation)
+private extension Store where State == YouTrackButtonReducer.State, Action == YouTrackButtonReducer.Action {
+	@PopUpMenuBuilder
+	var menuEntries: [PopUpMenuEntry] {
+		PopUpMenuEntry.section(currentStateTitle) {
+			for transition in self.transitions {
+				PopUpMenuAction(transition.presentation) {
+					self.send(.transitionTapped(transition))
 				}
 			}
 		}
@@ -116,7 +105,7 @@ private struct YouTrackMenuItems: View {
 	/// sits inline above the options and reads like a sixth, selectable state, which makes the
 	/// menu look like a full state picker rather than the reachable subset it is.
 	private var currentStateTitle: String {
-		if let currentState = store.currentState {
+		if let currentState = self.currentState {
 			"Move from \(currentState.rawValue) to"
 		}
 		else {
