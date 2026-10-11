@@ -78,34 +78,29 @@ struct TuistButtonView: View {
 	}
 }
 
-/// The Tuist menu as a submenu of another menu (the repository row's "⋯" menu). While a command
-/// runs it is a disabled entry naming it instead.
-///
-/// A menu entry cannot present anything, so whoever shows this must also apply
-/// `tuistPresentations(store:)` to a view outside the menu.
-struct TuistSubmenu: View {
-	let store: StoreOf<TuistButtonReducer>
-
-	var body: some View {
-		if let runningAction = store.runningAction {
-			Button {} label: {
-				Label("Tuist: \(TuistButtonView.progressText(for: runningAction))", systemImage: "hammer")
-			}
-			.disabled(true)
+extension Store where State == TuistButtonReducer.State, Action == TuistButtonReducer.Action {
+	/// The Tuist menu as an entry of another menu (the repository row's "⋯" menu): a submenu, or
+	/// while a command runs a disabled entry naming it.
+	///
+	/// A menu entry cannot present anything, so whoever shows this must also apply
+	/// `tuistPresentations(store:)` to a view outside the menu.
+	var submenuEntry: PopUpMenuEntry {
+		if let runningAction = self.runningAction {
+			.action(PopUpMenuAction(
+				"Tuist: \(TuistButtonView.progressText(for: runningAction))",
+				systemImage: "hammer",
+				isEnabled: false
+			) {})
 		}
 		else {
-			Menu {
-				PopUpMenuContent {
-					store.menuEntries
-				}
-			} label: {
-				Label("Tuist", systemImage: "hammer")
+			.submenu("Tuist", systemImage: "hammer") {
+				self.menuEntries
 			}
 		}
 	}
 }
 
-/// The menu's entries, shared by `TuistButtonView` and `TuistSubmenu`.
+/// The menu's entries, shared by `TuistButtonView` and `submenuEntry`.
 private extension Store where State == TuistButtonReducer.State, Action == TuistButtonReducer.Action {
 	@PopUpMenuBuilder
 	var menuEntries: [PopUpMenuEntry] {
@@ -148,7 +143,7 @@ private extension Store where State == TuistButtonReducer.State, Action == Tuist
 }
 
 extension View {
-	/// The Tuist menu's error sheet. Applied by `TuistButtonView` itself; a `TuistSubmenu` needs
+	/// The Tuist menu's error sheet. Applied by `TuistButtonView` itself; a `submenuEntry` needs
 	/// it on a view outside the menu it sits in.
 	func tuistPresentations(store: StoreOf<TuistButtonReducer>) -> some View {
 		modifier(TuistPresentations(store: store))

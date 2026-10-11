@@ -67,6 +67,18 @@ struct PopUpMenuTests {
 		#expect(menu.items[4].submenu?.items.map(\.isSeparatorItem) == [false, true, false])
 	}
 
+	@Test("an item's help becomes its tooltip; a share entry is the system's Share submenu, titled")
+	func tooltipsAndShare() {
+		let menu = NSMenu(entries: [
+			.action(PopUpMenuAction("Lookup Failed", isEnabled: false, help: "403 Forbidden") {}),
+			.share(title: "Share Branch", text: "Branch: main"),
+		])
+
+		#expect(menu.items[0].toolTip == "403 Forbidden")
+		#expect(menu.items[1].title == "Share Branch")
+		#expect(menu.items[1].representedObject is NSSharingServicePicker)
+	}
+
 	@Test("a section at the top of the menu gets no separator above it")
 	func leadingSection() {
 		let menu = NSMenu(entries: [.section("Move to") { PopUpMenuAction("Done") {} }])

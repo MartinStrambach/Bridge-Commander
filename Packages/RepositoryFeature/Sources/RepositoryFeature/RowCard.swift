@@ -67,7 +67,7 @@ struct RowChip: View {
 		.padding(.vertical, 2)
 		.background(color.opacity(0.14), in: Capsule())
 		.fixedSize()
-		.help(help ?? "")
+		.help(unlessEmpty: help)
 	}
 }
 

@@ -34,38 +34,25 @@ public struct GitActionsMenuView: View {
 	}
 }
 
-/// The Git Actions menu as a submenu of another menu (the repository row's "⋯" menu). While an
-/// operation runs it is a disabled entry naming it instead.
-///
-/// A menu entry cannot present anything, so whoever shows this must also apply
-/// `gitActionsMenuPresentations(store:)` to a view outside the menu.
-public struct GitActionsSubmenu: View {
-	let store: StoreOf<GitActionsMenuReducer>
-
-	public init(store: StoreOf<GitActionsMenuReducer>) {
-		self.store = store
-	}
-
-	public var body: some View {
-		if let operation = store.runningOperation {
-			Button {} label: {
-				Label(operation.text, systemImage: "arrow.triangle.branch")
-			}
-			.disabled(true)
+public extension Store where State == GitActionsMenuReducer.State, Action == GitActionsMenuReducer.Action {
+	/// The Git Actions menu as an entry of another menu (the repository row's "⋯" menu): a
+	/// submenu, or while an operation runs a disabled entry naming it.
+	///
+	/// A menu entry cannot present anything, so whoever shows this must also apply
+	/// `gitActionsMenuPresentations(store:)` to a view outside the menu.
+	var submenuEntry: PopUpMenuEntry {
+		if let operation = self.runningOperation {
+			.action(PopUpMenuAction(operation.text, systemImage: "arrow.triangle.branch", isEnabled: false) {})
 		}
 		else {
-			Menu {
-				PopUpMenuContent {
-					store.menuEntries
-				}
-			} label: {
-				Label("Git Actions", systemImage: "arrow.triangle.branch")
+			.submenu("Git Actions", systemImage: "arrow.triangle.branch") {
+				self.menuEntries
 			}
 		}
 	}
 }
 
-/// The menu's entries, shared by `GitActionsMenuView` and `GitActionsSubmenu`.
+/// The menu's entries, shared by `GitActionsMenuView` and `submenuEntry`.
 extension Store where State == GitActionsMenuReducer.State, Action == GitActionsMenuReducer.Action {
 	@PopUpMenuBuilder
 	var menuEntries: [PopUpMenuEntry] {
@@ -161,7 +148,7 @@ extension Store where State == GitActionsMenuReducer.State, Action == GitActions
 
 public extension View {
 	/// The Git Actions menu's alert and confirmation dialogs. Applied by `GitActionsMenuView`
-	/// itself; a `GitActionsSubmenu` needs it on a view outside the menu it sits in, because
+	/// itself; a `submenuEntry` needs it on a view outside the menu it sits in, because
 	/// dialogs attached inside a macOS `Menu` do not present reliably.
 	func gitActionsMenuPresentations(store: StoreOf<GitActionsMenuReducer>) -> some View {
 		modifier(GitActionsMenuPresentations(store: store))

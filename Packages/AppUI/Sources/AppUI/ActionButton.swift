@@ -32,7 +32,7 @@ public struct ActionButton: View {
 		}
 //		.fixedSize()
 		.foregroundColor(color ?? .secondary)
-		.help(tooltip)
+		.help(unlessEmpty: tooltip)
 	}
 
 	public init(

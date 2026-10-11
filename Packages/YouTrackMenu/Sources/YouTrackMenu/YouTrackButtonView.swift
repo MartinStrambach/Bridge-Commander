@@ -34,32 +34,19 @@ public struct YouTrackButtonView: View {
 	}
 }
 
-/// The YouTrack menu as a submenu of another menu (the repository row's "⋯" menu). While a move
-/// is being applied it is a disabled entry saying so instead.
-///
-/// A menu entry cannot present anything, so whoever shows this must also apply
-/// `youTrackMenuPresentations(store:)` to a view outside the menu.
-public struct YouTrackSubmenu: View {
-	let store: StoreOf<YouTrackButtonReducer>
-
-	public init(store: StoreOf<YouTrackButtonReducer>) {
-		self.store = store
-	}
-
-	public var body: some View {
-		if store.isApplying {
-			Button {} label: {
-				Label("Updating \(store.ticketId)...", systemImage: "list.bullet.rectangle")
-			}
-			.disabled(true)
+public extension Store where State == YouTrackButtonReducer.State, Action == YouTrackButtonReducer.Action {
+	/// The YouTrack menu as an entry of another menu (the repository row's "⋯" menu): a submenu,
+	/// or while a move is being applied a disabled entry saying so.
+	///
+	/// A menu entry cannot present anything, so whoever shows this must also apply
+	/// `youTrackMenuPresentations(store:)` to a view outside the menu.
+	var submenuEntry: PopUpMenuEntry {
+		if self.isApplying {
+			.action(PopUpMenuAction("Updating \(self.ticketId)...", systemImage: "list.bullet.rectangle", isEnabled: false) {})
 		}
 		else {
-			Menu {
-				PopUpMenuContent {
-					store.menuEntries
-				}
-			} label: {
-				Label("YouTrack", systemImage: "list.bullet.rectangle")
+			.submenu("YouTrack", systemImage: "list.bullet.rectangle") {
+				self.menuEntries
 			}
 		}
 	}
@@ -67,7 +54,7 @@ public struct YouTrackSubmenu: View {
 
 public extension View {
 	/// The YouTrack menu's error alert. Applied by `YouTrackButtonView` itself; a
-	/// `YouTrackSubmenu` needs it on a view outside the menu it sits in.
+	/// `submenuEntry` needs it on a view outside the menu it sits in.
 	func youTrackMenuPresentations(store: StoreOf<YouTrackButtonReducer>) -> some View {
 		modifier(YouTrackMenuPresentations(store: store))
 	}
@@ -88,7 +75,7 @@ private struct YouTrackMenuPresentations: ViewModifier {
 	}
 }
 
-/// The menu's entries, shared by `YouTrackButtonView` and `YouTrackSubmenu`.
+/// The menu's entries, shared by `YouTrackButtonView` and `submenuEntry`.
 private extension Store where State == YouTrackButtonReducer.State, Action == YouTrackButtonReducer.Action {
 	@PopUpMenuBuilder
 	var menuEntries: [PopUpMenuEntry] {

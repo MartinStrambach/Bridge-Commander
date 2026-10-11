@@ -108,7 +108,7 @@ public struct ToolButton: View {
 		.fixedSize()
 		.tint(tint)
 		.disabled(isProcessing)
-		.help(tooltip)
+		.help(unlessEmpty: tooltip)
 	}
 
 	public init(

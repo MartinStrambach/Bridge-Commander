@@ -1,5 +1,6 @@
 import ActionButtons
 import AppKit
+import AppUI
 import ComposableArchitecture
 import GitActionsMenu
 import GitHosting
@@ -11,75 +12,64 @@ import YouTrackMenu
 /// The row draws it only while it holds at least one.
 extension RepositoryRowView {
 	func moreActionsMenu(items: [RepositoryRowItem]) -> some View {
-		Menu {
-			Group {
-				ForEach(items) { item in
-					moreMenuItem(item)
-				}
+		PopUpMenuButton {
+			for item in items {
+				moreMenuEntries(item)
 			}
-			.labelStyle(.titleAndIcon)
 		} label: {
 			Image(systemName: "ellipsis.circle")
+				.foregroundColor(.secondary)
 		}
-		.menuStyle(.borderlessButton)
-		.menuIndicator(.hidden)
-		.fixedSize()
-		.foregroundColor(.secondary)
 		.help("More actions")
 	}
 
-	/// An action bar item as a menu entry. The menus become submenus; an item that does not apply
-	/// to this repository draws nothing, as it does in the row.
-	@ViewBuilder
-	private func moreMenuItem(_ item: RepositoryRowItem) -> some View {
+	/// An action bar item as menu entries. The menus become submenus; an item that does not apply
+	/// to this repository adds nothing, as it draws nothing in the row.
+	@PopUpMenuBuilder
+	private func moreMenuEntries(_ item: RepositoryRowItem) -> [PopUpMenuEntry] {
 		switch item {
 		case .gitActions:
-			GitActionsSubmenu(store: store.scope(\.gitActionsMenu, action: \.gitActionsMenu))
+			store.scope(\.gitActionsMenu, action: \.gitActionsMenu).submenuEntry
 
 		case .tuist:
 			if store.supportsIOS, store.supportsTuist {
-				TuistSubmenu(store: store.scope(\.tuistButton, action: \.tuistButton))
+				store.scope(\.tuistButton, action: \.tuistButton).submenuEntry
 			}
 
 		case .youTrackMenu:
 			if let youtrackButtonStore = store.scope(\.youtrackButton, action: \.youtrackButton) {
-				YouTrackSubmenu(store: youtrackButtonStore)
+				youtrackButtonStore.submenuEntry
 			}
 
 		case .copyPath:
-			Button {
+			PopUpMenuAction("Copy Path", systemImage: "doc.on.doc") {
 				copyToClipboard(store.path)
-			} label: {
-				Label("Copy Path", systemImage: "doc.on.doc")
 			}
 
 		case .showInFinder:
-			Button {
+			PopUpMenuAction("Show in Finder", systemImage: "folder") {
 				openInFinder(store.path)
-			} label: {
-				Label("Show in Finder", systemImage: "folder")
 			}
 
 		case .share:
-			ShareButtonView(store: store.scope(\.shareButton, action: \.shareButton), style: .menuItem)
+			PopUpMenuEntry.share(title: "Share Branch, Ticket and PR", text: store.shareButton.shareText)
 
 		case .pullRequest:
 			if let prFetchError = store.prFetchError {
-				Button {} label: {
-					Label("Pull Request Lookup Failed", systemImage: "exclamationmark.triangle.fill")
-				}
-				.disabled(true)
-				.help(prFetchError)
+				PopUpMenuAction(
+					"Pull Request Lookup Failed",
+					systemImage: "exclamationmark.triangle.fill",
+					isEnabled: false,
+					help: prFetchError
+				) {}
 			}
 			if let prUrl = store.prUrl, let url = URL(string: prUrl) {
-				Button {
+				PopUpMenuAction(
+					PullRequestButton(url: url, provider: store.prProvider, state: store.prState).tooltip
+						+ unresolvedDiscussionsSuffix,
+					systemImage: "arrow.triangle.pull"
+				) {
 					NSWorkspace.shared.open(url)
-				} label: {
-					Label(
-						PullRequestButton(url: url, provider: store.prProvider, state: store.prState).tooltip
-							+ unresolvedDiscussionsSuffix,
-						systemImage: "arrow.triangle.pull"
-					)
 				}
 			}
 
@@ -87,13 +77,11 @@ extension RepositoryRowView {
 			if let pipelineUrl = store.pipelineUrl,
 			   let url = URL(string: pipelineUrl),
 			   let pipelineState = store.pipelineState {
-				Button {
+				PopUpMenuAction(
+					PipelineStatusButton(url: url, state: pipelineState, hasConflicts: store.prHasConflicts).tooltip,
+					systemImage: pipelineState.systemImageName(hasConflicts: store.prHasConflicts)
+				) {
 					NSWorkspace.shared.open(url)
-				} label: {
-					Label(
-						PipelineStatusButton(url: url, state: pipelineState, hasConflicts: store.prHasConflicts).tooltip,
-						systemImage: pipelineState.systemImageName(hasConflicts: store.prHasConflicts)
-					)
 				}
 			}
 
@@ -101,65 +89,60 @@ extension RepositoryRowView {
 			if let slot = store.approvalSlot,
 			   let prUrl = store.prUrl,
 			   let url = URL(string: prUrl) {
-				Button {
-					NSWorkspace.shared.open(url)
-				} label: {
-					switch slot {
-					case .draft:
-						Label("Draft — Not Ready for Review", systemImage: "pencil.and.outline")
-					case let .review(status):
-						Label(
-							"Review: \(ApprovalStatusButton(url: url, status: status, provider: store.prProvider).headline)",
-							systemImage: status.decision.systemImageName
-						)
+				switch slot {
+				case .draft:
+					PopUpMenuAction("Draft — Not Ready for Review", systemImage: "pencil.and.outline") {
+						NSWorkspace.shared.open(url)
+					}
+				case let .review(status):
+					PopUpMenuAction(
+						"Review: \(ApprovalStatusButton(url: url, status: status, provider: store.prProvider).headline)",
+						systemImage: status.decision.systemImageName
+					) {
+						NSWorkspace.shared.open(url)
 					}
 				}
 			}
 
 		case .ticket:
 			if let ticketButtonStore = store.scope(\.ticketButton, action: \.ticketButton) {
-				Button {
+				PopUpMenuAction("Open YouTrack Ticket \(ticketButtonStore.ticketId)", systemImage: "ticket") {
 					ticketButtonStore.send(.openTicketButtonTapped)
-				} label: {
-					Label("Open YouTrack Ticket \(ticketButtonStore.ticketId)", systemImage: "ticket")
 				}
 			}
 			else if store.showsMissingYouTrackURLWarning {
-				Button {
+				PopUpMenuAction(
+					"Set a YouTrack URL for \(store.ticketId ?? "the Ticket")…",
+					systemImage: "exclamationmark.triangle.fill"
+				) {
 					openSettings()
-				} label: {
-					Label("Set a YouTrack URL for \(store.ticketId ?? "the Ticket")…", systemImage: "exclamationmark.triangle.fill")
 				}
 			}
 
 		case .web:
 			if let webButtonStore = store.scope(\.webButton, action: \.webButton) {
-				Button {
+				PopUpMenuAction("Open Web Preview", systemImage: "globe") {
 					webButtonStore.send(.openWebButtonTapped)
-				} label: {
-					Label("Open Web Preview", systemImage: "globe")
 				}
 			}
 
 		case .terminal:
-			Button {
+			PopUpMenuAction("Open in Terminal", systemImage: "terminal") {
 				store.send(.terminalButton(.openTerminalButtonTapped))
-			} label: {
-				Label("Open in Terminal", systemImage: "terminal")
 			}
 
 		case .androidStudio:
 			if store.supportsAndroid {
-				AndroidStudioMenuItem(store: store.scope(\.androidStudioButton, action: \.androidStudioButton))
+				store.scope(\.androidStudioButton, action: \.androidStudioButton).menuEntry
 			}
 
 		case .xcode:
 			if store.supportsIOS {
-				XcodeProjectMenuItem(store: store.scope(\.xcodeButton, action: \.xcodeButton))
+				store.scope(\.xcodeButton, action: \.xcodeButton).menuEntry
 			}
 
 		case .claudeCode:
-			ClaudeCodeMenuItem(store: store.scope(\.claudeCodeButton, action: \.claudeCodeButton))
+			store.scope(\.claudeCodeButton, action: \.claudeCodeButton).menuEntry
 		}
 	}
 
