@@ -54,6 +54,19 @@ struct RepositoryListReducer {
 		@Shared(.trackedRepoPaths)
 		fileprivate(set) var trackedRepoPaths: [String] = []
 
+		/// A bookmark per tracked path, which finds the folder again after it is renamed or moved.
+		@Shared(.trackedRepoBookmarks)
+		fileprivate(set) var trackedRepoBookmarks: [String: Data] = [:]
+
+		/// Tracked repositories whose folder the last scan did not find — deleted, renamed where
+		/// its bookmark could not follow, or on a volume that is not mounted — in tracked order.
+		/// They stay tracked, shown as banners, until a scan finds them again or they are removed.
+		fileprivate(set) var missingRepoPaths: [String] = []
+
+		/// Kept here only to follow a moved repository; the simulator pane owns the setting.
+		@Shared(.simulatorPaneRepositoryPaths)
+		fileprivate(set) var simulatorPaneRepositoryPaths: [String] = []
+
 		@Shared(.collapsedRepoPaths)
 		fileprivate(set) var collapsedRepoPaths: [String] = []
 
@@ -127,6 +140,13 @@ struct RepositoryListReducer {
 		case simulatorActivityReported(SimulatorActivity)
 		case didReceiveSystemEventsPermission(Bool)
 		case didScanGroup(rootPath: String, rows: [ScannedRepository])
+		/// A tracked repository's folder was found renamed or moved to `to`. Its worktrees are
+		/// repaired and the folder scanned after this, under the new path.
+		case trackedRepositoryMoved(from: String, to: String, bookmark: Data?)
+		/// A tracked repository's folder is gone, and its bookmark leads nowhere.
+		case trackedRepositoryMissing(String)
+		/// A tracked repository got a bookmark: it had none, or the one it had named another folder.
+		case trackedRepositoryBookmarked(path: String, bookmark: Data)
 		case refreshRepositories(RefreshTrigger)
 		/// Rows' repositories changed on disk; see `GitRepositoryWatcherClient`.
 		case repositoriesChangedOnDisk([GitRepositoryChange])
@@ -148,6 +168,9 @@ struct RepositoryListReducer {
 			case didBecomeActive
 			case dismissAccessibilityPermissionWarningButtonTapped
 			case dismissPermissionWarningButtonTapped
+			/// Locate… on a missing repository's banner picked the folder at `newPath`.
+			case missingRepositoryLocated(path: String, newPath: String)
+			case missingRepositoryRemoveButtonTapped(String)
 			case groupSettingsChanged
 			case onAppear
 			case onDisappear
@@ -224,6 +247,9 @@ struct RepositoryListReducer {
 
 	@Dependency(GitRepositoryWatcherClient.self)
 	private var gitRepositoryWatcherClient
+
+	@Dependency(RepositoryLocationClient.self)
+	private var repositoryLocationClient
 
 	@Dependency(SimulatorClient.self)
 	private var simulatorClient
@@ -471,7 +497,9 @@ struct RepositoryListReducer {
 			case .view(.clearButtonTapped):
 				state.repositoryGroups.removeAll()
 				state.$trackedRepoPaths.withLock { $0.removeAll() }
+				state.$trackedRepoBookmarks.withLock { $0.removeAll() }
 				state.$collapsedRepoPaths.withLock { $0.removeAll() }
+				state.missingRepoPaths = []
 				state.isScanning = false
 				state.watchedRepositoryPaths = []
 				return .merge(
@@ -548,13 +576,16 @@ struct RepositoryListReducer {
 				}
 
 				state.isScanning = true
-				return .run { [normalized] send in
+				return .run { [normalized, repositoryLocationClient] send in
 					let rows = await GitWorktreeScanner.listWorktrees(forRepo: normalized)
 					if rows.isEmpty {
 						await send(.addRepositoryFailed(normalized))
 					}
 					else {
 						await send(.addRepositorySucceeded(rootPath: normalized, scanned: rows))
+						if let bookmark = repositoryLocationClient.bookmark(normalized) {
+							await send(.trackedRepositoryBookmarked(path: normalized, bookmark: bookmark))
+						}
 					}
 				}
 				.cancellable(id: CancellableId.scan)
@@ -610,25 +641,93 @@ struct RepositoryListReducer {
 
 				state.isScanning = true
 				let paths = Array(state.trackedRepoPaths)
+				let bookmarks = state.trackedRepoBookmarks
 				// Permission checks deliberately don't hang off the scan: refreshRepositories
 				// routes through here, so every ⌘R used to re-run them (see .checkPermissions).
 				return .merge(
-					.run { send in
-						await withTaskGroup(of: (String, [ScannedRepository]).self) { group in
+					.run { [repositoryLocationClient] send in
+						await withTaskGroup(of: Void.self) { group in
 							for path in paths {
 								group.addTask {
-									let rows = await GitWorktreeScanner.listWorktrees(forRepo: path)
-									return (path, rows)
+									await scanTrackedRepository(
+										path,
+										bookmark: bookmarks[path],
+										location: repositoryLocationClient,
+										send: send
+									)
 								}
-							}
-							for await (rootPath, rows) in group {
-								await send(.didScanGroup(rootPath: rootPath, rows: rows))
 							}
 						}
 						await send(.scanCompleted)
 					}
 					.cancellable(id: CancellableId.scan, cancelInFlight: true)
 				)
+
+			// MARK: - Moved or missing repositories
+
+			case let .trackedRepositoryBookmarked(path, bookmark):
+				// A scan can land after its repository was removed; only a tracked path keeps one.
+				guard state.trackedRepoPaths.contains(path) else {
+					return .none
+				}
+
+				state.$trackedRepoBookmarks.withLock { $0[path] = bookmark }
+				return .none
+
+			case let .trackedRepositoryMoved(oldPath, newPath, bookmark):
+				guard state.trackedRepoPaths.contains(oldPath), oldPath != newPath else {
+					return .none
+				}
+
+				relocateTrackedRepository(from: oldPath, to: newPath, bookmark: bookmark, in: &state)
+				return .none
+
+			case let .trackedRepositoryMissing(path):
+				guard state.trackedRepoPaths.contains(path) else {
+					return .none
+				}
+
+				// Its rows name a folder that is gone; their actions could only fail.
+				state.repositoryGroups.remove(id: path)
+				if !state.missingRepoPaths.contains(path) {
+					state.missingRepoPaths.append(path)
+					sortMissingByTrackedOrder(in: &state)
+				}
+				if let activePath = state.terminalLayout?.activeRepositoryPath {
+					syncTerminalButtons(for: activePath, in: &state)
+				}
+				return .none
+
+			case let .view(.missingRepositoryLocated(path, newPath)):
+				let newPath = normalizePath(newPath)
+				guard state.trackedRepoPaths.contains(path), newPath != path else {
+					return .none
+				}
+
+				state.isScanning = true
+				return .run { [repositoryLocationClient] send in
+					guard !(await GitWorktreeScanner.listWorktrees(forRepo: newPath)).isEmpty else {
+						await send(.addRepositoryFailed(newPath))
+						return
+					}
+
+					await followMovedRepository(
+						from: path,
+						to: newPath,
+						bookmark: repositoryLocationClient.bookmark(newPath),
+						location: repositoryLocationClient,
+						send: send
+					)
+					await send(.scanCompleted)
+				}
+				.cancellable(id: CancellableId.scan)
+
+			case let .view(.missingRepositoryRemoveButtonTapped(path)):
+				state.missingRepoPaths.removeAll { $0 == path }
+				state.$trackedRepoPaths.withLock { $0.removeAll { $0 == path } }
+				state.$trackedRepoBookmarks.withLock { $0[path] = nil }
+				state.$collapsedRepoPaths.withLock { $0.removeAll { $0 == path } }
+				return .none
 
 			// MARK: - Per-group scan (worktree added/removed)
 
@@ -661,6 +760,10 @@ struct RepositoryListReducer {
 			// MARK: - Scan Results
 
 			case let .didScanGroup(rootPath, scanned):
+				if !scanned.isEmpty {
+					// Back where it was: put back after a rename, or its volume mounted again.
+					state.missingRepoPaths.removeAll { $0 == rootPath }
+				}
 				if state.repositoryGroups[id: rootPath] != nil {
 					// Existing group: merge rows, preserving cached PR/ticket data
 					mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
@@ -707,11 +810,16 @@ struct RepositoryListReducer {
 					}
 
 					// A worktree made or removed outside the app (`git worktree add` in a terminal)
-					// gets or loses its row the same way one made from the dialog does.
-					if change.kinds.contains(.worktreeList), rescannedGroupIds.insert(groupId).inserted {
+					// gets or loses its row the same way one made from the dialog does. A folder
+					// renamed or deleted is rescanned too: the scan follows a moved repository, or
+					// finds it missing.
+					if
+						!change.kinds.isDisjoint(with: [.worktreeList, .location]),
+						rescannedGroupIds.insert(groupId).inserted
+					{
 						effects.append(rescanGroup(groupId, in: &state))
 					}
-					let rowKinds = change.kinds.subtracting(.worktreeList)
+					let rowKinds = change.kinds.subtracting([.worktreeList, .location])
 					if !rowKinds.isEmpty {
 						effects.append(sendToRow(.changedOnDisk(rowKinds), for: change.repositoryPath, in: state))
 					}
@@ -806,6 +914,7 @@ struct RepositoryListReducer {
 			case let .repositoryGroups(.element(id: groupId, action: .remove)):
 				state.repositoryGroups.remove(id: groupId)
 				state.$trackedRepoPaths.withLock { $0.removeAll { $0 == groupId } }
+				state.$trackedRepoBookmarks.withLock { $0[groupId] = nil }
 				state.$collapsedRepoPaths.withLock { $0.removeAll { $0 == groupId } }
 				return watchRepositories(in: &state)
 
@@ -1309,13 +1418,13 @@ struct RepositoryListReducer {
 		.cancellable(id: CancellableId.repositoryWatch, cancelInFlight: true)
 	}
 
-	/// Re-lists one group's worktrees, for a worktree added or removed. The rows are merged, so
-	/// their loaded state survives.
+	/// Re-lists one group's worktrees, for a worktree added or removed, or its folder renamed.
+	/// The rows are merged, so their loaded state survives.
 	private func rescanGroup(_ groupId: String, in state: inout State) -> EffectOf<RepositoryListReducer> {
 		state.isScanning = true
-		return .run { send in
-			let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
-			await send(.didScanGroup(rootPath: groupId, rows: rows))
+		let bookmark = state.trackedRepoBookmarks[groupId]
+		return .run { [repositoryLocationClient] send in
+			await scanTrackedRepository(groupId, bookmark: bookmark, location: repositoryLocationClient, send: send)
 			await send(.scanCompleted)
 		}
 		.cancellable(id: CancellableId.scan)
@@ -1411,6 +1520,117 @@ private func persistGroupOrder(in state: inout RepositoryListReducer.State) {
 	state.$trackedRepoPaths.withLock { paths in
 		paths = order + paths.filter { !placed.contains($0) }
 	}
+}
+
+/// Scans one tracked repository, following its folder when it was renamed or moved, and reporting
+/// it missing when the folder is gone.
+private func scanTrackedRepository(
+	_ path: String,
+	bookmark: Data?,
+	location: RepositoryLocationClient,
+	send: Send<RepositoryListReducer.Action>
+) async {
+	switch location.locate(path, bookmark) {
+	case let .present(newBookmark):
+		let rows = await GitWorktreeScanner.listWorktrees(forRepo: path)
+		if let newBookmark {
+			await send(.trackedRepositoryBookmarked(path: path, bookmark: newBookmark))
+		}
+		await send(.didScanGroup(rootPath: path, rows: rows))
+
+	case let .moved(newPath, newBookmark):
+		let newPath = normalizePath(newPath)
+		// The bookmark finds the folder, not the repository in it.
+		guard !(await GitWorktreeScanner.listWorktrees(forRepo: newPath)).isEmpty else {
+			await send(.trackedRepositoryMissing(path))
+			return
+		}
+		await followMovedRepository(from: path, to: newPath, bookmark: newBookmark, location: location, send: send)
+
+	case .missing:
+		await send(.trackedRepositoryMissing(path))
+	}
+}
+
+/// Tracks a repository under the new path of its folder, reconnects its linked worktrees — whose
+/// `.git` files still point into the old path — and scans it there.
+private func followMovedRepository(
+	from oldPath: String,
+	to newPath: String,
+	bookmark: Data?,
+	location: RepositoryLocationClient,
+	send: Send<RepositoryListReducer.Action>
+) async {
+	await send(.trackedRepositoryMoved(from: oldPath, to: newPath, bookmark: bookmark))
+	await location.repairWorktreesAfterMove(oldPath, newPath)
+	let rows = await GitWorktreeScanner.listWorktrees(forRepo: newPath)
+	await send(.didScanGroup(rootPath: newPath, rows: rows))
+}
+
+/// Moves everything known by a tracked repository's path to the path its folder has now. The
+/// group is dropped: its rows name the old folder, and the scan that follows builds it afresh
+/// under the new path. When the new path is tracked already (the user added it again by hand),
+/// the old entry just goes.
+private func relocateTrackedRepository(
+	from oldPath: String,
+	to newPath: String,
+	bookmark: Data?,
+	in state: inout RepositoryListReducer.State
+) {
+	let isAlreadyTracked = state.trackedRepoPaths.contains(newPath)
+	state.repositoryGroups.remove(id: oldPath)
+	state.missingRepoPaths.removeAll { $0 == oldPath }
+	state.$trackedRepoPaths.withLock { paths in
+		if isAlreadyTracked {
+			paths.removeAll { $0 == oldPath }
+		}
+		else {
+			paths = paths.map { $0 == oldPath ? newPath : $0 }
+		}
+	}
+	state.$trackedRepoBookmarks.withLock { bookmarks in
+		bookmarks[oldPath] = nil
+		if let bookmark {
+			bookmarks[newPath] = bookmark
+		}
+	}
+	state.$groupSettings.withLock { settings in
+		if let moved = settings.removeValue(forKey: oldPath), settings[newPath] == nil {
+			settings[newPath] = moved
+		}
+	}
+	state.$collapsedRepoPaths.withLock { paths in
+		guard paths.contains(oldPath) else {
+			return
+		}
+		paths = Set(paths.map { $0 == oldPath ? newPath : $0 }).sorted()
+	}
+
+	// Worktrees inside the folder moved with it, so everything under it follows too. The shells
+	// already have: a working directory follows its folder.
+	state.$simulatorPaneRepositoryPaths.withLock { paths in
+		paths = Array(OrderedSet(paths.map { relocatedPath($0, from: oldPath, to: newPath) }))
+	}
+	for sessionId in state.terminalSessions.ids {
+		state.terminalSessions[id: sessionId]?.relocate(from: oldPath, to: newPath)
+	}
+	state.terminalLayout?.relocate(from: oldPath, to: newPath)
+	state.hiddenTerminalTabMemory?.relocate(from: oldPath, to: newPath)
+	state.pendingWorktreeLaunches = Dictionary(
+		state.pendingWorktreeLaunches.map { (relocatedPath($0.key, from: oldPath, to: newPath), $0.value) },
+		uniquingKeysWith: { first, _ in first }
+	)
+	// The toolbar's copies belong to rows that are gone now; the scan fills them in again.
+	if let activePath = state.terminalLayout?.activeRepositoryPath {
+		syncTerminalButtons(for: activePath, in: &state)
+	}
+}
+
+private func sortMissingByTrackedOrder(in state: inout RepositoryListReducer.State) {
+	let rank = Dictionary(
+		uniqueKeysWithValues: state.trackedRepoPaths.enumerated().map { ($0.element, $0.offset) }
+	)
+	state.missingRepoPaths.sort { (rank[$0] ?? .max) < (rank[$1] ?? .max) }
 }
 
 private func sortGroupsInState(in state: inout RepositoryListReducer.State) {

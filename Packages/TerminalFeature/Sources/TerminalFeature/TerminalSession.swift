@@ -21,8 +21,8 @@ public enum TerminalSessionStatus: Equatable, Sendable {
 
 public struct TerminalSession: Identifiable, Equatable, Sendable {
 	public let id: UUID
-	public let repositoryPath: String
-	public let startingDirectory: String
+	public private(set) var repositoryPath: String
+	public private(set) var startingDirectory: String
 	/// The command the settings give this tab, or `nil` to leave it idle. A tab reopened to resume
 	/// a Claude conversation types the resume instead (`commandToType`), but keeps this: a retry, or
 	/// a later relaunch that finds no Claude running in it, goes by what the tab was opened to run.
@@ -46,6 +46,24 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 
 	public var isRunTab: Bool {
 		runTitle != nil
+	}
+
+	/// Points the session at its folder's new path after the folder `oldPath` was renamed or moved
+	/// to `newPath`. The shell follows the folder by itself; only the paths the app knows the
+	/// session by change. A session outside that folder is left alone.
+	public mutating func relocate(from oldPath: String, to newPath: String) {
+		repositoryPath = Self.relocated(repositoryPath, from: oldPath, to: newPath)
+		startingDirectory = Self.relocated(startingDirectory, from: oldPath, to: newPath)
+	}
+
+	private static func relocated(_ path: String, from oldPath: String, to newPath: String) -> String {
+		if path == oldPath {
+			return newPath
+		}
+		guard path.hasPrefix(oldPath + "/") else {
+			return path
+		}
+		return newPath + path.dropFirst(oldPath.count)
 	}
 
 	public init(

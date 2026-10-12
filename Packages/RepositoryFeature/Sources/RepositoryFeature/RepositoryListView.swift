@@ -194,6 +194,13 @@ struct RepositoryListView: View {
 			if store.showAccessibilityPermissionDialog {
 				accessibilityPermissionWarningBanner
 			}
+			ForEach(store.missingRepoPaths, id: \.self) { path in
+				MissingRepositoryBanner(
+					path: path,
+					onLocate: { newPath in send(.missingRepositoryLocated(path: path, newPath: newPath)) },
+					onRemove: { send(.missingRepositoryRemoveButtonTapped(path)) }
+				)
+			}
 			if store.repositoryGroups.isEmpty {
 				emptyStateView
 			}

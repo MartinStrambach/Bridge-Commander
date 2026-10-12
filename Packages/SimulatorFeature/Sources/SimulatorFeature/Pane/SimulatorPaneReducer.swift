@@ -1,6 +1,13 @@
 import ComposableArchitecture
 import Foundation
 
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<[String]> {
+	/// The repositories whose terminal shows the simulator pane (`SimulatorPaneReducer.State`).
+	static var simulatorPaneRepositoryPaths: Self {
+		appStorage("simulatorPaneRepositoryPaths")
+	}
+}
+
 @Reducer
 public struct SimulatorPaneReducer {
 	@ObservableState
@@ -9,7 +16,7 @@ public struct SimulatorPaneReducer {
 		/// opened and closed on its own, so a worktree running the app keeps the simulator beside
 		/// its terminal while another's has the full width. Remembered across launches and across
 		/// the terminal panel being hidden, like the rest of the panel's layout.
-		@Shared(.appStorage("simulatorPaneRepositoryPaths"))
+		@Shared(.simulatorPaneRepositoryPaths)
 		public var visibleRepositoryPaths: [String] = []
 
 		/// The repository whose terminal the pane is showing beside. Each has its own device
