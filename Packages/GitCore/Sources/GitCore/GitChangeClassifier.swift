@@ -17,6 +17,9 @@ public nonisolated struct GitRepositoryChange: Equatable, Sendable {
 		public static let stash = Kind(rawValue: 1 << 1)
 		/// A linked worktree was added to or removed from the repository.
 		public static let worktreeList = Kind(rawValue: 1 << 2)
+		/// The repository's folder, or one above it, was renamed, moved or deleted: its path may
+		/// name nothing now.
+		public static let location = Kind(rawValue: 1 << 3)
 	}
 
 	/// The path the watch was started with, not the canonical one.
@@ -83,11 +86,14 @@ nonisolated struct FileSystemEvent: Equatable, Sendable {
 	let isCreatedOrRemoved: Bool
 	/// FSEvents dropped events at or below `path`: anything there may have changed.
 	let mustRescan: Bool
+	/// `path` is a watched root, and it or a folder above it was renamed, moved or deleted.
+	let isRootChanged: Bool
 
-	init(path: String, isCreatedOrRemoved: Bool = false, mustRescan: Bool = false) {
+	init(path: String, isCreatedOrRemoved: Bool = false, mustRescan: Bool = false, isRootChanged: Bool = false) {
 		self.path = path
 		self.isCreatedOrRemoved = isCreatedOrRemoved
 		self.mustRescan = mustRescan
+		self.isRootChanged = isRootChanged
 	}
 }
 
@@ -139,6 +145,17 @@ nonisolated enum GitChangeClassifier {
 		into result: inout Classification
 	) {
 		let path = event.path
+
+		if event.isRootChanged {
+			// Every repository under the root went with it: a main checkout's linked worktrees
+			// lose the git directory they share, wherever their own folders are.
+			for target in targets
+				where isWithin(target.workTree, path) || isWithin(target.commonGitDirectory, path)
+			{
+				result.kinds[target.repositoryPath, default: []].insert(.location)
+			}
+			return
+		}
 
 		if event.mustRescan {
 			// Events were lost; refresh whatever the lost subtree could have touched.

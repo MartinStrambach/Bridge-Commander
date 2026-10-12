@@ -170,6 +170,14 @@ public nonisolated extension SharedReaderKey where Self == FileStorageKey<[Strin
 	}
 }
 
+public nonisolated extension SharedReaderKey where Self == FileStorageKey<[String: Data]> {
+	/// A bookmark per tracked repository path, which finds the folder again after it is renamed
+	/// or moved (`RepositoryLocationClient`).
+	static var trackedRepoBookmarks: Self {
+		.fileStorage(applicationSupportURL(name: "trackedRepoBookmarks.json"))
+	}
+}
+
 public nonisolated extension SharedReaderKey where Self == FileStorageKey<[String: RepoGroupSettings]> {
 	static var groupSettings: Self {
 		.fileStorage(applicationSupportURL(name: "groupSettings.json"))

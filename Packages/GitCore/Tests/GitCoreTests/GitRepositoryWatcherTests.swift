@@ -147,6 +147,20 @@ struct GitRepositoryWatcherTests {
 	}
 
 	@Test
+	func renamingAMainCheckoutMovesItsWorktreesToo() {
+		// They share its git directory, wherever their own folders are.
+		#expect(classify(FileSystemEvent(path: "/r", isRootChanged: true)).kinds == [
+			"/r": .location,
+			"/r-feature": .location,
+		])
+	}
+
+	@Test
+	func renamingALinkedWorktreeMovesOnlyIt() {
+		#expect(classify(FileSystemEvent(path: "/r-feature", isRootChanged: true)).kinds == ["/r-feature": .location])
+	}
+
+	@Test
 	func watchRootsSkipDirectoriesAnotherRootAlreadyCovers() {
 		#expect(GitChangeClassifier.watchRoots(for: [main, feature]) == ["/r", "/r-feature"])
 	}
@@ -443,6 +457,38 @@ struct GitRepositoryWatcherTests {
 			_ = await ProcessRunner.runGit(arguments: ["worktree", "move", worktree, moved], at: repository.path)
 		}
 		#expect(changes.contains { $0.repositoryPath == repository.path && $0.kinds.contains(.worktreeList) })
+	}
+
+	@Test
+	func renamingTheRepositoryFolderIsReported() async throws {
+		let repository = try await Repository()
+		let renamed = repository.path + "-renamed"
+		defer {
+			repository.remove()
+			try? FileManager.default.removeItem(atPath: renamed)
+		}
+
+		let changes = try await firstChange(watching: [repository.path], matching: .location) {
+			try? FileManager.default.moveItem(atPath: repository.path, toPath: renamed)
+		}
+		#expect(changes.contains { $0.repositoryPath == repository.path && $0.kinds.contains(.location) })
+	}
+
+	@Test
+	func renamingAFolderAboveTheRepositoryIsReported() async throws {
+		let parent = Repository.makeDirectory()
+		let renamed = parent + "-renamed"
+		defer {
+			try? FileManager.default.removeItem(atPath: parent)
+			try? FileManager.default.removeItem(atPath: renamed)
+		}
+		try FileManager.default.createDirectory(atPath: parent + "/repository", withIntermediateDirectories: false)
+		let repository = try await Repository(at: parent + "/repository")
+
+		let changes = try await firstChange(watching: [repository.path], matching: .location) {
+			try? FileManager.default.moveItem(atPath: parent, toPath: renamed)
+		}
+		#expect(changes.contains { $0.repositoryPath == repository.path && $0.kinds.contains(.location) })
 	}
 
 	/// The first batch from a live watch that has a change of `kind`, after `action` runs.

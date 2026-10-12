@@ -35,7 +35,12 @@ nonisolated final class FileSystemEventStream: @unchecked Sendable {
 			release: nil,
 			copyDescription: nil
 		)
-		let flags = FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
+		// `WatchRoot` reports a watched folder, or one above it, being renamed, moved or deleted
+		// (`kFSEventStreamEventFlagRootChanged`). Without it renaming a folder above the root
+		// reports nothing, and renaming the root itself only an event at the path it no longer has.
+		let flags = FSEventStreamCreateFlags(
+			kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagWatchRoot
+		)
 		guard
 			let stream = FSEventStreamCreate(
 				kCFAllocatorDefault,
@@ -89,7 +94,8 @@ nonisolated final class FileSystemEventStream: @unchecked Sendable {
 			FileSystemEvent(
 				path: paths[index],
 				isCreatedOrRemoved: flags[index] & lifecycle != 0,
-				mustRescan: flags[index] & dropped != 0
+				mustRescan: flags[index] & dropped != 0,
+				isRootChanged: flags[index] & FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged) != 0
 			)
 		}
 		handler.deliver(events)
