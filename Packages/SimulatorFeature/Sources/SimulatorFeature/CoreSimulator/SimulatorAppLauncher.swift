@@ -288,12 +288,18 @@ public final class SimulatorAppLauncher: @unchecked Sendable {
 		return info?["CFBundleExecutable"] as? String ?? url.deletingPathExtension().lastPathComponent
 	}
 
-	/// `SIMCTL_CHILD_` before each name not already carrying it.
+	/// `SIMCTL_CHILD_` before each name not already carrying it. A name given both ways (`FOO` and
+	/// `SIMCTL_CHILD_FOO`) keeps the prefixed one's value — `uniqueKeysWithValues` trapped on it.
 	static func childEnvironment(_ environment: [String: String]) -> [String: String] {
 		let prefix = "SIMCTL_CHILD_"
-		return Dictionary(uniqueKeysWithValues: environment.map { name, value in
-			(name.hasPrefix(prefix) ? name : prefix + name, value)
-		})
+		var result = [String: String]()
+		for (name, value) in environment where !name.hasPrefix(prefix) {
+			result[prefix + name] = value
+		}
+		for (name, value) in environment where name.hasPrefix(prefix) {
+			result[name] = value
+		}
+		return result
 	}
 
 	/// The pid from `simctl launch`'s "com.example.App: 1234".

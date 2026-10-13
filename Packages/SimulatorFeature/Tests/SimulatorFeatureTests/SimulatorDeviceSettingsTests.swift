@@ -72,6 +72,12 @@ struct SimulatorDeviceSettingsTests {
 	}
 
 	@Test
+	func environmentNameGivenBothWaysKeepsThePrefixedValue() {
+		#expect(SimulatorAppLauncher.childEnvironment(["DEBUG": "0", "SIMCTL_CHILD_DEBUG": "1"])
+			== ["SIMCTL_CHILD_DEBUG": "1"])
+	}
+
+	@Test
 	func processIdComesFromSimctlLaunchOutput() {
 		#expect(SimulatorAppLauncher.processId(fromLaunchOutput: "com.example.App: 38237\n") == 38237)
 		#expect(SimulatorAppLauncher.processId(fromLaunchOutput: "An error was encountered") == nil)
