@@ -368,7 +368,7 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		guard
 			let text = copyDecider.textToCopy(
 				selectionIsActive: selection?.active == true,
-				selectedText: selection?.getSelectedText() ?? ""
+				selectedText: ClaudeQuoteGutter.strip(selection?.getSelectedText() ?? "")
 			)
 		else {
 			return
@@ -376,6 +376,18 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 		selectionPasteboard.clearContents()
 		selectionPasteboard.setString(text, forType: .string)
+	}
+
+	/// ⌘C. SwiftTerm's own copies the selected cells as they are; this drops Claude Code's quote
+	/// gutter from them first (`ClaudeQuoteGutter`).
+	override public func copy(_ sender: Any) {
+		guard let selection, selection.active else {
+			return
+		}
+
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setString(ClaudeQuoteGutter.strip(selection.getSelectedText()), forType: .string)
 	}
 
 	/// A command to type into the shell, held until the shell first writes something.
