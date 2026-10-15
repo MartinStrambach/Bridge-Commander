@@ -143,6 +143,7 @@ public struct SettingsView<Updates: View>: View {
 		case .worktrees:
 			branchNamesSection
 			worktreeOptionsSection
+			derivedDataUsageSection
 
 		case .terminal:
 			terminalFontSection
@@ -526,6 +527,18 @@ public struct SettingsView<Updates: View>: View {
 			Text("Automatically deletes the associated Xcode DerivedData folder when a worktree is removed.")
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
+		}
+	}
+
+	private var derivedDataUsageSection: some View {
+		SettingsSection("Xcode DerivedData") {
+			DerivedDataUsageView(
+				usage: store.derivedDataUsage,
+				isMeasuring: store.isMeasuringDerivedData,
+				deletingKind: store.deletingDerivedDataKind,
+				onMeasure: { store.send(.measureDerivedDataButtonTapped) },
+				onDelete: { store.send(.deleteDerivedDataButtonTapped($0)) }
+			)
 		}
 	}
 

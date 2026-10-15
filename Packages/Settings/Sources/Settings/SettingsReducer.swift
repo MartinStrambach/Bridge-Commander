@@ -117,6 +117,12 @@ public struct SettingsReducer {
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
 
+		/// Xcode's DerivedData, measured on request: a large folder takes a while to size.
+		public var derivedDataUsage: DerivedDataUsage?
+		public var isMeasuringDerivedData = false
+		/// The kind whose folders are being deleted, while that runs.
+		public var deletingDerivedDataKind: DerivedDataUsage.Kind?
+
 		@Presents
 		public var alert: AlertState<Action.Alert>?
 
@@ -155,6 +161,11 @@ public struct SettingsReducer {
 		case setTicketBranchNameTemplate(String)
 		case setOpenXcodeAfterGenerate(Bool)
 		case setDeleteDerivedDataOnWorktreeDelete(Bool)
+		case measureDerivedDataButtonTapped
+		case derivedDataUsageUpdated(DerivedDataUsage)
+		case derivedDataMeasurementFinished
+		case deleteDerivedDataButtonTapped(DerivedDataUsage.Kind)
+		case derivedDataDeletionFinished(DerivedDataDeletion)
 		case setActivityLogIncludesReadOnlyGitCommands(Bool)
 		case setTuistCacheType(TuistCacheType)
 		case setTerminalApp(TerminalApp)
@@ -188,8 +199,9 @@ public struct SettingsReducer {
 		case alert(PresentationAction<Alert>)
 
 		@CasePathable
-		public enum Alert {
+		public enum Alert: Equatable {
 			case confirmClearToken
+			case confirmDeleteDerivedData(DerivedDataUsage.Kind)
 		}
 	}
 
@@ -202,6 +214,9 @@ public struct SettingsReducer {
 	@Dependency(TerminalProfileImportClient.self)
 	private var profileImport
 
+	@Dependency(DerivedDataUsageClient.self)
+	private var derivedDataUsageClient
+
 	/// One per provider. Every action that resets a verdict to `.idle` also cancels its test:
 	/// `.idle` re-enables the Test button, and a run still in flight would otherwise land its
 	/// verdict on a token or URL it was never run against.
@@ -209,6 +224,7 @@ public struct SettingsReducer {
 		case youTrackTest
 		case gitHubTest
 		case gitLabTest
+		case derivedDataMeasurement
 	}
 
 	public init() {}
@@ -251,6 +267,45 @@ public struct SettingsReducer {
 		state.$terminalFontSize.withLock { $0 = TerminalFontSize.clamped(font.size) }
 		guard font.isAvailable else { return }
 		state.$terminalFontName.withLock { $0 = font.name }
+	}
+
+	private func measureDerivedData(_ state: inout State) -> Effect<Action> {
+		state.isMeasuringDerivedData = true
+		return .run { [derivedDataUsageClient] send in
+			for await usage in derivedDataUsageClient.measure() {
+				await send(.derivedDataUsageUpdated(usage))
+			}
+			await send(.derivedDataMeasurementFinished)
+		}
+		.cancellable(id: CancelID.derivedDataMeasurement, cancelInFlight: true)
+	}
+
+	static func deleteDerivedDataAlert(kind: DerivedDataUsage.Kind, tally: DerivedDataUsage.Tally) -> AlertState<Action.Alert> {
+		let folders = tally.folders == 1 ? "1 Folder" : "\(tally.folders) Folders"
+		let (title, explanation) = switch kind {
+		case .leftover:
+			(
+				"Delete \(folders) of DerivedData Leftovers?",
+				"They hold only logs and resolved packages of projects Xcode no longer tracks."
+			)
+		default:
+			(
+				"Delete \(folders) of Orphaned DerivedData?",
+				"Their projects no longer exist. If one comes back, Xcode builds it from scratch."
+			)
+		}
+		return AlertState {
+			TextState(title)
+		} actions: {
+			ButtonState(role: .destructive, action: .confirmDeleteDerivedData(kind)) {
+				TextState("Delete")
+			}
+			ButtonState(role: .cancel) {
+				TextState("Cancel")
+			}
+		} message: {
+			TextState("\(explanation) This frees \(tally.bytes.formatted(.byteCount(style: .file))).")
+		}
 	}
 
 	/// Runs a verification call and condenses its result into displayable state.
@@ -588,6 +643,47 @@ public struct SettingsReducer {
 			case let .setDeleteDerivedDataOnWorktreeDelete(value):
 				state.$deleteDerivedDataOnWorktreeDelete.withLock { $0 = value }
 				return .none
+
+			case .measureDerivedDataButtonTapped:
+				return measureDerivedData(&state)
+
+			case let .derivedDataUsageUpdated(usage):
+				state.derivedDataUsage = usage
+				return .none
+
+			case .derivedDataMeasurementFinished:
+				state.isMeasuringDerivedData = false
+				return .none
+
+			case let .deleteDerivedDataButtonTapped(kind):
+				guard let tally = state.derivedDataUsage?[kind], tally.folders > 0 else {
+					return .none
+				}
+				state.alert = Self.deleteDerivedDataAlert(kind: kind, tally: tally)
+				return .none
+
+			case let .alert(.presented(.confirmDeleteDerivedData(kind))):
+				state.deletingDerivedDataKind = kind
+				return .run { [derivedDataUsageClient] send in
+					await send(.derivedDataDeletionFinished(derivedDataUsageClient.deleteFolders(kind)))
+				}
+
+			case let .derivedDataDeletionFinished(deletion):
+				state.deletingDerivedDataKind = nil
+				if !deletion.failures.isEmpty {
+					state.alert = AlertState {
+						TextState("Some Folders Were Not Deleted")
+					} actions: {
+						ButtonState(role: .cancel) {
+							TextState("OK")
+						}
+					} message: {
+						TextState(deletion.failures.joined(separator: "\n\n"))
+					}
+				}
+				// Measured again rather than adjusted: the deletion re-classified the folders, so
+				// the last measurement may not describe what it removed.
+				return measureDerivedData(&state)
 
 			case let .setActivityLogIncludesReadOnlyGitCommands(value):
 				state.$activityLogIncludesReadOnlyGitCommands.withLock { $0 = value }
