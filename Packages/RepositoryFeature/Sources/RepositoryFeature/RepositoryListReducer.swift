@@ -1189,6 +1189,7 @@ struct RepositoryListReducer {
 				// operation re-runs the row's status fetch, which then syncs back into this copy.
 				switch menuAction {
 				case .abortMergeButton(.abortMergeCompleted),
+				     .checkoutDefaultBranchButton(.checkoutAndPullCompleted),
 				     .checkoutDefaultBranchButton(.checkoutCompleted),
 				     .discardButton(.discardCompleted),
 				     .fetchButton(.fetchCompleted),

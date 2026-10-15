@@ -92,6 +92,12 @@ extension Store where State == GitActionsMenuReducer.State, Action == GitActions
 			) {
 				self.send(.checkoutDefaultBranchButton(.checkoutTapped))
 			}
+			PopUpMenuAction(
+				"Checkout & Pull \(Self.branchTitle(self.checkoutDefaultBranchButton.defaultBranch))",
+				systemImage: "arrow.down.to.line.circle"
+			) {
+				self.send(.checkoutDefaultBranchButton(.checkoutAndPullTapped))
+			}
 		}
 	}
 
@@ -199,6 +205,13 @@ extension GitActionsMenuReducer.State {
 				text: "Merging...",
 				color: .orange,
 				helpText: "Merging \(defaultBranchName) branch..."
+			)
+		}
+		if checkoutDefaultBranchButton.isPullingAfterCheckout {
+			return GitRunningOperation(
+				text: "Checking out...",
+				color: .teal,
+				helpText: "Checking out and pulling \(defaultBranchName) branch..."
 			)
 		}
 		if checkoutDefaultBranchButton.isCheckingOut {

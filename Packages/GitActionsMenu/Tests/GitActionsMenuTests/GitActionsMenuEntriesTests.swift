@@ -19,10 +19,10 @@ struct GitActionsMenuEntriesTests {
 		}
 	}
 
-	@Test("a tracked feature branch offers fetch, pull, and merging or checking out the default branch")
+	@Test("a tracked feature branch offers fetch, pull, and merging, checking out or checking out and pulling the default branch")
 	func trackedFeatureBranch() {
 		#expect(titles { $0.hasRemoteBranch = true } == [
-			"Fetch", "Pull", "Merge default branch", "Checkout default branch",
+			"Fetch", "Pull", "Merge default branch", "Checkout default branch", "Checkout & Pull default branch",
 		])
 	}
 
@@ -53,7 +53,7 @@ struct GitActionsMenuEntriesTests {
 			$0.discardButton.hasUntrackedFiles = true
 		} == [
 			"Fetch", "Pull", "Stash", "Discard Tracked Changes", "Discard All Changes",
-			"Merge default branch", "Checkout default branch",
+			"Merge default branch", "Checkout default branch", "Checkout & Pull default branch",
 		])
 	}
 
