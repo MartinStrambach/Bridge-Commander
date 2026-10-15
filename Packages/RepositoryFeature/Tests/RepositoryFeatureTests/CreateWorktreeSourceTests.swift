@@ -105,7 +105,8 @@ struct CreateWorktreeSourceTests {
 		#expect(CreateWorktreeButtonReducer().creationRequest(from: state) == .init(
 			branchName: "fix_login_crash_MOB-42",
 			baseBranch: "develop",
-			createNewBranch: true
+			createNewBranch: true,
+			startFromOrigin: true
 		))
 	}
 
@@ -128,6 +129,53 @@ struct CreateWorktreeSourceTests {
 			$0.branchName = ""
 			$0.claudePrompt = ""
 		}
+	}
+
+	// MARK: - Start point
+
+	@Test("where a new branch starts is shown only when one is made, and picked only when the base has both sides")
+	func startPointChoice() {
+		var state = makeState(youtrack: false)
+		state.availableBranches = [
+			BranchInfo(name: "main", existsLocally: true, existsRemotely: true),
+			BranchInfo(name: "local-only", existsLocally: true, existsRemotely: false),
+			BranchInfo(name: "remote-only", existsLocally: false, existsRemotely: true)
+		]
+		state.selectedBaseBranch = "main"
+		#expect(state.showsStartPoint)
+		#expect(state.canChooseStartPoint)
+
+		// One side only: that side, whatever was picked before.
+		state.$startFromLocalBase.withLock { $0 = true }
+		state.selectedBaseBranch = "remote-only"
+		#expect(!state.canChooseStartPoint)
+		#expect(state.startsFromOrigin)
+		state.$startFromLocalBase.withLock { $0 = false }
+		state.selectedBaseBranch = "local-only"
+		#expect(!state.canChooseStartPoint)
+		#expect(!state.startsFromOrigin)
+
+		// Checking out the base itself makes no new branch to start anywhere.
+		state.createNewBranch = false
+		#expect(!state.showsStartPoint)
+		state.source = .ticket
+		#expect(state.showsStartPoint)
+	}
+
+	@Test("a new branch starts at origin's base unless local is picked, which is remembered")
+	func startPointPick() async {
+		var state = makeState(youtrack: false)
+		state.availableBranches = [BranchInfo(name: "main", existsLocally: true, existsRemotely: true)]
+		state.selectedBaseBranch = "main"
+		state.branchName = "feature"
+		#expect(CreateWorktreeButtonReducer().creationRequest(from: state)?.startFromOrigin == true)
+
+		let store = TestStore(initialState: state) { CreateWorktreeButtonReducer() }
+		await store.send(.startFromLocalBaseChanged(true)) {
+			$0.$startFromLocalBase.withLock { $0 = true }
+		}
+		#expect(CreateWorktreeButtonReducer().creationRequest(from: store.state)?.startFromOrigin == false)
+		#expect(CreateWorktreeButtonReducer.State(repositoryPath: repo).startFromLocalBase)
 	}
 
 	// MARK: - PR / MR

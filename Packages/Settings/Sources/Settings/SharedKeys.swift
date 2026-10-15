@@ -105,6 +105,13 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("terminalNotifications")
 	}
 
+	/// Whether a new branch made by the create-worktree dialog starts at the local base branch
+	/// rather than at `origin`'s, as just fetched. Off by default. Remembered from the dialog's
+	/// last use rather than set in Settings.
+	static var worktreeStartFromLocalBase: Self {
+		appStorage("worktreeStartFromLocalBase")
+	}
+
 	/// The create-worktree dialog's PR/MR tab lists only the user's own. Remembered from the
 	/// dialog's last use rather than set in Settings.
 	static var worktreeOnlyMyPullRequests: Self {
