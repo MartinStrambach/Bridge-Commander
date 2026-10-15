@@ -6,11 +6,7 @@ public nonisolated enum XcodeDerivedDataHelper {
 	/// - Parameter path: The path of the worktree whose DerivedData should be removed.
 	/// - Throws: An error if any matching DerivedData folder cannot be removed.
 	public static func deleteDerivedData(forWorktreePath path: String) throws {
-		let derivedDataURL = FileManager.default
-			.homeDirectoryForCurrentUser
-			.appending(path: "Library/Developer/Xcode/DerivedData", directoryHint: .isDirectory)
-
-		try deleteDerivedData(forWorktreePath: path, in: derivedDataURL)
+		try deleteDerivedData(forWorktreePath: path, in: DerivedDataUsageScanner.defaultDerivedDataURL)
 	}
 
 	static func deleteDerivedData(forWorktreePath path: String, in derivedDataURL: URL) throws {
@@ -21,15 +17,7 @@ public nonisolated enum XcodeDerivedDataHelper {
 		)) ?? []
 
 		for folderURL in subfolderURLs {
-			let infoPlistURL = folderURL.appending(path: "info.plist", directoryHint: .notDirectory)
-			guard FileManager.default.fileExists(atPath: infoPlistURL.path) else {
-				continue
-			}
-			guard
-				let data = try? Data(contentsOf: infoPlistURL),
-				let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-				let workspacePath = plist["WorkspacePath"] as? String
-			else {
+			guard let workspacePath = DerivedDataUsageScanner.workspacePath(ofFolderAt: folderURL) else {
 				continue
 			}
 
@@ -43,7 +31,7 @@ public nonisolated enum XcodeDerivedDataHelper {
 	/// the top-level folder, so on failure the folder is first moved to the Trash — a single
 	/// rename, which succeeds even when something inside cannot be unlinked — and only if that
 	/// fails too is the culprit searched for, so the warning can name the file that blocked it.
-	private static func removeFolder(at folderURL: URL) throws {
+	static func removeFolder(at folderURL: URL) throws {
 		let fileManager = FileManager.default
 		do {
 			try fileManager.removeItem(at: folderURL)

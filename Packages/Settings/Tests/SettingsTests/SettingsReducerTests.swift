@@ -666,6 +666,118 @@ struct SettingsReducerTests {
 		#expect(store.state.youtrackAuthToken == "keep-me")
 	}
 
+	// MARK: - DerivedData usage
+
+	@Test("measuring DerivedData shows each partial usage and ends when the scan does")
+	func measuresDerivedDataUsage() async {
+		let partial = DerivedDataUsage(
+			tallies: [.inUse: .init(folders: 1), .orphaned: .init(folders: 1)],
+			measuredFolders: 0,
+			totalFolders: 2
+		)
+		var complete = partial
+		complete.tallies[.inUse]?.bytes = 2048
+		complete.tallies[.orphaned]?.bytes = 1024
+		complete.measuredFolders = 2
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: { [partial, complete] in
+			$0[DerivedDataUsageClient.self].measure = {
+				AsyncStream { continuation in
+					continuation.yield(partial)
+					continuation.yield(complete)
+					continuation.finish()
+				}
+			}
+		}
+		await store.send(.measureDerivedDataButtonTapped) {
+			$0.isMeasuringDerivedData = true
+		}
+		await store.receive(\.derivedDataUsageUpdated) {
+			$0.derivedDataUsage = partial
+		}
+		await store.receive(\.derivedDataUsageUpdated) {
+			$0.derivedDataUsage = complete
+		}
+		await store.receive(\.derivedDataMeasurementFinished) {
+			$0.isMeasuringDerivedData = false
+		}
+	}
+
+	@Test("deleting orphaned DerivedData asks first, then deletes and subtracts the deleted folders")
+	func deletesOrphanedDerivedData() async {
+		let measured = DerivedDataUsage(
+			tallies: [.inUse: .init(folders: 1, bytes: 4096), .orphaned: .init(folders: 2, bytes: 2048)],
+			measuredFolders: 3,
+			totalFolders: 3,
+			folders: [
+				"App": .init(kind: .inUse, bytes: 4096),
+				"GoneA": .init(kind: .orphaned, bytes: 1024),
+				"GoneB": .init(kind: .orphaned, bytes: 1024),
+			]
+		)
+		var initialState = SettingsReducer.State()
+		initialState.derivedDataUsage = measured
+		let deletedKinds = LockIsolated<[DerivedDataUsage.Kind]>([])
+		let store = TestStore(initialState: initialState) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[DerivedDataUsageClient.self].deleteFolders = { kind in
+				deletedKinds.withValue { $0.append(kind) }
+				return DerivedDataDeletion(deletedFolders: ["GoneA", "GoneB"])
+			}
+		}
+
+		await store.send(.deleteDerivedDataButtonTapped(.orphaned)) {
+			$0.alert = SettingsReducer.deleteDerivedDataAlert(kind: .orphaned, tally: .init(folders: 2, bytes: 2048))
+		}
+		await store.send(.alert(.presented(.confirmDeleteDerivedData(.orphaned)))) {
+			$0.alert = nil
+			$0.deletingDerivedDataKind = .orphaned
+		}
+		await store.receive(\.derivedDataDeletionFinished) {
+			$0.deletingDerivedDataKind = nil
+			$0.derivedDataUsage = DerivedDataUsage(
+				tallies: [.inUse: .init(folders: 1, bytes: 4096), .orphaned: .init()],
+				measuredFolders: 1,
+				totalFolders: 1,
+				folders: ["App": .init(kind: .inUse, bytes: 4096)]
+			)
+		}
+		#expect(deletedKinds.value == [.orphaned])
+	}
+
+	@Test("folders that could not be deleted are named in an alert")
+	func reportsDerivedDataDeletionFailures() async {
+		var initialState = SettingsReducer.State()
+		initialState.deletingDerivedDataKind = .leftover
+		let store = TestStore(initialState: initialState) {
+			SettingsReducer()
+		}
+		await store.send(.derivedDataDeletionFinished(DerivedDataDeletion(deletedFolders: ["B"], failures: ["“A” could not be removed."]))) {
+			$0.deletingDerivedDataKind = nil
+			$0.alert = AlertState {
+				TextState("Some Folders Were Not Deleted")
+			} actions: {
+				ButtonState(role: .cancel) {
+					TextState("OK")
+				}
+			} message: {
+				TextState("“A” could not be removed.")
+			}
+		}
+	}
+
+	@Test("a kind with no folders offers nothing to delete")
+	func ignoresDeletingAnEmptyKind() async {
+		var initialState = SettingsReducer.State()
+		initialState.derivedDataUsage = DerivedDataUsage(tallies: [.inUse: .init(folders: 1)], measuredFolders: 1, totalFolders: 1)
+		let store = TestStore(initialState: initialState) {
+			SettingsReducer()
+		}
+		await store.send(.deleteDerivedDataButtonTapped(.leftover))
+	}
+
 	// MARK: - Representative scalar setters
 
 	@Test("clearGitHubToken empties the GitHub token")
