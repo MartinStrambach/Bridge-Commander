@@ -57,6 +57,8 @@ struct CreateWorktreeButtonReducer {
 		var pullRequestFilter: String = ""
 		@Shared(.worktreeOnlyMyPullRequests)
 		var onlyMyPullRequests = false
+		@Shared(.worktreeStartFromLocalBase)
+		var startFromLocalBase = false
 		var isLoadingPullRequests = false
 		var pullRequestError: String?
 		var selectedPullRequestNumber: Int?
@@ -118,6 +120,34 @@ struct CreateWorktreeButtonReducer {
 		}
 
 		var createNewBranch: Bool = true
+
+		/// Whether the dialog shows where the new branch starts: only when a new branch is made.
+		var showsStartPoint: Bool {
+			source == .ticket || (source == .branch && createNewBranch)
+		}
+
+		/// Whether the start is the user's to pick: the base is both a local branch and one on
+		/// `origin`. Otherwise the creator uses whichever exists, and the picker just shows it.
+		var canChooseStartPoint: Bool {
+			guard let base = selectedBase else {
+				return false
+			}
+			return base.existsLocally && base.existsRemotely
+		}
+
+		/// Where the new branch starts: the remembered pick when the base has both sides, else the
+		/// side that has it.
+		var startsFromOrigin: Bool {
+			guard let base = selectedBase, !canChooseStartPoint else {
+				return !startFromLocalBase
+			}
+			return !base.existsLocally
+		}
+
+		private var selectedBase: BranchInfo? {
+			availableBranches.first { $0.name == selectedBaseBranch }
+		}
+
 		@Presents
 		var errorAlert: AlertState<Action.ErrorAlert>?
 	}
@@ -147,6 +177,7 @@ struct CreateWorktreeButtonReducer {
 		case pullRequestsFailed(String)
 		case pullRequestSelected(Int?)
 		case onlyMyPullRequestsChanged(Bool)
+		case startFromLocalBaseChanged(Bool)
 
 		enum ErrorAlert: Equatable {}
 	}
@@ -224,6 +255,10 @@ struct CreateWorktreeButtonReducer {
 				state.selectedTicketId = nil
 				state.selectedPullRequestNumber = nil
 				return loadSourceItems(for: source, in: &state)
+
+			case let .startFromLocalBaseChanged(local):
+				state.$startFromLocalBase.withLock { $0 = local }
+				return .none
 
 			case let .followUpChanged(followUp):
 				state.$followUp.withLock { $0 = followUp }
@@ -369,6 +404,7 @@ struct CreateWorktreeButtonReducer {
 								baseBranch: request.baseBranch,
 								repositoryPath: path,
 								createNewBranch: request.createNewBranch,
+								startFromOrigin: request.startFromOrigin,
 								worktreeBasePath: worktreeBasePath
 							)
 						}
@@ -453,6 +489,8 @@ struct CreateWorktreeButtonReducer {
 		let branchName: String
 		let baseBranch: String
 		let createNewBranch: Bool
+		/// A new branch starts at `origin/<baseBranch>` rather than the local one.
+		var startFromOrigin = false
 		var fork: ForkCheckout?
 	}
 
@@ -469,7 +507,8 @@ struct CreateWorktreeButtonReducer {
 			return CreationRequest(
 				branchName: branchName,
 				baseBranch: state.selectedBaseBranch,
-				createNewBranch: createNewBranch
+				createNewBranch: createNewBranch,
+				startFromOrigin: createNewBranch && state.startsFromOrigin
 			)
 
 		case .pullRequest:

@@ -35,11 +35,16 @@ public nonisolated enum GitWorktreeCreator {
 
 	/// Creates a new Git worktree with the specified branch name.
 	/// Returns the absolute URL of the created worktree.
+	///
+	/// A new branch starts at the local `baseBranch`, or at `origin/<baseBranch>` (as the fetch just
+	/// left it) when `startFromOrigin` is set — a stale local base would otherwise put the branch
+	/// behind from its first commit. Whichever of the two exists is used when only one does.
 	public static func createWorktree(
 		branchName: String,
 		baseBranch: String,
 		repositoryPath: String,
 		createNewBranch: Bool = true,
+		startFromOrigin: Bool = false,
 		worktreeBasePath: String = "../worktrees"
 	) async throws -> URL {
 		let folder = worktreeFolder(
@@ -61,6 +66,7 @@ public nonisolated enum GitWorktreeCreator {
 		base_branch="$2";
 		create_new_branch="$3";
 		folder="$4";
+		start_from_origin="$5";
 
 		mkdir -p "$(dirname "$folder")"
 
@@ -79,7 +85,12 @@ public nonisolated enum GitWorktreeCreator {
 		fi
 
 		# Determine the correct base reference
-		if git show-ref --quiet "refs/heads/$base_branch"; then
+		if [ "$create_new_branch" = "true" ] && [ "$start_from_origin" = "true" ] \
+		  && git show-ref --quiet "refs/remotes/origin/$base_branch"; then
+		 # Asked for the remote's latest, which the fetch above just brought in
+		 base_ref="origin/$base_branch"
+		 echo "→ Using remote base branch: $base_ref"
+		elif git show-ref --quiet "refs/heads/$base_branch"; then
 		 # Base branch exists locally
 		 base_ref="$base_branch"
 		 echo "→ Using local base branch: $base_branch"
@@ -124,7 +135,8 @@ public nonisolated enum GitWorktreeCreator {
 				branchName,
 				baseBranch,
 				createNewBranch ? "true" : "false",
-				folder.path
+				folder.path,
+				startFromOrigin ? "true" : "false"
 			],
 			currentDirectory: URL(fileURLWithPath: repositoryPath),
 			environment: EnvironmentHelper.setupEnvironment()

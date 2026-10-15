@@ -69,7 +69,13 @@ struct CreateWorktreeDialogView: View {
 	private var branchSourceContent: some View {
 		baseBranchPicker
 
-		Toggle("Create new branch", isOn: $store.createNewBranch)
+		HStack {
+			Toggle("Create new branch", isOn: $store.createNewBranch)
+			Spacer()
+			if store.showsStartPoint {
+				startPointPicker
+			}
+		}
 
 		if store.createNewBranch {
 			newBranchNameField
@@ -100,7 +106,23 @@ struct CreateWorktreeDialogView: View {
 			}
 			.pickerStyle(.menu)
 			.disabled(store.filteredBranches.isEmpty)
+
 		}
+	}
+
+	/// Where a new branch starts: the base as `origin` has it (just fetched), or the local branch.
+	/// Disabled, showing the side that will be used, when the base exists on only one.
+	private var startPointPicker: some View {
+		Picker("Start from", selection: Binding(
+			get: { !store.startsFromOrigin },
+			set: { store.send(.startFromLocalBaseChanged($0)) }
+		)) {
+			Text("origin/\(store.selectedBaseBranch)").tag(false)
+			Text("Local \(store.selectedBaseBranch)").tag(true)
+		}
+		.pickerStyle(.menu)
+		.fixedSize()
+		.disabled(!store.canChooseStartPoint)
 	}
 
 	@ViewBuilder
@@ -147,6 +169,11 @@ struct CreateWorktreeDialogView: View {
 		}
 
 		baseBranchPicker
+
+		HStack {
+			Spacer()
+			startPointPicker
+		}
 
 		if store.selectedTicketId != nil {
 			newBranchNameField
