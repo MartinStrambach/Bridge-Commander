@@ -681,9 +681,11 @@ public struct SettingsReducer {
 						TextState(deletion.failures.joined(separator: "\n\n"))
 					}
 				}
-				// Measured again rather than adjusted: the deletion re-classified the folders, so
-				// the last measurement may not describe what it removed.
-				return measureDerivedData(&state)
+				// Subtracted rather than measured again, which would take as long as the first
+				// measurement. The usage records each folder's kind and size, so a folder the
+				// deletion classified differently still comes off the tally it was counted in.
+				state.derivedDataUsage?.removeFolders(named: deletion.deletedFolders)
+				return .none
 
 			case let .setActivityLogIncludesReadOnlyGitCommands(value):
 				state.$activityLogIncludesReadOnlyGitCommands.withLock { $0 = value }

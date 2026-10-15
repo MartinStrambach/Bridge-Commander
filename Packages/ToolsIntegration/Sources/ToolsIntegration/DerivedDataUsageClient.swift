@@ -13,7 +13,7 @@ public struct DerivedDataUsageClient: Sendable {
 extension DerivedDataUsageClient: DependencyKey {
 	public static let liveValue = DerivedDataUsageClient(
 		measure: { DerivedDataUsageScanner.measure() },
-		deleteFolders: { kind in DerivedDataUsageScanner.deleteFolders(of: kind) }
+		deleteFolders: { kind in await DerivedDataUsageScanner.deleteFolders(of: kind) }
 	)
 }
 

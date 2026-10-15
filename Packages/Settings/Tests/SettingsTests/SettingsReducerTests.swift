@@ -704,33 +704,27 @@ struct SettingsReducerTests {
 		}
 	}
 
-	@Test("deleting orphaned DerivedData asks first, then deletes and measures again")
+	@Test("deleting orphaned DerivedData asks first, then deletes and subtracts the deleted folders")
 	func deletesOrphanedDerivedData() async {
 		let measured = DerivedDataUsage(
 			tallies: [.inUse: .init(folders: 1, bytes: 4096), .orphaned: .init(folders: 2, bytes: 2048)],
 			measuredFolders: 3,
-			totalFolders: 3
-		)
-		let remeasured = DerivedDataUsage(
-			tallies: [.inUse: .init(folders: 1, bytes: 4096)],
-			measuredFolders: 1,
-			totalFolders: 1
+			totalFolders: 3,
+			folders: [
+				"App": .init(kind: .inUse, bytes: 4096),
+				"GoneA": .init(kind: .orphaned, bytes: 1024),
+				"GoneB": .init(kind: .orphaned, bytes: 1024),
+			]
 		)
 		var initialState = SettingsReducer.State()
 		initialState.derivedDataUsage = measured
 		let deletedKinds = LockIsolated<[DerivedDataUsage.Kind]>([])
 		let store = TestStore(initialState: initialState) {
 			SettingsReducer()
-		} withDependencies: { [remeasured] in
+		} withDependencies: {
 			$0[DerivedDataUsageClient.self].deleteFolders = { kind in
 				deletedKinds.withValue { $0.append(kind) }
-				return DerivedDataDeletion(deletedFolders: 2)
-			}
-			$0[DerivedDataUsageClient.self].measure = {
-				AsyncStream { continuation in
-					continuation.yield(remeasured)
-					continuation.finish()
-				}
+				return DerivedDataDeletion(deletedFolders: ["GoneA", "GoneB"])
 			}
 		}
 
@@ -743,13 +737,12 @@ struct SettingsReducerTests {
 		}
 		await store.receive(\.derivedDataDeletionFinished) {
 			$0.deletingDerivedDataKind = nil
-			$0.isMeasuringDerivedData = true
-		}
-		await store.receive(\.derivedDataUsageUpdated) {
-			$0.derivedDataUsage = remeasured
-		}
-		await store.receive(\.derivedDataMeasurementFinished) {
-			$0.isMeasuringDerivedData = false
+			$0.derivedDataUsage = DerivedDataUsage(
+				tallies: [.inUse: .init(folders: 1, bytes: 4096), .orphaned: .init()],
+				measuredFolders: 1,
+				totalFolders: 1,
+				folders: ["App": .init(kind: .inUse, bytes: 4096)]
+			)
 		}
 		#expect(deletedKinds.value == [.orphaned])
 	}
@@ -760,12 +753,9 @@ struct SettingsReducerTests {
 		initialState.deletingDerivedDataKind = .leftover
 		let store = TestStore(initialState: initialState) {
 			SettingsReducer()
-		} withDependencies: {
-			$0[DerivedDataUsageClient.self].measure = { .finished }
 		}
-		await store.send(.derivedDataDeletionFinished(DerivedDataDeletion(deletedFolders: 1, failures: ["“A” could not be removed."]))) {
+		await store.send(.derivedDataDeletionFinished(DerivedDataDeletion(deletedFolders: ["B"], failures: ["“A” could not be removed."]))) {
 			$0.deletingDerivedDataKind = nil
-			$0.isMeasuringDerivedData = true
 			$0.alert = AlertState {
 				TextState("Some Folders Were Not Deleted")
 			} actions: {
@@ -775,9 +765,6 @@ struct SettingsReducerTests {
 			} message: {
 				TextState("“A” could not be removed.")
 			}
-		}
-		await store.receive(\.derivedDataMeasurementFinished) {
-			$0.isMeasuringDerivedData = false
 		}
 	}
 
