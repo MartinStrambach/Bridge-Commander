@@ -150,6 +150,8 @@ public struct ScaledButtonStyle: PrimitiveButtonStyle {
 		case automatic
 		case bordered
 		case borderedProminent
+		case glass
+		case glassProminent
 	}
 
 	let base: Base
@@ -180,6 +182,8 @@ public struct ScaledButtonStyle: PrimitiveButtonStyle {
 		case .automatic: button.buttonStyle(.automatic)
 		case .bordered: button.buttonStyle(.bordered)
 		case .borderedProminent: button.buttonStyle(.borderedProminent)
+		case .glass: button.buttonStyle(.glass)
+		case .glassProminent: button.buttonStyle(.glassProminent)
 		}
 	}
 }
@@ -199,5 +203,16 @@ public extension PrimitiveButtonStyle where Self == ScaledButtonStyle {
 	/// `.borderedProminent`, scaled by the UI text size setting. Use instead of `.borderedProminent`.
 	static var scaledBorderedProminent: Self {
 		ScaledButtonStyle(base: .borderedProminent)
+	}
+
+	/// `.glass`, scaled by the UI text size setting. Use instead of `.glass` for a Liquid Glass
+	/// button floating over content (a bar's buttons, a scan's Stop).
+	static var scaledGlass: Self {
+		ScaledButtonStyle(base: .glass)
+	}
+
+	/// `.glassProminent`, scaled by the UI text size setting. Use instead of `.glassProminent`.
+	static var scaledGlassProminent: Self {
+		ScaledButtonStyle(base: .glassProminent)
 	}
 }

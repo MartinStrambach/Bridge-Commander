@@ -22,6 +22,9 @@ public struct DiskUsageView<Header: View>: View {
 	/// The result takes the keyboard when it appears, and back when it is clicked.
 	@FocusState
 	private var isResultFocused: Bool
+	/// The header's glass capsules morph into one another as the section changes state.
+	@Namespace
+	private var glassNamespace
 
 	public init(store: StoreOf<DiskUsageReducer>, @ViewBuilder header: () -> Header) {
 		self.store = store
@@ -29,59 +32,81 @@ public struct DiskUsageView<Header: View>: View {
 	}
 
 	public var body: some View {
-		VStack(spacing: 0) {
-			headerView
-			content
-		}
-		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.onAppear { send(.onAppear) }
+		content
+			// A bar rather than a row above the content: the picker's cards scroll under it with
+			// the system's soft edge effect, as content does under a toolbar.
+			.safeAreaBar(edge: .top, spacing: 0) {
+				headerView
+			}
+			.frame(maxWidth: .infinity, maxHeight: .infinity)
+			.onAppear { send(.onAppear) }
 		.alert($store.scope(\.$alert, action: \.alert))
 	}
 
 	// MARK: - Header
 
 	private var headerView: some View {
-		HStack(spacing: 12) {
-			header
-			if store.result != nil {
-				HStack(spacing: 2) {
-					historyButton(icon: "chevron.left", tooltip: "Back (⌘[)", isEnabled: store.canGoBack) { send(.goBackTapped) }
-						.keyboardShortcut("[", modifiers: .command)
-					historyButton(icon: "chevron.right", tooltip: "Forward (⌘])", isEnabled: store.canGoForward) { send(.goForwardTapped) }
-						.keyboardShortcut("]", modifiers: .command)
+		// One container, so the capsules sample the same background and the trailing one morphs
+		// between its scanning and result forms instead of one popping out as the other pops in.
+		GlassEffectContainer(spacing: 12) {
+			HStack(spacing: 12) {
+				header
+				if store.result != nil {
+					HStack(spacing: 2) {
+						historyButton(icon: "chevron.left", tooltip: "Back (⌘[)", isEnabled: store.canGoBack) { send(.goBackTapped) }
+							.keyboardShortcut("[", modifiers: .command)
+						historyButton(icon: "chevron.right", tooltip: "Forward (⌘])", isEnabled: store.canGoForward) { send(.goForwardTapped) }
+							.keyboardShortcut("]", modifiers: .command)
+					}
+					.headerCapsule()
+					.glassEffectID("history", in: glassNamespace)
 				}
-				.headerCapsule()
-			}
-			if !store.path.isEmpty {
-				breadcrumb
-			}
-			Spacer()
-			if case let .scanning(_, progress) = store.scan {
-				Text("\(progress.scannedBytes.formatted(.byteCount(style: .file))) · \(progress.scannedItems.formatted()) items")
-					.scaledFont(.subheadline)
-					.foregroundStyle(.secondary)
-					.monospacedDigit()
-				HStack(spacing: 2) {
-					HeaderButton(icon: "stop.circle.fill", tooltip: "Stop scanning", color: .red) { send(.stopTapped) }
+				if !store.path.isEmpty {
+					breadcrumb
 				}
-				.headerCapsule()
-			}
-			else if store.result != nil {
-				HStack(spacing: 2) {
-					HeaderButton(
-						icon: store.isCurrentFolderStarred ? "star.fill" : "star",
-						tooltip: store.isCurrentFolderStarred ? "Remove this folder from the picker's starred folders" : "Star this folder, so the picker offers it",
-						color: store.isCurrentFolderStarred ? .yellow : .secondary
-					) { send(.starToggled) }
-					HeaderButton(icon: "arrow.clockwise", tooltip: "Scan again (⌘R)", color: .blue) { send(.rescanTapped) }
-						.keyboardShortcut("r", modifiers: .command)
-					HeaderButton(icon: "internaldrive", tooltip: "Scan another volume or folder") { send(.newScanTapped) }
+				Spacer()
+				if case let .scanning(_, progress) = store.scan {
+					Text("\(progress.scannedBytes.formatted(.byteCount(style: .file))) · \(progress.scannedItems.formatted()) items")
+						.scaledFont(.subheadline)
+						.foregroundStyle(.secondary)
+						.monospacedDigit()
+						.contentTransition(.numericText(value: Double(progress.scannedItems)))
+						.animation(.default, value: progress.scannedItems)
+					HStack(spacing: 2) {
+						HeaderButton(icon: "stop.circle.fill", tooltip: "Stop scanning", color: .red) { send(.stopTapped) }
+					}
+					.headerCapsule()
+					.glassEffectID("actions", in: glassNamespace)
 				}
-				.headerCapsule()
+				else if store.result != nil {
+					HStack(spacing: 2) {
+						HeaderButton(
+							icon: store.isCurrentFolderStarred ? "star.fill" : "star",
+							tooltip: store.isCurrentFolderStarred ? "Remove this folder from the picker's starred folders" : "Star this folder, so the picker offers it",
+							color: store.isCurrentFolderStarred ? .yellow : .secondary
+						) { send(.starToggled) }
+							.symbolEffect(.bounce, value: store.isCurrentFolderStarred)
+						HeaderButton(icon: "arrow.clockwise", tooltip: "Scan again (⌘R)", color: .blue) { send(.rescanTapped) }
+							.keyboardShortcut("r", modifiers: .command)
+						HeaderButton(icon: "internaldrive", tooltip: "Scan another volume or folder") { send(.newScanTapped) }
+					}
+					.headerCapsule()
+					.glassEffectID("actions", in: glassNamespace)
+				}
 			}
 		}
+		.animation(.smooth, value: headerPhase)
 		.padding()
 		.windowTitleBarArea()
+	}
+
+	/// What the header shows, for the morph between its forms: the picker, a scan, a result.
+	private var headerPhase: Int {
+		switch store.scan {
+		case .idle: 0
+		case .scanning: 1
+		case .finished: 2
+		}
 	}
 
 	private func historyButton(icon: String, tooltip: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
@@ -92,7 +117,7 @@ public struct DiskUsageView<Header: View>: View {
 
 	/// The folders from the scan root to the one on screen; each earlier one is a button back.
 	private var breadcrumb: some View {
-		ScrollView(.horizontal, showsIndicators: false) {
+		ScrollView(.horizontal) {
 			HStack(spacing: 4) {
 				ForEach(Array(store.path.enumerated()), id: \.element.id) { index, node in
 					if index > 0 {
@@ -115,6 +140,7 @@ public struct DiskUsageView<Header: View>: View {
 				}
 			}
 		}
+		.scrollIndicators(.hidden)
 		.frame(maxWidth: 600)
 	}
 
@@ -149,14 +175,21 @@ public struct DiskUsageView<Header: View>: View {
 	private func scanningView(root: URL, progress: DiskScanProgress) -> some View {
 		VStack(spacing: 16) {
 			Spacer()
-			ProgressView()
-				.controlSize(.large)
+			Image(systemName: "internaldrive")
+				.scaledFont(size: 36)
+				.symbolRenderingMode(.hierarchical)
+				.symbolEffect(.breathe)
+				.frame(width: 84, height: 84)
+				.glassEffect(.regular, in: .circle)
 			Text("Scanning \(root.path(percentEncoded: false))")
 				.scaledFont(.title3)
 				.fontWeight(.semibold)
 			VStack(spacing: 4) {
+				// The figures roll over as the scan counts up rather than flickering.
 				Text("\(progress.scannedBytes.formatted(.byteCount(style: .file))) in \(progress.scannedItems.formatted()) items")
 					.monospacedDigit()
+					.contentTransition(.numericText(value: Double(progress.scannedItems)))
+					.animation(.default, value: progress.scannedItems)
 				if let currentPath = progress.currentPath {
 					Text(currentPath)
 						.lineLimit(1)
@@ -167,7 +200,7 @@ public struct DiskUsageView<Header: View>: View {
 			}
 			.scaledFont(.callout)
 			Button("Stop") { send(.stopTapped) }
-				.buttonStyle(.scaledBordered)
+				.buttonStyle(.scaledGlass)
 			Spacer()
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -176,58 +209,58 @@ public struct DiskUsageView<Header: View>: View {
 
 	private func resultView(result: DiskScanResult, current: DiskNode) -> some View {
 		let layout = SunburstLayout(center: current)
-		return VStack(spacing: 0) {
-			HStack(alignment: .top, spacing: 16) {
-				SunburstChartView(
-					layout: layout,
-					canGoUp: store.canGoUp,
-					hovered: $hoveredSegment,
-					selectedNames: store.selectedNames.isEmpty ? Set(hoveredName.map { [$0] } ?? []) : Set(store.selectedNames),
-					onOpen: { send(.nodeOpened($0)) },
-					onGoUp: { send(.goUpTapped) },
-					onSelect: { send(.nodeSelected($0?.name)) },
-					onToggle: { send(.selectionToggled($0.name)) }
-				)
-				.frame(minWidth: 280, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
-				.padding(.leading)
+		return HStack(alignment: .top, spacing: 16) {
+			SunburstChartView(
+				layout: layout,
+				canGoUp: store.canGoUp,
+				hovered: $hoveredSegment,
+				selectedNames: store.selectedNames.isEmpty ? Set(hoveredName.map { [$0] } ?? []) : Set(store.selectedNames),
+				onOpen: { send(.nodeOpened($0)) },
+				onGoUp: { send(.goUpTapped) },
+				onSelect: { send(.nodeSelected($0?.name)) },
+				onToggle: { send(.selectionToggled($0.name)) }
+			)
+			.frame(minWidth: 280, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
+			.padding(.leading)
 
-				DiskChildrenList(
-					node: current,
-					layout: layout,
-					selectedNames: Set(store.selectedNames),
-					leadName: store.selectedName,
-					hoveredName: hoveredSegment?.ancestry.first?.name ?? hoveredName,
-					deletingNames: store.deletingNames,
-					canRemove: { store.state.canRemove($0) },
-					onHover: { hoveredName = $0 },
-					onSelect: { send(.nodeSelected($0)) },
-					onToggle: { send(.selectionToggled($0)) },
-					onExtend: { send(.selectionExtended(to: $0)) },
-					onOpen: { send(.nodeOpened($0)) },
-					onQuickLook: { name in
-						send(.nodeSelected(name))
-						// An open panel already follows the selection; toggling would close it.
-						if !store.isQuickLookShown {
-							send(.quickLookToggled)
-						}
-					},
-					onShowInFinder: { name in
-						send(.nodeSelected(name))
-						send(.showInFinderTapped)
-					},
-					onMoveToTrash: { name in
-						send(.nodeSelected(name))
-						send(.moveToTrashTapped)
-					},
-					onDelete: { name in
-						send(.nodeSelected(name))
-						send(.deletePermanentlyTapped)
+			DiskChildrenList(
+				node: current,
+				layout: layout,
+				selectedNames: Set(store.selectedNames),
+				leadName: store.selectedName,
+				hoveredName: hoveredSegment?.ancestry.first?.name ?? hoveredName,
+				deletingNames: store.deletingNames,
+				canRemove: { store.state.canRemove($0) },
+				onHover: { hoveredName = $0 },
+				onSelect: { send(.nodeSelected($0)) },
+				onToggle: { send(.selectionToggled($0)) },
+				onExtend: { send(.selectionExtended(to: $0)) },
+				onOpen: { send(.nodeOpened($0)) },
+				onQuickLook: { name in
+					send(.nodeSelected(name))
+					// An open panel already follows the selection; toggling would close it.
+					if !store.isQuickLookShown {
+						send(.quickLookToggled)
 					}
-				)
-				.frame(minWidth: 320, idealWidth: 420, maxWidth: 520, maxHeight: .infinity)
-			}
-			.padding(.bottom, 8)
-
+				},
+				onShowInFinder: { name in
+					send(.nodeSelected(name))
+					send(.showInFinderTapped)
+				},
+				onMoveToTrash: { name in
+					send(.nodeSelected(name))
+					send(.moveToTrashTapped)
+				},
+				onDelete: { name in
+					send(.nodeSelected(name))
+					send(.deletePermanentlyTapped)
+				}
+			)
+			.frame(minWidth: 320, idealWidth: 420, maxWidth: 520, maxHeight: .infinity)
+		}
+		// A bar the list scrolls under with the system's soft edge effect; the chart, which does
+		// not scroll, stays above it.
+		.safeAreaBar(edge: .bottom, spacing: 0) {
 			footer(result: result)
 		}
 		// The mouse's back button goes back, as a browser's does and ⌘[ here.
@@ -275,75 +308,77 @@ public struct DiskUsageView<Header: View>: View {
 	/// title to appear only with a selection, the chart above would shrink to make room for it
 	/// every time an item is selected and grow back when it is not.
 	private func footer(result: DiskScanResult) -> some View {
-		HStack(spacing: 12) {
-			let selected = store.selectedNodes
-			if let node = store.selectedNode {
-				if selected.count > 1 {
-					footerTitle("\(selected.count.formatted()) items selected", detail: DiskNodeDescription.summary(of: selected, within: store.currentNode))
+		// One container, so the buttons sample the same background as they come and go.
+		GlassEffectContainer(spacing: 12) {
+			HStack(spacing: 12) {
+				let selected = store.selectedNodes
+				if let node = store.selectedNode {
+					if selected.count > 1 {
+						footerTitle("\(selected.count.formatted()) items selected", detail: DiskNodeDescription.summary(of: selected, within: store.currentNode))
+					}
+					else {
+						footerTitle(node.name, detail: DiskNodeDescription.summary(of: node, within: store.currentNode))
+					}
+
+					Spacer()
+
+					if store.isRemoving {
+						ProgressView()
+							.controlSize(.small)
+						Text(store.deletingNames.count > 1 ? "Removing \(store.deletingNames.count.formatted()) items…" : "Removing…")
+							.scaledFont(.caption)
+							.foregroundStyle(.secondary)
+					}
+					else {
+						if selected.count == 1 {
+							Button {
+								send(.showInFinderTapped)
+							} label: {
+								Label("Show in Finder", systemImage: "folder")
+							}
+							.buttonStyle(.scaledGlass)
+							.disabled(!node.isOnDisk)
+						}
+						let removable = store.removableSelection
+						let protected = selected.filter { store.state.isProtected($0) }
+						let removalHelp = removalHelp(removable: removable, protected: protected)
+						Button(role: .destructive) {
+							send(.moveToTrashTapped)
+						} label: {
+							Label(removable.count > 1 ? "Move \(removable.count.formatted()) to Trash…" : "Move to Trash…", systemImage: "trash")
+						}
+						.buttonStyle(.scaledGlass)
+						.keyboardShortcut(.delete, modifiers: .command)
+						.help(removalHelp ?? "Move to Trash (⌘⌫)")
+						.disabled(removable.isEmpty)
+						Button(removable.count > 1 ? "Delete \(removable.count.formatted())…" : "Delete…", role: .destructive) {
+							send(.deletePermanentlyTapped)
+						}
+						.buttonStyle(.scaledGlass)
+						.keyboardShortcut(.delete, modifiers: [.command, .option])
+						.help(removalHelp ?? "Delete Permanently (⌥⌘⌫)")
+						.disabled(removable.isEmpty)
+					}
 				}
 				else {
-					footerTitle(node.name, detail: DiskNodeDescription.summary(of: node, within: store.currentNode))
-				}
-
-				Spacer()
-
-				if store.isRemoving {
-					ProgressView()
-						.controlSize(.small)
-					Text(store.deletingNames.count > 1 ? "Removing \(store.deletingNames.count.formatted()) items…" : "Removing…")
+					footerTitle(currentFolderTitle, detail: currentFolderSummary(result: result))
+					Spacer()
+					if result.inaccessibleFolders > 0 {
+						Label(
+							"\(result.inaccessibleFolders.formatted()) \(result.inaccessibleFolders == 1 ? "folder" : "folders") could not be read",
+							systemImage: "lock"
+						)
 						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
-				}
-				else {
-					if selected.count == 1 {
-						Button {
-							send(.showInFinderTapped)
-						} label: {
-							Label("Show in Finder", systemImage: "folder")
-						}
-						.buttonStyle(.scaledBordered)
-						.disabled(!node.isOnDisk)
+						Button("Grant Full Disk Access…") { send(.openFullDiskAccessSettingsTapped) }
+							.buttonStyle(.scaledGlass)
+							.controlSize(.small)
 					}
-					let removable = store.removableSelection
-					let protected = selected.filter { store.state.isProtected($0) }
-					let removalHelp = removalHelp(removable: removable, protected: protected)
-					Button(role: .destructive) {
-						send(.moveToTrashTapped)
-					} label: {
-						Label(removable.count > 1 ? "Move \(removable.count.formatted()) to Trash…" : "Move to Trash…", systemImage: "trash")
-					}
-					.buttonStyle(.scaledBordered)
-					.keyboardShortcut(.delete, modifiers: .command)
-					.help(removalHelp ?? "Move to Trash (⌘⌫)")
-					.disabled(removable.isEmpty)
-					Button(removable.count > 1 ? "Delete \(removable.count.formatted())…" : "Delete…", role: .destructive) {
-						send(.deletePermanentlyTapped)
-					}
-					.buttonStyle(.scaledBordered)
-					.keyboardShortcut(.delete, modifiers: [.command, .option])
-					.help(removalHelp ?? "Delete Permanently (⌥⌘⌫)")
-					.disabled(removable.isEmpty)
-				}
-			}
-			else {
-				footerTitle(currentFolderTitle, detail: currentFolderSummary(result: result))
-				Spacer()
-				if result.inaccessibleFolders > 0 {
-					Label(
-						"\(result.inaccessibleFolders.formatted()) \(result.inaccessibleFolders == 1 ? "folder" : "folders") could not be read",
-						systemImage: "lock"
-					)
-					.scaledFont(.caption)
-					.foregroundStyle(.secondary)
-					Button("Grant Full Disk Access…") { send(.openFullDiskAccessSettingsTapped) }
-						.buttonStyle(.scaledBordered)
-						.controlSize(.small)
 				}
 			}
 		}
 		.padding(.horizontal)
 		.padding(.vertical, 10)
-		.background(Color(nsColor: .controlBackgroundColor))
 	}
 
 	/// Why the removal buttons are disabled or act on fewer items than are selected, if they do.
@@ -369,6 +404,9 @@ public struct DiskUsageView<Header: View>: View {
 			Text(detail)
 				.foregroundStyle(.secondary)
 				.monospacedDigit()
+				// The figures roll from one selection's to the next.
+				.contentTransition(.numericText())
+				.animation(.snappy, value: detail)
 		}
 		.scaledFont(.callout)
 	}
@@ -475,7 +513,10 @@ private extension View {
 
 // MARK: - Volume picker
 
-/// What to scan: a mounted volume, the home folder, a starred folder, or any folder.
+/// What to scan: a mounted volume, the home folder, a starred folder, or any folder. Each is a
+/// tile that is the control itself: clicking anywhere on it scans (or reopens the last result),
+/// and the tile lights under the pointer and sinks while pressed. Solid cards, not glass: a
+/// tile is mostly text, and text on glass over the window background was hard to read.
 struct VolumePickerView: View {
 	let volumes: [DiskVolume]
 	/// The result left for the picker, offered for reopening without a scan.
@@ -487,197 +528,230 @@ struct VolumePickerView: View {
 	let onReopen: () -> Void
 	let onUnstar: (String) -> Void
 
+	private static let columns = [GridItem(.adaptive(minimum: 340, maximum: 480), spacing: 12, alignment: .top)]
+
 	var body: some View {
 		ScrollView {
-			VStack(alignment: .leading, spacing: 16) {
-				Text("Choose what to scan")
-					.scaledFont(.title2)
-					.fontWeight(.semibold)
-				Text("The scan counts the space every folder takes, as Finder's Get Info does, and shows the result as rings around the folder you are looking at. Nothing is changed until you remove something yourself.")
-					.scaledFont(.callout)
-					.foregroundStyle(.secondary)
-					.fixedSize(horizontal: false, vertical: true)
+			VStack(alignment: .leading, spacing: 28) {
+				VStack(alignment: .leading, spacing: 6) {
+					Text("Choose what to scan")
+						.scaledFont(.title)
+						.fontWeight(.bold)
+					Text("The scan counts the space every folder takes, as Finder's Get Info does, and shows the result as rings around the folder you are looking at. Nothing is changed until you remove something yourself.")
+						.scaledFont(.callout)
+						.foregroundStyle(.secondary)
+						.fixedSize(horizontal: false, vertical: true)
+				}
 
 				if let lastResult {
-					Text("Last scan")
-						.scaledFont(.headline)
-						.padding(.top, 8)
-					LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
-						FolderCard(
+					section("Last scan") {
+						PickerTile(
 							title: DiskUsageView<EmptyView>.rootTitle(lastResult.root.name),
 							subtitle: lastResult.rootURL.path(percentEncoded: false),
-							detail: "\(lastResult.root.size.formatted(.byteCount(style: .file))) · scanned \(lastResult.finishedAt.formatted(.relative(presentation: .named)))",
 							systemImage: "clock.arrow.circlepath",
-							buttonTitle: "Reopen",
-							action: onReopen
+							actionTitle: "Reopen",
+							action: onReopen,
+							detail: {
+								Text("\(lastResult.root.size.formatted(.byteCount(style: .file))) · scanned \(lastResult.finishedAt.formatted(.relative(presentation: .named)))")
+									.scaledFont(.caption)
+									.foregroundStyle(.secondary)
+									.monospacedDigit()
+							}
 						)
 					}
 				}
 
-				LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+				section("Volumes and folders") {
 					ForEach(volumes) { volume in
-						VolumeCard(volume: volume) { onScan(volume.url) }
+						PickerTile(
+							title: volume.name,
+							subtitle: volume.isStartupVolume ? "Startup volume" : volume.url.path(percentEncoded: false),
+							systemImage: volume.isInternal ? "internaldrive" : "externaldrive",
+							actionTitle: "Scan",
+							action: { onScan(volume.url) },
+							detail: {
+								Gauge(value: min(1, max(0, volume.usedFraction))) {
+									Text("Used")
+								}
+								.gaugeStyle(.accessoryLinearCapacity)
+								.labelsHidden()
+								.tint(volume.usedFraction > 0.9 ? Color.red : volume.usedFraction > 0.75 ? Color.orange : Color.accentColor)
+								Text("\(volume.usedCapacity.formatted(.byteCount(style: .file))) used of \(volume.totalCapacity.formatted(.byteCount(style: .file)))")
+									.scaledFont(.caption)
+									.foregroundStyle(.secondary)
+									.monospacedDigit()
+							}
+						)
 					}
-					FolderCard(
+					PickerTile(
 						title: "Home Folder",
 						subtitle: FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false),
 						systemImage: "house",
-						buttonTitle: "Scan"
+						actionTitle: "Scan"
 					) {
 						onScan(FileManager.default.homeDirectoryForCurrentUser)
 					}
-					FolderCard(
+					PickerTile(
 						title: "Any Folder",
 						subtitle: "Pick a folder to scan",
 						systemImage: "folder.badge.questionmark",
-						buttonTitle: "Choose…",
+						actionTitle: "Choose…",
 						action: onChooseFolder
 					)
 				}
 
 				if !starredFolders.isEmpty {
-					Text("Starred folders")
-						.scaledFont(.headline)
-						.padding(.top, 8)
-					LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+					section("Starred folders") {
 						ForEach(starredFolders, id: \.self) { key in
-							FolderCard(
+							PickerTile(
 								title: DiskLocation.url(forKey: key).lastPathComponent,
 								subtitle: key,
 								systemImage: "star.fill",
-								buttonTitle: "Scan",
+								iconColor: .yellow,
+								actionTitle: "Scan",
+								action: { onScan(DiskLocation.url(forKey: key)) },
 								accessory: {
 									Button {
 										onUnstar(key)
 									} label: {
 										Image(systemName: "xmark.circle.fill")
+											.symbolRenderingMode(.hierarchical)
 											.foregroundStyle(.secondary)
 									}
 									.buttonStyle(.plain)
 									.help("Remove from starred folders")
-								},
-								action: { onScan(DiskLocation.url(forKey: key)) }
+								}
 							)
+							.contextMenu {
+								Button("Remove from Starred Folders") { onUnstar(key) }
+							}
 						}
 					}
 				}
 			}
-			.padding()
-			.frame(maxWidth: .infinity, alignment: .leading)
+			.frame(maxWidth: 1000, alignment: .leading)
+			.frame(maxWidth: .infinity)
+			.padding(.horizontal, 24)
+			.padding(.vertical, 20)
 		}
+		.scrollEdgeEffectStyle(.soft, for: .top)
 	}
-}
 
-private struct VolumeCard: View {
-	let volume: DiskVolume
-	let onScan: () -> Void
-
-	var body: some View {
+	/// A heading and a grid of tiles.
+	private func section(_ title: String, @ViewBuilder tiles: () -> some View) -> some View {
 		VStack(alignment: .leading, spacing: 10) {
-			HStack(spacing: 10) {
-				Image(systemName: volume.isInternal ? "internaldrive" : "externaldrive")
-					.scaledFont(.title2)
-					.foregroundStyle(.secondary)
-				VStack(alignment: .leading, spacing: 1) {
-					Text(volume.name)
-						.scaledFont(.headline)
-						.lineLimit(1)
-					Text(volume.isStartupVolume ? "Startup volume" : volume.url.path(percentEncoded: false))
-						.scaledFont(.caption)
-						.foregroundStyle(.secondary)
-						.lineLimit(1)
-						.truncationMode(.middle)
-				}
-			}
-			CapacityBar(fraction: volume.usedFraction)
-			HStack {
-				Text("\(volume.usedCapacity.formatted(.byteCount(style: .file))) used of \(volume.totalCapacity.formatted(.byteCount(style: .file)))")
-					.scaledFont(.caption)
-					.foregroundStyle(.secondary)
-					.monospacedDigit()
-				Spacer()
-				Button("Scan", action: onScan)
-					.buttonStyle(.scaledBorderedProminent)
-					.controlSize(.small)
+			Text(title)
+				.scaledFont(.headline)
+				.foregroundStyle(.secondary)
+			LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 12) {
+				tiles()
 			}
 		}
-		.padding(12)
-		.background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 	}
 }
 
-private struct FolderCard<Accessory: View>: View {
+/// One choice in the picker: an icon, then a title, a path and an optional line of detail under
+/// them (a volume's capacity, the last scan's age), and the action's name beside a chevron in
+/// the bottom corner. An accessory (a starred folder's unstar button) sits at the
+/// title's trailing edge; a button there takes its own click, so the tile's action does not run
+/// with it. Both are passed by label: a trailing closure binds to the first closure parameter
+/// it fits, and a volume's gauge handed over that way ended up as the accessory, beside the
+/// title (2026-10-17).
+private struct PickerTile<Detail: View, Accessory: View>: View {
 	let title: String
 	let subtitle: String
-	/// A second caption line under the subtitle: the last scan's size and age.
-	let detail: String?
 	let systemImage: String
-	let buttonTitle: String
-	/// At the card's trailing edge: a starred folder's unstar button.
-	let accessory: Accessory
+	let iconColor: Color
+	let actionTitle: String
 	let action: () -> Void
+	let accessory: Accessory
+	let detail: Detail
 
-	init(title: String, subtitle: String, detail: String? = nil, systemImage: String, buttonTitle: String, @ViewBuilder accessory: () -> Accessory = { EmptyView() }, action: @escaping () -> Void) {
+	@State
+	private var isHovered = false
+
+	init(
+		title: String,
+		subtitle: String,
+		systemImage: String,
+		iconColor: Color = .accentColor,
+		actionTitle: String,
+		action: @escaping () -> Void,
+		@ViewBuilder detail: () -> Detail = { EmptyView() },
+		@ViewBuilder accessory: () -> Accessory = { EmptyView() }
+	) {
 		self.title = title
 		self.subtitle = subtitle
-		self.detail = detail
 		self.systemImage = systemImage
-		self.buttonTitle = buttonTitle
-		self.accessory = accessory()
+		self.iconColor = iconColor
+		self.actionTitle = actionTitle
 		self.action = action
+		self.accessory = accessory()
+		self.detail = detail()
 	}
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: 10) {
-			HStack(alignment: .top, spacing: 10) {
-				Image(systemName: systemImage)
-					.scaledFont(.title2)
-					.foregroundStyle(.secondary)
-				VStack(alignment: .leading, spacing: 1) {
-					Text(title)
-						.scaledFont(.headline)
-					Text(subtitle)
-						.scaledFont(.caption)
-						.foregroundStyle(.secondary)
-						.lineLimit(1)
-						.truncationMode(.middle)
-					if let detail {
-						Text(detail)
+		Button(action: action) {
+			VStack(alignment: .leading, spacing: 10) {
+				HStack(alignment: .top, spacing: 12) {
+					Image(systemName: systemImage)
+						.scaledFont(size: 24)
+						.symbolRenderingMode(.hierarchical)
+						.foregroundStyle(iconColor)
+						.frame(width: 34, height: 34)
+					VStack(alignment: .leading, spacing: 3) {
+						Text(title)
+							.scaledFont(.headline)
+							.lineLimit(1)
+						Text(subtitle)
 							.scaledFont(.caption)
 							.foregroundStyle(.secondary)
 							.lineLimit(1)
+							.truncationMode(.middle)
+						detail
+							.padding(.top, 4)
 					}
+					Spacer(minLength: 8)
+					accessory
 				}
 				Spacer(minLength: 0)
-				accessory
+				HStack(spacing: 3) {
+					Spacer()
+					Text(actionTitle)
+					Image(systemName: "chevron.right")
+						.scaledFont(.caption2)
+				}
+				.scaledFont(.callout)
+				.foregroundStyle(.secondary)
 			}
-			Spacer(minLength: 0)
-			HStack {
-				Spacer()
-				Button(buttonTitle, action: action)
-					.buttonStyle(.scaledBordered)
-					.controlSize(.small)
-			}
+			.padding(16)
+			.frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+			.contentShape(.rect(cornerRadius: 16))
 		}
-		.padding(12)
-		.frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-		.background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+		.buttonStyle(TileButtonStyle(isHovered: isHovered))
+		.onHover { isHovered = $0 }
+		.help(subtitle)
 	}
 }
 
-private struct CapacityBar: View {
-	let fraction: Double
+/// A tile's surface: a solid card with a hairline border, a little darker under the pointer,
+/// darker still and slightly sunk while pressed. The surface is all background, so a button
+/// nested in the label still gets its clicks.
+private struct TileButtonStyle: ButtonStyle {
+	let isHovered: Bool
 
-	var body: some View {
-		GeometryReader { geometry in
-			ZStack(alignment: .leading) {
-				Capsule().fill(Color.primary.opacity(0.08))
-				Capsule()
-					.fill(fraction > 0.9 ? Color.red : fraction > 0.75 ? Color.orange : Color.accentColor)
-					.frame(width: max(4, geometry.size.width * min(1, fraction)))
+	func makeBody(configuration: Configuration) -> some View {
+		let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+		configuration.label
+			.background {
+				shape
+					.fill(Color(nsColor: .controlBackgroundColor))
+					.overlay(shape.fill(Color.primary.opacity(configuration.isPressed ? 0.08 : isHovered ? 0.04 : 0)))
+					.overlay(shape.strokeBorder(.separator))
 			}
-		}
-		.frame(height: 6)
+			.scaleEffect(configuration.isPressed ? 0.985 : 1)
+			.animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+			.animation(.easeOut(duration: 0.12), value: isHovered)
 	}
 }
 
@@ -741,6 +815,7 @@ struct DiskChildrenList: View {
 				.frame(width: 6, height: 22)
 			Image(systemName: icon(for: child))
 				.scaledFont(.callout)
+				.symbolRenderingMode(.hierarchical)
 				.foregroundStyle(.secondary)
 				.frame(width: 18)
 			VStack(alignment: .leading, spacing: 3) {

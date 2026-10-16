@@ -150,7 +150,7 @@ struct SunburstChartView: View {
 		}
 		.scaledFont(.caption)
 		.padding(8)
-		.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+		.glassEffect(.regular, in: .rect(cornerRadius: 10))
 		.padding(8)
 		.allowsHitTesting(false)
 	}
