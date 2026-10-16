@@ -191,19 +191,14 @@ public struct DiskUsageView<Header: View>: View {
 	}
 
 	/// What is selected and what can be done with it, plus what the scan could not read.
+	///
+	/// Both states show a two-line title on the left so the footer keeps its height: were the
+	/// title to appear only with a selection, the chart above would shrink to make room for it
+	/// every time an item is selected and grow back when it is not.
 	private func footer(result: DiskScanResult) -> some View {
 		HStack(spacing: 12) {
 			if let node = store.selectedNode {
-				VStack(alignment: .leading, spacing: 2) {
-					Text(node.name)
-						.fontWeight(.semibold)
-						.lineLimit(1)
-						.truncationMode(.middle)
-					Text(DiskNodeDescription.summary(of: node, within: store.currentNode))
-						.foregroundStyle(.secondary)
-						.monospacedDigit()
-				}
-				.scaledFont(.callout)
+				footerTitle(node.name, detail: DiskNodeDescription.summary(of: node, within: store.currentNode))
 
 				Spacer()
 
@@ -237,10 +232,7 @@ public struct DiskUsageView<Header: View>: View {
 				}
 			}
 			else {
-				Text(Self.summary(of: result))
-					.scaledFont(.callout)
-					.foregroundStyle(.secondary)
-					.monospacedDigit()
+				footerTitle(currentFolderTitle, detail: currentFolderSummary(result: result))
 				Spacer()
 				if result.inaccessibleFolders > 0 {
 					Label(
@@ -258,6 +250,31 @@ public struct DiskUsageView<Header: View>: View {
 		.padding(.horizontal)
 		.padding(.vertical, 10)
 		.background(Color(nsColor: .controlBackgroundColor))
+	}
+
+	private func footerTitle(_ name: String, detail: String) -> some View {
+		VStack(alignment: .leading, spacing: 2) {
+			Text(name)
+				.fontWeight(.semibold)
+				.lineLimit(1)
+				.truncationMode(.middle)
+			Text(detail)
+				.foregroundStyle(.secondary)
+				.monospacedDigit()
+		}
+		.scaledFont(.callout)
+	}
+
+	/// The folder on screen: the scan root by its last path component, a subfolder by its name.
+	private var currentFolderTitle: String {
+		guard let current = store.currentNode else { return "" }
+		return store.path.count > 1 ? current.name : Self.rootTitle(current.name)
+	}
+
+	/// At the root, how the scan went; in a subfolder, its size and share of its parent.
+	private func currentFolderSummary(result: DiskScanResult) -> String {
+		guard store.path.count > 1, let current = store.currentNode else { return Self.summary(of: result) }
+		return DiskNodeDescription.summary(of: current, within: store.path[store.path.count - 2])
 	}
 
 	private static func summary(of result: DiskScanResult) -> String {
