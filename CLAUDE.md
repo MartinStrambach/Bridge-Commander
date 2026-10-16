@@ -30,6 +30,7 @@ Packages/
   GitGraphFeature/        # Commit graph view + selected commit's diff
   StagingFeature/         # File staging panel (detail view, diff, commit)
   SimulatorFeature/       # iOS simulator pane beside the terminal + MCP server for Claude Code
+  DiskUsageFeature/       # Disk section: scans a volume/folder, sunburst of where the space goes, delete folders
   RepositoryFeature/      # Repository list/row views and reducers (top-level feature; hosts the window's sections)
 ```
 
