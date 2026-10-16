@@ -17,6 +17,9 @@ public struct DiskUsageView<Header: View>: View {
 	private var hoveredSegment: SunburstSegment?
 	@State
 	private var hoveredName: String?
+	/// The result takes the keyboard when it appears, and back when it is clicked.
+	@FocusState
+	private var isResultFocused: Bool
 
 	public init(store: StoreOf<DiskUsageReducer>, @ViewBuilder header: () -> Header) {
 		self.store = store
@@ -38,6 +41,15 @@ public struct DiskUsageView<Header: View>: View {
 	private var headerView: some View {
 		HStack(spacing: 12) {
 			header
+			if store.result != nil {
+				HStack(spacing: 2) {
+					historyButton(icon: "chevron.left", tooltip: "Back (⌘[)", isEnabled: store.canGoBack) { send(.goBackTapped) }
+						.keyboardShortcut("[", modifiers: .command)
+					historyButton(icon: "chevron.right", tooltip: "Forward (⌘])", isEnabled: store.canGoForward) { send(.goForwardTapped) }
+						.keyboardShortcut("]", modifiers: .command)
+				}
+				.headerCapsule()
+			}
 			if !store.path.isEmpty {
 				breadcrumb
 			}
@@ -54,7 +66,8 @@ public struct DiskUsageView<Header: View>: View {
 			}
 			else if store.result != nil {
 				HStack(spacing: 2) {
-					HeaderButton(icon: "arrow.clockwise", tooltip: "Scan again", color: .blue) { send(.rescanTapped) }
+					HeaderButton(icon: "arrow.clockwise", tooltip: "Scan again (⌘R)", color: .blue) { send(.rescanTapped) }
+						.keyboardShortcut("r", modifiers: .command)
 					HeaderButton(icon: "internaldrive", tooltip: "Scan another volume or folder") { send(.newScanTapped) }
 				}
 				.headerCapsule()
@@ -62,6 +75,12 @@ public struct DiskUsageView<Header: View>: View {
 		}
 		.padding()
 		.windowTitleBarArea()
+	}
+
+	private func historyButton(icon: String, tooltip: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+		HeaderButton(icon: icon, tooltip: tooltip, action: action)
+			.disabled(!isEnabled)
+			.opacity(isEnabled ? 1 : 0.35)
 	}
 
 	/// The folders from the scan root to the one on screen; each earlier one is a button back.
@@ -146,11 +165,11 @@ public struct DiskUsageView<Header: View>: View {
 			HStack(alignment: .top, spacing: 16) {
 				SunburstChartView(
 					layout: layout,
-					canGoUp: store.path.count > 1,
+					canGoUp: store.canGoUp,
 					hovered: $hoveredSegment,
 					selectedName: store.selectedName ?? hoveredName,
 					onOpen: { send(.nodeOpened($0)) },
-					onGoUp: { send(.pathIndexTapped(store.path.count - 2)) },
+					onGoUp: { send(.goUpTapped) },
 					onSelect: { send(.nodeSelected($0?.name)) }
 				)
 				.frame(minWidth: 280, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
@@ -184,10 +203,27 @@ public struct DiskUsageView<Header: View>: View {
 
 			footer(result: result)
 		}
-		// The mouse's back button goes up a folder, as clicking the chart's centre does.
+		// The mouse's back button goes back, as a browser's does and ⌘[ here.
 		.onMouseBackButton {
-			if store.path.count > 1 { send(.pathIndexTapped(store.path.count - 2)) }
+			send(.goBackTapped)
 		}
+		.focusable()
+		.focusEffectDisabled()
+		.focused($isResultFocused)
+		.onAppear { isResultFocused = true }
+		// Simultaneous, so a click on a row or a segment still does its own thing.
+		.simultaneousGesture(TapGesture().onEnded { isResultFocused = true })
+		.onKeyPress(keys: DiskKeyboard.keys, phases: [.down, .repeat], action: keyPressed)
+	}
+
+	// MARK: - Keyboard
+
+	private func keyPressed(_ press: KeyPress) -> KeyPress.Result {
+		guard let action = DiskKeyboard.action(for: press.key, modifiers: press.modifiers, hasSelection: store.selectedName != nil) else {
+			return .ignored
+		}
+		send(action)
+		return .handled
 	}
 
 	/// What is selected and what can be done with it, plus what the scan could not read.
@@ -223,11 +259,15 @@ public struct DiskUsageView<Header: View>: View {
 						Label("Move to Trash…", systemImage: "trash")
 					}
 					.buttonStyle(.scaledBordered)
+					.keyboardShortcut(.delete, modifiers: .command)
+					.help("Move to Trash (⌘⌫)")
 					.disabled(!isRemovable || store.deletingName != nil)
 					Button("Delete…", role: .destructive) {
 						send(.deletePermanentlyTapped)
 					}
 					.buttonStyle(.scaledBordered)
+					.keyboardShortcut(.delete, modifiers: [.command, .option])
+					.help("Delete Permanently (⌥⌘⌫)")
 					.disabled(!isRemovable || store.deletingName != nil)
 				}
 			}
@@ -281,6 +321,29 @@ public struct DiskUsageView<Header: View>: View {
 		"\(result.root.size.formatted(.byteCount(style: .file))) in \(result.root.itemCount.formatted()) items, scanned in \(result.duration.formatted(.units(allowed: [.minutes, .seconds], width: .narrow)))"
 	}
 
+}
+
+/// The map's keys, as in DaisyDisk and Finder: ↑/↓ select (⌥↑/⌥↓, Home/End the first and the
+/// last), Return, → or ⌘↓ open the selected folder, ← or ⌘↑ go up, Escape clears the selection.
+/// ⌘[ ⌘] ⌘R ⌘⌫ ⌥⌘⌫ are not here: they are the shortcuts of the buttons that do the same, so they
+/// work wherever the focus is.
+enum DiskKeyboard {
+	static let keys: Set<KeyEquivalent> = [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .return, .escape]
+
+	static func action(for key: KeyEquivalent, modifiers: EventModifiers, hasSelection: Bool) -> DiskUsageReducer.Action.View? {
+		// Arrow keys carry the numeric-pad flag, so only these count as modifiers.
+		let modifiers = modifiers.intersection([.command, .option, .control, .shift])
+		switch (key, modifiers) {
+		case (.upArrow, []): return .selectionMoved(.previous)
+		case (.downArrow, []): return .selectionMoved(.next)
+		case (.home, []), (.upArrow, .option): return .selectionMoved(.first)
+		case (.end, []), (.downArrow, .option): return .selectionMoved(.last)
+		case (.return, []), (.rightArrow, []), (.downArrow, .command): return .openSelectedTapped
+		case (.leftArrow, []), (.upArrow, .command): return .goUpTapped
+		case (.escape, []) where hasSelection: return .nodeSelected(nil)
+		default: return nil
+		}
+	}
 }
 
 /// One line about an item for the footer and the list rows' tooltips.
@@ -467,14 +530,21 @@ struct DiskChildrenList: View {
 	private var colorScheme
 
 	var body: some View {
-		ScrollView {
-			LazyVStack(spacing: 2) {
-				ForEach(node.children) { child in
-					row(child)
+		ScrollViewReader { proxy in
+			ScrollView {
+				LazyVStack(spacing: 2) {
+					ForEach(node.children) { child in
+						row(child)
+					}
 				}
+				.padding(.trailing)
+				.padding(.vertical, 4)
 			}
-			.padding(.trailing)
-			.padding(.vertical, 4)
+			// Keeps a selection made with the arrow keys in view; a clicked row already is.
+			.onChange(of: selectedName) { _, name in
+				guard let name, let child = node.child(named: name) else { return }
+				proxy.scrollTo(child.id)
+			}
 		}
 		.onHover { isInside in
 			if !isInside { onHover(nil) }

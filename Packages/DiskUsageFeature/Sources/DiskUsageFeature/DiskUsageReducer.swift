@@ -23,6 +23,13 @@ public struct DiskUsageReducer {
 		public var deletingName: String?
 		/// Where the last scan started, so Rescan can repeat it after the result is gone.
 		public var lastScanRoot: URL?
+		/// The folders visited before the one on screen, most recent last, for Back (⌘[). Each is
+		/// the names below the scan root, not nodes: a deletion rebuilds the chain, and nodes kept
+		/// here would bring the removed item back. A name no longer in the tree stops the walk at
+		/// the folder above it.
+		public var backHistory: [[String]] = []
+		/// The folders left with Back, most recent last, for Forward (⌘]); cleared by any other move.
+		public var forwardHistory: [[String]] = []
 		@Presents
 		public var alert: AlertState<Action.Alert>?
 
@@ -34,6 +41,9 @@ public struct DiskUsageReducer {
 			guard let selectedName else { return nil }
 			return currentNode?.child(named: selectedName)
 		}
+		public var canGoUp: Bool { path.count > 1 }
+		public var canGoBack: Bool { !backHistory.isEmpty }
+		public var canGoForward: Bool { !forwardHistory.isEmpty }
 		public var isScanning: Bool {
 			if case .scanning = scan { return true }
 			return false
@@ -59,7 +69,7 @@ public struct DiskUsageReducer {
 		case deletionFinished(name: String, error: String?)
 		case alert(PresentationAction<Alert>)
 
-		public enum View {
+		public enum View: Equatable {
 			case onAppear
 			case scanRequested(URL)
 			case chooseFolderTapped
@@ -70,11 +80,27 @@ public struct DiskUsageReducer {
 			case nodeOpened(DiskNode)
 			/// Go back to the node at this index of `path`.
 			case pathIndexTapped(Int)
+			/// To the folder above the one on screen (⌘↑, ←, the chart's centre).
+			case goUpTapped
+			/// Through the folders visited before (⌘[) and back again (⌘]).
+			case goBackTapped
+			case goForwardTapped
 			case nodeSelected(String?)
+			/// Move the selection through the folder's contents (↑, ↓, Home, End).
+			case selectionMoved(SelectionMove)
+			/// Open the selected folder (Return, ⌘↓, →).
+			case openSelectedTapped
 			case showInFinderTapped
 			case moveToTrashTapped
 			case deletePermanentlyTapped
 			case openFullDiskAccessSettingsTapped
+		}
+
+		public enum SelectionMove: Equatable, Sendable {
+			case previous
+			case next
+			case first
+			case last
 		}
 
 		public enum Alert: Equatable {
@@ -129,6 +155,7 @@ public struct DiskUsageReducer {
 				state.scan = .idle
 				state.path = []
 				state.selectedName = nil
+				clearHistory(&state)
 				return .merge(
 					.cancel(id: CancelID.scan),
 					.run { [client] send in await send(.volumesLoaded(client.volumes())) }
@@ -143,6 +170,7 @@ public struct DiskUsageReducer {
 				state.scan = .finished(result)
 				state.path = [result.root]
 				state.selectedName = nil
+				clearHistory(&state)
 				return .none
 
 			case let .scanEvent(.failed(message)):
@@ -155,23 +183,46 @@ public struct DiskUsageReducer {
 				return .none
 
 			case let .view(.nodeOpened(node)):
-				guard node.isDirectory, !node.isInaccessible, let current = state.currentNode, current.children.contains(where: { $0 === node }) else {
-					return .none
-				}
-				state.path.append(node)
-				state.selectedName = nil
+				open(&state, node)
+				return .none
+
+			case .view(.openSelectedTapped):
+				guard let node = state.selectedNode else { return .none }
+				open(&state, node)
 				return .none
 
 			case let .view(.pathIndexTapped(index)):
-				guard state.path.indices.contains(index) else { return .none }
-				let opened = state.path.indices.contains(index + 1) ? state.path[index + 1].name : nil
-				state.path.removeSubrange((index + 1)...)
-				// Coming back up, the folder just left is the natural selection.
-				state.selectedName = opened
+				guard state.path.indices.contains(index), index < state.path.count - 1 else { return .none }
+				go(&state, to: Array(state.path[...index]))
+				return .none
+
+			case .view(.goUpTapped):
+				guard state.canGoUp else { return .none }
+				go(&state, to: Array(state.path.dropLast()))
+				return .none
+
+			case .view(.goBackTapped):
+				walkHistory(&state, from: \.backHistory, to: \.forwardHistory)
+				return .none
+
+			case .view(.goForwardTapped):
+				walkHistory(&state, from: \.forwardHistory, to: \.backHistory)
 				return .none
 
 			case let .view(.nodeSelected(name)):
 				state.selectedName = name
+				return .none
+
+			case let .view(.selectionMoved(move)):
+				guard let children = state.currentNode?.children, !children.isEmpty else { return .none }
+				let index = state.selectedName.flatMap { name in children.firstIndex { $0.name == name } }
+				let target = switch (move, index) {
+				case (.first, _), (.next, nil): 0
+				case (.last, _), (.previous, nil): children.count - 1
+				case let (.next, index?): min(index + 1, children.count - 1)
+				case let (.previous, index?): max(index - 1, 0)
+				}
+				state.selectedName = children[target].name
 				return .none
 
 			case .view(.showInFinderTapped):
@@ -230,6 +281,7 @@ public struct DiskUsageReducer {
 		state.scan = .scanning(root: root, progress: DiskScanProgress())
 		state.path = []
 		state.selectedName = nil
+		clearHistory(&state)
 		state.lastScanRoot = root
 		return .run { [client] send in
 			for await event in client.scan(root) {
@@ -237,6 +289,68 @@ public struct DiskUsageReducer {
 			}
 		}
 		.cancellable(id: CancelID.scan, cancelInFlight: true)
+	}
+
+	/// Into a folder of the one on screen; a file or an unreadable folder is not opened.
+	private func open(_ state: inout State, _ node: DiskNode) {
+		guard node.isDirectory, !node.isInaccessible, let current = state.currentNode, current.children.contains(where: { $0 === node }) else {
+			return
+		}
+		go(&state, to: state.path + [node])
+	}
+
+	/// Shows `path`, remembering the folder left for Back; a new move forgets what Forward had.
+	private func go(_ state: inout State, to path: [DiskNode]) {
+		guard path != state.path else { return }
+		state.backHistory.append(Self.names(of: state.path))
+		state.forwardHistory = []
+		show(&state, path)
+	}
+
+	/// Back or Forward: shows the latest entry of one history, moving the folder left onto the
+	/// other. An entry that now resolves to the folder on screen (its folder was removed) is
+	/// dropped and the next one tried, so the key never seems to do nothing.
+	private func walkHistory(_ state: inout State, from source: WritableKeyPath<State, [[String]]>, to destination: WritableKeyPath<State, [[String]]>) {
+		guard let root = state.path.first else { return }
+		while let names = state[keyPath: source].popLast() {
+			let path = Self.resolve(names, from: root)
+			guard path != state.path else { continue }
+			state[keyPath: destination].append(Self.names(of: state.path))
+			show(&state, path)
+			return
+		}
+	}
+
+	/// Puts `path` on screen. Coming back up, the folder just left is selected, so ↓/↑ carry on
+	/// from it and Return goes straight back in; going down nothing is.
+	private func show(_ state: inout State, _ path: [DiskNode]) {
+		let left = state.path
+		state.path = path
+		if left.count > path.count, Array(left.prefix(path.count)) == path {
+			state.selectedName = left[path.count].name
+		}
+		else {
+			state.selectedName = nil
+		}
+	}
+
+	private func clearHistory(_ state: inout State) {
+		state.backHistory = []
+		state.forwardHistory = []
+	}
+
+	private static func names(of path: [DiskNode]) -> [String] {
+		path.dropFirst().map(\.name)
+	}
+
+	/// The chain from `root` down the named folders, as far as they are still in the tree.
+	private static func resolve(_ names: [String], from root: DiskNode) -> [DiskNode] {
+		var path = [root]
+		for name in names {
+			guard let child = path[path.count - 1].child(named: name), child.isDirectory, !child.isInaccessible else { break }
+			path.append(child)
+		}
+		return path
 	}
 
 	private func selectedURL(_ state: State) -> URL? {

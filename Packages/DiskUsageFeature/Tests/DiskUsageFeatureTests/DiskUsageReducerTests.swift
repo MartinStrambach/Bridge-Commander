@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import SwiftUI
 import Testing
 @testable import DiskUsageFeature
 
@@ -57,13 +58,129 @@ struct DiskUsageReducerTests {
 
 		await store.send(.view(.nodeOpened(cache))) {
 			$0.path.append(cache)
+			$0.backHistory = [[]]
 		}
 		// A file is not opened.
 		await store.send(.view(.nodeOpened(cache.children[0])))
 		await store.send(.view(.pathIndexTapped(0))) {
 			$0.path.removeLast()
 			$0.selectedName = "Cache"
+			$0.backHistory = [[], ["Cache"]]
 		}
+	}
+
+	@Test("the arrow keys walk the selection and Return opens it")
+	func keyboardSelection() async {
+		let store = await scannedStore()
+		let cache = store.state.currentNode!.child(named: "Cache")!
+
+		await store.send(.view(.selectionMoved(.next))) {
+			$0.selectedName = "Cache"
+		}
+		await store.send(.view(.selectionMoved(.next))) {
+			$0.selectedName = "notes.md"
+		}
+		// The last item stays selected rather than wrapping round.
+		await store.send(.view(.selectionMoved(.next)))
+		await store.send(.view(.selectionMoved(.first))) {
+			$0.selectedName = "Cache"
+		}
+		await store.send(.view(.openSelectedTapped)) {
+			$0.path.append(cache)
+			$0.selectedName = nil
+			$0.backHistory = [[]]
+		}
+		// Nothing selected: ↑ starts from the end.
+		await store.send(.view(.selectionMoved(.previous))) {
+			$0.selectedName = "big.bin"
+		}
+		// A file is not opened.
+		await store.send(.view(.openSelectedTapped))
+		await store.send(.view(.goUpTapped)) {
+			$0.path.removeLast()
+			$0.selectedName = "Cache"
+			$0.backHistory = [[], ["Cache"]]
+		}
+		// At the root there is nothing above.
+		await store.send(.view(.goUpTapped))
+	}
+
+	@Test("back and forward walk the folders visited, and a new move forgets forward")
+	func history() async {
+		let store = await scannedStore()
+		let root = store.state.path[0]
+		let cache = root.child(named: "Cache")!
+
+		await store.send(.view(.goBackTapped))
+		await store.send(.view(.nodeOpened(cache))) {
+			$0.path = [root, cache]
+			$0.backHistory = [[]]
+		}
+		await store.send(.view(.goBackTapped)) {
+			$0.path = [root]
+			$0.selectedName = "Cache"
+			$0.backHistory = []
+			$0.forwardHistory = [["Cache"]]
+		}
+		await store.send(.view(.goForwardTapped)) {
+			$0.path = [root, cache]
+			$0.selectedName = nil
+			$0.backHistory = [[]]
+			$0.forwardHistory = []
+		}
+		await store.send(.view(.goBackTapped)) {
+			$0.path = [root]
+			$0.selectedName = "Cache"
+			$0.backHistory = []
+			$0.forwardHistory = [["Cache"]]
+		}
+		await store.send(.view(.nodeOpened(cache))) {
+			$0.path = [root, cache]
+			$0.selectedName = nil
+			$0.backHistory = [[]]
+			$0.forwardHistory = []
+		}
+	}
+
+	@Test("a history entry whose folder was removed is skipped")
+	func historyAfterRemoval() async {
+		let store = await scannedStore()
+		let cache = store.state.currentNode!.child(named: "Cache")!
+
+		await store.send(.view(.nodeOpened(cache))) {
+			$0.path.append(cache)
+			$0.backHistory = [[]]
+		}
+		await store.send(.view(.goUpTapped)) {
+			$0.path.removeLast()
+			$0.selectedName = "Cache"
+			$0.backHistory = [[], ["Cache"]]
+		}
+		store.exhaustivity = .off(showSkippedAssertions: false)
+		await store.send(.view(.moveToTrashTapped))
+		await store.send(.alert(.presented(.confirmMoveToTrash(name: "Cache"))))
+		await store.receive(\.deletionFinished)
+		#expect(store.state.currentNode?.child(named: "Cache") == nil)
+
+		// Back would land on Cache, now gone, which resolves to the root on screen: skipped, and
+		// with nothing before it Back stays put.
+		await store.send(.view(.goBackTapped))
+		#expect(store.state.path.count == 1)
+		#expect(store.state.backHistory.isEmpty)
+		#expect(store.state.forwardHistory.isEmpty)
+	}
+
+	@Test("keys map to the map's actions; the arrow keys' numeric-pad flag does not count")
+	func keyMapping() {
+		#expect(DiskKeyboard.action(for: .downArrow, modifiers: .numericPad, hasSelection: false) == .selectionMoved(.next))
+		#expect(DiskKeyboard.action(for: .upArrow, modifiers: .command, hasSelection: false) == .goUpTapped)
+		#expect(DiskKeyboard.action(for: .downArrow, modifiers: .command, hasSelection: false) == .openSelectedTapped)
+		#expect(DiskKeyboard.action(for: .return, modifiers: [], hasSelection: true) == .openSelectedTapped)
+		#expect(DiskKeyboard.action(for: .leftArrow, modifiers: [], hasSelection: true) == .goUpTapped)
+		#expect(DiskKeyboard.action(for: .escape, modifiers: [], hasSelection: true) == .nodeSelected(nil))
+		// Escape with nothing selected is left to the window.
+		#expect(DiskKeyboard.action(for: .escape, modifiers: [], hasSelection: false) == nil)
+		#expect(DiskKeyboard.action(for: .downArrow, modifiers: .shift, hasSelection: false) == nil)
 	}
 
 	@Test("moving the selection to the Trash asks first, then takes it out of the tree")
