@@ -209,58 +209,60 @@ public struct DiskUsageView<Header: View>: View {
 
 	private func resultView(result: DiskScanResult, current: DiskNode) -> some View {
 		let layout = SunburstLayout(center: current)
-		return HStack(alignment: .top, spacing: 16) {
-			SunburstChartView(
-				layout: layout,
-				canGoUp: store.canGoUp,
-				hovered: $hoveredSegment,
-				selectedNames: store.selectedNames.isEmpty ? Set(hoveredName.map { [$0] } ?? []) : Set(store.selectedNames),
-				onOpen: { send(.nodeOpened($0)) },
-				onGoUp: { send(.goUpTapped) },
-				onSelect: { send(.nodeSelected($0?.name)) },
-				onToggle: { send(.selectionToggled($0.name)) }
-			)
-			.frame(minWidth: 280, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
-			.padding(.leading)
+		return VStack(spacing: 0) {
+			HStack(alignment: .top, spacing: 16) {
+				SunburstChartView(
+					layout: layout,
+					canGoUp: store.canGoUp,
+					hovered: $hoveredSegment,
+					selectedNames: store.selectedNames.isEmpty ? Set(hoveredName.map { [$0] } ?? []) : Set(store.selectedNames),
+					onOpen: { send(.nodeOpened($0)) },
+					onGoUp: { send(.goUpTapped) },
+					onSelect: { send(.nodeSelected($0?.name)) },
+					onToggle: { send(.selectionToggled($0.name)) }
+				)
+				.frame(minWidth: 280, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
+				.padding(.leading)
 
-			DiskChildrenList(
-				node: current,
-				layout: layout,
-				selectedNames: Set(store.selectedNames),
-				leadName: store.selectedName,
-				hoveredName: hoveredSegment?.ancestry.first?.name ?? hoveredName,
-				deletingNames: store.deletingNames,
-				canRemove: { store.state.canRemove($0) },
-				onHover: { hoveredName = $0 },
-				onSelect: { send(.nodeSelected($0)) },
-				onToggle: { send(.selectionToggled($0)) },
-				onExtend: { send(.selectionExtended(to: $0)) },
-				onOpen: { send(.nodeOpened($0)) },
-				onQuickLook: { name in
-					send(.nodeSelected(name))
-					// An open panel already follows the selection; toggling would close it.
-					if !store.isQuickLookShown {
-						send(.quickLookToggled)
+				DiskChildrenList(
+					node: current,
+					layout: layout,
+					selectedNames: Set(store.selectedNames),
+					leadName: store.selectedName,
+					hoveredName: hoveredSegment?.ancestry.first?.name ?? hoveredName,
+					deletingNames: store.deletingNames,
+					canRemove: { store.state.canRemove($0) },
+					onHover: { hoveredName = $0 },
+					onSelect: { send(.nodeSelected($0)) },
+					onToggle: { send(.selectionToggled($0)) },
+					onExtend: { send(.selectionExtended(to: $0)) },
+					onOpen: { send(.nodeOpened($0)) },
+					onQuickLook: { name in
+						send(.nodeSelected(name))
+						// An open panel already follows the selection; toggling would close it.
+						if !store.isQuickLookShown {
+							send(.quickLookToggled)
+						}
+					},
+					onShowInFinder: { name in
+						send(.nodeSelected(name))
+						send(.showInFinderTapped)
+					},
+					onMoveToTrash: { name in
+						send(.nodeSelected(name))
+						send(.moveToTrashTapped)
+					},
+					onDelete: { name in
+						send(.nodeSelected(name))
+						send(.deletePermanentlyTapped)
 					}
-				},
-				onShowInFinder: { name in
-					send(.nodeSelected(name))
-					send(.showInFinderTapped)
-				},
-				onMoveToTrash: { name in
-					send(.nodeSelected(name))
-					send(.moveToTrashTapped)
-				},
-				onDelete: { name in
-					send(.nodeSelected(name))
-					send(.deletePermanentlyTapped)
-				}
-			)
-			.frame(minWidth: 320, idealWidth: 420, maxWidth: 520, maxHeight: .infinity)
-		}
-		// A bar the list scrolls under with the system's soft edge effect; the chart, which does
-		// not scroll, stays above it.
-		.safeAreaBar(edge: .bottom, spacing: 0) {
+				)
+				.frame(minWidth: 320, idealWidth: 420, maxWidth: 520, maxHeight: .infinity)
+			}
+			.padding(.bottom, 8)
+
+			// A row below the list rather than a bar over it: buttons floating over the rows
+			// got in the way of the list (2026-10-17).
 			footer(result: result)
 		}
 		// The mouse's back button goes back, as a browser's does and ⌘[ here.
