@@ -9,7 +9,16 @@ public struct SunburstSegment: Identifiable, Equatable, Sendable {
 		case rest(count: Int, size: Int64)
 	}
 
+	/// What a segment stands for, the same in two layouts of related centres, so a transition
+	/// between them can move it rather than redraw it (`SunburstTransition`).
+	public enum Key: Hashable, Sendable {
+		case node(ObjectIdentifier)
+		/// A parent's summed smallest children, told by the parent.
+		case rest(parent: ObjectIdentifier)
+	}
+
 	public let id: Int
+	public let key: Key
 	public let content: Content
 	/// 1 for the centre node's children.
 	public let depth: Int
@@ -61,7 +70,7 @@ public struct SunburstLayout: Equatable, Sendable {
 					continue
 				}
 				let childAncestry = ancestry + [child]
-				segments.append(SunburstSegment(id: nextID, content: .node(child), depth: depth, start: cursor, end: cursor + span, ancestry: childAncestry))
+				segments.append(SunburstSegment(id: nextID, key: .node(child.id), content: .node(child), depth: depth, start: cursor, end: cursor + span, ancestry: childAncestry))
 				nextID += 1
 				if child.isDirectory, span >= minimumSpanToDescend {
 					layOut(child, ancestry: childAncestry, depth: depth + 1, start: cursor, end: cursor + span)
@@ -70,7 +79,7 @@ public struct SunburstLayout: Equatable, Sendable {
 			}
 			if restCount > 0 {
 				let span = Double(restSize) * scale
-				segments.append(SunburstSegment(id: nextID, content: .rest(count: restCount, size: restSize), depth: depth, start: cursor, end: cursor + span, ancestry: []))
+				segments.append(SunburstSegment(id: nextID, key: .rest(parent: parent.id), content: .rest(count: restCount, size: restSize), depth: depth, start: cursor, end: cursor + span, ancestry: []))
 				nextID += 1
 			}
 		}
