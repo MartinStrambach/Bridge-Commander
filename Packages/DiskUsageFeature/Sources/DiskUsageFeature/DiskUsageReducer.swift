@@ -19,6 +19,9 @@ public struct DiskUsageReducer {
 		public var path: [DiskNode] = []
 		/// The child of the folder on screen that is selected, by name.
 		public var selectedName: String?
+		/// Whether the selection is shown in Quick Look (Space). Only ever true with a selection:
+		/// the panel previews `selectedURL`, so clearing the selection also closes it.
+		public var isQuickLookShown = false
 		/// The folder or file being removed, while the removal runs.
 		public var deletingName: String?
 		/// Where the last scan started, so Rescan can repeat it after the result is gone.
@@ -40,6 +43,11 @@ public struct DiskUsageReducer {
 		public var selectedNode: DiskNode? {
 			guard let selectedName else { return nil }
 			return currentNode?.child(named: selectedName)
+		}
+		/// Where the selection is on disk; nil for the summed smaller files, which are nowhere.
+		public var selectedURL: URL? {
+			guard let node = selectedNode, node.isOnDisk else { return nil }
+			return DiskTree.url(of: path + [node])
 		}
 		public var canGoUp: Bool { path.count > 1 }
 		public var canGoBack: Bool { !backHistory.isEmpty }
@@ -90,6 +98,11 @@ public struct DiskUsageReducer {
 			case selectionMoved(SelectionMove)
 			/// Open the selected folder (Return, ⌘↓, →).
 			case openSelectedTapped
+			/// Show the selection in Quick Look, or close the panel if it is open (Space).
+			case quickLookToggled
+			/// The Quick Look panel moved to another of the folder's items with its arrow keys, or
+			/// closed (nil).
+			case quickLookItemChanged(URL?)
 			case showInFinderTapped
 			case moveToTrashTapped
 			case deletePermanentlyTapped
@@ -154,7 +167,7 @@ public struct DiskUsageReducer {
 			case .view(.newScanTapped):
 				state.scan = .idle
 				state.path = []
-				state.selectedName = nil
+				deselect(&state)
 				clearHistory(&state)
 				return .merge(
 					.cancel(id: CancelID.scan),
@@ -169,7 +182,7 @@ public struct DiskUsageReducer {
 			case let .scanEvent(.finished(result)):
 				state.scan = .finished(result)
 				state.path = [result.root]
-				state.selectedName = nil
+				deselect(&state)
 				clearHistory(&state)
 				return .none
 
@@ -210,7 +223,12 @@ public struct DiskUsageReducer {
 				return .none
 
 			case let .view(.nodeSelected(name)):
-				state.selectedName = name
+				if let name {
+					state.selectedName = name
+				}
+				else {
+					deselect(&state)
+				}
 				return .none
 
 			case let .view(.selectionMoved(move)):
@@ -225,8 +243,24 @@ public struct DiskUsageReducer {
 				state.selectedName = children[target].name
 				return .none
 
+			case .view(.quickLookToggled):
+				guard state.selectedURL != nil else { return .none }
+				state.isQuickLookShown.toggle()
+				return .none
+
+			case let .view(.quickLookItemChanged(url)):
+				guard let url else {
+					state.isQuickLookShown = false
+					return .none
+				}
+				// The panel only knows URLs; the one it moved to is a child of the folder on screen.
+				if let child = state.currentNode?.children.first(where: { DiskTree.url(of: state.path + [$0]) == url }) {
+					state.selectedName = child.name
+				}
+				return .none
+
 			case .view(.showInFinderTapped):
-				guard let url = selectedURL(state) else { return .none }
+				guard let url = state.selectedURL else { return .none }
 				return .run { [client] _ in client.showInFinder(url) }
 
 			case .view(.moveToTrashTapped):
@@ -264,7 +298,7 @@ public struct DiskUsageReducer {
 				guard state.currentNode?.child(named: name) != nil else { return .none }
 				state.path = DiskTree.removing(childNamed: name, from: state.path)
 				if state.selectedName == name {
-					state.selectedName = nil
+					deselect(&state)
 				}
 				if case let .finished(result) = state.scan, let root = state.path.first {
 					var updated = result
@@ -280,7 +314,7 @@ public struct DiskUsageReducer {
 	private func startScan(_ state: inout State, root: URL) -> Effect<Action> {
 		state.scan = .scanning(root: root, progress: DiskScanProgress())
 		state.path = []
-		state.selectedName = nil
+		deselect(&state)
 		clearHistory(&state)
 		state.lastScanRoot = root
 		return .run { [client] send in
@@ -322,16 +356,21 @@ public struct DiskUsageReducer {
 	}
 
 	/// Puts `path` on screen. Coming back up, the folder just left is selected, so ↓/↑ carry on
-	/// from it and Return goes straight back in; going down nothing is.
+	/// from it and Return goes straight back in; going down nothing is. Quick Look closes either
+	/// way: it was showing an item of the folder left.
 	private func show(_ state: inout State, _ path: [DiskNode]) {
 		let left = state.path
 		state.path = path
+		deselect(&state)
 		if left.count > path.count, Array(left.prefix(path.count)) == path {
 			state.selectedName = left[path.count].name
 		}
-		else {
-			state.selectedName = nil
-		}
+	}
+
+	/// Clears the selection, and with it the Quick Look panel, which has nothing left to show.
+	private func deselect(_ state: inout State) {
+		state.selectedName = nil
+		state.isQuickLookShown = false
 	}
 
 	private func clearHistory(_ state: inout State) {
@@ -351,11 +390,6 @@ public struct DiskUsageReducer {
 			path.append(child)
 		}
 		return path
-	}
-
-	private func selectedURL(_ state: State) -> URL? {
-		guard let node = state.selectedNode, node.isOnDisk else { return nil }
-		return DiskTree.url(of: state.path + [node])
 	}
 
 	private func remove(_ state: inout State, name: String, using operation: @escaping @Sendable (URL) async throws -> Void) -> Effect<Action> {

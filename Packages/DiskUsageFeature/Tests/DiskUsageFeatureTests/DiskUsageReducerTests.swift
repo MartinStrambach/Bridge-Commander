@@ -178,9 +178,55 @@ struct DiskUsageReducerTests {
 		#expect(DiskKeyboard.action(for: .return, modifiers: [], hasSelection: true) == .openSelectedTapped)
 		#expect(DiskKeyboard.action(for: .leftArrow, modifiers: [], hasSelection: true) == .goUpTapped)
 		#expect(DiskKeyboard.action(for: .escape, modifiers: [], hasSelection: true) == .nodeSelected(nil))
-		// Escape with nothing selected is left to the window.
+		#expect(DiskKeyboard.action(for: .space, modifiers: [], hasSelection: true) == .quickLookToggled)
+		// Escape and Space with nothing selected are left to the window.
 		#expect(DiskKeyboard.action(for: .escape, modifiers: [], hasSelection: false) == nil)
+		#expect(DiskKeyboard.action(for: .space, modifiers: [], hasSelection: false) == nil)
 		#expect(DiskKeyboard.action(for: .downArrow, modifiers: .shift, hasSelection: false) == nil)
+	}
+
+	@Test("Space shows the selection in Quick Look, the panel's arrows move the selection, and leaving the folder closes it")
+	func quickLook() async {
+		let store = await scannedStore()
+		let cache = store.state.currentNode!.child(named: "Cache")!
+
+		// Nothing selected, nothing to show.
+		await store.send(.view(.quickLookToggled))
+		await store.send(.view(.nodeSelected("Cache"))) {
+			$0.selectedName = "Cache"
+		}
+		await store.send(.view(.quickLookToggled)) {
+			$0.isQuickLookShown = true
+		}
+		#expect(store.state.selectedURL == Self.rootURL.appending(path: "Cache", directoryHint: .isDirectory))
+
+		await store.send(.view(.quickLookItemChanged(Self.rootURL.appending(path: "notes.md", directoryHint: .notDirectory)))) {
+			$0.selectedName = "notes.md"
+		}
+		// A URL that is not one of the folder's items is ignored.
+		await store.send(.view(.quickLookItemChanged(URL(filePath: "/elsewhere"))))
+		await store.send(.view(.quickLookItemChanged(nil))) {
+			$0.isQuickLookShown = false
+		}
+
+		await store.send(.view(.quickLookToggled)) {
+			$0.isQuickLookShown = true
+		}
+		await store.send(.view(.quickLookToggled)) {
+			$0.isQuickLookShown = false
+		}
+		await store.send(.view(.quickLookToggled)) {
+			$0.isQuickLookShown = true
+		}
+		await store.send(.view(.nodeSelected("Cache"))) {
+			$0.selectedName = "Cache"
+		}
+		await store.send(.view(.openSelectedTapped)) {
+			$0.path.append(cache)
+			$0.selectedName = nil
+			$0.isQuickLookShown = false
+			$0.backHistory = [[]]
+		}
 	}
 
 	@Test("moving the selection to the Trash asks first, then takes it out of the tree")

@@ -1,5 +1,6 @@
 import AppUI
 import ComposableArchitecture
+import QuickLook
 import SwiftUI
 
 /// The Disk section: a header with the app's section switcher, then the volume picker, the
@@ -184,6 +185,13 @@ public struct DiskUsageView<Header: View>: View {
 					onHover: { hoveredName = $0 },
 					onSelect: { send(.nodeSelected($0)) },
 					onOpen: { send(.nodeOpened($0)) },
+					onQuickLook: { name in
+						send(.nodeSelected(name))
+						// An open panel already follows the selection; toggling would close it.
+						if !store.isQuickLookShown {
+							send(.quickLookToggled)
+						}
+					},
 					onShowInFinder: { name in
 						send(.nodeSelected(name))
 						send(.showInFinderTapped)
@@ -214,16 +222,32 @@ public struct DiskUsageView<Header: View>: View {
 		// Simultaneous, so a click on a row or a segment still does its own thing.
 		.simultaneousGesture(TapGesture().onEnded { isResultFocused = true })
 		.onKeyPress(keys: DiskKeyboard.keys, phases: [.down, .repeat], action: keyPressed)
+		// The folder's items are the panel's collection, so its arrow keys move through them and
+		// the selection here follows.
+		.quickLookPreview(quickLookItem, in: current.children.filter(\.isOnDisk).compactMap { DiskTree.url(of: store.path + [$0]) })
 	}
 
 	// MARK: - Keyboard
 
 	private func keyPressed(_ press: KeyPress) -> KeyPress.Result {
+		// A held Space would flick the panel on and off.
+		guard press.phase == .down || press.key != .space else { return .handled }
 		guard let action = DiskKeyboard.action(for: press.key, modifiers: press.modifiers, hasSelection: store.selectedName != nil) else {
 			return .ignored
 		}
 		send(action)
 		return .handled
+	}
+
+	// MARK: - Quick Look
+
+	/// What the Quick Look panel shows: the selection while the panel is open. The panel sets it
+	/// to the item its arrow keys moved to, and to nil when it closes.
+	private var quickLookItem: Binding<URL?> {
+		Binding(
+			get: { store.isQuickLookShown ? store.selectedURL : nil },
+			set: { send(.quickLookItemChanged($0)) }
+		)
 	}
 
 	/// What is selected and what can be done with it, plus what the scan could not read.
@@ -324,11 +348,11 @@ public struct DiskUsageView<Header: View>: View {
 }
 
 /// The map's keys, as in DaisyDisk and Finder: ↑/↓ select (⌥↑/⌥↓, Home/End the first and the
-/// last), Return, → or ⌘↓ open the selected folder, ← or ⌘↑ go up, Escape clears the selection.
-/// ⌘[ ⌘] ⌘R ⌘⌫ ⌥⌘⌫ are not here: they are the shortcuts of the buttons that do the same, so they
-/// work wherever the focus is.
+/// last), Return, → or ⌘↓ open the selected folder, ← or ⌘↑ go up, Space shows the selection in
+/// Quick Look, Escape clears the selection. ⌘[ ⌘] ⌘R ⌘⌫ ⌥⌘⌫ are not here: they are the shortcuts
+/// of the buttons that do the same, so they work wherever the focus is.
 enum DiskKeyboard {
-	static let keys: Set<KeyEquivalent> = [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .return, .escape]
+	static let keys: Set<KeyEquivalent> = [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .return, .space, .escape]
 
 	static func action(for key: KeyEquivalent, modifiers: EventModifiers, hasSelection: Bool) -> DiskUsageReducer.Action.View? {
 		// Arrow keys carry the numeric-pad flag, so only these count as modifiers.
@@ -340,6 +364,7 @@ enum DiskKeyboard {
 		case (.end, []), (.downArrow, .option): return .selectionMoved(.last)
 		case (.return, []), (.rightArrow, []), (.downArrow, .command): return .openSelectedTapped
 		case (.leftArrow, []), (.upArrow, .command): return .goUpTapped
+		case (.space, []) where hasSelection: return .quickLookToggled
 		case (.escape, []) where hasSelection: return .nodeSelected(nil)
 		default: return nil
 		}
@@ -522,6 +547,7 @@ struct DiskChildrenList: View {
 	let onHover: (String?) -> Void
 	let onSelect: (String?) -> Void
 	let onOpen: (DiskNode) -> Void
+	let onQuickLook: (String) -> Void
 	let onShowInFinder: (String) -> Void
 	let onMoveToTrash: (String) -> Void
 	let onDelete: (String) -> Void
@@ -623,6 +649,7 @@ struct DiskChildrenList: View {
 				Button("Open") { onOpen(child) }
 			}
 			if child.isOnDisk {
+				Button("Quick Look") { onQuickLook(child.name) }
 				Button("Show in Finder") { onShowInFinder(child.name) }
 			}
 			if child.isRemovable {
