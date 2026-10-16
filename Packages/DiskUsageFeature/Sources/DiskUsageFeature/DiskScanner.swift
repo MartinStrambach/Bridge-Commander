@@ -430,8 +430,8 @@ nonisolated final class DirectoryWalker {
 	}
 
 	/// Reads one open directory: the names of its subfolders still to be read (mount points and
-	/// empty folders left out), and its files and empty subfolders as nodes, the smaller files
-	/// summed. Does not close the directory.
+	/// empty folders left out, firmlinks kept), and its files and empty subfolders as nodes, the
+	/// smaller files summed. Does not close the directory.
 	///
 	/// Entries are parsed by the attributes each reports as returned rather than at fixed
 	/// offsets, so a file system that cannot tell a folder's entry count (or a file's id) is
@@ -440,7 +440,7 @@ nonisolated final class DirectoryWalker {
 		var attributes = attrlist()
 		attributes.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
 		attributes.commonattr = attrgroup_t(ATTR_CMN_RETURNED_ATTRS) | attrgroup_t(ATTR_CMN_NAME)
-			| attrgroup_t(ATTR_CMN_OBJTYPE) | attrgroup_t(ATTR_CMN_FILEID)
+			| attrgroup_t(ATTR_CMN_OBJTYPE) | attrgroup_t(ATTR_CMN_FLAGS) | attrgroup_t(ATTR_CMN_FILEID)
 		attributes.dirattr = attrgroup_t(ATTR_DIR_ENTRYCOUNT) | attrgroup_t(ATTR_DIR_MOUNTSTATUS)
 		attributes.fileattr = attrgroup_t(ATTR_FILE_LINKCOUNT) | attrgroup_t(ATTR_FILE_ALLOCSIZE)
 
@@ -474,12 +474,20 @@ nonisolated final class DirectoryWalker {
 					cursor += MemoryLayout<attrreference_t>.size
 				}
 				let objectType = take(ATTR_CMN_OBJTYPE, of: returned.commonattr, as: UInt32.self)
+				let flags = take(ATTR_CMN_FLAGS, of: returned.commonattr, as: UInt32.self) ?? 0
 				let fileID = take(ATTR_CMN_FILEID, of: returned.commonattr, as: UInt64.self)
 
 				if objectType == VDIR.rawValue {
 					let entryCount = take(ATTR_DIR_ENTRYCOUNT, of: returned.dirattr, as: UInt32.self)
 					let mountStatus = take(ATTR_DIR_MOUNTSTATUS, of: returned.dirattr, as: UInt32.self) ?? 0
-					if mountStatus & UInt32(DIR_MNTSTATUS_MNTPOINT) != 0 {
+					// A firmlink (`/Users`, `/Applications`, `/Library`, `/private`, … on the sealed
+					// system volume) is reported as it is there: an empty folder that is no mount
+					// point. Opening it lands on the data volume, which is where the space is.
+					let isFirmlink = flags & UInt32(SF_FIRMLINK) != 0
+					if isFirmlink {
+						listing.subdirectories.append(name)
+					}
+					else if mountStatus & UInt32(DIR_MNTSTATUS_MNTPOINT) != 0 {
 						// Another volume: not entered, like `du -x`.
 					}
 					else if entryCount == 0 {
