@@ -35,6 +35,7 @@
 		93D4B2C12FAB515100AE9EB8 /* StagingFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = StagingFeature; path = Packages/StagingFeature; sourceTree = "<group>"; };
 		93B1A0012FF0000100AE9EB8 /* SimulatorFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = SimulatorFeature; path = Packages/SimulatorFeature; sourceTree = "<group>"; };
 		93E7A1D42FB0000100AE9EB8 /* YouTrackMenu */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = YouTrackMenu; path = Packages/YouTrackMenu; sourceTree = "<group>"; };
+		93D15C0A2FC0000100AE9EB8 /* DiskUsageFeature */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = DiskUsageFeature; path = Packages/DiskUsageFeature; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -83,6 +84,7 @@
 				93C9515E2F807809002EB9A8 /* ActionButtons */,
 				93AC71012FE0000100AE9EB8 /* ActivityLog */,
 				932CED7A2F793C71004ED67F /* AppUI */,
+				93D15C0A2FC0000100AE9EB8 /* DiskUsageFeature */,
 				9303DBEA2F7A967A00AE9EB8 /* GitActionsMenu */,
 				932CED7B2F793C71004ED67F /* GitCore */,
 				93761C4F2FA4111100AE9EB8 /* GitGraphFeature */,

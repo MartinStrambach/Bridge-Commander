@@ -5,6 +5,7 @@ import SwiftUI
 public enum AppSection: String, CaseIterable, Sendable {
 	case repositories
 	case homer
+	case disk
 
 	public var title: String {
 		switch self {
@@ -12,6 +13,8 @@ public enum AppSection: String, CaseIterable, Sendable {
 			"Repositories"
 		case .homer:
 			"Homer"
+		case .disk:
+			"Disk"
 		}
 	}
 }
@@ -103,6 +106,8 @@ public struct AppSectionSwitcher: View {
 					.frame(width: side, height: side)
 					.accessibilityHidden(true)
 			}
+		case .disk:
+			Image(systemName: "internaldrive")
 		}
 	}
 
@@ -114,6 +119,8 @@ public struct AppSectionSwitcher: View {
 			badge > 0
 				? "Homer console — \(badge) open \(badge == 1 ? "question" : "questions")"
 				: "Homer console"
+		case .disk:
+			"Disk usage: scan a volume or folder and see where the space goes"
 		}
 	}
 }
