@@ -9,6 +9,7 @@ let package = Package(
 	],
 	dependencies: [
 		.package(url: "https://github.com/pointfreeco/swift-composable-architecture.git", from: "1.26.1", traits: ["ComposableArchitecture2Deprecations", "ComposableArchitecture2DeprecationOverloads"]),
+		.package(url: "https://github.com/pointfreeco/swift-sharing", from: "2.9.1"),
 		.package(path: "../AppUI"),
 		.package(path: "../ActivityLog"),
 	],
@@ -17,6 +18,7 @@ let package = Package(
 			name: "DiskUsageFeature",
 			dependencies: [
 				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+				.product(name: "Sharing", package: "swift-sharing"),
 				.product(name: "AppUI", package: "AppUI"),
 				.product(name: "ActivityLog", package: "ActivityLog"),
 			]

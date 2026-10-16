@@ -13,7 +13,14 @@ public final class DiskNode: Sendable, Identifiable, Equatable {
 		case file
 		/// The files of a folder below its largest `DiskScanner.filesKeptPerDirectory`, summed.
 		case smallerFiles(count: Int)
+		/// Space the volume reports as allocated that the scan of it did not find: purgeable
+		/// space, the other volumes of its APFS container, and what could not be read. Only a
+		/// child of the root of a volume scan, so the centre adds up to what Finder says is used.
+		case hiddenSpace(purgeable: Int64, otherVolumes: Int64)
 	}
+
+	/// The name of the root's hidden-space entry.
+	public static let hiddenSpaceName = "Hidden space"
 
 	/// The item's file name; the root carries the scanned location's full path.
 	public let name: String
@@ -59,11 +66,27 @@ public final class DiskNode: Sendable, Identifiable, Equatable {
 	}
 
 	public var isDirectory: Bool { kind == .directory }
+	public var isHiddenSpace: Bool {
+		if case .hiddenSpace = kind { return true }
+		return false
+	}
 
-	/// Whether the node is one item on disk: the summed smaller files are not.
+	/// Whether the node is one item on disk: the summed smaller files and the hidden space are not.
 	public var isOnDisk: Bool {
-		if case .smallerFiles = kind { return false }
-		return true
+		switch kind {
+		case .directory, .file: true
+		case .smallerFiles, .hiddenSpace: false
+		}
+	}
+
+	/// The hidden space of a volume scan, as the root's child, or nil when the volume reports
+	/// no more allocated than the scan found (or the scan was of a folder).
+	public static func hiddenSpace(for root: DiskNode, on volume: DiskVolumeUsage) -> DiskNode? {
+		let hidden = volume.allocatedCapacity - root.size
+		guard hidden > 0 else { return nil }
+		let purgeable = min(max(0, volume.purgeableCapacity), hidden)
+		let otherVolumes = min(max(0, volume.otherVolumesCapacity), hidden - purgeable)
+		return DiskNode(name: hiddenSpaceName, kind: .hiddenSpace(purgeable: purgeable, otherVolumes: otherVolumes), size: hidden, itemCount: 0)
 	}
 
 	/// Whether the node can be moved to the Trash or deleted: one item on disk that could be read.

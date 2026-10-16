@@ -26,12 +26,15 @@ public struct DiskScanResult: Equatable, Sendable {
 	public var rootURL: URL
 	public var inaccessibleFolders: Int
 	public var duration: Duration
+	/// What the volume reported as taken when the scan finished; nil for a scan of a folder.
+	public var volume: DiskVolumeUsage?
 
-	public init(root: DiskNode, rootURL: URL, inaccessibleFolders: Int, duration: Duration) {
+	public init(root: DiskNode, rootURL: URL, inaccessibleFolders: Int, duration: Duration, volume: DiskVolumeUsage? = nil) {
 		self.root = root
 		self.rootURL = rootURL
 		self.inaccessibleFolders = inaccessibleFolders
 		self.duration = duration
+		self.volume = volume
 	}
 }
 
@@ -121,7 +124,8 @@ public nonisolated enum DiskScanner {
 					root: node,
 					rootURL: rootURL,
 					inaccessibleFolders: tally.snapshot().inaccessibleFolders,
-					duration: start.duration(to: .now)
+					duration: start.duration(to: .now),
+					volume: DiskVolumeLister.usage(ofVolumeAt: rootURL)
 				)))
 				continuation.finish()
 			}

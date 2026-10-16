@@ -1,3 +1,4 @@
+import AppKit
 import AppUI
 import SwiftUI
 
@@ -10,10 +11,13 @@ struct SunburstChartView: View {
 	let canGoUp: Bool
 	@Binding
 	var hovered: SunburstSegment?
-	let selectedName: String?
+	let selectedNames: Set<String>
 	let onOpen: (DiskNode) -> Void
 	let onGoUp: () -> Void
+	/// A plain click: the first-ring item alone, or nothing.
 	let onSelect: (DiskNode?) -> Void
+	/// ⌘-click: the first-ring item into or out of the selection.
+	let onToggle: (DiskNode) -> Void
 
 	/// The zoom under way, if any, and the `phase` value it ends at. The phase only ever grows:
 	/// an animatable value is interpolated from what was last drawn, so a transition that reset
@@ -40,7 +44,7 @@ struct SunburstChartView: View {
 					transitionEnd: transition?.end ?? 0,
 					phase: phase,
 					hovered: hovered,
-					selectedName: selectedName,
+					selectedNames: selectedNames,
 					canGoUp: canGoUp,
 					colorScheme: colorScheme,
 					geometry: geometry
@@ -177,7 +181,10 @@ struct SunburstChartView: View {
 			onSelect(nil)
 			return
 		}
-		if node.isDirectory, !node.isInaccessible, segment.depth == 1 {
+		if NSEvent.modifierFlags.contains(.command), let topLevel = segment.ancestry.first {
+			onToggle(topLevel)
+		}
+		else if node.isDirectory, !node.isInaccessible, segment.depth == 1 {
 			onOpen(node)
 		}
 		else if let topLevel = segment.ancestry.first {
@@ -195,7 +202,7 @@ private struct SunburstCanvas: View, Animatable {
 	let transitionEnd: Int
 	var phase: Double
 	let hovered: SunburstSegment?
-	let selectedName: String?
+	let selectedNames: Set<String>
 	let canGoUp: Bool
 	let colorScheme: ColorScheme
 	let geometry: ChartGeometry
@@ -239,7 +246,7 @@ private struct SunburstCanvas: View, Animatable {
 	private func draw(_ segment: SunburstSegment, at frame: SunburstTransition.Frame, highlightable: Bool, in context: inout GraphicsContext) {
 		guard let path = arcPath(for: frame) else { return }
 		let isHovered = highlightable && hovered?.id == segment.id
-		let isSelected = highlightable && selectedName != nil && segment.ancestry.first?.name == selectedName
+		let isSelected = highlightable && segment.ancestry.first.map { selectedNames.contains($0.name) } == true
 		var color = color(of: segment, at: frame)
 		if let hovered, !isHovered, !isRelated(segment, to: hovered) {
 			color = color.opacity(0.45)
@@ -282,7 +289,7 @@ private struct SunburstCanvas: View, Animatable {
 		case .rest:
 			return Color.gray.opacity(0.35)
 		case let .node(node):
-			if node.isInaccessible {
+			if node.isInaccessible || node.isHiddenSpace {
 				return Color.gray.opacity(0.5)
 			}
 			let depthFade = max(0, frame.depth - 1) * 0.06

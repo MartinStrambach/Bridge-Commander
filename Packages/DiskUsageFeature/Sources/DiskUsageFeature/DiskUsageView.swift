@@ -1,3 +1,4 @@
+import AppKit
 import AppUI
 import ComposableArchitecture
 import QuickLook
@@ -67,6 +68,11 @@ public struct DiskUsageView<Header: View>: View {
 			}
 			else if store.result != nil {
 				HStack(spacing: 2) {
+					HeaderButton(
+						icon: store.isCurrentFolderStarred ? "star.fill" : "star",
+						tooltip: store.isCurrentFolderStarred ? "Remove this folder from the picker's starred folders" : "Star this folder, so the picker offers it",
+						color: store.isCurrentFolderStarred ? .yellow : .secondary
+					) { send(.starToggled) }
 					HeaderButton(icon: "arrow.clockwise", tooltip: "Scan again (⌘R)", color: .blue) { send(.rescanTapped) }
 						.keyboardShortcut("r", modifiers: .command)
 					HeaderButton(icon: "internaldrive", tooltip: "Scan another volume or folder") { send(.newScanTapped) }
@@ -122,7 +128,13 @@ public struct DiskUsageView<Header: View>: View {
 	private var content: some View {
 		switch store.scan {
 		case .idle:
-			VolumePickerView(volumes: store.volumes, onScan: { send(.scanRequested($0)) }, onChooseFolder: { send(.chooseFolderTapped) })
+			VolumePickerView(
+				volumes: store.volumes,
+				starredFolders: store.starredFolders,
+				onScan: { send(.scanRequested($0)) },
+				onChooseFolder: { send(.chooseFolderTapped) },
+				onUnstar: { send(.starredFolderRemoved($0)) }
+			)
 		case let .scanning(root, progress):
 			scanningView(root: root, progress: progress)
 		case let .finished(result):
@@ -168,10 +180,11 @@ public struct DiskUsageView<Header: View>: View {
 					layout: layout,
 					canGoUp: store.canGoUp,
 					hovered: $hoveredSegment,
-					selectedName: store.selectedName ?? hoveredName,
+					selectedNames: store.selectedNames.isEmpty ? Set(hoveredName.map { [$0] } ?? []) : Set(store.selectedNames),
 					onOpen: { send(.nodeOpened($0)) },
 					onGoUp: { send(.goUpTapped) },
-					onSelect: { send(.nodeSelected($0?.name)) }
+					onSelect: { send(.nodeSelected($0?.name)) },
+					onToggle: { send(.selectionToggled($0.name)) }
 				)
 				.frame(minWidth: 280, maxWidth: .infinity, minHeight: 280, maxHeight: .infinity)
 				.padding(.leading)
@@ -179,11 +192,15 @@ public struct DiskUsageView<Header: View>: View {
 				DiskChildrenList(
 					node: current,
 					layout: layout,
-					selectedName: store.selectedName,
+					selectedNames: Set(store.selectedNames),
+					leadName: store.selectedName,
 					hoveredName: hoveredSegment?.ancestry.first?.name ?? hoveredName,
-					deletingName: store.deletingName,
+					deletingNames: store.deletingNames,
+					canRemove: { store.state.canRemove($0) },
 					onHover: { hoveredName = $0 },
 					onSelect: { send(.nodeSelected($0)) },
+					onToggle: { send(.selectionToggled($0)) },
+					onExtend: { send(.selectionExtended(to: $0)) },
 					onOpen: { send(.nodeOpened($0)) },
 					onQuickLook: { name in
 						send(.nodeSelected(name))
@@ -257,42 +274,53 @@ public struct DiskUsageView<Header: View>: View {
 	/// every time an item is selected and grow back when it is not.
 	private func footer(result: DiskScanResult) -> some View {
 		HStack(spacing: 12) {
+			let selected = store.selectedNodes
 			if let node = store.selectedNode {
-				footerTitle(node.name, detail: DiskNodeDescription.summary(of: node, within: store.currentNode))
+				if selected.count > 1 {
+					footerTitle("\(selected.count.formatted()) items selected", detail: DiskNodeDescription.summary(of: selected, within: store.currentNode))
+				}
+				else {
+					footerTitle(node.name, detail: DiskNodeDescription.summary(of: node, within: store.currentNode))
+				}
 
 				Spacer()
 
-				if store.deletingName == node.name {
+				if store.isRemoving {
 					ProgressView()
 						.controlSize(.small)
-					Text("Removing…")
+					Text(store.deletingNames.count > 1 ? "Removing \(store.deletingNames.count.formatted()) items…" : "Removing…")
 						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
 				}
 				else {
-					Button {
-						send(.showInFinderTapped)
-					} label: {
-						Label("Show in Finder", systemImage: "folder")
+					if selected.count == 1 {
+						Button {
+							send(.showInFinderTapped)
+						} label: {
+							Label("Show in Finder", systemImage: "folder")
+						}
+						.buttonStyle(.scaledBordered)
+						.disabled(!node.isOnDisk)
 					}
-					.buttonStyle(.scaledBordered)
-					let isRemovable = node.isRemovable
+					let removable = store.removableSelection
+					let protected = selected.filter { store.state.isProtected($0) }
+					let removalHelp = removalHelp(removable: removable, protected: protected)
 					Button(role: .destructive) {
 						send(.moveToTrashTapped)
 					} label: {
-						Label("Move to Trash…", systemImage: "trash")
+						Label(removable.count > 1 ? "Move \(removable.count.formatted()) to Trash…" : "Move to Trash…", systemImage: "trash")
 					}
 					.buttonStyle(.scaledBordered)
 					.keyboardShortcut(.delete, modifiers: .command)
-					.help("Move to Trash (⌘⌫)")
-					.disabled(!isRemovable || store.deletingName != nil)
-					Button("Delete…", role: .destructive) {
+					.help(removalHelp ?? "Move to Trash (⌘⌫)")
+					.disabled(removable.isEmpty)
+					Button(removable.count > 1 ? "Delete \(removable.count.formatted())…" : "Delete…", role: .destructive) {
 						send(.deletePermanentlyTapped)
 					}
 					.buttonStyle(.scaledBordered)
 					.keyboardShortcut(.delete, modifiers: [.command, .option])
-					.help("Delete Permanently (⌥⌘⌫)")
-					.disabled(!isRemovable || store.deletingName != nil)
+					.help(removalHelp ?? "Delete Permanently (⌥⌘⌫)")
+					.disabled(removable.isEmpty)
 				}
 			}
 			else {
@@ -314,6 +342,20 @@ public struct DiskUsageView<Header: View>: View {
 		.padding(.horizontal)
 		.padding(.vertical, 10)
 		.background(Color(nsColor: .controlBackgroundColor))
+	}
+
+	/// Why the removal buttons are disabled or act on fewer items than are selected, if they do.
+	private func removalHelp(removable: [DiskNode], protected: [DiskNode]) -> String? {
+		if !protected.isEmpty {
+			let names = protected.map { "“\($0.name)”" }.formatted(.list(type: .and))
+			return removable.isEmpty
+				? "\(names) cannot be removed: system folders, the home folder, volumes and the scan root are protected"
+				: "\(names) will be left alone: system folders, the home folder, volumes and the scan root are protected"
+		}
+		if removable.isEmpty {
+			return "The summed smaller files, hidden space and unreadable folders cannot be removed"
+		}
+		return nil
 	}
 
 	private func footerTitle(_ name: String, detail: String) -> some View {
@@ -348,11 +390,12 @@ public struct DiskUsageView<Header: View>: View {
 }
 
 /// The map's keys, as in DaisyDisk and Finder: ↑/↓ select (⌥↑/⌥↓, Home/End the first and the
-/// last), Return, → or ⌘↓ open the selected folder, ← or ⌘↑ go up, Space shows the selection in
-/// Quick Look, Escape clears the selection. ⌘[ ⌘] ⌘R ⌘⌫ ⌥⌘⌫ are not here: they are the shortcuts
-/// of the buttons that do the same, so they work wherever the focus is.
+/// last; ⇧↑/⇧↓ extend the selection, ⌘A selects everything), Return, → or ⌘↓ open the selected
+/// folder, ← or ⌘↑ go up, Space shows the selection in Quick Look, Escape clears the selection.
+/// ⌘[ ⌘] ⌘R ⌘⌫ ⌥⌘⌫ are not here: they are the shortcuts of the buttons that do the same, so they
+/// work wherever the focus is.
 enum DiskKeyboard {
-	static let keys: Set<KeyEquivalent> = [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .return, .space, .escape]
+	static let keys: Set<KeyEquivalent> = [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .return, .space, .escape, "a"]
 
 	static func action(for key: KeyEquivalent, modifiers: EventModifiers, hasSelection: Bool) -> DiskUsageReducer.Action.View? {
 		// Arrow keys carry the numeric-pad flag, so only these count as modifiers.
@@ -360,6 +403,9 @@ enum DiskKeyboard {
 		switch (key, modifiers) {
 		case (.upArrow, []): return .selectionMoved(.previous)
 		case (.downArrow, []): return .selectionMoved(.next)
+		case (.upArrow, .shift): return .selectionMoved(.previous, extending: true)
+		case (.downArrow, .shift): return .selectionMoved(.next, extending: true)
+		case ("a", .command): return .selectAllTapped
 		case (.home, []), (.upArrow, .option): return .selectionMoved(.first)
 		case (.end, []), (.downArrow, .option): return .selectionMoved(.last)
 		case (.return, []), (.rightArrow, []), (.downArrow, .command): return .openSelectedTapped
@@ -387,7 +433,34 @@ enum DiskNodeDescription {
 			return "\(size) · \(shareText)"
 		case let .smallerFiles(count):
 			return "\(size) · \(shareText) · \(count.formatted()) files"
+		case let .hiddenSpace(purgeable, otherVolumes):
+			return "\(size) · \(shareText) · \(Self.hiddenSpaceBreakdown(size: node.size, purgeable: purgeable, otherVolumes: otherVolumes))"
 		}
+	}
+
+	/// Several items: their total and its share of the folder.
+	static func summary(of nodes: [DiskNode], within parent: DiskNode?) -> String {
+		let total = nodes.reduce(Int64(0)) { $0 + $1.size }
+		let parentSize = parent?.size ?? 0
+		let share = parentSize > 0 ? Double(total) / Double(parentSize) : 0
+		let items = nodes.reduce(0) { $0 + max(1, $1.itemCount) }
+		return "\(total.formatted(.byteCount(style: .file))) · \(share.formatted(.percent.precision(.fractionLength(1)))) · \(items.formatted()) items"
+	}
+
+	/// What a volume's hidden space is made of: "4 GB purgeable, 7 GB other volumes, 2 GB other".
+	static func hiddenSpaceBreakdown(size: Int64, purgeable: Int64, otherVolumes: Int64) -> String {
+		var parts: [String] = []
+		if purgeable > 0 {
+			parts.append("\(purgeable.formatted(.byteCount(style: .file))) purgeable")
+		}
+		if otherVolumes > 0 {
+			parts.append("\(otherVolumes.formatted(.byteCount(style: .file))) other volumes")
+		}
+		let rest = size - purgeable - otherVolumes
+		if rest > 0 || parts.isEmpty {
+			parts.append("\(rest.formatted(.byteCount(style: .file))) unreadable or file system data")
+		}
+		return parts.joined(separator: ", ")
 	}
 }
 
@@ -400,11 +473,14 @@ private extension View {
 
 // MARK: - Volume picker
 
-/// What to scan: a mounted volume, the home folder, or any folder.
+/// What to scan: a mounted volume, the home folder, a starred folder, or any folder.
 struct VolumePickerView: View {
 	let volumes: [DiskVolume]
+	/// `DiskLocation` keys, most recently starred last.
+	let starredFolders: [String]
 	let onScan: (URL) -> Void
 	let onChooseFolder: () -> Void
+	let onUnstar: (String) -> Void
 
 	var body: some View {
 		ScrollView {
@@ -436,6 +512,33 @@ struct VolumePickerView: View {
 						buttonTitle: "Choose…",
 						action: onChooseFolder
 					)
+				}
+
+				if !starredFolders.isEmpty {
+					Text("Starred folders")
+						.scaledFont(.headline)
+						.padding(.top, 8)
+					LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+						ForEach(starredFolders, id: \.self) { key in
+							FolderCard(
+								title: DiskLocation.url(forKey: key).lastPathComponent,
+								subtitle: key,
+								systemImage: "star.fill",
+								buttonTitle: "Scan",
+								accessory: {
+									Button {
+										onUnstar(key)
+									} label: {
+										Image(systemName: "xmark.circle.fill")
+											.foregroundStyle(.secondary)
+									}
+									.buttonStyle(.plain)
+									.help("Remove from starred folders")
+								},
+								action: { onScan(DiskLocation.url(forKey: key)) }
+							)
+						}
+					}
 				}
 			}
 			.padding()
@@ -482,16 +585,27 @@ private struct VolumeCard: View {
 	}
 }
 
-private struct FolderCard: View {
+private struct FolderCard<Accessory: View>: View {
 	let title: String
 	let subtitle: String
 	let systemImage: String
 	let buttonTitle: String
+	/// At the card's trailing edge: a starred folder's unstar button.
+	let accessory: Accessory
 	let action: () -> Void
+
+	init(title: String, subtitle: String, systemImage: String, buttonTitle: String, @ViewBuilder accessory: () -> Accessory = { EmptyView() }, action: @escaping () -> Void) {
+		self.title = title
+		self.subtitle = subtitle
+		self.systemImage = systemImage
+		self.buttonTitle = buttonTitle
+		self.accessory = accessory()
+		self.action = action
+	}
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 10) {
-			HStack(spacing: 10) {
+			HStack(alignment: .top, spacing: 10) {
 				Image(systemName: systemImage)
 					.scaledFont(.title2)
 					.foregroundStyle(.secondary)
@@ -504,6 +618,8 @@ private struct FolderCard: View {
 						.lineLimit(1)
 						.truncationMode(.middle)
 				}
+				Spacer(minLength: 0)
+				accessory
 			}
 			Spacer(minLength: 0)
 			HStack {
@@ -541,11 +657,19 @@ private struct CapacityBar: View {
 struct DiskChildrenList: View {
 	let node: DiskNode
 	let layout: SunburstLayout
-	let selectedName: String?
+	let selectedNames: Set<String>
+	/// The item the arrow keys move from, kept in view.
+	let leadName: String?
 	let hoveredName: String?
-	let deletingName: String?
+	let deletingNames: Set<String>
+	let canRemove: (DiskNode) -> Bool
 	let onHover: (String?) -> Void
+	/// A plain click: the item alone, or nothing.
 	let onSelect: (String?) -> Void
+	/// ⌘-click: the item into or out of the selection.
+	let onToggle: (String) -> Void
+	/// ⇧-click: everything from the anchor to the item.
+	let onExtend: (String) -> Void
 	let onOpen: (DiskNode) -> Void
 	let onQuickLook: (String) -> Void
 	let onShowInFinder: (String) -> Void
@@ -567,7 +691,7 @@ struct DiskChildrenList: View {
 				.padding(.vertical, 4)
 			}
 			// Keeps a selection made with the arrow keys in view; a clicked row already is.
-			.onChange(of: selectedName) { _, name in
+			.onChange(of: leadName) { _, name in
 				guard let name, let child = node.child(named: name) else { return }
 				proxy.scrollTo(child.id)
 			}
@@ -578,7 +702,7 @@ struct DiskChildrenList: View {
 	}
 
 	private func row(_ child: DiskNode) -> some View {
-		let isSelected = selectedName == child.name
+		let isSelected = selectedNames.contains(child.name)
 		let isHovered = hoveredName == child.name
 		let share = node.size > 0 ? Double(child.size) / Double(node.size) : 0
 		return HStack(spacing: 8) {
@@ -611,7 +735,7 @@ struct DiskChildrenList: View {
 				}
 				.frame(height: 4)
 			}
-			if deletingName == child.name {
+			if deletingNames.contains(child.name) {
 				ProgressView()
 					.controlSize(.mini)
 			}
@@ -642,7 +766,17 @@ struct DiskChildrenList: View {
 			onOpen(child)
 		}
 		.onTapGesture {
-			onSelect(isSelected ? nil : child.name)
+			// The modifiers of the click that just ended, as Finder's list reads them.
+			let modifiers = NSEvent.modifierFlags.intersection([.command, .shift])
+			if modifiers.contains(.command) {
+				onToggle(child.name)
+			}
+			else if modifiers.contains(.shift) {
+				onExtend(child.name)
+			}
+			else {
+				onSelect(isSelected && selectedNames.count == 1 ? nil : child.name)
+			}
 		}
 		.contextMenu {
 			if child.isDirectory, !child.isInaccessible {
@@ -652,7 +786,7 @@ struct DiskChildrenList: View {
 				Button("Quick Look") { onQuickLook(child.name) }
 				Button("Show in Finder") { onShowInFinder(child.name) }
 			}
-			if child.isRemovable {
+			if canRemove(child) {
 				Divider()
 				Button("Move to Trash…", role: .destructive) { onMoveToTrash(child.name) }
 				Button("Delete Permanently…", role: .destructive) { onDelete(child.name) }
@@ -666,12 +800,13 @@ struct DiskChildrenList: View {
 		case .directory: child.isInaccessible ? "lock.fill" : "folder.fill"
 		case .file: "doc"
 		case .smallerFiles: "doc.on.doc"
+		case .hiddenSpace: "eye.slash"
 		}
 	}
 
 	/// The colour the chart gives the child; grey for one too small to be drawn.
 	private func swatchColor(for child: DiskNode) -> Color {
-		guard let segment = layout.segment(forChildNamed: child.name), !child.isInaccessible else {
+		guard let segment = layout.segment(forChildNamed: child.name), !child.isInaccessible, child.isOnDisk else {
 			return Color.gray.opacity(0.45)
 		}
 		return Color(

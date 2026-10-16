@@ -47,6 +47,23 @@ struct DiskNodeTests {
 		#expect(DiskTree.url(of: []) == nil)
 	}
 
+	@Test("hidden space is the volume's allocation beyond the scan, split as far as the parts go")
+	func hiddenSpace() {
+		let root = DiskNode(directoryNamed: "/", children: [DiskNode(name: "a", kind: .file, size: 700, itemCount: 1)])
+		#expect(DiskNode.hiddenSpace(for: root, on: .init(allocatedCapacity: 700, purgeableCapacity: 10, otherVolumesCapacity: 10)) == nil)
+		#expect(DiskNode.hiddenSpace(for: root, on: .init(allocatedCapacity: 600, purgeableCapacity: 0, otherVolumesCapacity: 0)) == nil)
+		let hidden = DiskNode.hiddenSpace(for: root, on: .init(allocatedCapacity: 1000, purgeableCapacity: 200, otherVolumesCapacity: 150))
+		#expect(hidden?.size == 300)
+		// Purgeable first, then the other volumes, each capped by what is left.
+		#expect(hidden?.kind == .hiddenSpace(purgeable: 200, otherVolumes: 100))
+		#expect(hidden?.isHiddenSpace == true)
+		#expect(hidden?.isOnDisk == false)
+		#expect(hidden?.isRemovable == false)
+		let withHidden = DiskNode(directoryNamed: "/", children: root.children + [hidden!])
+		#expect(withHidden.size == 1000)
+		#expect(withHidden.itemCount == 1)
+	}
+
 	@Test("the summed smaller files are not one item on disk")
 	func smallerFilesAreNotRemovable() {
 		let rest = DiskNode(name: "12 smaller files", kind: .smallerFiles(count: 12), size: 10, itemCount: 12)
