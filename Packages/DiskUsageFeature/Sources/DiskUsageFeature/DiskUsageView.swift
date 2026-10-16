@@ -118,7 +118,7 @@ public struct DiskUsageView<Header: View>: View {
 		.frame(maxWidth: 600)
 	}
 
-	private static func rootTitle(_ path: String) -> String {
+	static func rootTitle(_ path: String) -> String {
 		path == "/" ? "/" : URL(filePath: path).lastPathComponent
 	}
 
@@ -130,9 +130,11 @@ public struct DiskUsageView<Header: View>: View {
 		case .idle:
 			VolumePickerView(
 				volumes: store.volumes,
+				lastResult: store.lastResult,
 				starredFolders: store.starredFolders,
 				onScan: { send(.scanRequested($0)) },
 				onChooseFolder: { send(.chooseFolderTapped) },
+				onReopen: { send(.lastResultReopened) },
 				onUnstar: { send(.starredFolderRemoved($0)) }
 			)
 		case let .scanning(root, progress):
@@ -476,10 +478,13 @@ private extension View {
 /// What to scan: a mounted volume, the home folder, a starred folder, or any folder.
 struct VolumePickerView: View {
 	let volumes: [DiskVolume]
+	/// The result left for the picker, offered for reopening without a scan.
+	let lastResult: DiskScanResult?
 	/// `DiskLocation` keys, most recently starred last.
 	let starredFolders: [String]
 	let onScan: (URL) -> Void
 	let onChooseFolder: () -> Void
+	let onReopen: () -> Void
 	let onUnstar: (String) -> Void
 
 	var body: some View {
@@ -492,6 +497,22 @@ struct VolumePickerView: View {
 					.scaledFont(.callout)
 					.foregroundStyle(.secondary)
 					.fixedSize(horizontal: false, vertical: true)
+
+				if let lastResult {
+					Text("Last scan")
+						.scaledFont(.headline)
+						.padding(.top, 8)
+					LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
+						FolderCard(
+							title: DiskUsageView<EmptyView>.rootTitle(lastResult.root.name),
+							subtitle: lastResult.rootURL.path(percentEncoded: false),
+							detail: "\(lastResult.root.size.formatted(.byteCount(style: .file))) · scanned \(lastResult.finishedAt.formatted(.relative(presentation: .named)))",
+							systemImage: "clock.arrow.circlepath",
+							buttonTitle: "Reopen",
+							action: onReopen
+						)
+					}
+				}
 
 				LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12, alignment: .top)], alignment: .leading, spacing: 12) {
 					ForEach(volumes) { volume in
@@ -588,15 +609,18 @@ private struct VolumeCard: View {
 private struct FolderCard<Accessory: View>: View {
 	let title: String
 	let subtitle: String
+	/// A second caption line under the subtitle: the last scan's size and age.
+	let detail: String?
 	let systemImage: String
 	let buttonTitle: String
 	/// At the card's trailing edge: a starred folder's unstar button.
 	let accessory: Accessory
 	let action: () -> Void
 
-	init(title: String, subtitle: String, systemImage: String, buttonTitle: String, @ViewBuilder accessory: () -> Accessory = { EmptyView() }, action: @escaping () -> Void) {
+	init(title: String, subtitle: String, detail: String? = nil, systemImage: String, buttonTitle: String, @ViewBuilder accessory: () -> Accessory = { EmptyView() }, action: @escaping () -> Void) {
 		self.title = title
 		self.subtitle = subtitle
+		self.detail = detail
 		self.systemImage = systemImage
 		self.buttonTitle = buttonTitle
 		self.accessory = accessory()
@@ -617,6 +641,12 @@ private struct FolderCard<Accessory: View>: View {
 						.foregroundStyle(.secondary)
 						.lineLimit(1)
 						.truncationMode(.middle)
+					if let detail {
+						Text(detail)
+							.scaledFont(.caption)
+							.foregroundStyle(.secondary)
+							.lineLimit(1)
+					}
 				}
 				Spacer(minLength: 0)
 				accessory

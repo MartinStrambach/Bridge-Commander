@@ -42,6 +42,12 @@ public struct DiskUsageReducer {
 		public var removalFailures: [RemovalFailure] = []
 		/// Where the last scan started, so Rescan can repeat it after the result is gone.
 		public var lastScanRoot: URL?
+		/// The result left for the picker, so its Reopen card brings it back without a scan;
+		/// replaced when another scan finishes. The tree is as the disk was at `finishedAt`.
+		public var lastResult: DiskScanResult?
+		/// The folder that was on screen when `lastResult` was left, as names below its root,
+		/// so Reopen lands there.
+		public var lastResultPath: [String] = []
 		/// The folders visited before the one on screen, most recent last, for Back (⌘[). Each is
 		/// the names below the scan root, not nodes: a deletion rebuilds the chain, and nodes kept
 		/// here would bring the removed item back. A name no longer in the tree stops the walk at
@@ -138,6 +144,8 @@ public struct DiskUsageReducer {
 			case rescanTapped
 			case stopTapped
 			case newScanTapped
+			/// The picker's Reopen card: back to the result left with `newScanTapped`.
+			case lastResultReopened
 			/// Drill into a child of the folder on screen.
 			case nodeOpened(DiskNode)
 			/// Go back to the node at this index of `path`.
@@ -231,6 +239,10 @@ public struct DiskUsageReducer {
 				return .cancel(id: CancelID.scan)
 
 			case .view(.newScanTapped):
+				if let result = state.result {
+					state.lastResult = result
+					state.lastResultPath = Self.names(of: state.path)
+				}
 				state.scan = .idle
 				state.path = []
 				deselect(&state)
@@ -239,6 +251,17 @@ public struct DiskUsageReducer {
 					.cancel(id: CancelID.scan),
 					.run { [client] send in await send(.volumesLoaded(client.volumes())) }
 				)
+
+			case .view(.lastResultReopened):
+				guard case .idle = state.scan, let result = state.lastResult else { return .none }
+				state.scan = .finished(result)
+				state.path = Self.resolve(state.lastResultPath, from: result.root)
+				state.lastScanRoot = result.rootURL
+				state.lastResult = nil
+				state.lastResultPath = []
+				deselect(&state)
+				clearHistory(&state)
+				return .none
 
 			case let .scanEvent(.progress(progress)):
 				guard case let .scanning(root, _) = state.scan else { return .none }
@@ -254,6 +277,8 @@ public struct DiskUsageReducer {
 				}
 				state.scan = .finished(result)
 				state.path = [result.root]
+				state.lastResult = nil
+				state.lastResultPath = []
 				deselect(&state)
 				clearHistory(&state)
 				return .none

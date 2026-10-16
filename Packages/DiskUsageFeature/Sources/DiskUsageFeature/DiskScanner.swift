@@ -28,13 +28,16 @@ public struct DiskScanResult: Equatable, Sendable {
 	public var duration: Duration
 	/// What the volume reported as taken when the scan finished; nil for a scan of a folder.
 	public var volume: DiskVolumeUsage?
+	/// When the scan finished: a result kept for the picker's Reopen card says how old it is.
+	public var finishedAt: Date
 
-	public init(root: DiskNode, rootURL: URL, inaccessibleFolders: Int, duration: Duration, volume: DiskVolumeUsage? = nil) {
+	public init(root: DiskNode, rootURL: URL, inaccessibleFolders: Int, duration: Duration, volume: DiskVolumeUsage? = nil, finishedAt: Date = Date()) {
 		self.root = root
 		self.rootURL = rootURL
 		self.inaccessibleFolders = inaccessibleFolders
 		self.duration = duration
 		self.volume = volume
+		self.finishedAt = finishedAt
 	}
 }
 

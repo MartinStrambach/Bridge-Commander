@@ -38,6 +38,7 @@ struct DiskUsageReducerTests {
 				}
 			}
 			$0[DiskUsageClient.self].moveToTrash = { url in trashed.withValue { $0.append(url) } }
+			$0[DiskUsageClient.self].volumes = { [] }
 		}
 		await store.send(.view(.scanRequested(Self.rootURL))) {
 			$0.scan = .scanning(root: Self.rootURL, progress: DiskScanProgress())
@@ -548,6 +549,46 @@ struct DiskUsageReducerTests {
 			$0.$starredFolders.withLock { $0 = [] }
 		}
 		#expect(DiskLocation.url(forKey: "/Volumes/Data/Cache").path(percentEncoded: false) == "/Volumes/Data/Cache/")
+	}
+
+	@Test("leaving for the picker keeps the result, and Reopen brings it back to the folder left")
+	func reopenLastResult() async {
+		let store = await scannedStore()
+		let result = store.state.result!
+		let cache = result.root.child(named: "Cache")!
+		await store.send(.view(.nodeOpened(cache))) {
+			$0.path = [result.root, cache]
+			$0.backHistory = [[]]
+		}
+		await store.send(.view(.newScanTapped)) {
+			$0.scan = .idle
+			$0.path = []
+			$0.backHistory = []
+			$0.lastResult = result
+			$0.lastResultPath = ["Cache"]
+		}
+		await store.receive(\.volumesLoaded)
+		await store.send(.view(.lastResultReopened)) {
+			$0.scan = .finished(result)
+			$0.path = [result.root, cache]
+			$0.lastResult = nil
+			$0.lastResultPath = []
+		}
+		#expect(store.state.currentNode === cache)
+
+		// A scan that finishes replaces the kept result; a stopped one leaves it there.
+		await store.send(.view(.newScanTapped)) {
+			$0.scan = .idle
+			$0.path = []
+			$0.lastResult = result
+			$0.lastResultPath = ["Cache"]
+		}
+		await store.receive(\.volumesLoaded)
+		store.exhaustivity = .off(showSkippedAssertions: false)
+		await store.send(.view(.scanRequested(Self.rootURL)))
+		await store.receive(\.scanEvent.finished)
+		store.exhaustivity = .on
+		#expect(store.state.lastResult == nil)
 	}
 
 	@Test("stopping a scan cancels it and goes back to the picker")
