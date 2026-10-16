@@ -552,10 +552,11 @@ struct DiskUsageReducerTests {
 	}
 
 	@Test("leaving for the picker keeps the result, and Reopen brings it back to the folder left")
-	func reopenLastResult() async {
+	func reopenRecentScan() async {
 		let store = await scannedStore()
 		let result = store.state.result!
 		let cache = result.root.child(named: "Cache")!
+		let kept = DiskUsageReducer.State.RecentScan(result: result, path: ["Cache"])
 		await store.send(.view(.nodeOpened(cache))) {
 			$0.path = [result.root, cache]
 			$0.backHistory = [[]]
@@ -564,31 +565,72 @@ struct DiskUsageReducerTests {
 			$0.scan = .idle
 			$0.path = []
 			$0.backHistory = []
-			$0.lastResult = result
-			$0.lastResultPath = ["Cache"]
+			$0.recentScans = [kept]
 		}
 		await store.receive(\.volumesLoaded)
-		await store.send(.view(.lastResultReopened)) {
+		await store.send(.view(.recentScanReopened(kept.id))) {
 			$0.scan = .finished(result)
 			$0.path = [result.root, cache]
-			$0.lastResult = nil
-			$0.lastResultPath = []
+			$0.recentScans = []
 		}
 		#expect(store.state.currentNode === cache)
 
-		// A scan that finishes replaces the kept result; a stopped one leaves it there.
+		// A scan of the same root that finishes replaces the kept result; a stopped one leaves it there.
 		await store.send(.view(.newScanTapped)) {
 			$0.scan = .idle
 			$0.path = []
-			$0.lastResult = result
-			$0.lastResultPath = ["Cache"]
+			$0.recentScans = [kept]
 		}
 		await store.receive(\.volumesLoaded)
 		store.exhaustivity = .off(showSkippedAssertions: false)
 		await store.send(.view(.scanRequested(Self.rootURL)))
 		await store.receive(\.scanEvent.finished)
 		store.exhaustivity = .on
-		#expect(store.state.lastResult == nil)
+		#expect(store.state.recentScans.isEmpty)
+	}
+
+	@Test("results of different roots are kept side by side, newest first, and one can be dropped")
+	func recentScansOfSeveralRoots() async {
+		let otherURL = URL(filePath: "/Volumes/Other", directoryHint: .isDirectory)
+		let otherRoot = DiskNode(directoryNamed: otherURL.path(percentEncoded: false), children: [])
+		let other = DiskScanResult(root: otherRoot, rootURL: otherURL, inaccessibleFolders: 0, duration: .seconds(1))
+		let data = Self.result()
+		let results = LockIsolated([data, other])
+		let store = TestStore(initialState: DiskUsageReducer.State()) {
+			DiskUsageReducer()
+		} withDependencies: {
+			$0[DiskUsageClient.self].scan = { root in
+				let result = results.withValue { $0.first { $0.rootURL == root }! }
+				return AsyncStream { continuation in
+					continuation.yield(.finished(result))
+					continuation.finish()
+				}
+			}
+			$0[DiskUsageClient.self].volumes = { [] }
+		}
+		store.exhaustivity = .off(showSkippedAssertions: false)
+		await store.send(.view(.scanRequested(Self.rootURL)))
+		await store.receive(\.scanEvent.finished)
+		await store.send(.view(.newScanTapped))
+		await store.receive(\.volumesLoaded)
+		await store.send(.view(.scanRequested(otherURL)))
+		await store.receive(\.scanEvent.finished)
+		await store.send(.view(.newScanTapped))
+		await store.receive(\.volumesLoaded)
+		#expect(store.state.recentScans.map(\.id) == ["/Volumes/Other", "/Volumes/Data"])
+
+		// Reopening the older one and leaving again moves it to the front.
+		await store.send(.view(.recentScanReopened("/Volumes/Data")))
+		#expect(store.state.recentScans.map(\.id) == ["/Volumes/Other"])
+		await store.send(.view(.newScanTapped))
+		await store.receive(\.volumesLoaded)
+		#expect(store.state.recentScans.map(\.id) == ["/Volumes/Data", "/Volumes/Other"])
+
+		store.exhaustivity = .on
+		await store.send(.view(.recentScanRemoved("/Volumes/Other"))) {
+			$0.recentScans.removeLast()
+		}
+		#expect(store.state.recentScans.map(\.id) == ["/Volumes/Data"])
 	}
 
 	@Test("stopping a scan cancels it and goes back to the picker")

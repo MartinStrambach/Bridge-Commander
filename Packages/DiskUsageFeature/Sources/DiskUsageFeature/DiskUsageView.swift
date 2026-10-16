@@ -156,11 +156,12 @@ public struct DiskUsageView<Header: View>: View {
 		case .idle:
 			VolumePickerView(
 				volumes: store.volumes,
-				lastResult: store.lastResult,
+				recentScans: store.recentScans,
 				starredFolders: store.starredFolders,
 				onScan: { send(.scanRequested($0)) },
 				onChooseFolder: { send(.chooseFolderTapped) },
-				onReopen: { send(.lastResultReopened) },
+				onReopen: { send(.recentScanReopened($0)) },
+				onForget: { send(.recentScanRemoved($0)) },
 				onUnstar: { send(.starredFolderRemoved($0)) }
 			)
 		case let .scanning(root, progress):
@@ -516,18 +517,20 @@ private extension View {
 // MARK: - Volume picker
 
 /// What to scan: a mounted volume, the home folder, a starred folder, or any folder. Each is a
-/// tile that is the control itself: clicking anywhere on it scans (or reopens the last result),
+/// tile that is the control itself: clicking anywhere on it scans (or reopens a kept result),
 /// and the tile lights under the pointer and sinks while pressed. Solid cards, not glass: a
 /// tile is mostly text, and text on glass over the window background was hard to read.
 struct VolumePickerView: View {
 	let volumes: [DiskVolume]
-	/// The result left for the picker, offered for reopening without a scan.
-	let lastResult: DiskScanResult?
+	/// The results left for the picker, most recent first, offered for reopening without a scan.
+	let recentScans: [DiskUsageReducer.State.RecentScan]
 	/// `DiskLocation` keys, most recently starred last.
 	let starredFolders: [String]
 	let onScan: (URL) -> Void
 	let onChooseFolder: () -> Void
-	let onReopen: () -> Void
+	/// Reopen or drop a kept result, by its root's `DiskLocation` key.
+	let onReopen: (String) -> Void
+	let onForget: (String) -> Void
 	let onUnstar: (String) -> Void
 
 	private static let columns = [GridItem(.adaptive(minimum: 340, maximum: 480), spacing: 12, alignment: .top)]
@@ -545,21 +548,37 @@ struct VolumePickerView: View {
 						.fixedSize(horizontal: false, vertical: true)
 				}
 
-				if let lastResult {
-					section("Last scan") {
-						PickerTile(
-							title: DiskUsageView<EmptyView>.rootTitle(lastResult.root.name),
-							subtitle: lastResult.rootURL.path(percentEncoded: false),
-							systemImage: "clock.arrow.circlepath",
-							actionTitle: "Reopen",
-							action: onReopen,
-							detail: {
-								Text("\(lastResult.root.size.formatted(.byteCount(style: .file))) · scanned \(lastResult.finishedAt.formatted(.relative(presentation: .named)))")
-									.scaledFont(.caption)
-									.foregroundStyle(.secondary)
-									.monospacedDigit()
+				if !recentScans.isEmpty {
+					section("Recent scans") {
+						ForEach(recentScans) { recent in
+							PickerTile(
+								title: DiskUsageView<EmptyView>.rootTitle(recent.result.root.name),
+								subtitle: recent.result.rootURL.path(percentEncoded: false),
+								systemImage: "clock.arrow.circlepath",
+								actionTitle: "Reopen",
+								action: { onReopen(recent.id) },
+								detail: {
+									Text("\(recent.result.root.size.formatted(.byteCount(style: .file))) · scanned \(recent.result.finishedAt.formatted(.relative(presentation: .named)))")
+										.scaledFont(.caption)
+										.foregroundStyle(.secondary)
+										.monospacedDigit()
+								},
+								accessory: {
+									Button {
+										onForget(recent.id)
+									} label: {
+										Image(systemName: "xmark.circle.fill")
+											.symbolRenderingMode(.hierarchical)
+											.foregroundStyle(.secondary)
+									}
+									.buttonStyle(.plain)
+									.help("Remove from recent scans")
+								}
+							)
+							.contextMenu {
+								Button("Remove from Recent Scans") { onForget(recent.id) }
 							}
-						)
+						}
 					}
 				}
 

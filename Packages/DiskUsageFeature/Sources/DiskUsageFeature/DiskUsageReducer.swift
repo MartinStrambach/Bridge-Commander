@@ -25,6 +25,24 @@ public struct DiskUsageReducer {
 			}
 		}
 
+		/// A result kept for the picker: the tree as the disk was at its `finishedAt`, and the
+		/// folder that was on screen when it was left, as names below its root, so Reopen lands
+		/// there. Identified by its root's `DiskLocation` key.
+		public struct RecentScan: Equatable, Identifiable, Sendable {
+			public var result: DiskScanResult
+			public var path: [String]
+
+			public init(result: DiskScanResult, path: [String] = []) {
+				self.result = result
+				self.path = path
+			}
+
+			public var id: String { DiskLocation.key(for: result.rootURL) }
+		}
+
+		/// How many results the picker keeps to reopen.
+		public static let recentScansLimit = 5
+
 		public var volumes: [DiskVolume] = []
 		public var scan: Scan = .idle
 		/// The nodes from the scan root down to the folder on screen; empty until a scan finishes.
@@ -42,12 +60,10 @@ public struct DiskUsageReducer {
 		public var removalFailures: [RemovalFailure] = []
 		/// Where the last scan started, so Rescan can repeat it after the result is gone.
 		public var lastScanRoot: URL?
-		/// The result left for the picker, so its Reopen card brings it back without a scan;
-		/// replaced when another scan finishes. The tree is as the disk was at `finishedAt`.
-		public var lastResult: DiskScanResult?
-		/// The folder that was on screen when `lastResult` was left, as names below its root,
-		/// so Reopen lands there.
-		public var lastResultPath: [String] = []
+		/// The results left for the picker, most recent first, one per scan root, so its Reopen
+		/// cards bring them back without a scan. A scan of the same root that finishes replaces
+		/// the kept one; the list is capped at `recentScansLimit`, since each holds a whole tree.
+		public var recentScans: [RecentScan] = []
 		/// The folders visited before the one on screen, most recent last, for Back (⌘[). Each is
 		/// the names below the scan root, not nodes: a deletion rebuilds the chain, and nodes kept
 		/// here would bring the removed item back. A name no longer in the tree stops the walk at
@@ -144,8 +160,11 @@ public struct DiskUsageReducer {
 			case rescanTapped
 			case stopTapped
 			case newScanTapped
-			/// The picker's Reopen card: back to the result left with `newScanTapped`.
-			case lastResultReopened
+			/// A picker's Reopen card: back to a result left with `newScanTapped`, by its root's
+			/// `DiskLocation` key.
+			case recentScanReopened(String)
+			/// Drop a kept result from the picker, by its root's `DiskLocation` key.
+			case recentScanRemoved(String)
 			/// Drill into a child of the folder on screen.
 			case nodeOpened(DiskNode)
 			/// Go back to the node at this index of `path`.
@@ -240,8 +259,7 @@ public struct DiskUsageReducer {
 
 			case .view(.newScanTapped):
 				if let result = state.result {
-					state.lastResult = result
-					state.lastResultPath = Self.names(of: state.path)
+					keep(&state, State.RecentScan(result: result, path: Self.names(of: state.path)))
 				}
 				state.scan = .idle
 				state.path = []
@@ -252,15 +270,18 @@ public struct DiskUsageReducer {
 					.run { [client] send in await send(.volumesLoaded(client.volumes())) }
 				)
 
-			case .view(.lastResultReopened):
-				guard case .idle = state.scan, let result = state.lastResult else { return .none }
-				state.scan = .finished(result)
-				state.path = Self.resolve(state.lastResultPath, from: result.root)
-				state.lastScanRoot = result.rootURL
-				state.lastResult = nil
-				state.lastResultPath = []
+			case let .view(.recentScanReopened(id)):
+				guard case .idle = state.scan, let index = state.recentScans.firstIndex(where: { $0.id == id }) else { return .none }
+				let recent = state.recentScans.remove(at: index)
+				state.scan = .finished(recent.result)
+				state.path = Self.resolve(recent.path, from: recent.result.root)
+				state.lastScanRoot = recent.result.rootURL
 				deselect(&state)
 				clearHistory(&state)
+				return .none
+
+			case let .view(.recentScanRemoved(id)):
+				state.recentScans.removeAll { $0.id == id }
 				return .none
 
 			case let .scanEvent(.progress(progress)):
@@ -277,8 +298,7 @@ public struct DiskUsageReducer {
 				}
 				state.scan = .finished(result)
 				state.path = [result.root]
-				state.lastResult = nil
-				state.lastResultPath = []
+				state.recentScans.removeAll { $0.id == DiskLocation.key(for: result.rootURL) }
 				deselect(&state)
 				clearHistory(&state)
 				return .none
@@ -536,6 +556,16 @@ public struct DiskUsageReducer {
 	private func clearHistory(_ state: inout State) {
 		state.backHistory = []
 		state.forwardHistory = []
+	}
+
+	/// Puts a result at the front of the picker's recent scans, in place of any kept for the
+	/// same root, and drops the oldest past the limit.
+	private func keep(_ state: inout State, _ recent: State.RecentScan) {
+		state.recentScans.removeAll { $0.id == recent.id }
+		state.recentScans.insert(recent, at: 0)
+		if state.recentScans.count > State.recentScansLimit {
+			state.recentScans.removeLast(state.recentScans.count - State.recentScansLimit)
+		}
 	}
 
 	private static func names(of path: [DiskNode]) -> [String] {
