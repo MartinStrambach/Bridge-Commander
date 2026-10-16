@@ -184,6 +184,10 @@ public struct DiskUsageView<Header: View>: View {
 
 			footer(result: result)
 		}
+		// The mouse's back button goes up a folder, as clicking the chart's centre does.
+		.onMouseBackButton {
+			if store.path.count > 1 { send(.pathIndexTapped(store.path.count - 2)) }
+		}
 	}
 
 	/// What is selected and what can be done with it, plus what the scan could not read.
