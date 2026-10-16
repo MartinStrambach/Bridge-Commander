@@ -13,6 +13,7 @@ struct DiskScannerTests {
 		try Data(count: 4096).write(to: root.appending(path: "nested/medium.bin"))
 		try Data("hello".utf8).write(to: root.appending(path: "top.txt"))
 		try FileManager.default.createDirectory(at: root.appending(path: "many"), withIntermediateDirectories: true)
+		try FileManager.default.createDirectory(at: root.appending(path: "nested/empty"), withIntermediateDirectories: true)
 		for index in 0 ..< (DiskScanner.filesKeptPerDirectory + 5) {
 			try Data(count: 512).write(to: root.appending(path: "many/file\(index).bin"))
 		}
@@ -38,12 +39,14 @@ struct DiskScannerTests {
 			#expect(result.root.size >= 64 * 1024 + 4096 + 5 + 105 * 512)
 			#expect(result.root.children.map(\.name).contains("nested"))
 			let nested = try #require(result.root.child(named: "nested"))
-			#expect(nested.children.map(\.name) == ["deeper", "medium.bin"])
+			#expect(nested.children.map(\.name) == ["deeper", "medium.bin", "empty"])
+			let empty = try #require(nested.child(named: "empty"))
+			#expect(empty.isDirectory && empty.children.isEmpty && empty.size == 0 && empty.itemCount == 0)
 			let deeper = try #require(nested.child(named: "deeper"))
 			#expect(deeper.children.map(\.name) == ["large.bin"])
 			#expect(deeper.size >= 64 * 1024)
-			// Three folders, three files, and the 105 files of "many".
-			#expect(result.root.itemCount == 3 + 3 + 105)
+			// Four folders, three files, and the 105 files of "many".
+			#expect(result.root.itemCount == 4 + 3 + 105)
 		}
 	}
 
@@ -60,6 +63,33 @@ struct DiskScannerTests {
 			#expect(many.children.filter { $0.kind == .file }.count == DiskScanner.filesKeptPerDirectory)
 			#expect(many.itemCount == DiskScanner.filesKeptPerDirectory + 5)
 		}
+	}
+
+	@Test("a scan leaves no descriptor open, finished or cancelled")
+	func closesDescriptors() async throws {
+		try await withFixture { root in
+			// A first scan starts the worker threads' infrastructure, whose descriptors stay.
+			_ = await finishedResult(root)
+			let openBefore = openDescriptorCount()
+			_ = await finishedResult(root)
+			#expect(openDescriptorCount() == openBefore)
+
+			let scanning = Task {
+				for await _ in DiskScanner.scan(root) {}
+			}
+			scanning.cancel()
+			await scanning.value
+			// The consumer returns before the scan's own task has drained its queue.
+			for _ in 0 ..< 100 where openDescriptorCount() != openBefore {
+				try await Task.sleep(for: .milliseconds(20))
+			}
+			#expect(openDescriptorCount() == openBefore)
+		}
+	}
+
+	/// Descriptors the process has open (including the one listing them, each time).
+	private func openDescriptorCount() -> Int {
+		(try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? -1
 	}
 
 	@Test("a root that cannot be opened fails instead of finishing")
