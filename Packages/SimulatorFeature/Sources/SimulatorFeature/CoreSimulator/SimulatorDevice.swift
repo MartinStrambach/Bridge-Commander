@@ -151,6 +151,9 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 	case coreSimulatorException(String)
 	case deviceNotFound(String)
 	case noBootedDevice
+	/// Every booted device is another repository's: each described with the repositories that
+	/// chose it.
+	case everyBootedDeviceTaken([String])
 	case deviceNotBooted(String)
 	case noFramebuffer
 	case inputUnavailable(String)
@@ -183,6 +186,8 @@ public enum SimulatorError: Error, Equatable, LocalizedError, Sendable {
 			"No simulator with UDID \(udid)."
 		case .noBootedDevice:
 			"No iOS simulator is booted. Boot one (`xcrun simctl boot <udid>`; list_devices shows them) and try again."
+		case let .everyBootedDeviceTaken(devices):
+			"Every booted simulator belongs to another worktree's terminal: \(devices.joined(separator: "; ")). Boot another one for this worktree (`xcrun simctl boot <udid>`; list_devices shows them) and try again — or, to share one of these on purpose, pass its `udid`."
 		case let .deviceNotBooted(name):
 			"\(name) is not booted."
 		case .noFramebuffer:

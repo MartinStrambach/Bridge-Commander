@@ -195,8 +195,14 @@ public final class SimulatorHost: @unchecked Sendable {
 		return device
 	}
 
-	private var lastSelectedDeviceId: String? {
-		UserDefaults.standard.string(forKey: Self.selectedDeviceKey)
+	/// The stored choices. Repositories no longer on disk (removed worktrees) are left out, so
+	/// they do not keep a device from the others.
+	private var assignment: SimulatorDeviceAssignment {
+		let selections = UserDefaults.standard.dictionary(forKey: Self.repositorySelectionsKey) as? [String: String] ?? [:]
+		return SimulatorDeviceAssignment(
+			selections: selections.filter { FileManager.default.fileExists(atPath: $0.key) },
+			lastSelected: UserDefaults.standard.string(forKey: Self.selectedDeviceKey)
+		)
 	}
 
 	private var repositorySelections: [String: String] {
@@ -204,10 +210,18 @@ public final class SimulatorHost: @unchecked Sendable {
 	}
 
 	/// The device `repositoryPath`'s pane shows and its terminal's tools act on: its own choice,
-	/// else the last one made anywhere. `nil` (a `claude` outside the app) gets the last one.
+	/// else the last one made anywhere unless another repository has it. `nil` (a `claude`
+	/// outside the app) gets the last one.
 	public func selectedDeviceId(repositoryPath: String?) -> String? {
 		state.withLock { _ in
-			repositoryPath.flatMap { repositorySelections[$0] } ?? lastSelectedDeviceId
+			assignment.storedDeviceId(repositoryPath: repositoryPath)
+		}
+	}
+
+	/// The devices other repositories have chosen, which the pane does not fall back to.
+	public func devicesOfOtherRepositories(than repositoryPath: String?) -> Set<String> {
+		state.withLock { _ in
+			Set(assignment.devicesOfOtherRepositories(than: repositoryPath).keys)
 		}
 	}
 
@@ -226,10 +240,10 @@ public final class SimulatorHost: @unchecked Sendable {
 	}
 
 	/// The device a command from `repositoryPath`'s terminal addresses: `udid` when given,
-	/// otherwise the repository's device if it is booted, otherwise a booted one — preferably one
-	/// no other repository has chosen, so a worktree whose iPad is shut down does not take over
-	/// another worktree's iPhone. That one then becomes the repository's device, so the pane
-	/// follows the simulator Claude booted.
+	/// otherwise the repository's device if it is booted, otherwise a booted one no other
+	/// repository has chosen (`SimulatorDeviceAssignment`) — never another worktree's, so two
+	/// terminals do not fight over one simulator. That one then becomes the repository's device,
+	/// so the pane follows the simulator Claude booted.
 	public func resolveDevice(udid: String?, repositoryPath: String?) throws -> SimulatorDevice {
 		let all = try devices()
 		if let udid {
@@ -242,22 +256,33 @@ public final class SimulatorHost: @unchecked Sendable {
 			return device
 		}
 
-		if
-			let selected = selectedDeviceId(repositoryPath: repositoryPath),
-			let device = all.first(where: { $0.id == selected }),
-			device.isBooted
-		{
+		let (resolution, chosen) = state.withLock { _ in
+			let assignment = assignment
+			let chosen = if let repositoryPath { assignment.selections[repositoryPath] } else { assignment.lastSelected }
+			return (
+				assignment.resolve(bootedIds: all.filter(\.isBooted).map(\.id), repositoryPath: repositoryPath),
+				chosen
+			)
+		}
+		switch resolution {
+		case let .device(id):
+			guard let device = all.first(where: { $0.id == id }) else {
+				throw SimulatorError.deviceNotFound(id)
+			}
+			if chosen != id {
+				select(deviceId: id, repositoryPath: repositoryPath)
+			}
 			return device
-		}
-		let takenByOthers = Set(repositorySelections.filter { $0.key != repositoryPath }.values)
-		guard
-			let booted = all.first(where: { $0.isBooted && !takenByOthers.contains($0.id) })
-				?? all.first(where: \.isBooted)
-		else {
+
+		case .noBootedDevice:
 			throw SimulatorError.noBootedDevice
+
+		case let .everyBootedDeviceTaken(taken):
+			let devices = all.filter { taken[$0.id] != nil }.map { device in
+				"\(device.name) \(device.id) (\(taken[device.id, default: []].joined(separator: ", ")))"
+			}
+			throw SimulatorError.everyBootedDeviceTaken(devices)
 		}
-		select(deviceId: booted.id, repositoryPath: repositoryPath)
-		return booted
 	}
 
 	// MARK: - Screen
