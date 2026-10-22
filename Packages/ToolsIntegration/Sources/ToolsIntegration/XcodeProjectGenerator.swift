@@ -7,7 +7,7 @@ public nonisolated enum XcodeProjectGenerator {
 	/// Generates Xcode project by running ti and tg commands sequentially in the configured iOS subfolder
 	/// - Parameters:
 	///   - repositoryPath: The repository root path
-	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/FlashScore")
+	///   - iosSubfolderPath: The iOS subfolder path (e.g., "ios/MyApp")
 	///   - shouldOpenXcode: Controls whether Xcode opens after generation
 	///   - onStateChange: Awaited on every state change, so a caller that forwards the state
 	///     sees each one before the next — and before this function returns
@@ -21,7 +21,7 @@ public nonisolated enum XcodeProjectGenerator {
 		onStateChange: @Sendable (XcodeProjectState) async -> Void
 	) async throws -> String {
 		// Get iOS subfolder path
-		let iosFlashscorePath = XcodeProjectDetector.getIosFlashscorePath(
+		let iosFolderPath = XcodeProjectDetector.iosFolderPath(
 			in: repositoryPath,
 			iosSubfolderPath: iosSubfolderPath
 		)
@@ -30,7 +30,7 @@ public nonisolated enum XcodeProjectGenerator {
 		let fileManager = FileManager.default
 		var isDirectory: ObjCBool = false
 		guard
-			fileManager.fileExists(atPath: iosFlashscorePath, isDirectory: &isDirectory),
+			fileManager.fileExists(atPath: iosFolderPath, isDirectory: &isDirectory),
 			isDirectory.boolValue
 		else {
 			throw ProjectGenerationError.iosSubfolderNotFound(path: iosSubfolderPath)
@@ -40,7 +40,7 @@ public nonisolated enum XcodeProjectGenerator {
 		await onStateChange(.runningTi)
 		let installResult = await TuistCommandHelper.runCommand(
 			.install,
-			at: iosFlashscorePath,
+			at: iosFolderPath,
 			shouldOpenXcode: shouldOpenXcode,
 			misePath: misePath,
 			runMode: runMode
@@ -53,7 +53,7 @@ public nonisolated enum XcodeProjectGenerator {
 		await onStateChange(.runningTg)
 		let generateResult = await TuistCommandHelper.runCommand(
 			.generate,
-			at: iosFlashscorePath,
+			at: iosFolderPath,
 			shouldOpenXcode: shouldOpenXcode,
 			misePath: misePath,
 			runMode: runMode

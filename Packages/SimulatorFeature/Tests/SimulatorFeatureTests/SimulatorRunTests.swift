@@ -37,7 +37,7 @@ struct SimulatorRunTests {
 
 	@Test("a scheme's runnable app is what its Run action launches")
 	func runnableProductOfLaunchAction() {
-		#expect(XcodeSchemeScanner.runnableProductName(inScheme: Self.scheme(launching: "FlashScore.app")) == "FlashScore.app")
+		#expect(XcodeSchemeScanner.runnableProductName(inScheme: Self.scheme(launching: "MyApp.app")) == "MyApp.app")
 	}
 
 	@Test("schemes that launch nothing, or not an app, are not runnable")
@@ -52,7 +52,7 @@ struct SimulatorRunTests {
 		let contents = Data("""
 		<?xml version="1.0" encoding="UTF-8"?>
 		<Workspace version = "1.0">
-		   <FileRef location = "group:FlashScore/FlashScore.xcodeproj"></FileRef>
+		   <FileRef location = "group:MyApp/MyApp.xcodeproj"></FileRef>
 		   <FileRef location = "group:README.md"></FileRef>
 		   <Group location = "container:" name = "Dependencies">
 		      <FileRef location = "group:Tuist/Facebook.xcodeproj"></FileRef>
@@ -70,7 +70,7 @@ struct SimulatorRunTests {
 		let paths = XcodeSchemeScanner.projectPaths(inWorkspaceContents: contents, workspaceDirectory: "/repo/ios")
 
 		#expect(paths == [
-			"/repo/ios/FlashScore/FlashScore.xcodeproj",
+			"/repo/ios/MyApp/MyApp.xcodeproj",
 			"/repo/ios/Tuist/Facebook.xcodeproj",
 			"/repo/ios/Inner.xcodeproj",
 			"/repo/ios/Plain.xcodeproj",
