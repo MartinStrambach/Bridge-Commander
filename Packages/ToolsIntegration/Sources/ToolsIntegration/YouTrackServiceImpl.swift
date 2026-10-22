@@ -29,6 +29,27 @@ public struct YouTrackClient: Sendable {
 		_ baseURL: String,
 		_ authToken: String
 	) async throws -> String
+	public var listProjects: @Sendable (
+		_ baseURL: String,
+		_ authToken: String
+	) async throws -> [YouTrackProject]
+	public var projectFields: @Sendable (
+		_ project: YouTrackProject,
+		_ baseURL: String,
+		_ authToken: String
+	) async throws -> YouTrackProjectFields
+	public var createIssue: @Sendable (
+		_ issue: NewYouTrackIssue,
+		_ baseURL: String,
+		_ authToken: String
+	) async throws -> YouTrackIssueSummary
+	/// Sets picked choice values on a filed ticket; returns a line per field that could not be set.
+	public var applyFieldValues: @Sendable (
+		_ values: [YouTrackFieldValue],
+		_ to: String,
+		_ baseURL: String,
+		_ authToken: String
+	) async throws -> [String]
 }
 
 extension YouTrackClient: DependencyKey {
@@ -56,6 +77,26 @@ extension YouTrackClient: DependencyKey {
 		},
 		verifyToken: { baseURL, authToken in
 			try await YouTrackService.verifyToken(baseURL: baseURL, authToken: authToken)
+		},
+		listProjects: { baseURL, authToken in
+			try await ActivityLog.shared.recordingErrors("YouTrack projects", unless: isNotConfigured) {
+				try await YouTrackService.listProjects(baseURL: baseURL, authToken: authToken)
+			}
+		},
+		projectFields: { project, baseURL, authToken in
+			try await ActivityLog.shared.recordingErrors("YouTrack project \(project.shortName) fields", unless: isNotConfigured) {
+				try await YouTrackService.projectFields(project: project, baseURL: baseURL, authToken: authToken)
+			}
+		},
+		createIssue: { issue, baseURL, authToken in
+			try await ActivityLog.shared.recordingErrors("YouTrack new issue in \(issue.projectId)") {
+				try await YouTrackService.createIssue(issue, baseURL: baseURL, authToken: authToken)
+			}
+		},
+		applyFieldValues: { values, ticketId, baseURL, authToken in
+			try await ActivityLog.shared.recordingErrors("YouTrack fields of \(ticketId)") {
+				try await YouTrackService.applyFieldValues(values, to: ticketId, baseURL: baseURL, authToken: authToken)
+			}
 		}
 	)
 

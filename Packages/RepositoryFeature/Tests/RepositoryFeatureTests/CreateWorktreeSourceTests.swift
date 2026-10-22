@@ -20,7 +20,7 @@ struct CreateWorktreeSourceTests {
 	@Test("the ticket source is offered only when the group has a YouTrack instance")
 	func ticketSourceNeedsYouTrack() {
 		#expect(CreateWorktreeButtonReducer.State(repositoryPath: repo).availableSources == [.branch, .pullRequest])
-		#expect(makeState(youtrack: true).availableSources == [.branch, .ticket, .pullRequest])
+		#expect(makeState(youtrack: true).availableSources == [.branch, .ticket, .newTicket, .pullRequest])
 	}
 
 	@Test("switching to the ticket source lists the user's open tickets right away")

@@ -32,6 +32,16 @@ struct CreateWorktreeDialogView: View {
 					branchSourceContent
 				case .ticket:
 					ticketSourceContent
+				case .newTicket:
+					NewTicketSourceView(
+						store: store.scope(\.newTicket, action: \.newTicket),
+						branchTemplate: store.ticketBranchNameTemplate
+					)
+					baseBranchPicker
+					HStack {
+						Spacer()
+						startPointPicker
+					}
 				case .pullRequest:
 					pullRequestSourceContent
 				}
@@ -266,7 +276,7 @@ struct CreateWorktreeDialogView: View {
 
 		if store.followUp == .runClaude {
 			TextField(
-				"Prompt for Claude (optional)",
+				store.source == .newTicket ? "Prompt for Claude (blank: work on the new ticket)" : "Prompt for Claude (optional)",
 				text: $store.claudePrompt,
 				axis: .vertical
 			)
@@ -281,6 +291,159 @@ struct CreateWorktreeDialogView: View {
 			.foregroundColor(isError ? .orange : .secondary)
 			.multilineTextAlignment(.center)
 			.padding()
+	}
+}
+
+/// The New Ticket tab's ticket fields; the base branch below them is the dialog's own.
+private struct NewTicketSourceView: View {
+	@Bindable
+	var store: StoreOf<NewTicketFormReducer>
+	let branchTemplate: String
+
+	var body: some View {
+		HStack {
+			Picker("Project", selection: $store.selectedProjectId.sending(\.projectSelected)) {
+				Text("Choose a project").tag(String?.none)
+				ForEach(store.projects) { project in
+					Text("\(project.shortName) — \(project.name)").tag(String?.some(project.id))
+				}
+			}
+			.disabled(store.projects.isEmpty)
+			ProgressView()
+				.scaleEffect(0.5)
+				.frame(width: 16, height: 16)
+				.opacity(store.isLoadingProjects || store.isLoadingFields ? 1 : 0)
+		}
+
+		if let error = store.projectsError ?? store.fieldsError {
+			Text(error)
+				.scaledFont(.caption)
+				.foregroundColor(.orange)
+		}
+
+		TextField("Summary", text: $store.summary)
+			.textFieldStyle(.roundedBorder)
+
+		TextField("Description (optional)", text: $store.description, axis: .vertical)
+			.textFieldStyle(.roundedBorder)
+			.lineLimit(3 ... 6)
+
+		ForEach(store.choiceFieldSections) { section in
+			if let title = section.title {
+				ChoiceFieldSectionHeader(title: title)
+			}
+			ChoiceFieldsGrid(fields: section.fields, store: store)
+		}
+
+		HStack {
+			Toggle("Assign to me", isOn: $store.assignToMe.sending(\.assignToMeChanged))
+				.disabled(!store.canAssignToMe)
+				.help(store.canAssignToMe ? "" : "The project's Assignee field does not take your YouTrack user.")
+			Toggle("Move to In Progress", isOn: $store.moveToInProgress.sending(\.moveToInProgressChanged))
+				.help("Once the worktree exists")
+		}
+
+		if let preview = store.state.branchPreview(template: branchTemplate) {
+			Text("Branch: \(preview)")
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
+				.lineLimit(1)
+				.truncationMode(.middle)
+				.help("The ticket number is known once YouTrack files it")
+		}
+	}
+}
+
+/// Sets a group of conditional fields apart from the ones above it.
+private struct ChoiceFieldSectionHeader: View {
+	let title: String
+
+	var body: some View {
+		HStack(spacing: 6) {
+			Text(title)
+				.scaledFont(.caption)
+				.foregroundColor(.secondary)
+				.lineLimit(1)
+				.truncationMode(.tail)
+				.layoutPriority(1)
+			VStack {
+				Divider()
+			}
+		}
+		.padding(.top, 4)
+		.help(title)
+	}
+}
+
+/// A new ticket's choice fields, two to a row, each starting at the project's default.
+private struct ChoiceFieldsGrid: View {
+	let fields: [YouTrackChoiceField]
+	let store: StoreOf<NewTicketFormReducer>
+
+	var body: some View {
+		Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
+			ForEach(Array(stride(from: 0, to: fields.count, by: 2)), id: \.self) { index in
+				GridRow {
+					cells(for: fields[index])
+					if index + 1 < fields.count {
+						cells(for: fields[index + 1])
+					}
+				}
+			}
+		}
+		.controlSize(.small)
+	}
+
+	@ViewBuilder
+	private func cells(for field: YouTrackChoiceField) -> some View {
+		Text(field.name)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+			.lineLimit(1)
+			.truncationMode(.tail)
+			.gridColumnAlignment(.trailing)
+			.help(field.name)
+		Group {
+			if field.isMultiValue {
+				multiValueMenu(for: field)
+			}
+			else {
+				singleValuePicker(for: field)
+			}
+		}
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.help(field.eventDriven ? "Applied through YouTrack's workflow once the ticket is filed" : "")
+	}
+
+	private func singleValuePicker(for field: YouTrackChoiceField) -> some View {
+		Picker(field.name, selection: Binding(
+			get: { store.state.selection(of: field).first },
+			set: { store.send(.fieldValueChanged(field: field.name, values: $0.map { [$0] } ?? [])) }
+		)) {
+			if field.canBeEmpty || field.defaultValues.isEmpty {
+				Text("None").tag(String?.none)
+			}
+			ForEach(field.values, id: \.self) { value in
+				Text(value).tag(String?.some(value))
+			}
+		}
+		.labelsHidden()
+	}
+
+	private func multiValueMenu(for field: YouTrackChoiceField) -> some View {
+		let selection = store.state.selection(of: field)
+		return Menu(selection.isEmpty ? "None" : selection.joined(separator: ", ")) {
+			ForEach(field.values, id: \.self) { value in
+				Toggle(value, isOn: Binding(
+					get: { selection.contains(value) },
+					set: { isOn in
+						let values = isOn ? selection + [value] : selection.filter { $0 != value }
+						store.send(.fieldValueChanged(field: field.name, values: values))
+					}
+				))
+			}
+		}
+		.labelsHidden()
 	}
 }
 

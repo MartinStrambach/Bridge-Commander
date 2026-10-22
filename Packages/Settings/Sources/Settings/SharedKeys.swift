@@ -117,6 +117,18 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var worktreeOnlyMyPullRequests: Self {
 		appStorage("worktreeOnlyMyPullRequests")
 	}
+
+	/// The create-worktree dialog's New Ticket tab assigns the new ticket to the token's user.
+	/// Remembered from the dialog's last use rather than set in Settings.
+	static var newTicketAssignToMe: Self {
+		appStorage("newTicketAssignToMe")
+	}
+
+	/// The create-worktree dialog's New Ticket tab moves the new ticket to In Progress once the
+	/// worktree exists. Remembered from the dialog's last use rather than set in Settings.
+	static var newTicketMoveToInProgress: Self {
+		appStorage("newTicketMoveToInProgress")
+	}
 }
 
 public nonisolated extension SharedReaderKey where Self == AppStorageKey<WorktreeSource> {
