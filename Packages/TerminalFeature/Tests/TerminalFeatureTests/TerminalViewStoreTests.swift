@@ -106,6 +106,25 @@ struct TerminalViewStoreTests {
 		return (session, view.process.shellPid, view.process.childfd)
 	}
 
+	/// Option composes the layout's characters (Czech ⌥4 = `$`) yet stays Meta on the keys that
+	/// compose nothing, which is what makes ⌥← move a word; SwiftTerm's own tests pin the bytes.
+	@Test func optionComposesTextButIsMetaOnFunctionalKeys() {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let view = store.view(
+			for: session,
+			foregroundColor: .white,
+			backgroundColor: .black,
+			processDelegate: processDelegate,
+			onStatusChange: { _, _, _ in },
+			onNotification: { _, _ in }
+		)
+		defer { store.killSession(sessionId: session.id) }
+
+		#expect(!view.optionAsMetaKey)
+		#expect(view.optionAsMetaKeyForFunctionalKeys)
+	}
+
 	@Test func killSessionEndsTheShell() async throws {
 		let store = makeStore()
 		let (session, pid, _) = startSession(in: store)

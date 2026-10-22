@@ -50,7 +50,6 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		self.onNotification = onNotification
 		self.onOpenFile = onOpenFile
 		super.init(frame: .zero)
-		cellGridScale = Self.currentBackingScale(of: nil)
 		registerForDraggedTypes([.fileURL])
 		observeNotifications()
 		observeProcessOutput()
@@ -66,102 +65,12 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// when the window closes.
 	isolated deinit {
 		hangUp()
-		if let wordMotionMonitor {
-			NSEvent.removeMonitor(wordMotionMonitor)
-		}
 	}
 
-	// MARK: - Backing scale
-
-	/// The pixels-per-point the cell grid was last measured for.
-	///
-	/// SwiftTerm snaps the cell width and height to the pixel grid of whichever screen the pane is
-	/// on when the font is set (`computeFontDimensions`), and only re-measures when the font is set
-	/// again. It never reacts to the pane moving to a screen with a different backing scale, so
-	/// after unplugging an external monitor a grid snapped for one scale is drawn at another: cell
-	/// edges fall between pixels, glyphs smear into their neighbours and the column count no longer
-	/// matches the width. Set from the same fallback chain SwiftTerm uses, since a pane is built
-	/// before it has a window and measures against the main screen.
-	private var cellGridScale: CGFloat = 1
-
-	private static func currentBackingScale(of window: NSWindow?) -> CGFloat {
-		window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1
-	}
-
-	override public func viewDidChangeBackingProperties() {
-		super.viewDidChangeBackingProperties()
-		remeasureCellGridIfScaleChanged()
-	}
-
-	/// Also checked here: the first measurement happened against the main screen, and the window
-	/// the pane is added to may sit on a different one.
+	/// Picks up a focus request made before the pane had a window.
 	override public func viewDidMoveToWindow() {
 		super.viewDidMoveToWindow()
-		remeasureCellGridIfScaleChanged()
-		updateWordMotionMonitor()
 		takePendingFocus()
-	}
-
-	/// Re-snaps the cell grid to the current screen when its scale differs from the one the grid
-	/// was measured for.
-	///
-	/// Goes through the public `font` setter, the only entry to SwiftTerm's `resetFont`: it
-	/// recomputes the cell size, resizes the terminal to the columns and rows that now fit, and
-	/// drops the selection. That resize reaches the shell as a SIGWINCH, which is the right outcome
-	/// here — the number of cells that fit really did change — and is why this runs only on an
-	/// actual scale change, not on every backing-properties callback (a color space change fires
-	/// it too). A pane without a window keeps its grid: the window's scale is the only one that
-	/// matters, and there is none to compare against.
-	private func remeasureCellGridIfScaleChanged() {
-		guard let window else {
-			return
-		}
-
-		let scale = Self.currentBackingScale(of: window)
-		guard scale != cellGridScale else {
-			return
-		}
-
-		cellGridScale = scale
-		font = font
-	}
-
-	// MARK: - Word motion
-
-	/// Watches for ⌥← / ⌥→ while the pane is in a window; see `OptionArrowWordMotion` for why.
-	///
-	/// A local event monitor rather than an override: SwiftTerm declares `keyDown` `public`, not
-	/// `open`, so a subclass outside its module cannot intercept the key there.
-	private var wordMotionMonitor: Any?
-
-	private func updateWordMotionMonitor() {
-		if let wordMotionMonitor {
-			NSEvent.removeMonitor(wordMotionMonitor)
-			self.wordMotionMonitor = nil
-		}
-		guard window != nil else {
-			return
-		}
-
-		wordMotionMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-			guard
-				let self,
-				let window,
-				event.window === window,
-				window.firstResponder === self,
-				let bytes = OptionArrowWordMotion.bytes(
-					modifiers: event.modifierFlags,
-					charactersIgnoringModifiers: event.charactersIgnoringModifiers,
-					optionIsMeta: optionAsMetaKey,
-					kittyProtocolActive: !keyboardEnhancementFlags.isEmpty
-				)
-			else {
-				return event
-			}
-
-			send(bytes)
-			return nil
-		}
 	}
 
 	// MARK: - Notifications

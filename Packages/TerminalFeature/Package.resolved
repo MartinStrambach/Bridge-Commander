@@ -1,5 +1,5 @@
 {
-  "originHash" : "b639aa8b0e3debf341f785060df35d54e374978903640cb554744d5fbb66329a",
+  "originHash" : "62d278ecf72d3baecf3659147bb10c406a5c18b0a0faa9afa43437f90a1da11c",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -159,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/migueldeicaza/SwiftTerm",
       "state" : {
-        "revision" : "2dad6a1e516f755bed77cf9bbd09455062f54758",
-        "version" : "1.99.0"
+        "revision" : "2f573f73af5e768d90847dce20c97fa9535d7164",
+        "version" : "1.99.1"
       }
     }
   ],
