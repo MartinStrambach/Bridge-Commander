@@ -70,7 +70,8 @@ struct CreateWorktreeDialogView: View {
 			}
 		}
 		.padding(24)
-		.frame(width: 520)
+		// Grows with the "Start from" menu, which names the selected base branch in full.
+		.frame(minWidth: 520, maxWidth: 800)
 	}
 
 	// MARK: - Branch
@@ -115,6 +116,9 @@ struct CreateWorktreeDialogView: View {
 				}
 			}
 			.pickerStyle(.menu)
+			// A menu wants the width of its longest item, here any branch in the repository;
+			// the dialog sizes to the selected one, through the "Start from" menu, instead.
+			.frame(idealWidth: 200, maxWidth: .infinity)
 			.disabled(store.filteredBranches.isEmpty)
 
 		}
@@ -122,7 +126,16 @@ struct CreateWorktreeDialogView: View {
 
 	/// Where a new branch starts: the base as `origin` has it (just fetched), or the local branch.
 	/// Disabled, showing the side that will be used, when the base exists on only one.
+	/// At its natural width when the dialog has room, truncated otherwise: a fixed size wider than
+	/// the dialog pushed the whole content past both of its edges.
 	private var startPointPicker: some View {
+		ViewThatFits(in: .horizontal) {
+			startPointMenu.fixedSize()
+			startPointMenu
+		}
+	}
+
+	private var startPointMenu: some View {
 		Picker("Start from", selection: Binding(
 			get: { !store.startsFromOrigin },
 			set: { store.send(.startFromLocalBaseChanged($0)) }
@@ -131,7 +144,6 @@ struct CreateWorktreeDialogView: View {
 			Text("Local \(store.selectedBaseBranch)").tag(true)
 		}
 		.pickerStyle(.menu)
-		.fixedSize()
 		.disabled(!store.canChooseStartPoint)
 	}
 
