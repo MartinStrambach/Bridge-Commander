@@ -18,7 +18,7 @@ struct CreateWorktreeDialogView: View {
 			VStack(alignment: .leading, spacing: 16) {
 				header
 
-				Picker("Source", selection: $store.source.sending(\.sourceChanged)) {
+				Picker("Source", selection: $store.source.sending(\.sourceChanged).animation(.smooth(duration: 0.25))) {
 					ForEach(store.availableSources, id: \.self) { source in
 						Text(source.title).tag(source)
 					}
@@ -27,21 +27,29 @@ struct CreateWorktreeDialogView: View {
 				.labelsHidden()
 				.controlSize(.large)
 
-				switch store.source {
-				case .branch:
-					branchSourceContent
-				case .ticket:
-					ticketSourceContent
-				case .newTicket:
-					DialogSection("New Ticket", systemImage: "square.and.pencil") {
-						NewTicketSourceView(
-							store: store.scope(\.newTicket, action: \.newTicket),
-							branchTemplate: store.ticketBranchNameTemplate
-						)
+				// Stacked so the outgoing tab fades out over the incoming one rather than above it,
+				// which would stretch the sheet to both tabs' heights added up for the length of the fade.
+				ZStack(alignment: .top) {
+					VStack(alignment: .leading, spacing: 16) {
+						switch store.source {
+						case .branch:
+							branchSourceContent
+						case .ticket:
+							ticketSourceContent
+						case .newTicket:
+							DialogSection("New Ticket", systemImage: "square.and.pencil") {
+								NewTicketSourceView(
+									store: store.scope(\.newTicket, action: \.newTicket),
+									branchTemplate: store.ticketBranchNameTemplate
+								)
+							}
+							baseBranchSection
+						case .pullRequest:
+							pullRequestSourceContent
+						}
 					}
-					baseBranchSection
-				case .pullRequest:
-					pullRequestSourceContent
+					.id(store.source)
+					.transition(.opacity)
 				}
 
 				followUpSection
