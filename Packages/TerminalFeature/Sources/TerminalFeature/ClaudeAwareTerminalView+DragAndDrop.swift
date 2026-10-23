@@ -26,7 +26,7 @@ extension ClaudeAwareTerminalView {
 	}
 }
 
-private extension String {
+extension String {
 	/// Backslash-escapes shell-special characters so the path can be used as-is
 	/// at the command line without surrounding quotes.
 	/// e.g. `/foo bar` → `/foo\ bar`, `/it's` → `/it\'s`

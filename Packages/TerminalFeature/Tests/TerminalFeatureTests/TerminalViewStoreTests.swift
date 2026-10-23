@@ -96,8 +96,11 @@ struct TerminalViewStoreTests {
 
 	/// Starts a pane and hands back what the test needs to watch it, without keeping the view
 	/// itself: the store must be the only owner, as it is in the app.
-	private func startSession(in store: TerminalViewStore) -> (session: TerminalSession, pid: pid_t, pty: Int32) {
-		let session = TerminalSession(repositoryPath: "/")
+	private func startSession(
+		in store: TerminalViewStore,
+		repositoryPath: String = "/"
+	) -> (session: TerminalSession, pid: pid_t, pty: Int32) {
+		let session = TerminalSession(repositoryPath: repositoryPath)
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
@@ -173,6 +176,47 @@ struct TerminalViewStoreTests {
 		#expect(await eventually { !isRunning(vanished.pid) })
 		#expect(isRunning(kept.pid))
 		store.killSession(sessionId: kept.session.id)
+	}
+
+	@Test func killAllSessionsForARepositoryLeavesOtherRepositoriesAlone() async throws {
+		let store = makeStore()
+		let first = startSession(in: store, repositoryPath: "/tmp/one")
+		let second = startSession(in: store, repositoryPath: "/tmp/one")
+		let other = startSession(in: store, repositoryPath: "/tmp/two")
+		try #require(first.pid > 0 && second.pid > 0 && other.pid > 0)
+
+		store.killAllSessions(for: "/tmp/one")
+
+		#expect(await eventually { !isRunning(first.pid) && !isRunning(second.pid) })
+		#expect(isRunning(other.pid))
+		#expect(store.paneSnapshots().keys.sorted() == [other.session.id])
+		store.killSession(sessionId: other.session.id)
+	}
+
+	/// Ctrl-C reaches the foreground program as the user's keystroke would: the terminal turns it
+	/// into SIGINT, which ends `cat`, and the pane reports its shell gone.
+	@Test func interruptSendsTheForegroundProgramSIGINT() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let view = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			onStatusChange: { _, status, _ in
+				MainActor.assumeIsolated { reported.statuses.append(status) }
+			},
+			onNotification: { _, _ in }
+		)
+		let pid = view.process.shellPid
+		try #require(pid > 0)
+		defer { store.killSession(sessionId: session.id) }
+
+		store.interrupt(sessionId: session.id)
+
+		#expect(await eventually { !isRunning(pid) })
+		#expect(await eventually {
+			reported.statuses.contains { if case .failed = $0 { true } else { false } }
+		})
 	}
 
 	/// A killed pane gets one last burst of output as its shell exits, and the pane can outlive the
