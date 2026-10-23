@@ -9,6 +9,9 @@ public struct SimulatorClient: Sendable {
 	public var devices: @Sendable () async throws -> [SimulatorDevice]
 	/// The device chosen for a repository's pane (`SimulatorHost.selectedDeviceId(repositoryPath:)`).
 	public var selectedDeviceId: @Sendable (_ repositoryPath: String?) -> String? = { _ in nil }
+	/// The devices other repositories have chosen, which a pane with no device of its own does
+	/// not fall back to (`SimulatorHost.devicesOfOtherRepositories(than:)`).
+	public var devicesOfOtherRepositories: @Sendable (_ repositoryPath: String?) -> Set<String> = { _ in [] }
 	public var selectDevice: @Sendable (_ id: String, _ repositoryPath: String?) -> Void
 	public var boot: @Sendable (_ id: String) async throws -> Void
 	public var shutdown: @Sendable (_ id: String) async throws -> Void
@@ -52,6 +55,7 @@ extension SimulatorClient: DependencyKey {
 	public static let liveValue = SimulatorClient(
 		devices: { try SimulatorHost.shared.devices() },
 		selectedDeviceId: { SimulatorHost.shared.selectedDeviceId(repositoryPath: $0) },
+		devicesOfOtherRepositories: { SimulatorHost.shared.devicesOfOtherRepositories(than: $0) },
 		selectDevice: { SimulatorHost.shared.select(deviceId: $0, repositoryPath: $1) },
 		boot: { try await SimulatorHost.shared.boot(udid: $0) },
 		shutdown: { try await SimulatorHost.shared.shutdown(udid: $0) },
