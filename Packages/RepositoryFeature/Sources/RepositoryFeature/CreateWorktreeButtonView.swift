@@ -1,3 +1,4 @@
+import AppKit
 import ComposableArchitecture
 import SwiftUI
 import AppUI
@@ -12,115 +13,187 @@ struct CreateWorktreeDialogView: View {
 	@Bindable
 	var store: StoreOf<CreateWorktreeButtonReducer>
 
+	/// The current tab's and the follow-up section's natural heights, which their frames animate to.
+	@State
+	private var tabHeight: CGFloat?
+	@State
+	private var followUpHeight: CGFloat?
+
+	private static let heightAnimation = Animation.smooth(duration: 0.25)
+
 	var body: some View {
-		VStack(spacing: 20) {
-			Text("Create New Worktree in \(store.repositoryName)")
-				.scaledFont(.headline)
-				.multilineTextAlignment(.center)
+		VStack(spacing: 0) {
+			VStack(alignment: .leading, spacing: 16) {
+				header
 
-			Picker("Source", selection: $store.source.sending(\.sourceChanged)) {
-				ForEach(store.availableSources, id: \.self) { source in
-					Text(source.title).tag(source)
-				}
-			}
-			.pickerStyle(.segmented)
-			.labelsHidden()
-
-			VStack(alignment: .leading, spacing: 12) {
-				switch store.source {
-				case .branch:
-					branchSourceContent
-				case .ticket:
-					ticketSourceContent
-				case .newTicket:
-					NewTicketSourceView(
-						store: store.scope(\.newTicket, action: \.newTicket),
-						branchTemplate: store.ticketBranchNameTemplate
-					)
-					baseBranchPicker
-					HStack {
-						Spacer()
-						startPointPicker
+				Picker("Source", selection: $store.source.sending(\.sourceChanged).animation(Self.heightAnimation)) {
+					ForEach(store.availableSources, id: \.self) { source in
+						Text(source.title).tag(source)
 					}
-				case .pullRequest:
-					pullRequestSourceContent
 				}
+				.pickerStyle(.segmented)
+				.labelsHidden()
+				.controlSize(.large)
 
-				Divider()
-					.padding(.vertical, 4)
+				// The outgoing tab fades out over the incoming one. The sheet does not animate its own
+				// resize, so the stack's height is animated instead, toward the incoming tab's height:
+				// the outgoing tab's would keep the stack at the taller of the two until its fade ends.
+				ZStack(alignment: .top) {
+					let source = store.source
+					VStack(alignment: .leading, spacing: 16) {
+						switch store.source {
+						case .branch:
+							branchSourceContent
+						case .ticket:
+							ticketSourceContent
+						case .newTicket:
+							DialogSection("New Ticket", systemImage: "square.and.pencil") {
+								NewTicketSourceView(
+									store: store.scope(\.newTicket, action: \.newTicket),
+									branchTemplate: store.ticketBranchNameTemplate
+								)
+							}
+							baseBranchSection
+						case .pullRequest:
+							pullRequestSourceContent
+						}
+					}
+					.onNaturalHeightChange { height in
+						guard source == store.source else { return }
+						animate($tabHeight, to: height)
+					}
+					.id(source)
+					.transition(.opacity)
+				}
+				.modifier(AnimatedHeight(height: tabHeight))
 
-				followUpContent
+				followUpSection
+					.onNaturalHeightChange { animate($followUpHeight, to: $0) }
+					.modifier(AnimatedHeight(height: followUpHeight))
 			}
+			.padding(20)
 
-			HStack {
-				Button("Cancel") {
-					store.send(.cancelCreation)
-				}
-				.buttonStyle(.scaledAutomatic)
-				.keyboardShortcut(.cancelAction)
-
-				Spacer()
-
-				Button("Create") {
-					store.send(.confirmCreation)
-				}
-				.buttonStyle(.scaledAutomatic)
-				.keyboardShortcut(.defaultAction)
-				.disabled(!store.canCreate)
-			}
+			footer
 		}
-		.padding(24)
 		// Grows with the "Start from" menu, which names the selected base branch in full.
 		.frame(minWidth: 520, maxWidth: 800)
+	}
+
+	// MARK: - Header & footer
+
+	private var header: some View {
+		HStack(spacing: 12) {
+			RoundedRectangle(cornerRadius: 9, style: .continuous)
+				.fill(.green.gradient)
+				.frame(width: 38, height: 38)
+				.overlay {
+					Image(systemName: "plus.square.on.square")
+						.font(.system(size: 17, weight: .semibold))
+						.foregroundStyle(.white)
+				}
+				.shadow(color: .green.opacity(0.25), radius: 3, y: 1)
+
+			VStack(alignment: .leading, spacing: 2) {
+				Text("New Worktree")
+					.scaledFont(.title3)
+					.fontWeight(.semibold)
+				Label(store.repositoryName, systemImage: "folder")
+					.scaledFont(.callout)
+					.foregroundStyle(.secondary)
+					.lineLimit(1)
+					.truncationMode(.middle)
+			}
+		}
+	}
+
+	private var footer: some View {
+		HStack {
+			Spacer()
+
+			Button("Cancel") {
+				store.send(.cancelCreation)
+			}
+			.buttonStyle(.scaledAutomatic)
+			.keyboardShortcut(.cancelAction)
+
+			Button("Create") {
+				store.send(.confirmCreation)
+			}
+			.buttonStyle(.scaledBorderedProminent)
+			.keyboardShortcut(.defaultAction)
+			.disabled(!store.canCreate)
+		}
+		.controlSize(.large)
+		.padding(.horizontal, 20)
+		.padding(.vertical, 14)
+		.background(.bar)
+		.overlay(alignment: .top) {
+			Divider()
+		}
 	}
 
 	// MARK: - Branch
 
 	@ViewBuilder
 	private var branchSourceContent: some View {
-		baseBranchPicker
+		baseBranchSection
 
-		HStack {
-			Toggle("Create new branch", isOn: $store.createNewBranch)
-			Spacer()
-			if store.showsStartPoint {
-				startPointPicker
+		DialogSection(
+			"New Branch",
+			systemImage: "plus.circle",
+			accessory: {
+				Toggle("Create new branch", isOn: $store.createNewBranch)
+					.toggleStyle(.switch)
+					.controlSize(.small)
+					.labelsHidden()
 			}
-		}
-
-		if store.createNewBranch {
-			newBranchNameField
+		) {
+			if store.createNewBranch {
+				newBranchNameField
+			}
+			else {
+				sectionNote("Checks out \(store.selectedBaseBranch) as it is")
+			}
 		}
 	}
 
-	@ViewBuilder
-	private var baseBranchPicker: some View {
-		Text("Base Branch")
-			.scaledFont(.subheadline)
-			.foregroundColor(.secondary)
+	/// The base branch, filtered and picked, and where a new branch starts on it.
+	private var baseBranchSection: some View {
+		DialogSection("Base Branch", systemImage: "arrow.triangle.branch") {
+			if store.isLoadingBranches {
+				ProgressView()
+					.controlSize(.small)
+					.frame(maxWidth: .infinity)
+			}
+			else {
+				DialogSearchField(prompt: "Filter branches", text: $store.branchSearchText)
 
-		if store.isLoadingBranches {
-			ProgressView()
-				.scaleEffect(0.7)
-				.frame(maxWidth: .infinity)
-		}
-		else {
-			TextField("Filter branches...", text: $store.branchSearchText)
-				.textFieldStyle(.roundedBorder)
+				Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+					GridRow {
+						gridLabel("Branch")
+						Picker("Branch", selection: $store.selectedBaseBranch) {
+							ForEach(store.filteredBranches, id: \.self) { branchInfo in
+								Text(branchInfo.name + (branchInfo.isRemoteOnly ? " (remote)" : ""))
+									.foregroundColor(branchInfo.isRemoteOnly ? .orange.opacity(0.5) : .green.opacity(0.8))
+									.tag(branchInfo.name)
+							}
+						}
+						.pickerStyle(.menu)
+						.labelsHidden()
+						// A menu wants the width of its longest item, here any branch in the repository;
+						// the dialog sizes to the selected one, through the "Start from" menu, instead.
+						.frame(idealWidth: 200, maxWidth: .infinity)
+						.disabled(store.filteredBranches.isEmpty)
+					}
 
-			Picker("Branch name", selection: $store.selectedBaseBranch) {
-				ForEach(store.filteredBranches, id: \.self) { branchInfo in
-					Text(branchInfo.name + (branchInfo.isRemoteOnly ? " (remote)" : ""))
-						.foregroundColor(branchInfo.isRemoteOnly ? .orange.opacity(0.5) : .green.opacity(0.8))
-						.tag(branchInfo.name)
+					if store.showsStartPoint {
+						GridRow {
+							gridLabel("Start from")
+							startPointPicker
+						}
+					}
 				}
 			}
-			.pickerStyle(.menu)
-			// A menu wants the width of its longest item, here any branch in the repository;
-			// the dialog sizes to the selected one, through the "Start from" menu, instead.
-			.frame(idealWidth: 200, maxWidth: .infinity)
-			.disabled(store.filteredBranches.isEmpty)
-
 		}
 	}
 
@@ -144,16 +217,12 @@ struct CreateWorktreeDialogView: View {
 			Text("Local \(store.selectedBaseBranch)").tag(true)
 		}
 		.pickerStyle(.menu)
+		.labelsHidden()
 		.disabled(!store.canChooseStartPoint)
 	}
 
-	@ViewBuilder
 	private var newBranchNameField: some View {
-		Text("New Branch Name")
-			.scaledFont(.subheadline)
-			.foregroundColor(.secondary)
-
-		TextField("Enter branch name", text: $store.branchName)
+		TextField("Branch name", text: $store.branchName, prompt: Text("Enter branch name"))
 			.textFieldStyle(.roundedBorder)
 	}
 
@@ -161,97 +230,100 @@ struct CreateWorktreeDialogView: View {
 
 	@ViewBuilder
 	private var ticketSourceContent: some View {
-		HStack {
-			TextField("Search YouTrack — empty lists your open tickets", text: $store.ticketQuery)
-				.textFieldStyle(.roundedBorder)
-				.onSubmit { store.send(.searchTickets) }
-			ProgressView()
-				.scaleEffect(0.5)
-				.frame(width: 16, height: 16)
-				.opacity(store.isSearchingTickets ? 1 : 0)
-		}
+		DialogSection(
+			"Ticket",
+			systemImage: "ticket",
+			accessory: {
+				ProgressView()
+					.controlSize(.small)
+					.opacity(store.isSearchingTickets ? 1 : 0)
+			}
+		) {
+			DialogSearchField(
+				prompt: "Search YouTrack — empty lists your open tickets",
+				text: $store.ticketQuery,
+				onSubmit: { store.send(.searchTickets) }
+			)
 
-		List(selection: Binding(
-			get: { store.selectedTicketId },
-			set: { store.send(.ticketSelected($0)) }
-		)) {
-			ForEach(store.tickets) { ticket in
-				TicketRow(ticket: ticket)
-					.tag(ticket.id)
+			List(selection: Binding(
+				get: { store.selectedTicketId },
+				set: { store.send(.ticketSelected($0)) }
+			)) {
+				ForEach(store.tickets) { ticket in
+					TicketRow(ticket: ticket)
+						.tag(ticket.id)
+				}
+			}
+			.dialogList(height: 200)
+			.overlay {
+				if let error = store.ticketSearchError {
+					listPlaceholder(error, systemImage: "exclamationmark.triangle", isError: true)
+				}
+				else if store.tickets.isEmpty, !store.isSearchingTickets {
+					listPlaceholder("No matching tickets", systemImage: "ticket")
+				}
+			}
+
+			if store.selectedTicketId != nil {
+				newBranchNameField
 			}
 		}
-		.frame(height: 200)
-		.overlay {
-			if let error = store.ticketSearchError {
-				listPlaceholder(error, isError: true)
-			}
-			else if store.tickets.isEmpty, !store.isSearchingTickets {
-				listPlaceholder("No matching tickets")
-			}
-		}
 
-		baseBranchPicker
-
-		HStack {
-			Spacer()
-			startPointPicker
-		}
-
-		if store.selectedTicketId != nil {
-			newBranchNameField
-		}
+		baseBranchSection
 	}
 
 	// MARK: - Pull request
 
-	@ViewBuilder
 	private var pullRequestSourceContent: some View {
-		HStack {
-			TextField("Filter by title, branch, number or author", text: $store.pullRequestFilter)
-				.textFieldStyle(.roundedBorder)
-			if store.isLoadingPullRequests {
-				ProgressView()
-					.scaleEffect(0.5)
-					.frame(width: 16, height: 16)
-			}
-			else {
-				Button {
-					store.send(.loadPullRequests)
-				} label: {
-					Image(systemName: "arrow.clockwise")
+		DialogSection(
+			"Pull Request",
+			systemImage: "arrow.triangle.pull",
+			accessory: {
+				HStack(spacing: 10) {
+					Toggle("Only mine", isOn: $store.onlyMyPullRequests.sending(\.onlyMyPullRequestsChanged))
+						.toggleStyle(.switch)
+						.controlSize(.mini)
+						.scaledFont(.caption)
+					if store.isLoadingPullRequests {
+						ProgressView()
+							.controlSize(.small)
+					}
+					else {
+						Button {
+							store.send(.loadPullRequests)
+						} label: {
+							Image(systemName: "arrow.clockwise")
+						}
+						.buttonStyle(.borderless)
+						.help("Reload open PRs/MRs")
+					}
 				}
-				.buttonStyle(.borderless)
-				.help("Reload open PRs/MRs")
 			}
-		}
+		) {
+			DialogSearchField(prompt: "Filter by title, branch, number or author", text: $store.pullRequestFilter)
 
-		Toggle("Only mine", isOn: $store.onlyMyPullRequests.sending(\.onlyMyPullRequestsChanged))
+			List(selection: Binding(
+				get: { store.selectedPullRequestNumber },
+				set: { store.send(.pullRequestSelected($0)) }
+			)) {
+				ForEach(store.filteredPullRequests) { pullRequest in
+					PullRequestRow(pullRequest: pullRequest)
+						.tag(pullRequest.number)
+				}
+			}
+			.dialogList(height: 240)
+			.overlay {
+				if let error = store.pullRequestError {
+					listPlaceholder(error, systemImage: "exclamationmark.triangle", isError: true)
+				}
+				else if store.filteredPullRequests.isEmpty, !store.isLoadingPullRequests {
+					listPlaceholder(pullRequestPlaceholder, systemImage: "arrow.triangle.pull")
+				}
+			}
 
-		List(selection: Binding(
-			get: { store.selectedPullRequestNumber },
-			set: { store.send(.pullRequestSelected($0)) }
-		)) {
-			ForEach(store.filteredPullRequests) { pullRequest in
-				PullRequestRow(pullRequest: pullRequest)
-					.tag(pullRequest.number)
+			if let pullRequest = store.selectedPullRequest {
+				sectionNote("Checks out \(pullRequest.headBranchLabel)\(pullRequest.isFromFork ? " from a fork" : "")")
 			}
-		}
-		.frame(height: 240)
-		.overlay {
-			if let error = store.pullRequestError {
-				listPlaceholder(error, isError: true)
-			}
-			else if store.filteredPullRequests.isEmpty, !store.isLoadingPullRequests {
-				listPlaceholder(pullRequestPlaceholder)
-			}
-		}
-
-		if let pullRequest = store.selectedPullRequest {
-			Text("Checks out \(pullRequest.headBranchLabel)\(pullRequest.isFromFork ? " from a fork" : "")")
-				.scaledFont(.caption)
-				.foregroundColor(.secondary)
-				.lineLimit(1)
-				.truncationMode(.middle)
 		}
 	}
 
@@ -269,13 +341,8 @@ struct CreateWorktreeDialogView: View {
 
 	// MARK: - Follow-up
 
-	@ViewBuilder
-	private var followUpContent: some View {
-		HStack {
-			Text("After creating")
-				.scaledFont(.subheadline)
-				.foregroundColor(.secondary)
-			Spacer()
+	private var followUpSection: some View {
+		DialogSection("After Creating", systemImage: "arrow.forward.circle") {
 			Picker("After creating", selection: $store.followUp.sending(\.followUpChanged)) {
 				ForEach(WorktreeCreationFollowUp.allCases, id: \.self) { followUp in
 					Text(followUp.title).tag(followUp)
@@ -283,26 +350,190 @@ struct CreateWorktreeDialogView: View {
 			}
 			.pickerStyle(.segmented)
 			.labelsHidden()
-			.fixedSize()
-		}
 
-		if store.followUp == .runClaude {
-			TextField(
-				store.source == .newTicket ? "Prompt for Claude (blank: work on the new ticket)" : "Prompt for Claude (optional)",
-				text: $store.claudePrompt,
-				axis: .vertical
-			)
-			.textFieldStyle(.roundedBorder)
-			.lineLimit(2 ... 4)
+			if store.followUp == .runClaude {
+				TextField(
+					"Prompt for Claude",
+					text: $store.claudePrompt,
+					prompt: Text(store.source == .newTicket ? "Prompt for Claude (blank: work on the new ticket)" : "Prompt for Claude (optional)"),
+					axis: .vertical
+				)
+				.textFieldStyle(.roundedBorder)
+				.lineLimit(2 ... 4)
+			}
 		}
 	}
 
-	private func listPlaceholder(_ text: String, isError: Bool = false) -> some View {
+	// MARK: - Helpers
+
+	/// Moves a frame to a section's new natural height, at once the first time it is measured.
+	private func animate(_ height: Binding<CGFloat?>, to newHeight: CGFloat) {
+		guard height.wrappedValue != nil else {
+			height.wrappedValue = newHeight
+			return
+		}
+		withAnimation(Self.heightAnimation) {
+			height.wrappedValue = newHeight
+		}
+	}
+
+	private func gridLabel(_ text: String) -> some View {
 		Text(text)
 			.scaledFont(.callout)
-			.foregroundColor(isError ? .orange : .secondary)
-			.multilineTextAlignment(.center)
-			.padding()
+			.foregroundStyle(.secondary)
+			.gridColumnAlignment(.trailing)
+	}
+
+	private func sectionNote(_ text: String) -> some View {
+		Text(text)
+			.scaledFont(.caption)
+			.foregroundStyle(.secondary)
+			.lineLimit(1)
+			.truncationMode(.middle)
+	}
+
+	private func listPlaceholder(_ text: String, systemImage: String, isError: Bool = false) -> some View {
+		VStack(spacing: 6) {
+			Image(systemName: systemImage)
+				.scaledFont(.title2)
+				.foregroundStyle(isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+			Text(text)
+				.scaledFont(.callout)
+				.foregroundColor(isError ? .orange : .secondary)
+				.multilineTextAlignment(.center)
+		}
+		.padding()
+	}
+}
+
+/// A frame of the given height, top-aligned and clipped, that passes through every step of an
+/// animation. SwiftUI lays out each step, so the sheet follows it; it does not animate a resize of
+/// its own. A nil height leaves the content at its natural height.
+private struct AnimatedHeight: ViewModifier, Animatable {
+	var height: CGFloat?
+
+	nonisolated var animatableData: CGFloat {
+		get { height ?? 0 }
+		set { height = newValue }
+	}
+
+	func body(content: Content) -> some View {
+		content
+			.frame(height: height, alignment: .top)
+			.clipped()
+	}
+}
+
+/// A titled, rounded group of the dialog's controls, with an optional control at the title's end.
+private struct DialogSection<Accessory: View, Content: View>: View {
+	let title: String
+	let systemImage: String
+	@ViewBuilder
+	let accessory: Accessory
+	@ViewBuilder
+	let content: Content
+
+	init(
+		_ title: String,
+		systemImage: String,
+		@ViewBuilder accessory: () -> Accessory = { EmptyView() },
+		@ViewBuilder content: () -> Content
+	) {
+		self.title = title
+		self.systemImage = systemImage
+		self.accessory = accessory()
+		self.content = content()
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: 6) {
+			HStack(spacing: 6) {
+				Label(title, systemImage: systemImage)
+					.scaledFont(.subheadline)
+					.fontWeight(.semibold)
+					.foregroundStyle(.secondary)
+				Spacer(minLength: 8)
+				accessory
+			}
+			.padding(.horizontal, 4)
+			// Keeps the cards aligned whether or not the title has a control beside it.
+			.frame(minHeight: 18)
+
+			let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+			VStack(alignment: .leading, spacing: 10) {
+				content
+			}
+			.frame(maxWidth: .infinity, alignment: .leading)
+			.padding(12)
+			.background(Color.primary.opacity(0.035), in: shape)
+			.overlay {
+				shape.strokeBorder(Color.primary.opacity(0.08))
+			}
+		}
+	}
+}
+
+/// A text field drawn like a search field: a magnifying glass, the text and a clear button.
+private struct DialogSearchField: View {
+	let prompt: String
+	@Binding
+	var text: String
+	var onSubmit: () -> Void = {}
+
+	@FocusState
+	private var isFocused: Bool
+
+	var body: some View {
+		let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+		HStack(spacing: 6) {
+			Image(systemName: "magnifyingglass")
+				.foregroundStyle(.secondary)
+			TextField(prompt, text: $text)
+				.textFieldStyle(.plain)
+				.focused($isFocused)
+				.onSubmit(onSubmit)
+			if !text.isEmpty {
+				Button {
+					text = ""
+				} label: {
+					Image(systemName: "xmark.circle.fill")
+						.foregroundStyle(.tertiary)
+				}
+				.buttonStyle(.plain)
+				.help("Clear")
+			}
+		}
+		.padding(.horizontal, 8)
+		.padding(.vertical, 5)
+		.background(Color(nsColor: .textBackgroundColor), in: shape)
+		.overlay {
+			shape.strokeBorder(
+				isFocused ? Color.accentColor : Color.primary.opacity(0.12),
+				lineWidth: isFocused ? 2 : 1
+			)
+		}
+		.animation(.easeOut(duration: 0.12), value: isFocused)
+	}
+}
+
+private extension View {
+	/// Lays the view out at its natural height and reports that height whenever it changes.
+	func onNaturalHeightChange(_ action: @escaping (CGFloat) -> Void) -> some View {
+		fixedSize(horizontal: false, vertical: true)
+			.onGeometryChange(for: CGFloat.self, of: \.size.height, action: action)
+	}
+
+	/// A selectable list inset into a section, on the text background with rounded corners.
+	func dialogList(height: CGFloat) -> some View {
+		let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+		return listStyle(.inset)
+			.scrollContentBackground(.hidden)
+			.background(Color(nsColor: .textBackgroundColor), in: shape)
+			.clipShape(shape)
+			.overlay {
+				shape.strokeBorder(Color.primary.opacity(0.1))
+			}
+			.frame(height: height)
 	}
 }
 
@@ -491,8 +722,11 @@ private struct PullRequestRow: View {
 				if pullRequest.isDraft {
 					Text("Draft")
 						.scaledFont(.caption2)
-						.padding(.horizontal, 4)
-						.background(Color.secondary.opacity(0.2), in: RoundedRectangle(cornerRadius: 3))
+						.fontWeight(.medium)
+						.foregroundStyle(.secondary)
+						.padding(.horizontal, 6)
+						.padding(.vertical, 1)
+						.background(Color.secondary.opacity(0.16), in: Capsule())
 				}
 			}
 			Text([pullRequest.headBranchLabel, pullRequest.author].compactMap(\.self).joined(separator: " · "))
