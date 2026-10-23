@@ -1,5 +1,5 @@
 {
-  "originHash" : "62d278ecf72d3baecf3659147bb10c406a5c18b0a0faa9afa43437f90a1da11c",
+  "originHash" : "1f5bd74e897600295e5b5cb18de9a897a81cf1d467563a23a46ca668664b283d",
   "pins" : [
     {
       "identity" : "combine-schedulers",
@@ -8,15 +8,6 @@
       "state" : {
         "revision" : "114354e8c1667a2edc4993700fb9fa4f90157b56",
         "version" : "1.2.2"
-      }
-    },
-    {
-      "identity" : "h",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/rarestype/h",
-      "state" : {
-        "revision" : "aa3626829160917d4378330617971977cbd78f5b",
-        "version" : "1.0.1"
       }
     },
     {
@@ -125,15 +116,6 @@
       "state" : {
         "revision" : "597afd46249f4a71885b95d26b26cc5b893daf32",
         "version" : "2.0.12"
-      }
-    },
-    {
-      "identity" : "swift-png",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tayloraswift/swift-png",
-      "state" : {
-        "revision" : "8a0bcd4df5e4b307c804937776a56dd6ecdf6396",
-        "version" : "4.5.1"
       }
     },
     {

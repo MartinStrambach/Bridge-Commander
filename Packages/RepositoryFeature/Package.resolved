@@ -11,15 +11,6 @@
       }
     },
     {
-      "identity" : "h",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/rarestype/h",
-      "state" : {
-        "revision" : "aa3626829160917d4378330617971977cbd78f5b",
-        "version" : "1.0.1"
-      }
-    },
-    {
       "identity" : "homer-console-mac-app",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MartinStrambach/Homer-console-mac-app",
@@ -134,15 +125,6 @@
       "state" : {
         "revision" : "597afd46249f4a71885b95d26b26cc5b893daf32",
         "version" : "2.0.12"
-      }
-    },
-    {
-      "identity" : "swift-png",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tayloraswift/swift-png",
-      "state" : {
-        "revision" : "8a0bcd4df5e4b307c804937776a56dd6ecdf6396",
-        "version" : "4.5.1"
       }
     },
     {
