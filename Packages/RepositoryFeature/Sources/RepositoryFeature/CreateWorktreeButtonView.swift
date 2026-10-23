@@ -13,12 +13,20 @@ struct CreateWorktreeDialogView: View {
 	@Bindable
 	var store: StoreOf<CreateWorktreeButtonReducer>
 
+	/// The current tab's and the follow-up section's natural heights, which their frames animate to.
+	@State
+	private var tabHeight: CGFloat?
+	@State
+	private var followUpHeight: CGFloat?
+
+	private static let heightAnimation = Animation.smooth(duration: 0.25)
+
 	var body: some View {
 		VStack(spacing: 0) {
 			VStack(alignment: .leading, spacing: 16) {
 				header
 
-				Picker("Source", selection: $store.source.sending(\.sourceChanged).animation(.smooth(duration: 0.25))) {
+				Picker("Source", selection: $store.source.sending(\.sourceChanged).animation(Self.heightAnimation)) {
 					ForEach(store.availableSources, id: \.self) { source in
 						Text(source.title).tag(source)
 					}
@@ -27,9 +35,11 @@ struct CreateWorktreeDialogView: View {
 				.labelsHidden()
 				.controlSize(.large)
 
-				// Stacked so the outgoing tab fades out over the incoming one rather than above it,
-				// which would stretch the sheet to both tabs' heights added up for the length of the fade.
+				// The outgoing tab fades out over the incoming one. The sheet does not animate its own
+				// resize, so the stack's height is animated instead, toward the incoming tab's height:
+				// the outgoing tab's would keep the stack at the taller of the two until its fade ends.
 				ZStack(alignment: .top) {
+					let source = store.source
 					VStack(alignment: .leading, spacing: 16) {
 						switch store.source {
 						case .branch:
@@ -48,11 +58,18 @@ struct CreateWorktreeDialogView: View {
 							pullRequestSourceContent
 						}
 					}
-					.id(store.source)
+					.onNaturalHeightChange { height in
+						guard source == store.source else { return }
+						animate($tabHeight, to: height)
+					}
+					.id(source)
 					.transition(.opacity)
 				}
+				.modifier(AnimatedHeight(height: tabHeight))
 
 				followUpSection
+					.onNaturalHeightChange { animate($followUpHeight, to: $0) }
+					.modifier(AnimatedHeight(height: followUpHeight))
 			}
 			.padding(20)
 
@@ -349,6 +366,17 @@ struct CreateWorktreeDialogView: View {
 
 	// MARK: - Helpers
 
+	/// Moves a frame to a section's new natural height, at once the first time it is measured.
+	private func animate(_ height: Binding<CGFloat?>, to newHeight: CGFloat) {
+		guard height.wrappedValue != nil else {
+			height.wrappedValue = newHeight
+			return
+		}
+		withAnimation(Self.heightAnimation) {
+			height.wrappedValue = newHeight
+		}
+	}
+
 	private func gridLabel(_ text: String) -> some View {
 		Text(text)
 			.scaledFont(.callout)
@@ -375,6 +403,24 @@ struct CreateWorktreeDialogView: View {
 				.multilineTextAlignment(.center)
 		}
 		.padding()
+	}
+}
+
+/// A frame of the given height, top-aligned and clipped, that passes through every step of an
+/// animation. SwiftUI lays out each step, so the sheet follows it; it does not animate a resize of
+/// its own. A nil height leaves the content at its natural height.
+private struct AnimatedHeight: ViewModifier, Animatable {
+	var height: CGFloat?
+
+	nonisolated var animatableData: CGFloat {
+		get { height ?? 0 }
+		set { height = newValue }
+	}
+
+	func body(content: Content) -> some View {
+		content
+			.frame(height: height, alignment: .top)
+			.clipped()
 	}
 }
 
@@ -471,6 +517,12 @@ private struct DialogSearchField: View {
 }
 
 private extension View {
+	/// Lays the view out at its natural height and reports that height whenever it changes.
+	func onNaturalHeightChange(_ action: @escaping (CGFloat) -> Void) -> some View {
+		fixedSize(horizontal: false, vertical: true)
+			.onGeometryChange(for: CGFloat.self, of: \.size.height, action: action)
+	}
+
 	/// A selectable list inset into a section, on the text background with rounded corners.
 	func dialogList(height: CGFloat) -> some View {
 		let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
