@@ -32,25 +32,6 @@ enum PtyForegroundProcess {
 		return foreground == pid ? .shell : .job(processGroup: foreground)
 	}
 
-	/// Whether Claude Code holds the foreground of the terminal behind `descriptor`.
-	///
-	/// Returns `nil` when the foreground process can't be identified (closed descriptor, no
-	/// controlling process group, or a process this app may not inspect). Callers should fall back to
-	/// their own heuristics on `nil` rather than read it as "not Claude", so an unexpected failure
-	/// degrades to the previous behaviour instead of dropping the status entirely.
-	static func isClaude(ptyDescriptor descriptor: Int32) -> Bool? {
-		guard descriptor >= 0 else {
-			return nil
-		}
-
-		let processGroup = tcgetpgrp(descriptor)
-		guard processGroup > 0, let arguments = arguments(ofProcess: processGroup) else {
-			return nil
-		}
-
-		return isClaude(arguments: arguments)
-	}
-
 	/// Matches the shapes Claude Code is launched in:
 	/// - the native install execs a version-named binary with `argv[0] == "claude"`, so the
 	///   executable path alone (`.../claude/versions/2.1.245`) is not a reliable marker

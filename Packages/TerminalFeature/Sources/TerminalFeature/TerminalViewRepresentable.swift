@@ -20,14 +20,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let terminalViewStore: TerminalViewStore
 	public let sessions: IdentifiedArrayOf<TerminalSession>
 	public let activeSessionId: UUID?
-	public let foregroundColor: NSColor
-	public let backgroundColor: NSColor
-	/// The 16 ANSI colors of an imported profile, or `nil` for SwiftTerm's default palette.
-	public let ansiPalette: [NSColor]?
-	/// An imported profile's caret color, or `nil` for SwiftTerm's default.
-	public let cursorColor: NSColor?
-	/// An imported profile's selection background, or `nil` for SwiftTerm's default.
-	public let selectionColor: NSColor?
+	/// The colors a new pane is created with.
+	public let colors: TerminalColors
 	public let copyOnSelect: Bool
 	public let mouseReporting: Bool
 	/// The font every pane renders with. Resolved by the caller — the family and its point size are
@@ -43,11 +37,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		terminalViewStore: TerminalViewStore,
 		sessions: IdentifiedArrayOf<TerminalSession>,
 		activeSessionId: UUID?,
-		foregroundColor: NSColor,
-		backgroundColor: NSColor,
-		ansiPalette: [NSColor]? = nil,
-		cursorColor: NSColor? = nil,
-		selectionColor: NSColor? = nil,
+		colors: TerminalColors,
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
 		font: NSFont,
@@ -59,11 +49,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.terminalViewStore = terminalViewStore
 		self.sessions = sessions
 		self.activeSessionId = activeSessionId
-		self.foregroundColor = foregroundColor
-		self.backgroundColor = backgroundColor
-		self.ansiPalette = ansiPalette
-		self.cursorColor = cursorColor
-		self.selectionColor = selectionColor
+		self.colors = colors
 		self.copyOnSelect = copyOnSelect
 		self.mouseReporting = mouseReporting
 		self.font = font
@@ -78,66 +64,54 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	}
 
 	public func updateNSView(_ nsView: NSView, context: Context) {
-		for session in sessions {
-			switch session.status {
-			case .active,
-			     .launching,
-			     .waitingForInput:
-				let termView = terminalViewStore.view(
-					for: session,
-					foregroundColor: foregroundColor,
-					backgroundColor: backgroundColor,
-					ansiPalette: ansiPalette,
-					cursorColor: cursorColor,
-					selectionColor: selectionColor,
-					onStatusChange: onStatusChange,
-					onNotification: onNotification,
-					onTitleChange: onTitleChange,
-					onOpenFile: onOpenFile
-				)
-				// Assigned on every update, not at creation: panes outlive a change to the
-				// setting, and the colors only look like they don't because a new theme is
-				// documented as applying to newly opened terminals.
-				termView.copiesSelectionAutomatically = copyOnSelect
-				termView.allowMouseReporting = mouseReporting
+		for session in sessions where session.status.isLive {
+			let termView = terminalViewStore.view(
+				for: session,
+				colors: colors,
+				onStatusChange: onStatusChange,
+				onNotification: onNotification,
+				onTitleChange: onTitleChange,
+				onOpenFile: onOpenFile
+			)
+			// Assigned on every update, not at creation: panes outlive a change to the
+			// setting, and the colors only look like they don't because a new theme is
+			// documented as applying to newly opened terminals.
+			termView.copiesSelectionAutomatically = copyOnSelect
+			termView.allowMouseReporting = mouseReporting
 
-				// Guarded on a real change, unlike the two flags above: SwiftTerm's font setter
-				// rebuilds the bold/italic faces, drops the selection and re-derives the column and
-				// row count from the new cell size, which resizes the PTY and sends the shell a
-				// SIGWINCH. That is the right thing to do when the user picks a font, and the wrong
-				// thing to do on every unrelated update pass. Compared by name and size rather than
-				// with `!=`: NSFont equality also weighs matrix and descriptor attributes that the
-				// view may have derived, which would make the guard fire every pass.
-				if
-					termView.font.fontName != font.fontName
-					|| termView.font.pointSize != font.pointSize
-				{
-					termView.font = font
-				}
+			// Guarded on a real change, unlike the two flags above: SwiftTerm's font setter
+			// rebuilds the bold/italic faces, drops the selection and re-derives the column and
+			// row count from the new cell size, which resizes the PTY and sends the shell a
+			// SIGWINCH. That is the right thing to do when the user picks a font, and the wrong
+			// thing to do on every unrelated update pass. Compared by name and size rather than
+			// with `!=`: NSFont equality also weighs matrix and descriptor attributes that the
+			// view may have derived, which would make the guard fire every pass.
+			if
+				termView.font.fontName != font.fontName
+				|| termView.font.pointSize != font.pointSize
+			{
+				termView.font = font
+			}
 
-				if termView.superview !== nsView {
-					termView.translatesAutoresizingMaskIntoConstraints = true
-					termView.autoresizingMask = []
-					nsView.addSubview(termView)
-					nsView.needsLayout = true
-				}
-				let isActive = session.id == activeSessionId
-				if termView.isHidden == isActive {
-					termView.isHidden = !isActive
-					// Sized in the container's next layout, not here: this update can run before
-					// SwiftUI gives the container the width of the newly shown repository, and sizing
-					// to the stale bounds would resize the pane twice.
-					nsView.needsLayout = true
-				}
-				if isActive {
-					termView.requestFocus()
-				}
-				else {
-					termView.cancelPendingFocus()
-				}
-
-			case .failed:
-				break
+			if termView.superview !== nsView {
+				termView.translatesAutoresizingMaskIntoConstraints = true
+				termView.autoresizingMask = []
+				nsView.addSubview(termView)
+				nsView.needsLayout = true
+			}
+			let isActive = session.id == activeSessionId
+			if termView.isHidden == isActive {
+				termView.isHidden = !isActive
+				// Sized in the container's next layout, not here: this update can run before
+				// SwiftUI gives the container the width of the newly shown repository, and sizing
+				// to the stale bounds would resize the pane twice.
+				nsView.needsLayout = true
+			}
+			if isActive {
+				termView.requestFocus()
+			}
+			else {
+				termView.cancelPendingFocus()
 			}
 		}
 	}
@@ -148,11 +122,11 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 ///
 /// Every pane used to be pinned to the container's edges, so any change of the container's width
 /// resized all of them — and the container's width depends on the repository on screen, whose
-/// simulator pane may be open while another's is not. Each resize is a reflow and a SIGWINCH; a
-/// narrow→wide reflow of a Claude Code screen joins unrelated lines (SwiftTerm keeps stale soft-wrap
-/// flags, see the README), so switching between two repositories' tabs garbled every terminal
-/// in the app a little more each time. A hidden pane now keeps its size until it is shown, which
-/// for a repository's own tabs is the size they will be shown at.
+/// simulator pane may be open while another's is not. Each resize is a reflow and a SIGWINCH; until
+/// SwiftTerm 1.99.1 a narrow→wide reflow of a Claude Code screen joined unrelated lines (see the
+/// README), so switching between two repositories' tabs garbled every terminal in the app a little
+/// more each time. A hidden pane keeps its size until it is shown, which for a repository's own
+/// tabs is the size they will be shown at, and saves a reflow and a SIGWINCH per hidden pane.
 final class TerminalPaneContainerView: NSView {
 	override init(frame frameRect: NSRect) {
 		super.init(frame: frameRect)

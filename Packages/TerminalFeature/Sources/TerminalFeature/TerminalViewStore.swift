@@ -36,22 +36,13 @@ public final class TerminalViewStore {
 	}
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one. A new
-	/// pane keeps the callbacks it is created with for its whole life; later calls' are ignored.
-	/// - Parameter ansiPalette: The 16 ANSI colors to install, or `nil` to keep SwiftTerm's
-	///   default palette — which is Terminal.app's own, so an imported profile that defines no
-	///   ANSI colors renders the same way Terminal renders it.
-	/// - Parameter cursorColor: The caret color, or `nil` to keep SwiftTerm's default. Most
-	///   Terminal profiles set no cursor color, so `nil` is the usual case.
-	/// - Parameter selectionColor: The selection background, or `nil` to keep SwiftTerm's default.
+	/// pane keeps the colors and callbacks it is created with for its whole life; later calls' are
+	/// ignored.
 	/// - Parameter onStatusChange: Also reports `.failed` once the pane's shell exits on its own.
 	/// - Parameter onTitleChange: The terminal title the pane's program sets, cleaned for display.
 	public func view(
 		for session: TerminalSession,
-		foregroundColor: NSColor,
-		backgroundColor: NSColor,
-		ansiPalette: [NSColor]? = nil,
-		cursorColor: NSColor? = nil,
-		selectionColor: NSColor? = nil,
+		colors: TerminalColors,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
 		onTitleChange: @escaping @Sendable (UUID, String?) -> Void = { _, _ in },
@@ -69,34 +60,7 @@ public final class TerminalViewStore {
 			onOpenFile: onOpenFile
 		)
 
-		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.
-		// Users can toggle back to Meta mode with Option+Command+O if needed.
-		terminalView.optionAsMetaKey = false
-		// Option stays Meta on the keys no layout composes anything for (arrows, Backspace,
-		// Enter, Escape, Tab, Home/End, function keys): ⌥← moves a word, ⌥⌫ deletes one, ⌥↩ is
-		// Meta-Enter (a newline in Claude Code), under the kitty protocol as well.
-		terminalView.optionAsMetaKeyForFunctionalKeys = true
-
-		terminalView.nativeForegroundColor = foregroundColor
-		terminalView.nativeBackgroundColor = backgroundColor
-		// Installed after the fg/bg assignment: SwiftTerm derives the extended 256-color
-		// palette from the 16 ANSI colors plus the terminal's own background and foreground.
-		if let ansiPalette, let colors = TerminalPaletteMapping.swiftTermColors(from: ansiPalette) {
-			terminalView.installColors(colors)
-		}
-		if let cursorColor {
-			terminalView.caretColor = cursorColor
-		}
-		if let selectionColor {
-			terminalView.selectedTextBackgroundColor = selectionColor
-			// Not optional to set alongside it: SwiftTerm *replaces* the foreground of every
-			// selected cell with `selectedTextForegroundColor`, which defaults to black — fine
-			// against its own teal default, unreadable against the dark selection colors most
-			// Terminal profiles ship. The theme's own text color is the right stand-in: the
-			// profile's author picked a selection color that works behind exactly that text.
-			terminalView.selectedTextForegroundColor = foregroundColor
-		}
-		terminalView.changeScrollback(3000)
+		terminalView.apply(colors)
 
 		let sessionId = session.id
 		let processDelegate = TerminalProcessDelegate(

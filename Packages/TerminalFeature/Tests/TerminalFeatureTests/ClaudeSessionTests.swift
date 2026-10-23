@@ -99,8 +99,7 @@ struct ClaudeSessionTests {
 		let session = TerminalSession(repositoryPath: "/")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -109,7 +108,9 @@ struct ClaudeSessionTests {
 		try #require(pid > 0)
 		// The pid exists from the fork on, but until the exec lands it is not yet `claude`, and
 		// would read as "no session" for that reason alone.
-		try #require(await eventually { PtyForegroundProcess.isClaude(ptyDescriptor: view.process.childfd) == true })
+		try #require(await eventually {
+			PtyForegroundProcess.arguments(ofProcess: pid).map(PtyForegroundProcess.isClaude(arguments:)) == true
+		})
 
 		#expect(ClaudeSession.id(inForegroundOf: view.process.childfd, sessionsDirectory: sessions) == nil)
 

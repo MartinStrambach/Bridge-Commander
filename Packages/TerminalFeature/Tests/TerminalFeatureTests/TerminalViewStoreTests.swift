@@ -100,8 +100,7 @@ struct TerminalViewStoreTests {
 		let session = TerminalSession(repositoryPath: "/")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -115,8 +114,7 @@ struct TerminalViewStoreTests {
 		let session = TerminalSession(repositoryPath: "/")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -186,8 +184,7 @@ struct TerminalViewStoreTests {
 		let reported = Reported()
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, status, _ in
 				MainActor.assumeIsolated { reported.statuses.append(status) }
 			},
@@ -219,8 +216,7 @@ struct TerminalViewStoreTests {
 		let reported = Reported()
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, status, report in
 				MainActor.assumeIsolated {
 					reported.statuses.append(status)
@@ -251,8 +247,7 @@ struct TerminalViewStoreTests {
 		let titles = Titles()
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, status, _ in
 				MainActor.assumeIsolated { reported.statuses.append(status) }
 			},
@@ -285,8 +280,7 @@ struct TerminalViewStoreTests {
 		let session = TerminalSession(repositoryPath: "/")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -313,8 +307,7 @@ struct TerminalViewStoreTests {
 		let session = TerminalSession(repositoryPath: "/", startingDirectory: "/tmp")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -349,8 +342,7 @@ struct TerminalViewStoreTests {
 
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)

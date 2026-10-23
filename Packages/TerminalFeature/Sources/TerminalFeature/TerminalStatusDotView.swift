@@ -16,20 +16,12 @@ public struct TerminalStatusDotView: View {
 	}
 
 	public var body: some View {
-		switch status {
-		case .active,
-		     .launching:
-			Circle()
-				.fill(showsActive ? Color.green : Color.clear)
-				.frame(width: size, height: size)
-
-		case .waitingForInput:
+		if status == .waitingForInput {
 			PulsingAmberDot(size: size)
-
-		case .failed,
-		     nil:
+		}
+		else {
 			Circle()
-				.fill(Color.clear)
+				.fill(status?.isLive == true && showsActive ? Color.green : Color.clear)
 				.frame(width: size, height: size)
 		}
 	}

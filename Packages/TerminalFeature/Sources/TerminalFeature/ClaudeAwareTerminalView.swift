@@ -50,6 +50,14 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		self.onNotification = onNotification
 		self.onOpenFile = onOpenFile
 		super.init(frame: .zero)
+		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.
+		// Users can toggle back to Meta mode with Option+Command+O if needed.
+		optionAsMetaKey = false
+		// Option stays Meta on the keys no layout composes anything for (arrows, Backspace,
+		// Enter, Escape, Tab, Home/End, function keys): ⌥← moves a word, ⌥⌫ deletes one, ⌥↩ is
+		// Meta-Enter (a newline in Claude Code), under the kitty protocol as well.
+		optionAsMetaKeyForFunctionalKeys = true
+		changeScrollback(3000)
 		registerForDraggedTypes([.fileURL])
 		observeNotifications()
 		observeProcessOutput()

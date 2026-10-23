@@ -431,11 +431,13 @@ struct TerminalPanelView: View {
 				terminalViewStore: terminalViewStore,
 				sessions: sessions,
 				activeSessionId: activeSessionId,
-				foregroundColor: resolvedTheme.foreground,
-				backgroundColor: resolvedTheme.background,
-				ansiPalette: resolvedTheme.ansiPalette,
-				cursorColor: resolvedTheme.cursor,
-				selectionColor: resolvedTheme.selection,
+				colors: TerminalColors(
+					foreground: resolvedTheme.foreground,
+					background: resolvedTheme.background,
+					ansiPalette: resolvedTheme.ansiPalette,
+					cursor: resolvedTheme.cursor,
+					selection: resolvedTheme.selection
+				),
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
 				font: terminalFont,

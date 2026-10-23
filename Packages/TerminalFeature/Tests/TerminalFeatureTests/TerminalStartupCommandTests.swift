@@ -59,8 +59,7 @@ struct TerminalStartupCommandTests {
 		let session = TerminalSession(repositoryPath: "/", startupCommand: command)
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
+			colors: TerminalColors(foreground: .white, background: .black),
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
