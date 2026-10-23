@@ -3,7 +3,7 @@ import Foundation
 import SwiftTerm
 
 /// Dropping files onto a pane pastes their paths at the prompt.
-extension ClaudeAwareTerminalView {
+extension TerminalPaneView {
 	override public func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
 		sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
 			? .copy

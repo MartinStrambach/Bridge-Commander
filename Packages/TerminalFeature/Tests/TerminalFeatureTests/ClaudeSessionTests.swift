@@ -100,8 +100,7 @@ struct ClaudeSessionTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		defer { store.killSession(sessionId: session.id) }
 		let pid = view.process.shellPid

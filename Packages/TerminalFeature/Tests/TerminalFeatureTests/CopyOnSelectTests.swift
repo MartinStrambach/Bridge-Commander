@@ -16,12 +16,11 @@ struct CopyOnSelectTests {
 	private func makeView(
 		writingTo pasteboard: NSPasteboard,
 		copyOnSelect: Bool
-	) -> ClaudeAwareTerminalView {
-		let view = ClaudeAwareTerminalView(
+	) -> TerminalPaneView {
+		let view = TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 		view.selectionPasteboard = pasteboard

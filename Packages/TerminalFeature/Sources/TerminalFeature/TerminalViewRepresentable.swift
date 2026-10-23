@@ -27,11 +27,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	/// The font every pane renders with. Resolved by the caller — the family and its point size are
 	/// both settings, and this package stays free of a Settings dependency.
 	public let font: NSFont
-	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
-	public let onNotification: @Sendable (UUID, TerminalNotification) -> Void
-	public let onTitleChange: @Sendable (UUID, String?) -> Void
-	/// A ⌘-clicked link that names a file.
-	public let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
+	/// What a new pane reports.
+	public let events: TerminalPaneEvents
 
 	public init(
 		terminalViewStore: TerminalViewStore,
@@ -41,10 +38,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
 		font: NSFont,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onTitleChange: @escaping @Sendable (UUID, String?) -> Void,
-		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void
+		events: TerminalPaneEvents
 	) {
 		self.terminalViewStore = terminalViewStore
 		self.sessions = sessions
@@ -53,10 +47,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.copyOnSelect = copyOnSelect
 		self.mouseReporting = mouseReporting
 		self.font = font
-		self.onStatusChange = onStatusChange
-		self.onNotification = onNotification
-		self.onTitleChange = onTitleChange
-		self.onOpenFile = onOpenFile
+		self.events = events
 	}
 
 	public func makeNSView(context: Context) -> NSView {
@@ -68,10 +59,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 			let termView = terminalViewStore.view(
 				for: session,
 				colors: colors,
-				onStatusChange: onStatusChange,
-				onNotification: onNotification,
-				onTitleChange: onTitleChange,
-				onOpenFile: onOpenFile
+				events: events
 			)
 			// Assigned on every update, not at creation: panes outlive a change to the
 			// setting, and the colors only look like they don't because a new theme is

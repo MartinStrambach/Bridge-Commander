@@ -70,13 +70,14 @@ struct TerminalNotificationTests {
 	@Test func aPaneForwardsTheNotificationsItsProgramAsksFor() async {
 		let received = Received()
 		let sessionId = UUID()
-		let view = ClaudeAwareTerminalView(
+		let view = TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: sessionId,
-			onStatusChange: { _, _, _ in },
-			onNotification: { id, notification in
-				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
-			}
+			events: TerminalPaneEvents(
+				onNotification: { id, notification in
+					MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
+				}
+			)
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 
@@ -105,15 +106,17 @@ struct TerminalNotificationTests {
 	@Test func aNotificationLeavesThePanesStatusToTheProgramsReport() async {
 		let received = Received()
 		let statuses = ReceivedStatuses()
-		let view = ClaudeAwareTerminalView(
+		let view = TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, status, report in
-				MainActor.assumeIsolated { statuses.items.append(.init(status: status, report: report)) }
-			},
-			onNotification: { id, notification in
-				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
-			}
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, report in
+					MainActor.assumeIsolated { statuses.items.append(.init(status: status, report: report)) }
+				},
+				onNotification: { id, notification in
+					MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
+				}
+			)
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 
@@ -135,15 +138,17 @@ struct TerminalNotificationTests {
 	@Test func marksNotificationsFromAProgramThatReportsItsStatus() async {
 		let received = Received()
 		let statuses = ReceivedStatuses()
-		let view = ClaudeAwareTerminalView(
+		let view = TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, status, report in
-				MainActor.assumeIsolated { statuses.items.append(.init(status: status, report: report)) }
-			},
-			onNotification: { id, notification in
-				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
-			}
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, report in
+					MainActor.assumeIsolated { statuses.items.append(.init(status: status, report: report)) }
+				},
+				onNotification: { id, notification in
+					MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
+				}
+			)
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 
@@ -166,13 +171,14 @@ struct TerminalNotificationTests {
 	@MainActor
 	@Test func aStoppedPaneForwardsNoNotifications() async throws {
 		let received = Received()
-		let view = ClaudeAwareTerminalView(
+		let view = TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, _, _ in },
-			onNotification: { id, notification in
-				MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
-			}
+			events: TerminalPaneEvents(
+				onNotification: { id, notification in
+					MainActor.assumeIsolated { received.items.append(.init(id: id, notification: notification)) }
+				}
+			)
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 

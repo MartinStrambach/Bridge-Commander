@@ -6,7 +6,7 @@ import SwiftTerm
 @MainActor
 @Observable
 public final class TerminalViewStore {
-	private var views: [UUID: ClaudeAwareTerminalView] = [:]
+	private var views: [UUID: TerminalPaneView] = [:]
 	/// Each pane's process delegate, which SwiftTerm holds only weakly. Kept here, for as long as
 	/// the pane, rather than by the terminal panel: the panel can close while its panes run on, and
 	/// a pane whose delegate went with the panel reported neither its title nor its shell's exit
@@ -36,36 +36,29 @@ public final class TerminalViewStore {
 	}
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one. A new
-	/// pane keeps the colors and callbacks it is created with for its whole life; later calls' are
+	/// pane keeps the colors and events it is created with for its whole life; later calls' are
 	/// ignored.
-	/// - Parameter onStatusChange: Also reports `.failed` once the pane's shell exits on its own.
-	/// - Parameter onTitleChange: The terminal title the pane's program sets, cleaned for display.
 	public func view(
 		for session: TerminalSession,
 		colors: TerminalColors,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onTitleChange: @escaping @Sendable (UUID, String?) -> Void = { _, _ in },
-		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
-	) -> ClaudeAwareTerminalView {
+		events: TerminalPaneEvents
+	) -> TerminalPaneView {
 		if let existing = views[session.id] {
 			return existing
 		}
 
-		let terminalView = ClaudeAwareTerminalView(
+		let terminalView = TerminalPaneView(
 			repositoryPath: session.repositoryPath,
 			sessionId: session.id,
-			onStatusChange: onStatusChange,
-			onNotification: onNotification,
-			onOpenFile: onOpenFile
+			events: events
 		)
 
 		terminalView.apply(colors)
 
 		let sessionId = session.id
 		let processDelegate = TerminalProcessDelegate(
-			onFailed: { message in onStatusChange(sessionId, .failed(message), nil) },
-			onTitleChange: { title in onTitleChange(sessionId, title) }
+			onFailed: { message in events.onStatusChange(sessionId, .failed(message), nil) },
+			onTitleChange: { title in events.onTitleChange(sessionId, title) }
 		)
 		processDelegates[session.id] = processDelegate
 		terminalView.processDelegate = processDelegate
@@ -80,13 +73,13 @@ public final class TerminalViewStore {
 			currentDirectory: session.startingDirectory
 		)
 
-		// Store the view before calling onStatusChange to prevent re-entrancy:
-		// onStatusChange triggers a TCA state mutation that can cause updateNSView to fire
+		// Store the view before reporting its status to prevent re-entrancy:
+		// the report triggers a TCA state mutation that can cause updateNSView to fire
 		// again synchronously; if views[id] were still nil at that point, a second
-		// ClaudeAwareTerminalView would be created for the same session.
+		// TerminalPaneView would be created for the same session.
 		views[session.id] = terminalView
 
-		onStatusChange(session.id, .active, nil)
+		events.onStatusChange(session.id, .active, nil)
 
 		return terminalView
 	}

@@ -9,13 +9,13 @@ import Synchronization
 /// The judgement lives in `ProgramStatusDetector`. This type owns the pane and forwards it what
 /// the program reports (OSC 7501) and when output arrives. Notifications the program asks for go
 /// straight up to the session.
-public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
+public final class TerminalPaneView: LocalProcessTerminalView {
 	public let repositoryPath: String
 	public let sessionId: UUID
 
-	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
-	private let onNotification: @Sendable (UUID, TerminalNotification) -> Void
-	private let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
+	/// The title goes up through the pane's process delegate, which `TerminalViewStore` builds
+	/// from these same events.
+	private let events: TerminalPaneEvents
 
 	/// Built on first use, since it reads this view's process and `self` isn't available until
 	/// `super.init` has run.
@@ -33,22 +33,18 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 				return
 			}
 
-			onStatusChange(sessionId, status, report)
+			events.onStatusChange(sessionId, status, report)
 		}
 	)
 
 	public init(
 		repositoryPath: String,
 		sessionId: UUID,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
+		events: TerminalPaneEvents
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId
-		self.onStatusChange = onStatusChange
-		self.onNotification = onNotification
-		self.onOpenFile = onOpenFile
+		self.events = events
 		super.init(frame: .zero)
 		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.
 		// Users can toggle back to Meta mode with Option+Command+O if needed.
@@ -135,20 +131,20 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		var notification = notification
 		notification.isFromStatusReportingProgram = detector.isReportStanding
 
-		onNotification(sessionId, notification)
+		events.onNotification(sessionId, notification)
 	}
 
 	// MARK: - Links
 
-	/// Opens a ⌘-clicked link. A file goes up to `onOpenFile`, to open in the repository's IDE; a
-	/// relative path is looked up in the shell's current directory, where the program that printed
-	/// it was started, then at the repository root. Other URLs get the default handler, and a link
-	/// that names nothing beeps rather than doing nothing — see `TerminalLinkTarget`.
+	/// Opens a ⌘-clicked link. A file goes up as an `onOpenFile` event, to open in the repository's
+	/// IDE; a relative path is looked up in the shell's current directory, where the program that
+	/// printed it was started, then at the repository root. Other URLs get the default handler, and
+	/// a link that names nothing beeps rather than doing nothing — see `TerminalLinkTarget`.
 	override public func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
 		let directories = [currentDirectory, repositoryPath].compactMap(\.self)
 		switch TerminalLinkTarget(link: link, relativeTo: directories) {
 		case let .file(file):
-			onOpenFile(sessionId, file)
+			events.onOpenFile(sessionId, file)
 		case let .url(url):
 			NSWorkspace.shared.open(url)
 		case nil:

@@ -20,12 +20,11 @@ struct TerminalFocusTests {
 		return window
 	}
 
-	private func makePane() -> ClaudeAwareTerminalView {
-		let view = ClaudeAwareTerminalView(
+	private func makePane() -> TerminalPaneView {
+		let view = TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 		return view

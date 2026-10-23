@@ -54,10 +54,7 @@ struct TerminalPanelView: View {
 	let terminalViewStore: TerminalViewStore
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let activeSessionId: UUID?
-	let onStatusChange: @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void
-	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
-	let onTitleChange: @Sendable (UUID, String?) -> Void
-	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
+	let paneEvents: TerminalPaneEvents
 	let onRetry: (UUID) -> Void
 	let onNewTab: () -> Void
 	let onSelectTab: (UUID) -> Void
@@ -441,10 +438,7 @@ struct TerminalPanelView: View {
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
 				font: terminalFont,
-				onStatusChange: onStatusChange,
-				onNotification: onNotification,
-				onTitleChange: onTitleChange,
-				onOpenFile: onOpenFile
+				events: paneEvents
 			)
 
 			if

@@ -104,8 +104,7 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		return (session, view.process.shellPid, view.process.childfd)
 	}
@@ -118,8 +117,7 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		defer { store.killSession(sessionId: session.id) }
 
@@ -202,10 +200,11 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, status, _ in
-				MainActor.assumeIsolated { reported.statuses.append(status) }
-			},
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				}
+			)
 		)
 		let pid = view.process.shellPid
 		try #require(pid > 0)
@@ -229,10 +228,11 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, status, _ in
-				MainActor.assumeIsolated { reported.statuses.append(status) }
-			},
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				}
+			)
 		)
 		try #require(view.process.shellPid > 0)
 
@@ -261,13 +261,14 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, status, report in
-				MainActor.assumeIsolated {
-					reported.statuses.append(status)
-					reported.reports.append(report)
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, report in
+					MainActor.assumeIsolated {
+						reported.statuses.append(status)
+						reported.reports.append(report)
+					}
 				}
-			},
-			onNotification: { _, _ in }
+			)
 		)
 		defer { store.killSession(sessionId: session.id) }
 		try #require(view.process.shellPid > 0)
@@ -292,13 +293,14 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, status, _ in
-				MainActor.assumeIsolated { reported.statuses.append(status) }
-			},
-			onNotification: { _, _ in },
-			onTitleChange: { _, title in
-				MainActor.assumeIsolated { titles.items.append(title) }
-			}
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				},
+				onTitleChange: { _, title in
+					MainActor.assumeIsolated { titles.items.append(title) }
+				}
+			)
 		)
 		defer { store.killSession(sessionId: session.id) }
 		let pid = view.process.shellPid
@@ -325,8 +327,7 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		defer { store.killSession(sessionId: session.id) }
 		let shell = view.process.shellPid
@@ -352,8 +353,7 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		try #require(view.process.shellPid > 0)
 		#expect(await eventually { store.paneSnapshots()[session.id]?.directory == "/private/tmp" })
@@ -387,8 +387,7 @@ struct TerminalViewStoreTests {
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		view.process.send(data: Array("sleep 300\n".utf8)[...])
 		let job = try #require(await firstChild(of: shellPid))

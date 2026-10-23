@@ -246,26 +246,28 @@ struct RepositoryListView: View {
 				activeRowStore: activeRowStore,
 				sessions: store.terminalSessions,
 				terminalViewStore: terminalViewStore,
-				onStatusChange: { sessionId, status, report in
-					MainActor.assumeIsolated {
-						_ = send(.terminalSessionStatusChanged(sessionId: sessionId, status: status, report: report))
+				paneEvents: TerminalPaneEvents(
+					onStatusChange: { sessionId, status, report in
+						MainActor.assumeIsolated {
+							_ = send(.terminalSessionStatusChanged(sessionId: sessionId, status: status, report: report))
+						}
+					},
+					onNotification: { sessionId, notification in
+						MainActor.assumeIsolated {
+							_ = send(.terminalNotificationReceived(sessionId: sessionId, notification: notification))
+						}
+					},
+					onTitleChange: { sessionId, title in
+						MainActor.assumeIsolated {
+							_ = send(.terminalSessionTitleChanged(sessionId: sessionId, title: title))
+						}
+					},
+					onOpenFile: { sessionId, link in
+						MainActor.assumeIsolated {
+							_ = send(.terminalFileLinkClicked(sessionId: sessionId, link: link))
+						}
 					}
-				},
-				onNotification: { sessionId, notification in
-					MainActor.assumeIsolated {
-						_ = send(.terminalNotificationReceived(sessionId: sessionId, notification: notification))
-					}
-				},
-				onTitleChange: { sessionId, title in
-					MainActor.assumeIsolated {
-						_ = send(.terminalSessionTitleChanged(sessionId: sessionId, title: title))
-					}
-				},
-				onOpenFile: { sessionId, link in
-					MainActor.assumeIsolated {
-						_ = send(.terminalFileLinkClicked(sessionId: sessionId, link: link))
-					}
-				}
+				)
 			)
 			.transition(.opacity)
 		}

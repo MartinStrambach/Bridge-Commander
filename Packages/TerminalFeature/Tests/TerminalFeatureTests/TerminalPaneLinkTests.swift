@@ -37,17 +37,17 @@ struct TerminalPaneLinkTests {
 		defer { try? FileManager.default.removeItem(at: repository) }
 		let opened = OpenedFiles()
 		let sessionId = UUID()
-		let pane = ClaudeAwareTerminalView(
+		let pane = TerminalPaneView(
 			repositoryPath: repository.path,
 			sessionId: sessionId,
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in },
-			onOpenFile: { id, file in
-				MainActor.assumeIsolated {
-					#expect(id == sessionId)
-					opened.items.append(file)
+			events: TerminalPaneEvents(
+				onOpenFile: { id, file in
+					MainActor.assumeIsolated {
+						#expect(id == sessionId)
+						opened.items.append(file)
+					}
 				}
-			}
+			)
 		)
 
 		pane.requestOpenLink(source: pane, link: "Root.swift:12", params: [:])
@@ -70,11 +70,11 @@ struct TerminalPaneLinkTests {
 		let pane = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in },
-			onOpenFile: { _, file in
-				MainActor.assumeIsolated { opened.items.append(file) }
-			}
+			events: TerminalPaneEvents(
+				onOpenFile: { _, file in
+					MainActor.assumeIsolated { opened.items.append(file) }
+				}
+			)
 		)
 		defer { store.killSession(sessionId: session.id) }
 		// The child chdirs after the fork; until then it is still in this process's directory.

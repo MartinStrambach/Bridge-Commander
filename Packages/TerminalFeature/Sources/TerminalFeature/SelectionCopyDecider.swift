@@ -3,7 +3,7 @@ import Foundation
 /// Decides what copy-on-select should put on the pasteboard, given the selection as it stands once
 /// a mouse gesture has finished.
 ///
-/// Split out of `ClaudeAwareTerminalView` so the rules can be checked without a terminal, a
+/// Split out of `TerminalPaneView` so the rules can be checked without a terminal, a
 /// pasteboard or a synthesized mouse event.
 struct SelectionCopyDecider {
 	/// What was copied last, so a gesture that leaves the selection untouched — a shift-click that

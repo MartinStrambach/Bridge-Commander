@@ -54,23 +54,22 @@ struct TerminalStartupCommandTests {
 		command: String?,
 		shell: String = "/bin/cat",
 		arguments: [String] = []
-	) -> (store: TerminalViewStore, session: TerminalSession, view: ClaudeAwareTerminalView) {
+	) -> (store: TerminalViewStore, session: TerminalSession, view: TerminalPaneView) {
 		let store = TerminalViewStore(shellExecutable: shell, shellArguments: arguments)
 		let session = TerminalSession(repositoryPath: "/", startupCommand: command)
 		let view = store.view(
 			for: session,
 			colors: TerminalColors(foreground: .white, background: .black),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		return (store, session, view)
 	}
 
-	private func screenText(of view: ClaudeAwareTerminalView) -> String {
+	private func screenText(of view: TerminalPaneView) -> String {
 		String(decoding: view.getBufferAsData(), as: UTF8.self)
 	}
 
-	private func occurrences(of needle: String, in view: ClaudeAwareTerminalView) -> Int {
+	private func occurrences(of needle: String, in view: TerminalPaneView) -> Int {
 		screenText(of: view).components(separatedBy: needle).count - 1
 	}
 

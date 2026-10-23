@@ -8,12 +8,11 @@ import Testing
 @MainActor
 @Suite("Terminal colors")
 struct TerminalColorsTests {
-	private func makePane() -> ClaudeAwareTerminalView {
-		ClaudeAwareTerminalView(
+	private func makePane() -> TerminalPaneView {
+		TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 	}
 

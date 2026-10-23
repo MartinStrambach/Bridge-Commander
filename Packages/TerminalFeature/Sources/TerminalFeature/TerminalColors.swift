@@ -32,7 +32,7 @@ public struct TerminalColors: Equatable {
 	}
 }
 
-extension ClaudeAwareTerminalView {
+extension TerminalPaneView {
 	/// Installs a pane's colors. Done once, as the pane is created: a new theme applies to newly
 	/// opened terminals.
 	func apply(_ colors: TerminalColors) {
