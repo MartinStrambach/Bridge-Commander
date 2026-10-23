@@ -445,7 +445,7 @@ struct RepositoryRowReducer {
 				}
 
 			case let .createWorktreeButton(action):
-				if case let .didCreateSuccessfully(_, worktreePath, launch) = action {
+				if case let .didCreateSuccessfully(_, _, worktreePath, launch) = action {
 					return .send(.worktreeCreated(path: worktreePath, launch: launch))
 				}
 				return .none

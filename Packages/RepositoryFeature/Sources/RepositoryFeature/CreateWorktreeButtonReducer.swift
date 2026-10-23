@@ -53,6 +53,8 @@ struct CreateWorktreeButtonReducer {
 		var ticketSearchError: String?
 		var selectedTicketId: String?
 
+		var newTicket: NewTicketFormReducer.State
+
 		var pullRequests: [OpenPullRequest] = []
 		var pullRequestFilter: String = ""
 		@Shared(.worktreeOnlyMyPullRequests)
@@ -64,8 +66,14 @@ struct CreateWorktreeButtonReducer {
 		var selectedPullRequestNumber: Int?
 
 		/// Typed after `claude` when the follow-up runs Claude; blank starts it without a prompt.
-		/// Prefilled from the picked ticket or PR.
+		/// Prefilled from the picked ticket or PR; for a new ticket, a blank one is filled in once
+		/// the ticket exists.
 		var claudePrompt: String = ""
+
+		init(repositoryPath: String) {
+			self.repositoryPath = repositoryPath
+			self.newTicket = NewTicketFormReducer.State(repositoryPath: repositoryPath)
+		}
 
 		var repositoryName: String {
 			URL(fileURLWithPath: repositoryPath).lastPathComponent
@@ -114,6 +122,8 @@ struct CreateWorktreeButtonReducer {
 				!availableBranches.isEmpty && (!createNewBranch || !branchName.isEmpty)
 			case .ticket:
 				!availableBranches.isEmpty && selectedTicket != nil && !branchName.isEmpty
+			case .newTicket:
+				!availableBranches.isEmpty && newTicket.canSubmit
 			case .pullRequest:
 				selectedPullRequest != nil
 			}
@@ -123,7 +133,7 @@ struct CreateWorktreeButtonReducer {
 
 		/// Whether the dialog shows where the new branch starts: only when a new branch is made.
 		var showsStartPoint: Bool {
-			source == .ticket || (source == .branch && createNewBranch)
+			source == .ticket || source == .newTicket || (source == .branch && createNewBranch)
 		}
 
 		/// Whether the start is the user's to pick: the base is both a local branch and one on
@@ -154,12 +164,14 @@ struct CreateWorktreeButtonReducer {
 
 	enum Action: BindableAction {
 		case binding(BindingAction<State>)
+		case newTicket(NewTicketFormReducer.Action)
 		case showDialog
 		case cancelCreation
 		case confirmCreation
 		case errorAlert(PresentationAction<ErrorAlert>)
 		case didCreateSuccessfully(
 			copyResult: WorktreeFileCopier.Result?,
+			warnings: [String] = [],
 			worktreePath: String,
 			launch: WorktreeTerminalLaunch?
 		)
@@ -204,6 +216,9 @@ struct CreateWorktreeButtonReducer {
 
 	var body: some Reducer<State, Action> {
 		BindingReducer()
+		Scope(\.newTicket, action: \.newTicket) {
+			NewTicketFormReducer()
+		}
 		Reduce { state, action in
 			switch action {
 			case .binding(\.branchName):
@@ -255,6 +270,9 @@ struct CreateWorktreeButtonReducer {
 				state.selectedTicketId = nil
 				state.selectedPullRequestNumber = nil
 				return loadSourceItems(for: source, in: &state)
+
+			case .newTicket:
+				return .none
 
 			case let .startFromLocalBaseChanged(local):
 				state.$startFromLocalBase.withLock { $0 = local }
@@ -374,7 +392,13 @@ struct CreateWorktreeButtonReducer {
 				return .merge(.cancel(id: CancelID.ticketSearch), .cancel(id: CancelID.pullRequests))
 
 			case .confirmCreation:
-				guard state.canCreate, let request = creationRequest(from: state) else {
+				guard state.canCreate else {
+					return .none
+				}
+				if state.source == .newTicket {
+					return createTicketAndWorktree(&state)
+				}
+				guard let request = creationRequest(from: state) else {
 					return .none
 				}
 
@@ -390,31 +414,12 @@ struct CreateWorktreeButtonReducer {
 					launch
 				] send in
 					do {
-						let worktreeURL = if let fork = request.fork {
-							try await GitWorktreeCreator.createWorktree(
-								fetching: fork.headRef,
-								branchCandidates: fork.branchCandidates,
-								repositoryPath: path,
-								worktreeBasePath: worktreeBasePath
-							)
-						}
-						else {
-							try await GitWorktreeCreator.createWorktree(
-								branchName: request.branchName,
-								baseBranch: request.baseBranch,
-								repositoryPath: path,
-								createNewBranch: request.createNewBranch,
-								startFromOrigin: request.startFromOrigin,
-								worktreeBasePath: worktreeBasePath
-							)
-						}
-						let copyResult: WorktreeFileCopier.Result? = copyPaths.isEmpty
-							? nil
-							: WorktreeFileCopier.copy(
-								paths: copyPaths,
-								from: URL(fileURLWithPath: path),
-								to: worktreeURL
-							)
+						let (worktreeURL, copyResult) = try await Self.createWorktree(
+							request,
+							repositoryPath: path,
+							worktreeBasePath: worktreeBasePath,
+							copyPaths: copyPaths
+						)
 						await send(.didCreateSuccessfully(
 							copyResult: copyResult,
 							worktreePath: worktreeURL.path,
@@ -426,12 +431,13 @@ struct CreateWorktreeButtonReducer {
 					}
 				}
 
-			case let .didCreateSuccessfully(copyResult, _, _):
+			case let .didCreateSuccessfully(copyResult, warnings, _, _):
 				state.isCreating = false
 				resetDialog(&state)
+				var lines = warnings
 				if let result = copyResult, result.hasWarnings {
-					var lines: [String] = []
 					if !result.missing.isEmpty {
+						if !lines.isEmpty { lines.append("") }
 						lines.append("Missing in source repository:")
 						lines.append(contentsOf: result.missing.map { "  • \($0)" })
 					}
@@ -440,6 +446,8 @@ struct CreateWorktreeButtonReducer {
 						lines.append("Failed to copy:")
 						lines.append(contentsOf: result.failed.map { "  • \($0.path) — \($0.reason)" })
 					}
+				}
+				if !lines.isEmpty {
 					state.errorAlert = AlertState {
 						TextState("Worktree created with warnings")
 					} actions: {
@@ -496,6 +504,11 @@ struct CreateWorktreeButtonReducer {
 
 	func creationRequest(from state: State) -> CreationRequest? {
 		switch state.source {
+		case .newTicket:
+			// The branch is named after a ticket that does not exist yet; see
+			// `createTicketAndWorktree`.
+			return nil
+
 		case .branch, .ticket:
 			let branchName = GitBranchNameSanitizer.sanitize(state.branchName)
 			// A ticket always gets a branch of its own; only the plain source may check out
@@ -537,6 +550,8 @@ struct CreateWorktreeButtonReducer {
 		case .ticket:
 			// Always re-run: the user's open tickets change between openings of the dialog.
 			return searchTickets(in: &state, debounce: false)
+		case .newTicket:
+			return .send(.newTicket(.load))
 		case .pullRequest:
 			guard !state.isLoadingPullRequests else {
 				return .none
@@ -591,6 +606,196 @@ struct CreateWorktreeButtonReducer {
 		state.isLoadingPullRequests = false
 		state.selectedPullRequestNumber = nil
 		state.claudePrompt = ""
+		state.newTicket = NewTicketFormReducer.State(repositoryPath: state.repositoryPath)
+	}
+
+	/// Creates the worktree for `request` and copies the group's files into it.
+	private static func createWorktree(
+		_ request: CreationRequest,
+		repositoryPath path: String,
+		worktreeBasePath: String,
+		copyPaths: [String]
+	) async throws -> (URL, WorktreeFileCopier.Result?) {
+		let worktreeURL = if let fork = request.fork {
+			try await GitWorktreeCreator.createWorktree(
+				fetching: fork.headRef,
+				branchCandidates: fork.branchCandidates,
+				repositoryPath: path,
+				worktreeBasePath: worktreeBasePath
+			)
+		}
+		else {
+			try await GitWorktreeCreator.createWorktree(
+				branchName: request.branchName,
+				baseBranch: request.baseBranch,
+				repositoryPath: path,
+				createNewBranch: request.createNewBranch,
+				startFromOrigin: request.startFromOrigin,
+				worktreeBasePath: worktreeBasePath
+			)
+		}
+		let copyResult: WorktreeFileCopier.Result? = copyPaths.isEmpty
+			? nil
+			: WorktreeFileCopier.copy(paths: copyPaths, from: URL(fileURLWithPath: path), to: worktreeURL)
+		return (worktreeURL, copyResult)
+	}
+
+	/// Files the New Ticket tab's ticket, then makes the worktree on a branch named after it, and
+	/// only then moves the ticket to In Progress, so a failed worktree leaves the ticket Open.
+	/// A worktree that fails after the ticket was filed says which ticket, so retrying from the
+	/// Ticket tab does not file a second one.
+	private func createTicketAndWorktree(_ state: inout State) -> Effect<Action> {
+		guard let issue = state.newTicket.issue, let project = state.newTicket.selectedProject else {
+			return .none
+		}
+		state.showCreateDialog = false
+		state.isCreating = true
+		@Shared(.youtrackAuthToken)
+		var authToken = ""
+
+		return .run { [
+			issue,
+			project,
+			authToken = authToken.trimmingCharacters(in: .whitespacesAndNewlines),
+			baseURL = state.youtrackBaseURL,
+			template = state.ticketBranchNameTemplate,
+			baseBranch = state.selectedBaseBranch,
+			startFromOrigin = state.startsFromOrigin,
+			moveToInProgress = state.newTicket.moveToInProgress,
+			fieldValuesOnceInProgress = state.newTicket.fieldValuesOnceInProgress,
+			followUp = state.followUp,
+			claudePrompt = state.claudePrompt.trimmingCharacters(in: .whitespacesAndNewlines),
+			path = state.repositoryPath,
+			worktreeBasePath = state.worktreeBasePath,
+			copyPaths = state.groupSettings[state.repositoryPath]?.worktreeCopyPaths ?? [],
+			youTrackClient
+		] send in
+			let ticket: YouTrackIssueSummary
+			do {
+				ticket = try await youTrackClient.createIssue(issue: issue, baseURL: baseURL, authToken: authToken)
+			}
+			catch {
+				await send(.didFailWithError(Self.newTicketErrorMessage(for: error, project: project)))
+				return
+			}
+			// Right after filing, so a field the worktree step outlives is still set.
+			var warnings = await Self.applyFieldValues(
+				issue.fieldValues,
+				ticketId: ticket.id,
+				baseURL: baseURL,
+				authToken: authToken,
+				youTrackClient: youTrackClient
+			)
+
+			let request = CreationRequest(
+				branchName: GitBranchNameSanitizer.sanitize(
+					BranchNameFormatter.branchName(ticketId: ticket.id, summary: ticket.summary, template: template)
+				),
+				baseBranch: baseBranch,
+				createNewBranch: true,
+				startFromOrigin: startFromOrigin
+			)
+			let worktreeURL: URL
+			let copyResult: WorktreeFileCopier.Result?
+			do {
+				(worktreeURL, copyResult) = try await Self.createWorktree(
+					request,
+					repositoryPath: path,
+					worktreeBasePath: worktreeBasePath,
+					copyPaths: copyPaths
+				)
+			}
+			catch {
+				await send(.didFailWithError(
+					"Created \(ticket.id), but the worktree failed: \(error.localizedDescription)\n\n"
+						+ "Pick \(ticket.id) on the Ticket tab to try again."
+				))
+				return
+			}
+
+			if moveToInProgress {
+				if let warning = await Self.moveToInProgress(
+					ticketId: ticket.id,
+					baseURL: baseURL,
+					authToken: authToken,
+					youTrackClient: youTrackClient
+				) {
+					warnings.append(warning)
+					warnings += fieldValuesOnceInProgress.map {
+						"\(ticket.id)'s \($0.field) was not set: the ticket shows it only once it is In Progress."
+					}
+				}
+				else {
+					// Fields the ticket shows only from In Progress on exist only now.
+					warnings += await Self.applyFieldValues(
+						fieldValuesOnceInProgress,
+						ticketId: ticket.id,
+						baseURL: baseURL,
+						authToken: authToken,
+						youTrackClient: youTrackClient
+					)
+				}
+			}
+			let prompt = claudePrompt.isEmpty ? Self.claudePrompt(for: ticket, baseURL: baseURL) : claudePrompt
+			await send(.didCreateSuccessfully(
+				copyResult: copyResult,
+				warnings: warnings,
+				worktreePath: worktreeURL.path,
+				launch: Self.launch(for: followUp, claudePrompt: prompt)
+			))
+		}
+	}
+
+	/// Sets the new ticket's picked field values.
+	/// - Returns: a line per field that could not be set.
+	static func applyFieldValues(
+		_ values: [YouTrackFieldValue],
+		ticketId: String,
+		baseURL: String,
+		authToken: String,
+		youTrackClient: YouTrackClient
+	) async -> [String] {
+		guard !values.isEmpty else {
+			return []
+		}
+		do {
+			let failures = try await youTrackClient.applyFieldValues(
+				values: values,
+				to: ticketId,
+				baseURL: baseURL,
+				authToken: authToken
+			)
+			return failures.map { "\(ticketId)'s \($0)" }
+		}
+		catch {
+			return ["\(ticketId)'s fields were not set: \(NewTicketFormReducer.errorMessage(for: error, doing: "read them"))"]
+		}
+	}
+
+	/// Applies the State transition YouTrack presents as In Progress.
+	/// - Returns: why it could not, or nil once it has.
+	static func moveToInProgress(
+		ticketId: String,
+		baseURL: String,
+		authToken: String,
+		youTrackClient: YouTrackClient
+	) async -> String? {
+		let failure = "\(ticketId) was not moved to In Progress"
+		do {
+			let details = try await youTrackClient.fetchIssueDetails(for: ticketId, baseURL: baseURL, authToken: authToken)
+			guard let fieldId = details.stateFieldId,
+			      let transition = details.stateTransitions.first(where: {
+			      	TicketState(rawValue: $0.presentation) == .inProgress
+			      })
+			else {
+				return "\(failure): YouTrack offers no such transition from its state."
+			}
+			try await youTrackClient.applyStateEvent(ticketId, fieldId, transition.eventId, baseURL, authToken)
+			return nil
+		}
+		catch {
+			return "\(failure): \(error.localizedDescription)"
+		}
 	}
 
 	static func launch(for followUp: WorktreeCreationFollowUp, claudePrompt: String) -> WorktreeTerminalLaunch? {
@@ -624,6 +829,17 @@ struct CreateWorktreeButtonReducer {
 			"YouTrack search failed: HTTP \(statusCode)"
 		default:
 			"YouTrack search failed: \(error.localizedDescription)"
+		}
+	}
+
+	static func newTicketErrorMessage(for error: Error, project: YouTrackProject) -> String {
+		switch error {
+		case YouTrackServiceError.httpFailure(statusCode: 403):
+			"The YouTrack token may not create tickets in \(project.shortName)."
+		case YouTrackServiceError.httpFailure(statusCode: 400):
+			"YouTrack refused the ticket — a required field of \(project.shortName) may be missing."
+		default:
+			NewTicketFormReducer.errorMessage(for: error, doing: "create the ticket")
 		}
 	}
 
