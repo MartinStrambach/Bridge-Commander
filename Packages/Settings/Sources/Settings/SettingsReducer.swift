@@ -89,6 +89,9 @@ public struct SettingsReducer {
 		@Shared(.terminalMouseReporting)
 		public var terminalMouseReporting = true
 
+		@Shared(.terminalReadsImageFiles)
+		public var terminalReadsImageFiles = false
+
 		@Shared(.terminalStartupCommand)
 		public var terminalStartupCommand = ""
 
@@ -167,6 +170,7 @@ public struct SettingsReducer {
 		case setTerminalColorTheme(TerminalThemeSelection)
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
+		case setTerminalReadsImageFiles(Bool)
 		case setTerminalStartupCommand(String)
 		case setTerminalStartupCommandInNewTabs(Bool)
 		case setTerminalNotifications(Bool)
@@ -624,6 +628,10 @@ public struct SettingsReducer {
 
 			case let .setTerminalMouseReporting(value):
 				state.$terminalMouseReporting.withLock { $0 = value }
+				return .none
+
+			case let .setTerminalReadsImageFiles(value):
+				state.$terminalReadsImageFiles.withLock { $0 = value }
 				return .none
 
 			case let .setTerminalStartupCommand(value):

@@ -91,6 +91,15 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("terminalMouseReporting")
 	}
 
+	/// Whether the built-in terminal draws Kitty graphics images that a program names by file path,
+	/// reading the file itself, rather than only images whose bytes the program sends. Off by
+	/// default: anything that prints to a pane, a remote host over ssh included, could then make the
+	/// app read and show any image file the user can read. Claude Code plugins such as floofbot
+	/// draw their pictures this way. Applies to terminals opened after the change.
+	static var terminalReadsImageFiles: Self {
+		appStorage("terminalReadsImageFiles")
+	}
+
 	/// Whether tabs opened with "+" / ⌘T also run the startup command. Off by default: the
 	/// command (typically a long-running tool such as `claude`) belongs in the repository's first
 	/// tab, and extra tabs are usually opened for a plain shell next to it.

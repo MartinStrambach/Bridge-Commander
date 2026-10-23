@@ -120,6 +120,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("reading image files is off until the user turns it on")
+	func terminalReadsImageFilesDefaultsToOff() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalReadsImageFiles == false)
+
+		await store.send(.setTerminalReadsImageFiles(true)) {
+			$0.$terminalReadsImageFiles.withLock { $0 = true }
+		}
+		await store.send(.setTerminalReadsImageFiles(false)) {
+			$0.$terminalReadsImageFiles.withLock { $0 = false }
+		}
+	}
+
 	@Test("mouse reporting is on until the user turns it off")
 	func terminalMouseReportingDefaultsToOn() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {

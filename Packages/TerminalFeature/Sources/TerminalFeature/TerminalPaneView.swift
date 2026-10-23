@@ -37,15 +37,19 @@ public final class TerminalPaneView: LocalProcessTerminalView {
 		}
 	)
 
+	/// - Parameter readsImageFiles: Whether Kitty graphics images may be loaded from a file the
+	///   program names (`t=f`), not only from bytes it sends. Fixed for the pane's life: SwiftTerm
+	///   reads its options only when it creates the terminal.
 	public init(
 		repositoryPath: String,
 		sessionId: UUID,
+		readsImageFiles: Bool = false,
 		events: TerminalPaneEvents
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId
 		self.events = events
-		super.init(frame: .zero)
+		super.init(frame: .zero, options: Self.startupOptions(readsImageFiles: readsImageFiles))
 		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.
 		// Users can toggle back to Meta mode with Option+Command+O if needed.
 		optionAsMetaKey = false
@@ -57,6 +61,17 @@ public final class TerminalPaneView: LocalProcessTerminalView {
 		registerForDraggedTypes([.fileURL])
 		observeNotifications()
 		observeProcessOutput()
+	}
+
+	/// SwiftTerm's defaults, which `init(frame:)` uses, plus permission to read regular image files
+	/// when asked. Temporary files and shared memory stay off: Claude Code sends either a path or
+	/// the bytes, and asks separately whether the terminal reads files.
+	nonisolated static func startupOptions(readsImageFiles: Bool) -> TerminalOptions {
+		var options = TerminalOptions.default
+		if readsImageFiles {
+			options.kittyGraphics.localMediaPolicy.insert(.regularFiles)
+		}
+		return options
 	}
 
 	/// Unsupported: a pane is only ever built in code, for the session it belongs to.

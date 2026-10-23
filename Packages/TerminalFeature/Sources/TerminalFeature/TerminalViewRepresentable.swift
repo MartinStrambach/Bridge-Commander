@@ -22,6 +22,8 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let activeSessionId: UUID?
 	/// The colors a new pane is created with.
 	public let colors: TerminalColors
+	/// Whether a new pane loads Kitty graphics images from files a program names.
+	public let readsImageFiles: Bool
 	public let copyOnSelect: Bool
 	public let mouseReporting: Bool
 	/// The font every pane renders with. Resolved by the caller — the family and its point size are
@@ -35,6 +37,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		sessions: IdentifiedArrayOf<TerminalSession>,
 		activeSessionId: UUID?,
 		colors: TerminalColors,
+		readsImageFiles: Bool,
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
 		font: NSFont,
@@ -44,6 +47,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.sessions = sessions
 		self.activeSessionId = activeSessionId
 		self.colors = colors
+		self.readsImageFiles = readsImageFiles
 		self.copyOnSelect = copyOnSelect
 		self.mouseReporting = mouseReporting
 		self.font = font
@@ -59,11 +63,12 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 			let termView = terminalViewStore.view(
 				for: session,
 				colors: colors,
+				readsImageFiles: readsImageFiles,
 				events: events
 			)
 			// Assigned on every update, not at creation: panes outlive a change to the
-			// setting, and the colors only look like they don't because a new theme is
-			// documented as applying to newly opened terminals.
+			// setting, and the colors and image file permission only look like they don't
+			// because both are documented as applying to newly opened terminals.
 			termView.copiesSelectionAutomatically = copyOnSelect
 			termView.allowMouseReporting = mouseReporting
 

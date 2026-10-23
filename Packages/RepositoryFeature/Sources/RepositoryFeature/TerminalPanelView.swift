@@ -29,6 +29,9 @@ struct TerminalPanelView: View {
 	@Shared(.terminalMouseReporting)
 	private var terminalMouseReporting = true
 
+	@Shared(.terminalReadsImageFiles)
+	private var terminalReadsImageFiles = false
+
 	/// Read here like its sibling settings; the ⌘+/⌘−/⌘0 shortcuts write it through
 	/// `TerminalLayoutReducer` so the zoom actions stay testable.
 	@Shared(.terminalFontSize)
@@ -435,6 +438,7 @@ struct TerminalPanelView: View {
 					cursor: resolvedTheme.cursor,
 					selection: resolvedTheme.selection
 				),
+				readsImageFiles: terminalReadsImageFiles,
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
 				font: terminalFont,

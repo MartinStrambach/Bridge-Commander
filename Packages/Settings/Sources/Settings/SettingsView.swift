@@ -148,6 +148,7 @@ public struct SettingsView<Updates: View>: View {
 			terminalFontSection
 			terminalColorThemeSection
 			terminalInputSection
+			terminalImagesSection
 			terminalStartupCommandSection
 			terminalNotificationsSection
 
@@ -769,6 +770,21 @@ public struct SettingsView<Updates: View>: View {
 
 			Text(
 				"Programs like lazygit and vim can then see clicks and the scroll wheel, so scrolling affects the pane under the pointer instead of the focused one. With this off they never get the pointer position. Hold ⇧ while dragging to select text either way."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+		}
+	}
+
+	private var terminalImagesSection: some View {
+		SettingsSection("Images") {
+			Toggle(
+				"Show images from files",
+				isOn: $store.terminalReadsImageFiles.sending(\.setTerminalReadsImageFiles)
+			)
+
+			Text(
+				"Lets programs show a picture by naming its file, which the terminal then reads, as Claude Code plugins like floofbot do. Anything printed to the terminal could then show any image file you can open, including output from a remote host over ssh. Applies to terminals opened after the change."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)

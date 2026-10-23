@@ -36,11 +36,12 @@ public final class TerminalViewStore {
 	}
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one. A new
-	/// pane keeps the colors and events it is created with for its whole life; later calls' are
-	/// ignored.
+	/// pane keeps the colors, image file permission and events it is created with for its whole
+	/// life; later calls' are ignored.
 	public func view(
 		for session: TerminalSession,
 		colors: TerminalColors,
+		readsImageFiles: Bool = false,
 		events: TerminalPaneEvents
 	) -> TerminalPaneView {
 		if let existing = views[session.id] {
@@ -50,6 +51,7 @@ public final class TerminalViewStore {
 		let terminalView = TerminalPaneView(
 			repositoryPath: session.repositoryPath,
 			sessionId: session.id,
+			readsImageFiles: readsImageFiles,
 			events: events
 		)
 
