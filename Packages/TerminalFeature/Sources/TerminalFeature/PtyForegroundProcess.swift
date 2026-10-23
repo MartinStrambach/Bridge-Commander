@@ -1,16 +1,25 @@
 import Darwin
 
+/// Who holds a pane's foreground: its shell, or a job the shell started.
+enum PaneForeground: Equatable {
+	/// The shell, at its prompt with no job running.
+	case shell
+	/// A job, by its process group. A job suspended and brought back with `fg` keeps its group.
+	case job(processGroup: pid_t)
+}
+
 /// Identifies the process holding the foreground of a pseudo-terminal.
 ///
 /// Used to set aside a status report a program left behind (its OSC 7501 records outlive a program
 /// that crashed or was suspended without clearing them), and to find the Claude Code conversation
 /// in a pane.
 enum PtyForegroundProcess {
-	/// Whether `pid`'s process group holds the foreground of the terminal behind `descriptor` — for
-	/// a pane's shell, which leads its own group, whether it is at its prompt with no job running.
+	/// Who holds the foreground of the terminal behind `descriptor`, whose shell is `pid`: the shell
+	/// itself (it leads its own group, so at its prompt with no job running), or the process group
+	/// of a job it started.
 	///
 	/// Returns `nil` when the foreground can't be read (closed descriptor, no foreground group).
-	static func isInForeground(processGroup pid: pid_t, ptyDescriptor descriptor: Int32) -> Bool? {
+	static func foreground(ofShell pid: pid_t, ptyDescriptor descriptor: Int32) -> PaneForeground? {
 		guard descriptor >= 0, pid > 0 else {
 			return nil
 		}
@@ -20,7 +29,7 @@ enum PtyForegroundProcess {
 			return nil
 		}
 
-		return foreground == pid
+		return foreground == pid ? .shell : .job(processGroup: foreground)
 	}
 
 	/// Whether Claude Code holds the foreground of the terminal behind `descriptor`.

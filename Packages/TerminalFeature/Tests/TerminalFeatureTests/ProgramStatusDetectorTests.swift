@@ -10,10 +10,13 @@ private final class Reported {
 	var reports: [TerminalProgramReport?] = []
 }
 
-/// Stands in for whether the pane's shell holds its foreground.
+/// Stands in for who holds the pane's foreground: a job (Claude, say) to begin with.
 @MainActor
 private final class Foreground {
-	var isShell: Bool? = false
+	static let claude = PaneForeground.job(processGroup: 100)
+	static let vim = PaneForeground.job(processGroup: 200)
+
+	var current: PaneForeground? = claude
 }
 
 @MainActor
@@ -29,7 +32,7 @@ struct ProgramStatusDetectorTests {
 	) -> ProgramStatusDetector {
 		ProgramStatusDetector(
 			label: "test",
-			isShellInForeground: { foreground.isShell },
+			foreground: { foreground.current },
 			foregroundCheckDelay: Self.neverFires,
 			onStatusChange: { status, report in
 				reported.statuses.append(status)
@@ -114,7 +117,7 @@ struct ProgramStatusDetectorTests {
 		let detector = makeDetector(reported: reported, foreground: foreground)
 		detector.statusReported(Self.report(.done))
 
-		foreground.isShell = true
+		foreground.current = .shell
 		detector.checkForeground()
 
 		#expect(reported.statuses == [.waitingForInput, .active])
@@ -127,12 +130,63 @@ struct ProgramStatusDetectorTests {
 		let detector = makeDetector(reported: reported, foreground: foreground)
 		detector.statusReported(Self.report(.done))
 
-		foreground.isShell = true
+		foreground.current = .shell
 		detector.checkForeground()
-		foreground.isShell = false
+		foreground.current = Foreground.claude
 		detector.checkForeground()
 
 		#expect(reported.statuses == [.waitingForInput, .active, .waitingForInput])
+	}
+
+	@Test func anotherJobDoesNotTakeUpASuspendedProgramsReport() {
+		// Claude leaves its records standing when suspended with Ctrl-Z. Running vim meanwhile is not
+		// Claude back, and must not turn the pane amber with Claude's old report.
+		let reported = Reported()
+		let foreground = Foreground()
+		let detector = makeDetector(reported: reported, foreground: foreground)
+		detector.statusReported(Self.report(.idle))
+
+		foreground.current = .shell
+		detector.checkForeground()
+		foreground.current = Foreground.vim
+		detector.checkForeground()
+		#expect(reported.statuses == [.waitingForInput, .active])
+		#expect(!detector.isReportStanding, "vim's notifications are its own")
+
+		foreground.current = Foreground.claude
+		detector.checkForeground()
+		#expect(reported.statuses == [.waitingForInput, .active, .waitingForInput])
+	}
+
+	@Test func anotherJobInTheForegroundSetsAReportAside() {
+		// Suspended and straight into another job, with no quiet moment at the prompt in between.
+		let reported = Reported()
+		let foreground = Foreground()
+		let detector = makeDetector(reported: reported, foreground: foreground)
+		detector.statusReported(Self.report(.done))
+
+		foreground.current = Foreground.vim
+		detector.checkForeground()
+
+		#expect(reported.statuses == [.waitingForInput, .active])
+	}
+
+	@Test func aReportFromAnUnknownJobIsSetAsideOnlyForTheShell() {
+		// Delivered while the shell held the foreground — just after its program crashed — so whose
+		// it was is not known; only the shell's foreground says it was left behind.
+		let reported = Reported()
+		let foreground = Foreground()
+		foreground.current = .shell
+		let detector = makeDetector(reported: reported, foreground: foreground)
+		detector.statusReported(Self.report(.error))
+
+		foreground.current = Foreground.vim
+		detector.checkForeground()
+		#expect(reported.statuses == [.waitingForInput])
+
+		foreground.current = .shell
+		detector.checkForeground()
+		#expect(reported.statuses == [.waitingForInput, .active])
 	}
 
 	@Test func outputArmsTheForegroundCheck() async {
@@ -141,12 +195,12 @@ struct ProgramStatusDetectorTests {
 		let foreground = Foreground()
 		let detector = ProgramStatusDetector(
 			label: "test",
-			isShellInForeground: { foreground.isShell },
+			foreground: { foreground.current },
 			foregroundCheckDelay: 0.05,
 			onStatusChange: { status, _ in reported.statuses.append(status) }
 		)
 		detector.statusReported(Self.report(.done))
-		foreground.isShell = true
+		foreground.current = .shell
 
 		detector.outputReceived()
 
@@ -158,9 +212,9 @@ struct ProgramStatusDetectorTests {
 		var checks = 0
 		let detector = ProgramStatusDetector(
 			label: "test",
-			isShellInForeground: {
+			foreground: {
 				checks += 1
-				return true
+				return .shell
 			},
 			foregroundCheckDelay: 0.01,
 			onStatusChange: { _, _ in }
@@ -177,12 +231,12 @@ struct ProgramStatusDetectorTests {
 		let foreground = Foreground()
 		let detector = ProgramStatusDetector(
 			label: "test",
-			isShellInForeground: { foreground.isShell },
+			foreground: { foreground.current },
 			foregroundCheckDelay: 0.05,
 			onStatusChange: { status, _ in reported.statuses.append(status) }
 		)
 		detector.statusReported(Self.report(.done))
-		foreground.isShell = true
+		foreground.current = .shell
 
 		detector.outputReceived()
 		detector.stop()
@@ -197,7 +251,7 @@ struct ProgramStatusDetectorTests {
 		let detector = makeDetector(reported: reported, foreground: foreground)
 		detector.statusReported(Self.report(.done))
 
-		foreground.isShell = nil
+		foreground.current = nil
 		detector.checkForeground()
 
 		#expect(reported.statuses == [.waitingForInput])
@@ -208,7 +262,7 @@ struct ProgramStatusDetectorTests {
 		let foreground = Foreground()
 		let detector = makeDetector(reported: reported, foreground: foreground)
 		detector.statusReported(Self.report(.done))
-		foreground.isShell = true
+		foreground.current = .shell
 		detector.checkForeground()
 
 		detector.statusReported(Self.report(.idle))
@@ -224,7 +278,7 @@ struct ProgramStatusDetectorTests {
 		detector.statusReported(Self.report(.working))
 		#expect(detector.isReportStanding, "working counts too: the program speaks for itself")
 
-		foreground.isShell = true
+		foreground.current = .shell
 		detector.checkForeground()
 		#expect(!detector.isReportStanding, "a report left behind by a crash speaks for nobody")
 
@@ -247,7 +301,7 @@ struct ProgramStatusDetectorTests {
 
 		detector.stop()
 		detector.statusReported(nil)
-		foreground.isShell = true
+		foreground.current = .shell
 		detector.checkForeground()
 
 		#expect(reported.statuses == [.waitingForInput], "a stopped detector has nothing more to say")

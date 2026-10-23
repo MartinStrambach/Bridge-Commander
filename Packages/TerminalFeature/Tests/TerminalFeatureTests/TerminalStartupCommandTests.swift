@@ -50,8 +50,6 @@ struct TerminalSessionStartupCommandTests {
 @MainActor
 @Suite("Terminal startup command", .serialized)
 struct TerminalStartupCommandTests {
-	private let processDelegate = TerminalProcessDelegate(onFailed: { _ in })
-
 	private func startPane(
 		command: String?,
 		shell: String = "/bin/cat",
@@ -63,7 +61,6 @@ struct TerminalStartupCommandTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)

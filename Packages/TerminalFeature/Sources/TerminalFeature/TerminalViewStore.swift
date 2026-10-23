@@ -7,6 +7,11 @@ import SwiftTerm
 @Observable
 public final class TerminalViewStore {
 	private var views: [UUID: ClaudeAwareTerminalView] = [:]
+	/// Each pane's process delegate, which SwiftTerm holds only weakly. Kept here, for as long as
+	/// the pane, rather than by the terminal panel: the panel can close while its panes run on, and
+	/// a pane whose delegate went with the panel reported neither its title nor its shell's exit
+	/// again, even once the panel reopened.
+	private var processDelegates: [UUID: TerminalProcessDelegate] = [:]
 
 	private let shellExecutable: String
 	private let shellArguments: [String]
@@ -30,15 +35,16 @@ public final class TerminalViewStore {
 		self.additionalEnvironment = additionalEnvironment
 	}
 
-	/// Returns the existing terminal view for a session, or creates and starts a new one.
-	/// The caller is responsible for creating `processDelegate` and keeping a strong reference
-	/// to it (e.g. in an NSViewRepresentable Coordinator).
+	/// Returns the existing terminal view for a session, or creates and starts a new one. A new
+	/// pane keeps the callbacks it is created with for its whole life; later calls' are ignored.
 	/// - Parameter ansiPalette: The 16 ANSI colors to install, or `nil` to keep SwiftTerm's
 	///   default palette — which is Terminal.app's own, so an imported profile that defines no
 	///   ANSI colors renders the same way Terminal renders it.
 	/// - Parameter cursorColor: The caret color, or `nil` to keep SwiftTerm's default. Most
 	///   Terminal profiles set no cursor color, so `nil` is the usual case.
 	/// - Parameter selectionColor: The selection background, or `nil` to keep SwiftTerm's default.
+	/// - Parameter onStatusChange: Also reports `.failed` once the pane's shell exits on its own.
+	/// - Parameter onTitleChange: The terminal title the pane's program sets, cleaned for display.
 	public func view(
 		for session: TerminalSession,
 		foregroundColor: NSColor,
@@ -46,9 +52,9 @@ public final class TerminalViewStore {
 		ansiPalette: [NSColor]? = nil,
 		cursorColor: NSColor? = nil,
 		selectionColor: NSColor? = nil,
-		processDelegate: TerminalProcessDelegate,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus, TerminalProgramReport?) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
+		onTitleChange: @escaping @Sendable (UUID, String?) -> Void = { _, _ in },
 		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
 	) -> ClaudeAwareTerminalView {
 		if let existing = views[session.id] {
@@ -92,6 +98,12 @@ public final class TerminalViewStore {
 		}
 		terminalView.changeScrollback(3000)
 
+		let sessionId = session.id
+		let processDelegate = TerminalProcessDelegate(
+			onFailed: { message in onStatusChange(sessionId, .failed(message), nil) },
+			onTitleChange: { title in onTitleChange(sessionId, title) }
+		)
+		processDelegates[session.id] = processDelegate
 		terminalView.processDelegate = processDelegate
 		terminalView.pendingStartupCommand = session.commandToType
 
@@ -143,6 +155,7 @@ public final class TerminalViewStore {
 			view.removeFromSuperview()
 		}
 		views.removeValue(forKey: sessionId)
+		processDelegates.removeValue(forKey: sessionId)
 	}
 
 	/// Kills every session that is not in `sessionIds`.

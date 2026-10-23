@@ -17,15 +17,6 @@ import SwiftUI
 /// only the pane on screen, not every shell in the app.
 public struct TerminalContainerRepresentable: NSViewRepresentable {
 
-	// MARK: - Coordinator
-
-	/// Owns strong references to per-session TerminalProcessDelegate instances.
-	/// SwiftUI manages the coordinator's lifetime — it lives as long as the representable
-	/// is in the view hierarchy, ensuring delegates are released when the terminal panel closes.
-	public final class Coordinator {
-		public var processDelegates: [UUID: TerminalProcessDelegate] = [:]
-	}
-
 	public let terminalViewStore: TerminalViewStore
 	public let sessions: IdentifiedArrayOf<TerminalSession>
 	public let activeSessionId: UUID?
@@ -86,34 +77,12 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		TerminalPaneContainerView(frame: .zero)
 	}
 
-	public func makeCoordinator() -> Coordinator {
-		Coordinator()
-	}
-
 	public func updateNSView(_ nsView: NSView, context: Context) {
 		for session in sessions {
 			switch session.status {
 			case .active,
 			     .launching,
 			     .waitingForInput:
-				let sessionId = session.id
-
-				// Retrieve or create the process delegate, held strongly by the coordinator.
-				// LocalProcessTerminalView.processDelegate is a weak var, so the coordinator
-				// must own the strong reference for callbacks to fire.
-				let delegate: TerminalProcessDelegate
-				if let existing = context.coordinator.processDelegates[sessionId] {
-					delegate = existing
-				}
-				else {
-					let newDelegate = TerminalProcessDelegate(
-						onFailed: { message in onStatusChange(sessionId, .failed(message), nil) },
-						onTitleChange: { title in onTitleChange(sessionId, title) }
-					)
-					context.coordinator.processDelegates[sessionId] = newDelegate
-					delegate = newDelegate
-				}
-
 				let termView = terminalViewStore.view(
 					for: session,
 					foregroundColor: foregroundColor,
@@ -121,9 +90,9 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 					ansiPalette: ansiPalette,
 					cursorColor: cursorColor,
 					selectionColor: selectionColor,
-					processDelegate: delegate,
 					onStatusChange: onStatusChange,
 					onNotification: onNotification,
+					onTitleChange: onTitleChange,
 					onOpenFile: onOpenFile
 				)
 				// Assigned on every update, not at creation: panes outlive a change to the
@@ -171,12 +140,6 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 				break
 			}
 		}
-
-		// Release delegates for sessions that are no longer present (killed or failed).
-		let activeIds = Set(sessions.map(\.id))
-		context.coordinator.processDelegates = context.coordinator
-			.processDelegates
-			.filter { activeIds.contains($0.key) }
 	}
 
 }

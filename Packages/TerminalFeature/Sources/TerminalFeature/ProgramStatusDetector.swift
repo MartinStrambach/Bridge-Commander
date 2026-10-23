@@ -11,8 +11,9 @@ import OSLog
 /// program waiting for the user. A pane without a report — a plain shell, a build, an older
 /// Claude — is active.
 ///
-/// A report outlives a program that crashed without clearing it, so once the pane falls quiet, a
-/// report is set aside while the shell has the foreground back. Nothing else moves the status:
+/// A report outlives a program that crashed or was suspended without clearing it, so once the pane
+/// falls quiet, a report is set aside while someone other than the program that made it holds the
+/// foreground: the shell, or another job. Nothing else moves the status:
 /// not the user's input (typing into Claude's input box leaves it `done` until the prompt is
 /// sent, and then it reports `working` itself), and not a notification the program asks for.
 @MainActor
@@ -24,9 +25,8 @@ final class ProgramStatusDetector {
 	/// Names the pane in a trace.
 	private let label: String
 
-	/// Whether the pane's shell holds its foreground — at its prompt, with no program running —
-	/// or `nil` when that can't be told.
-	private let isShellInForeground: () -> Bool?
+	/// Who holds the pane's foreground, or `nil` when that can't be told.
+	private let foreground: () -> PaneForeground?
 
 	/// How long the pane must be quiet before the foreground is checked.
 	private let foregroundCheckDelay: TimeInterval
@@ -45,19 +45,25 @@ final class ProgramStatusDetector {
 	/// The pane's root record, or `nil` while no program reports anything.
 	private var report: TerminalProgramReport?
 
-	/// Set when the last foreground check found the shell back in the foreground while a report
-	/// stood: a program that crashed or was suspended, leaving its last report behind. Cleared by
-	/// the next report, or by a check that finds a program in the foreground again.
+	/// The process group of the job in the foreground when the report was made, or `nil` when it
+	/// could not be told or the shell held it (a report that lands just after its program crashed).
+	/// A report is the work of whichever job holds the foreground as it is delivered.
+	private var reportingJob: pid_t?
+
+	/// Set when the last foreground check found someone other than the reporting job in the
+	/// foreground while a report stood: a program that crashed or was suspended, leaving its last
+	/// report behind. Cleared by the next report, or by a check that finds the reporting job in the
+	/// foreground again.
 	private var isReportLeftBehind = false
 
 	init(
 		label: String,
-		isShellInForeground: @escaping () -> Bool?,
+		foreground: @escaping () -> PaneForeground?,
 		foregroundCheckDelay: TimeInterval = 1.5,
 		onStatusChange: @escaping (TerminalSessionStatus, TerminalProgramReport?) -> Void
 	) {
 		self.label = label
-		self.isShellInForeground = isShellInForeground
+		self.foreground = foreground
 		self.foregroundCheckDelay = foregroundCheckDelay
 		self.onStatusChange = onStatusChange
 	}
@@ -73,6 +79,7 @@ final class ProgramStatusDetector {
 
 		trace("\(report?.program ?? "no program") reports \(report.map { "\($0.state)" } ?? "nothing")")
 		self.report = report
+		reportingJob = if report != nil, case let .job(group) = foreground() { group } else { nil }
 		isReportLeftBehind = false
 		reportStatus(derivedStatus, reason: "the program's report")
 	}
@@ -100,16 +107,26 @@ final class ProgramStatusDetector {
 		pendingForegroundCheck = nil
 	}
 
-	/// Sets aside a report once the shell has the foreground back, and takes it up again once a
-	/// program has it (a Claude suspended with Ctrl-Z and brought back with `fg` does not report
-	/// again until its state changes). A foreground that can't be told leaves the report standing.
+	/// Sets aside a report once the shell or another job has the foreground, and takes it up again
+	/// once the job that made it has it back (a Claude suspended with Ctrl-Z and brought back with
+	/// `fg` keeps its process group, and does not report again until its state changes). Claude
+	/// leaves its records standing when suspended, so `vim` run meanwhile must not count as Claude
+	/// back. A report whose job is not known is set aside only for the shell; a foreground that
+	/// can't be told leaves the report standing.
 	/// Called on the debounce, and directly by tests so they need not wait one out.
 	func checkForeground() {
 		guard !isStopped, report != nil else {
 			return
 		}
 
-		let isLeftBehind = isShellInForeground() == true
+		let isLeftBehind = switch foreground() {
+		case .shell:
+			true
+		case let .job(group):
+			reportingJob.map { $0 != group } ?? false
+		case nil:
+			false
+		}
 		guard isLeftBehind != isReportLeftBehind else {
 			return
 		}
@@ -117,7 +134,7 @@ final class ProgramStatusDetector {
 		isReportLeftBehind = isLeftBehind
 		reportStatus(
 			derivedStatus,
-			reason: isLeftBehind ? "the shell back in the foreground" : "a program back in the foreground"
+			reason: isLeftBehind ? "another process in the foreground" : "the reporting program back in the foreground"
 		)
 	}
 

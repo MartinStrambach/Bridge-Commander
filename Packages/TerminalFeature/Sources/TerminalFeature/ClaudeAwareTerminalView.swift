@@ -21,12 +21,12 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	/// `super.init` has run.
 	private lazy var detector = ProgramStatusDetector(
 		label: repositoryPath,
-		isShellInForeground: { [weak self] in
+		foreground: { [weak self] in
 			guard let process = self?.process else {
 				return nil
 			}
 
-			return PtyForegroundProcess.isInForeground(processGroup: process.shellPid, ptyDescriptor: process.childfd)
+			return PtyForegroundProcess.foreground(ofShell: process.shellPid, ptyDescriptor: process.childfd)
 		},
 		onStatusChange: { [weak self] status, report in
 			guard let self else {

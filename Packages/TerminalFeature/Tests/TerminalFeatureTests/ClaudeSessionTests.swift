@@ -96,13 +96,11 @@ struct ClaudeSessionTests {
 		)
 
 		let store = TerminalViewStore(shellExecutable: fakeClaude.path, shellArguments: [])
-		let delegate = TerminalProcessDelegate(onFailed: { _ in })
 		let session = TerminalSession(repositoryPath: "/")
 		let view = store.view(
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: delegate,
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)

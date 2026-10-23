@@ -72,6 +72,12 @@ private func firstChild(of pid: pid_t) async -> pid_t? {
 	return child
 }
 
+/// Collects the titles a pane passed on, in order.
+@MainActor
+private final class Titles {
+	var items: [String?] = []
+}
+
 /// Collects what a pane reported, in order.
 @MainActor
 private final class Reported {
@@ -82,9 +88,6 @@ private final class Reported {
 @MainActor
 @Suite(.serialized)
 struct TerminalViewStoreTests {
-	/// Keeps the process delegate alive for the panes, as the representable's coordinator does.
-	private let processDelegate = TerminalProcessDelegate(onFailed: { _ in })
-
 	/// `cat` sits reading its terminal forever and exits on hangup, which is all a shell needs to
 	/// do for these tests. The real thing is checked once, in the zsh test.
 	private func makeStore(shell: String = "/bin/cat", arguments: [String] = []) -> TerminalViewStore {
@@ -99,7 +102,6 @@ struct TerminalViewStoreTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -115,7 +117,6 @@ struct TerminalViewStoreTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -187,7 +188,6 @@ struct TerminalViewStoreTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, status, _ in
 				MainActor.assumeIsolated { reported.statuses.append(status) }
 			},
@@ -221,7 +221,6 @@ struct TerminalViewStoreTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, status, report in
 				MainActor.assumeIsolated {
 					reported.statuses.append(status)
@@ -242,8 +241,45 @@ struct TerminalViewStoreTests {
 		#expect(await eventually { reported.statuses.last == .active })
 	}
 
+	/// The pane's own report of its title and of its shell's exit, which SwiftTerm makes through a
+	/// delegate it holds only weakly. The store keeps that delegate: the terminal panel, which
+	/// used to, can close while the pane runs on, and a pane that lost it reported neither again.
+	@Test func thePaneKeepsReportingItsTitleAndItsShellsExit() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let titles = Titles()
+		let view = store.view(
+			for: session,
+			foregroundColor: .white,
+			backgroundColor: .black,
+			onStatusChange: { _, status, _ in
+				MainActor.assumeIsolated { reported.statuses.append(status) }
+			},
+			onNotification: { _, _ in },
+			onTitleChange: { _, title in
+				MainActor.assumeIsolated { titles.items.append(title) }
+			}
+		)
+		defer { store.killSession(sessionId: session.id) }
+		let pid = view.process.shellPid
+		try #require(pid > 0)
+
+		view.feed(text: "\u{1B}]0;Fix the login bug\u{07}")
+		#expect(await eventually { titles.items == ["Fix the login bug"] })
+
+		kill(pid, SIGKILL)
+		#expect(await eventually {
+			if case .failed = reported.statuses.last {
+				return true
+			}
+			return false
+		})
+	}
+
 	/// A pane's shell leads its own process group, so it holds the foreground exactly while no job
-	/// runs — what tells a report left behind by a crashed program from a live one.
+	/// runs, and a job holds it under a group of its own — what tells a report left behind by a
+	/// crashed or suspended program from a live one.
 	@Test func theShellHoldsTheForegroundOnlyAtItsPrompt() async throws {
 		let store = makeStore(shell: "/bin/zsh", arguments: ["-f"])
 		let session = TerminalSession(repositoryPath: "/")
@@ -251,7 +287,6 @@ struct TerminalViewStoreTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -259,11 +294,16 @@ struct TerminalViewStoreTests {
 		let shell = view.process.shellPid
 		let pty = view.process.childfd
 		try #require(shell > 0)
-		#expect(await eventually { PtyForegroundProcess.isInForeground(processGroup: shell, ptyDescriptor: pty) == true })
+		#expect(await eventually { PtyForegroundProcess.foreground(ofShell: shell, ptyDescriptor: pty) == .shell })
 
 		view.send(txt: "sleep 5\r")
 
-		#expect(await eventually { PtyForegroundProcess.isInForeground(processGroup: shell, ptyDescriptor: pty) == false })
+		#expect(await eventually {
+			if case let .job(group) = PtyForegroundProcess.foreground(ofShell: shell, ptyDescriptor: pty) {
+				return group != shell
+			}
+			return false
+		})
 	}
 
 	/// What a relaunch reopens a tab in: where its shell is now, which is not where it started once
@@ -275,7 +315,6 @@ struct TerminalViewStoreTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
@@ -312,7 +351,6 @@ struct TerminalViewStoreTests {
 			for: session,
 			foregroundColor: .white,
 			backgroundColor: .black,
-			processDelegate: processDelegate,
 			onStatusChange: { _, _, _ in },
 			onNotification: { _, _ in }
 		)
