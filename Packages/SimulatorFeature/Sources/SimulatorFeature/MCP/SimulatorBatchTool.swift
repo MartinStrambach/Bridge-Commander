@@ -32,7 +32,7 @@ nonisolated enum SimulatorBatchTool {
 					"description": "The steps, in order: {\"tool\": \"tap\", \"x\": 100, \"y\": 200}, {\"tool\": \"press_element\", \"label\": \"Next\"}, …",
 				],
 				"continue_on_error": ["type": "boolean", "description": "Run the later steps even after one fails. Default false."],
-				"udid": SimulatorMCPTools.udidProperty("Which simulator every step acts on, unless a step names its own. Defaults to the one shown in Bridge Commander, or else a booted one."),
+				"udid": SimulatorMCPTools.udidProperty("Which simulator every step acts on, unless a step names its own. Defaults to the one shown in Bridge Commander, or else a booted one no other worktree uses."),
 			],
 			required: ["steps"]
 		)

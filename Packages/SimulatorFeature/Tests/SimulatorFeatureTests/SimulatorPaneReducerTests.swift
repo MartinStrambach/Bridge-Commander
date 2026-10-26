@@ -29,12 +29,47 @@ struct SimulatorPaneReducerTests {
 
 		let shutdown = Self.device("A", state: .shutdown)
 		let booted = Self.device("B", state: .booted)
-		await store.send(.devicesLoaded([shutdown, booted], storedSelection: nil, repositoryPath: nil)) {
+		await store.send(.devicesLoaded([shutdown, booted], storedSelection: nil, takenByOthers: [], repositoryPath: nil)) {
 			$0.devices = [shutdown, booted]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "B"
 		}
 		#expect(stored.value == "B")
+	}
+
+	@Test
+	func withoutAStoredSelectionAnotherRepositorysDeviceIsPassedOver() async {
+		let stored = LockIsolated<String?>(nil)
+		let store = TestStore(initialState: SimulatorPaneReducer.State()) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].selectDevice = { id, _ in stored.setValue(id) }
+		}
+
+		let taken = Self.device("A", state: .booted)
+		let free = Self.device("B", state: .shutdown)
+		await store.send(.devicesLoaded([taken, free], storedSelection: nil, takenByOthers: ["A"], repositoryPath: nil)) {
+			$0.devices = [taken, free]
+			$0.hasLoadedDevices = true
+			$0.selectedDeviceId = "B"
+		}
+		#expect(stored.value == "B")
+	}
+
+	@Test
+	func whenEveryDeviceIsTakenOneIsShownButNotStored() async {
+		let store = TestStore(initialState: SimulatorPaneReducer.State()) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].prepareInput = { _ in }
+		}
+
+		let taken = Self.device("A", state: .booted)
+		await store.send(.devicesLoaded([taken], storedSelection: nil, takenByOthers: ["A"], repositoryPath: nil)) {
+			$0.devices = [taken]
+			$0.hasLoadedDevices = true
+			$0.selectedDeviceId = "A"
+		}
 	}
 
 	@Test
@@ -45,7 +80,7 @@ struct SimulatorPaneReducerTests {
 
 		let shutdown = Self.device("A", state: .shutdown)
 		let booted = Self.device("B", state: .booted)
-		await store.send(.devicesLoaded([shutdown, booted], storedSelection: "A", repositoryPath: nil)) {
+		await store.send(.devicesLoaded([shutdown, booted], storedSelection: "A", takenByOthers: [], repositoryPath: nil)) {
 			$0.devices = [shutdown, booted]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "A"
@@ -100,6 +135,7 @@ struct SimulatorPaneReducerTests {
 		} withDependencies: {
 			$0[SimulatorClient.self].devices = { [iPhone, iPad] }
 			$0[SimulatorClient.self].selectedDeviceId = { path in path.flatMap { selections.value[$0] ?? choices[$0] } }
+			$0[SimulatorClient.self].devicesOfOtherRepositories = { _ in [] }
 			$0[SimulatorClient.self].selectDevice = { id, path in selections.withValue { $0[path ?? ""] = id } }
 			$0[SimulatorClient.self].isClaudeCodeConnected = { true }
 			$0[SimulatorClient.self].prepareInput = { _ in }
@@ -111,7 +147,7 @@ struct SimulatorPaneReducerTests {
 			$0.repositoryPath = "/repos/app"
 		}
 		await store.receive(.claudeCodeStatusChecked(true))
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", repositoryPath: "/repos/app")) {
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", takenByOthers: [], repositoryPath: "/repos/app")) {
 			$0.devices = [iPhone, iPad]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "A"
@@ -123,7 +159,7 @@ struct SimulatorPaneReducerTests {
 			$0.selectedDeviceId = nil
 		}
 		await store.receive(.claudeCodeStatusChecked(true))
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", repositoryPath: "/repos/app-ipad")) {
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", takenByOthers: [], repositoryPath: "/repos/app-ipad")) {
 			$0.selectedDeviceId = "B"
 		}
 
@@ -242,10 +278,11 @@ struct SimulatorPaneReducerTests {
 			}
 			$0[SimulatorClient.self].devices = { [rotated] }
 			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+			$0[SimulatorClient.self].devicesOfOtherRepositories = { _ in [] }
 		}
 
 		await store.send(.rotateButtonTapped(clockwise: false))
-		await store.receive(.devicesLoaded([rotated], storedSelection: "A", repositoryPath: nil)) {
+		await store.receive(.devicesLoaded([rotated], storedSelection: "A", takenByOthers: [], repositoryPath: nil)) {
 			$0.devices = [rotated]
 		}
 		#expect(turns.value == [false])
@@ -277,6 +314,7 @@ struct SimulatorPaneReducerTests {
 			}
 			$0[SimulatorClient.self].devices = { [iPhone, iPad] }
 			$0[SimulatorClient.self].selectedDeviceId = { path in path.flatMap { choices[$0] } }
+			$0[SimulatorClient.self].devicesOfOtherRepositories = { _ in [] }
 			$0[SimulatorClient.self].isClaudeCodeConnected = { true }
 			$0[SimulatorClient.self].prepareInput = { _ in }
 			$0[SimulatorClient.self].recordingDeviceIds = { .finished }
@@ -289,12 +327,12 @@ struct SimulatorPaneReducerTests {
 			$0.selectedDeviceId = nil
 		}
 		await store.receive(.claudeCodeStatusChecked(true))
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", repositoryPath: "/repos/app-ipad")) {
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", takenByOthers: [], repositoryPath: "/repos/app-ipad")) {
 			$0.selectedDeviceId = "B"
 		}
 
 		finishRotation.yield()
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", repositoryPath: "/repos/app"))
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", takenByOthers: [], repositoryPath: "/repos/app"))
 		#expect(store.state.selectedDeviceId == "B")
 		await iPadTask.cancel()
 	}
@@ -317,11 +355,12 @@ struct SimulatorPaneReducerTests {
 			}
 			$0[SimulatorClient.self].devices = { [booted] }
 			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+			$0[SimulatorClient.self].devicesOfOtherRepositories = { _ in [] }
 			$0.continuousClock = clock
 		}
 
 		await store.send(.rotateButtonTapped(clockwise: true))
-		await store.receive(.devicesLoaded([booted], storedSelection: "A", repositoryPath: nil))
+		await store.receive(.devicesLoaded([booted], storedSelection: "A", takenByOthers: [], repositoryPath: nil))
 		let notice = SimulatorPaneReducer.Notice(
 			icon: "rotate.right",
 			title: "Turned to landscape right",
@@ -370,12 +409,13 @@ struct SimulatorPaneReducerTests {
 			$0[SimulatorClient.self].setFold = { _, fold in folds.withValue { $0.append(fold) } }
 			$0[SimulatorClient.self].devices = { [open] }
 			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+			$0[SimulatorClient.self].devicesOfOtherRepositories = { _ in [] }
 		}
 
 		await store.send(.foldButtonTapped) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([open], storedSelection: "A", repositoryPath: nil)) {
+		await store.receive(.devicesLoaded([open], storedSelection: "A", takenByOthers: [], repositoryPath: nil)) {
 			$0.devices = [open]
 		}
 		await store.receive(.transitionFinished(errorMessage: nil)) {
@@ -418,13 +458,14 @@ struct SimulatorPaneReducerTests {
 			$0[SimulatorClient.self].setFold = { _, fold in folds.withValue { $0.append(fold) } }
 			$0[SimulatorClient.self].devices = { [partlyOpen] }
 			$0[SimulatorClient.self].selectedDeviceId = { _ in "A" }
+			$0[SimulatorClient.self].devicesOfOtherRepositories = { _ in [] }
 		}
 
 		await store.send(.foldSelected(.closed))
 		await store.send(.foldSelected(.partiallyOpen)) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", repositoryPath: nil)) {
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", takenByOthers: [], repositoryPath: nil)) {
 			$0.devices = [partlyOpen]
 		}
 		await store.receive(.transitionFinished(errorMessage: nil)) {
@@ -436,7 +477,7 @@ struct SimulatorPaneReducerTests {
 		await store.send(.foldButtonTapped) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", repositoryPath: nil))
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", takenByOthers: [], repositoryPath: nil))
 		await store.receive(.transitionFinished(errorMessage: nil)) {
 			$0.transitioningDeviceId = nil
 		}

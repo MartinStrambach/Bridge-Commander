@@ -92,9 +92,10 @@ public struct SimulatorPaneReducer {
 		/// The pane is on screen beside `repositoryPath`'s terminal; runs until it leaves or shows
 		/// another repository.
 		case task(repositoryPath: String)
-		/// The device list and `repositoryPath`'s stored device, read for that repository. A read
-		/// for another one (a fold or rotation that finished after the pane moved on) is dropped.
-		case devicesLoaded([SimulatorDevice], storedSelection: String?, repositoryPath: String?)
+		/// The device list, `repositoryPath`'s stored device and the devices other repositories
+		/// have chosen, read for that repository. A read for another one (a fold or rotation that
+		/// finished after the pane moved on) is dropped.
+		case devicesLoaded([SimulatorDevice], storedSelection: String?, takenByOthers: Set<String>, repositoryPath: String?)
 		case devicesFailed(String)
 		case deviceSelected(String)
 		case bootButtonTapped
@@ -196,6 +197,7 @@ public struct SimulatorPaneReducer {
 				await send(.devicesLoaded(
 					devices,
 					storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+					takenByOthers: simulatorClient.devicesOfOtherRepositories(repositoryPath),
 					repositoryPath: repositoryPath
 				))
 				await send(.transitionFinished(errorMessage: nil))
@@ -231,6 +233,7 @@ public struct SimulatorPaneReducer {
 								await send(.devicesLoaded(
 									devices,
 									storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+									takenByOthers: simulatorClient.devicesOfOtherRepositories(repositoryPath),
 									repositoryPath: repositoryPath
 								))
 							}
@@ -249,7 +252,7 @@ public struct SimulatorPaneReducer {
 					.cancellable(id: CancelId.recordings, cancelInFlight: true)
 				)
 
-			case let .devicesLoaded(devices, storedSelection, repositoryPath):
+			case let .devicesLoaded(devices, storedSelection, takenByOthers, repositoryPath):
 				// The selection read is the other repository's; storing a fallback would even give
 				// this one that repository's device. The next poll brings this one's.
 				guard repositoryPath == state.repositoryPath else {
@@ -262,13 +265,17 @@ public struct SimulatorPaneReducer {
 
 				// The stored selection is the repository's, shared with the MCP tools its terminal's
 				// `claude` calls: they move it to the device they act on, and the pane follows.
+				// Without one the pane falls back to a device no other repository has chosen, as
+				// the tools do (`SimulatorDeviceAssignment`), and shows another worktree's only
+				// when there is no other, without making it this one's.
 				let selection = storedSelection.flatMap { id in devices.first { $0.id == id } }
-					?? devices.first(where: \.isBooted)
+					?? devices.first { $0.isBooted && !takenByOthers.contains($0.id) }
+					?? devices.first { !takenByOthers.contains($0.id) }
 					?? devices.first
 				state.selectedDeviceId = selection?.id
 
 				var effects: [Effect<Action>] = []
-				if let selection, selection.id != storedSelection {
+				if let selection, selection.id != storedSelection, !takenByOthers.contains(selection.id) {
 					effects.append(.run { [simulatorClient, repositoryPath = state.repositoryPath] _ in
 						simulatorClient.selectDevice(selection.id, repositoryPath)
 					})
@@ -355,6 +362,7 @@ public struct SimulatorPaneReducer {
 						await send(.devicesLoaded(
 							devices,
 							storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+							takenByOthers: simulatorClient.devicesOfOtherRepositories(repositoryPath),
 							repositoryPath: repositoryPath
 						))
 						if !rotation.interfaceFollowed {

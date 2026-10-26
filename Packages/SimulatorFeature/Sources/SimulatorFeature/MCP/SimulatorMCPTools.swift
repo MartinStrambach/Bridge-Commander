@@ -159,7 +159,7 @@ enum SimulatorMCPTools {
 				"since_minutes": number("How far back to look, in minutes. Default 60."),
 				"limit": number("How many to list at most. Default 10."),
 				"include_system": ["type": "boolean", "description": "Also list crashes of the simulator's own processes. Default false."],
-				"udid": udidProperty("Which simulator. Defaults to the one shown in Bridge Commander, or else a booted one; it need not be booted."),
+				"udid": udidProperty("Which simulator. Defaults to the one shown in Bridge Commander, or else a booted one no other worktree uses; it need not be booted."),
 			],
 			readOnly: true
 		),
@@ -573,7 +573,7 @@ enum SimulatorMCPTools {
 		["content": [["type": "text", "text": .string(message)]], "isError": .bool(isError)]
 	}
 
-	static let optionalUdid = udidProperty("Which simulator. Defaults to the one shown in Bridge Commander, or else a booted one.")
+	static let optionalUdid = udidProperty("Which simulator. Defaults to the one shown in Bridge Commander, or else a booted one no other worktree uses.")
 
 	static func udidProperty(_ description: String) -> JSONValue {
 		["type": "string", "description": .string(description)]
