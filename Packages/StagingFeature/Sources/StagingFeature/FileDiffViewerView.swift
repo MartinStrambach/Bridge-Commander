@@ -10,7 +10,7 @@ struct FileDiffViewerView: View {
 		if let diff = store.displayDiff {
 			DiffViewer(
 				diff: diff,
-				isStaged: store.fileIsStaged ?? false,
+				isStaged: store.diffIsStaged,
 				onStageHunk: { store.send(.stageHunk(hunkId: $0.id)) },
 				onUnstageHunk: { store.send(.unstageHunk(hunkId: $0.id)) },
 				onDiscardHunk: { store.send(.discardHunk(hunkId: $0.id)) }

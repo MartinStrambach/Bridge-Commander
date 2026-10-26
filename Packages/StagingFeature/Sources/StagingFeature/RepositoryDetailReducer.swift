@@ -258,8 +258,7 @@ public struct RepositoryDetail: Sendable {
 					let firstId = ids.first,
 					let file = state.staged.files.first(where: { $0.id == firstId })
 				else {
-					state.diffViewer.clearSelection()
-					return .none
+					return .send(.diffViewer(.clear))
 				}
 
 				return .send(.diffViewer(.load(file, isStaged: true)))
@@ -270,8 +269,7 @@ public struct RepositoryDetail: Sendable {
 					let firstId = ids.first,
 					let file = state.unstaged.files.first(where: { $0.id == firstId })
 				else {
-					state.diffViewer.clearSelection()
-					return .none
+					return .send(.diffViewer(.clear))
 				}
 
 				return .send(.diffViewer(.load(file, isStaged: false)))
@@ -428,7 +426,6 @@ public struct RepositoryDetail: Sendable {
 				return .send(.selectFile(firstStaged, isStaged: true))
 			}
 		}
-		state.diffViewer.clearSelection()
-		return .none
+		return .send(.diffViewer(.clear))
 	}
 }
