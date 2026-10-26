@@ -2,6 +2,7 @@ import ComposableArchitecture
 import SwiftUI
 import UniformTypeIdentifiers
 import AppUI
+import DiskUsageFeature
 import HomerFeature
 import HomerUI
 import Settings
@@ -24,14 +25,14 @@ public extension SharedReaderKey where Self == AppStorageKey<AppSection> {
 /// restores them. They are `@State`, so a re-created view keeps its window's stores; the app
 /// allows one main window at a time, since each one's stores would scan and write the same files.
 ///
-/// Hosts the window's two sections, switched by the `AppSectionSwitcher` that heads each one.
-/// The repository list stays mounted while the Homer console is shown — like it does under the
-/// terminal overlay — so switching back costs no rescan and its terminals keep running; it is
-/// disabled meanwhile so its keyboard shortcuts (⌘R, ⌘T, ⌘F, ⌘A) do not fire from under the
-/// console. The switcher is only reachable with the terminal panel closed (the overlay covers
-/// the list's header), and the panel opening for any other reason (a notification click, tabs
-/// restored at launch) brings the repositories back, so the console never sits over a terminal
-/// that still has keyboard focus.
+/// Hosts the window's sections — Repositories, the Homer console and the Disk dashboard —
+/// switched by the `AppSectionSwitcher` that heads each one. The repository list stays mounted
+/// while another section is shown — like it does under the terminal overlay — so switching back
+/// costs no rescan and its terminals keep running; it is disabled meanwhile so its keyboard
+/// shortcuts (⌘R, ⌘T, ⌘F, ⌘A) do not fire from under the other section. The switcher is only
+/// reachable with the terminal panel closed (the overlay covers the list's header), and the panel
+/// opening for any other reason (a notification click, tabs restored at launch) brings the
+/// repositories back, so no other section sits over a terminal that still has keyboard focus.
 public struct RootRepositoryView: View {
 	@State
 	private var store = Store(
@@ -42,6 +43,13 @@ public struct RootRepositoryView: View {
 	private var homerStore = Store(
 		initialState: HomerConsoleReducer.State(),
 		reducer: { HomerConsoleReducer() }
+	)
+	/// Lives with the window like the others, so a scan started in the Disk section keeps
+	/// running while another section is on screen.
+	@State
+	private var diskStore = Store(
+		initialState: DiskUsageReducer.State(),
+		reducer: { DiskUsageReducer() }
 	)
 
 	@Shared(.selectedAppSection)
@@ -59,11 +67,19 @@ public struct RootRepositoryView: View {
 				.opacity(section == .repositories ? 1 : 0)
 				.disabled(section != .repositories)
 
-			if section == .homer {
+			switch section {
+			case .repositories:
+				EmptyView()
+			case .homer:
 				HomerConsoleView(store: homerStore) {
 					sectionSwitcher
 				}
 				.homerUIFontScale(uiFontScale)
+			case .disk:
+				DiskUsageView(store: diskStore) {
+					sectionSwitcher
+				}
+				.background(Color(nsColor: .windowBackgroundColor))
 			}
 		}
 		// Not tied to the Homer section being shown: the open-question badge on the switcher
