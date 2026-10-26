@@ -17,6 +17,7 @@ public struct GitClient: Sendable {
 	public var checkoutDefaultBranch: @Sendable (_ at: String, _ baseBranch: String) async throws -> String
 	public var pull: @Sendable (_ at: String) async throws -> GitPullHelper.PullResult
 	public var fetch: @Sendable (_ at: String) async throws -> GitFetchHelper.FetchResult
+	public var push: @Sendable (_ at: String) async throws -> GitPushHelper.PushResult
 }
 
 extension GitClient: DependencyKey {
@@ -39,6 +40,9 @@ extension GitClient: DependencyKey {
 			},
 			fetch: { at in
 				try await GitFetchHelper.fetch(at: at)
+			},
+			push: { at in
+				try await GitPushHelper.push(at: at)
 			}
 		)
 	}
