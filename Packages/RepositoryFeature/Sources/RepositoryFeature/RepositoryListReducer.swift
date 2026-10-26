@@ -237,8 +237,10 @@ struct RepositoryListReducer {
 				// Reported by the pane itself, and kept on the session list rather than on the
 				// terminal panel: the panel can be closed while a session keeps running, and the
 				// dots in the repository list still have to move. A late report from a session
-				// that has already been killed finds no entry and changes nothing.
-				guard let session = state.terminalSessions[id: sessionId] else {
+				// that has already been killed finds no entry and changes nothing. Nor does one from a
+				// session whose shell has exited: `.failed` is final (Retry opens a new session), and a
+				// status judged from the dead pane's screen would hide Retry and could post "waiting".
+				guard let session = state.terminalSessions[id: sessionId], session.status.isLive else {
 					return .none
 				}
 
