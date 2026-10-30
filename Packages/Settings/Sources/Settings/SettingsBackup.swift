@@ -54,6 +54,7 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 	public var terminalCopyOnSelect: Bool?
 	public var terminalMouseReporting: Bool?
 	public var terminalReadsImageFiles: Bool?
+	public var terminalRocketBuddy: Bool?
 	public var terminalStartupCommand: String?
 	public var terminalStartupCommandInNewTabs: Bool?
 	public var terminalNotifications: Bool?
@@ -113,6 +114,7 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 		terminalCopyOnSelect = state.terminalCopyOnSelect
 		terminalMouseReporting = state.terminalMouseReporting
 		terminalReadsImageFiles = state.terminalReadsImageFiles
+		terminalRocketBuddy = state.terminalRocketBuddy
 		terminalStartupCommand = state.terminalStartupCommand
 		terminalStartupCommandInNewTabs = state.terminalStartupCommandInNewTabs
 		terminalNotifications = state.terminalNotifications
@@ -193,6 +195,7 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 		set(\.$terminalCopyOnSelect, terminalCopyOnSelect, in: &state)
 		set(\.$terminalMouseReporting, terminalMouseReporting, in: &state)
 		set(\.$terminalReadsImageFiles, terminalReadsImageFiles, in: &state)
+		set(\.$terminalRocketBuddy, terminalRocketBuddy, in: &state)
 		set(\.$terminalStartupCommand, terminalStartupCommand, in: &state)
 		set(\.$terminalStartupCommandInNewTabs, terminalStartupCommandInNewTabs, in: &state)
 		set(\.$terminalNotifications, terminalNotifications, in: &state)

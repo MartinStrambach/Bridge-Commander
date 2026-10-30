@@ -15,6 +15,14 @@ public enum TokenTestState: Equatable, Sendable {
 	case failure(message: String)
 }
 
+/// The rocket buddy's download, started by turning its setting on. Idle once it is in place,
+/// and while the setting is off.
+public enum RocketBuddyDownloadState: Equatable, Sendable {
+	case idle
+	case downloading
+	case failure(message: String)
+}
+
 @Reducer
 public struct SettingsReducer {
 	@ObservableState
@@ -98,6 +106,9 @@ public struct SettingsReducer {
 		@Shared(.terminalReadsImageFiles)
 		public var terminalReadsImageFiles = false
 
+		@Shared(.terminalRocketBuddy)
+		public var terminalRocketBuddy = false
+
 		@Shared(.terminalStartupCommand)
 		public var terminalStartupCommand = ""
 
@@ -136,6 +147,8 @@ public struct SettingsReducer {
 
 		/// The settings file being exported; non-nil while the save panel is up.
 		public var exportedSettings: SettingsBackupDocument?
+
+		public var rocketBuddyDownload = RocketBuddyDownloadState.idle
 
 		@Presents
 		public var alert: AlertState<Action.Alert>?
@@ -199,6 +212,9 @@ public struct SettingsReducer {
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
 		case setTerminalReadsImageFiles(Bool)
+		case setTerminalRocketBuddy(Bool)
+		case retryRocketBuddyDownloadButtonTapped
+		case rocketBuddyDownloadFinished(RocketBuddyDownloadState)
 		case setTerminalStartupCommand(String)
 		case setTerminalStartupCommandInNewTabs(Bool)
 		case setTerminalNotifications(Bool)
@@ -252,6 +268,9 @@ public struct SettingsReducer {
 	@Dependency(\.date.now)
 	private var now
 
+	@Dependency(ClaudeRocketBuddyClient.self)
+	private var rocketBuddy
+
 	/// One per provider. Every action that resets a verdict to `.idle` also cancels its test:
 	/// `.idle` re-enables the Test button, and a run still in flight would otherwise land its
 	/// verdict on a token or URL it was never run against.
@@ -264,6 +283,20 @@ public struct SettingsReducer {
 	}
 
 	public init() {}
+
+	/// Downloads the rocket buddy, which the setting needs before a terminal can load it.
+	private func downloadRocketBuddy(_ state: inout State) -> Effect<Action> {
+		state.rocketBuddyDownload = .downloading
+		return .run { [rocketBuddy] send in
+			do {
+				try await rocketBuddy.install()
+				await send(.rocketBuddyDownloadFinished(.idle))
+			}
+			catch {
+				await send(.rocketBuddyDownloadFinished(.failure(message: error.localizedDescription)))
+			}
+		}
+	}
 
 	/// Adds imported profiles to the stored list, replacing any with the same name.
 	///
@@ -935,6 +968,20 @@ public struct SettingsReducer {
 
 			case let .setTerminalReadsImageFiles(value):
 				state.$terminalReadsImageFiles.withLock { $0 = value }
+				return .none
+
+			case let .setTerminalRocketBuddy(value):
+				state.$terminalRocketBuddy.withLock { $0 = value }
+				guard value, !rocketBuddy.isInstalled(), state.rocketBuddyDownload != .downloading else {
+					return .none
+				}
+				return downloadRocketBuddy(&state)
+
+			case .retryRocketBuddyDownloadButtonTapped:
+				return downloadRocketBuddy(&state)
+
+			case let .rocketBuddyDownloadFinished(outcome):
+				state.rocketBuddyDownload = outcome
 				return .none
 
 			case let .setTerminalStartupCommand(value):
