@@ -135,6 +135,85 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("the rocket buddy is off until the user turns it on")
+	func terminalRocketBuddyDefaultsToOff() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[ClaudeRocketBuddyClient.self].isInstalled = { true }
+		}
+		#expect(store.state.terminalRocketBuddy == false)
+
+		await store.send(.setTerminalRocketBuddy(true)) {
+			$0.$terminalRocketBuddy.withLock { $0 = true }
+		}
+		await store.send(.setTerminalRocketBuddy(false)) {
+			$0.$terminalRocketBuddy.withLock { $0 = false }
+		}
+	}
+
+	@Test("turning the rocket buddy on downloads it when it is missing")
+	func terminalRocketBuddyDownloads() async {
+		let downloads = LockIsolated(0)
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[ClaudeRocketBuddyClient.self].isInstalled = { downloads.value > 0 }
+			$0[ClaudeRocketBuddyClient.self].install = { downloads.withValue { $0 += 1 } }
+		}
+
+		await store.send(.setTerminalRocketBuddy(true)) {
+			$0.$terminalRocketBuddy.withLock { $0 = true }
+			$0.rocketBuddyDownload = .downloading
+		}
+		await store.receive(\.rocketBuddyDownloadFinished) {
+			$0.rocketBuddyDownload = .idle
+		}
+		// Downloaded already: turning it off and on again downloads nothing.
+		await store.send(.setTerminalRocketBuddy(false)) {
+			$0.$terminalRocketBuddy.withLock { $0 = false }
+		}
+		await store.send(.setTerminalRocketBuddy(true)) {
+			$0.$terminalRocketBuddy.withLock { $0 = true }
+		}
+		#expect(downloads.value == 1)
+	}
+
+	@Test("a failed rocket buddy download says why and can be tried again")
+	func terminalRocketBuddyDownloadFails() async {
+		struct Offline: LocalizedError {
+			var errorDescription: String? { "The Internet connection appears to be offline." }
+		}
+
+		let fails = LockIsolated(true)
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[ClaudeRocketBuddyClient.self].isInstalled = { false }
+			$0[ClaudeRocketBuddyClient.self].install = {
+				if fails.value {
+					throw Offline()
+				}
+			}
+		}
+
+		await store.send(.setTerminalRocketBuddy(true)) {
+			$0.$terminalRocketBuddy.withLock { $0 = true }
+			$0.rocketBuddyDownload = .downloading
+		}
+		await store.receive(\.rocketBuddyDownloadFinished) {
+			$0.rocketBuddyDownload = .failure(message: "The Internet connection appears to be offline.")
+		}
+
+		fails.setValue(false)
+		await store.send(.retryRocketBuddyDownloadButtonTapped) {
+			$0.rocketBuddyDownload = .downloading
+		}
+		await store.receive(\.rocketBuddyDownloadFinished) {
+			$0.rocketBuddyDownload = .idle
+		}
+	}
+
 	@Test("mouse reporting is on until the user turns it off")
 	func terminalMouseReportingDefaultsToOn() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {

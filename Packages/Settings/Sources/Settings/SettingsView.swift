@@ -149,6 +149,7 @@ public struct SettingsView<Updates: View>: View {
 			terminalColorThemeSection
 			terminalInputSection
 			terminalImagesSection
+			terminalClaudeCodeSection
 			terminalStartupCommandSection
 			terminalNotificationsSection
 
@@ -788,6 +789,52 @@ public struct SettingsView<Updates: View>: View {
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
+		}
+	}
+
+	private var terminalClaudeCodeSection: some View {
+		SettingsSection("Claude Code") {
+			Toggle(
+				"Rocket buddy above Claude's prompt",
+				isOn: $store.terminalRocketBuddy.sending(\.setTerminalRocketBuddy)
+			)
+
+			Text(
+				"A little rocket and its astronaut crew act out what Claude is doing: thinking, reading, writing, running, waiting for you, done, or asleep. Downloaded from Bridge Commander's GitHub releases (3.5 MB) when turned on. Applies to terminals opened after the change; restart claude in open ones. Type /rocket pixel in Claude to draw it with block characters instead."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			rocketBuddyDownloadStatus
+		}
+	}
+
+	@ViewBuilder
+	private var rocketBuddyDownloadStatus: some View {
+		switch store.rocketBuddyDownload {
+		case .idle:
+			EmptyView()
+
+		case .downloading:
+			HStack(spacing: 6) {
+				ProgressView()
+					.controlSize(.small)
+				Text("Downloading…")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+
+		case let .failure(message):
+			HStack(alignment: .firstTextBaseline, spacing: 6) {
+				Image(systemName: "exclamationmark.triangle.fill")
+					.foregroundColor(.orange)
+				Text("Couldn't download the rocket buddy: \(message)")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+					.textSelection(.enabled)
+				Button("Try Again") { store.send(.retryRocketBuddyDownloadButtonTapped) }
+					.buttonStyle(.scaledBordered)
+			}
 		}
 	}
 
