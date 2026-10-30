@@ -7,6 +7,7 @@ import HomerUI
 import Settings
 import SimulatorFeature
 import TerminalFeature
+import ToolsIntegration
 
 // MARK: - Public entry point
 
@@ -91,10 +92,12 @@ struct RepositoryListView: View {
 
 	/// Every pane's shell is told where the simulator MCP server listens and which session it is,
 	/// so a `claude` started in it reaches the pane beside it (`ClaudeCodeRegistration`) and acts on
-	/// its repository's device.
+	/// its repository's device. With the rocket buddy setting on, it is also told to load that mod
+	/// (downloading it first, for the tabs opened after it arrives, when it is missing).
 	@State
 	private var terminalViewStore = TerminalViewStore(additionalEnvironment: { session in
 		SimulatorMCPServer.shared.terminalEnvironment(sessionId: session.id, repositoryPath: session.repositoryPath)
+			+ (SharedReader(wrappedValue: false, .terminalRocketBuddy).wrappedValue ? ClaudeRocketBuddy.environment() : [])
 	})
 	@FocusState
 	private var isSearchFocused: Bool

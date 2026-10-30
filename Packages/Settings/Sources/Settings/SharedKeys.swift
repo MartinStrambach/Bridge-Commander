@@ -100,6 +100,14 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("terminalReadsImageFiles")
 	}
 
+	/// Whether a `claude` started in the built-in terminal loads the rocket-buddy mod the app ships:
+	/// a rocket and its astronaut crew above Claude's prompt, acting out what Claude is doing. Off by
+	/// default; turning it on downloads the mod (`ClaudeRocketBuddyClient`). Applies to terminals
+	/// opened after the change, like the rest of a shell's environment.
+	static var terminalRocketBuddy: Self {
+		appStorage("terminalRocketBuddy")
+	}
+
 	/// Whether tabs opened with "+" / ⌘T also run the startup command. Off by default: the
 	/// command (typically a long-running tool such as `claude`) belongs in the repository's first
 	/// tab, and extra tabs are usually opened for a plain shell next to it.
