@@ -47,6 +47,14 @@ public struct SimulatorPaneReducer {
 		public var schemes: [XcodeScheme] = []
 		public var selectedSchemeName: String?
 		public var hasLoadedSchemes = false
+		/// The iPhones and iPads paired with this Mac, polled while the pane is on screen.
+		public var physicalDevices: [PhysicalDevice] = []
+		/// Why the last read of the paired devices failed; `physicalDevices` keeps the last list
+		/// that was read.
+		public var physicalDevicesError: String?
+		/// The device Run builds for instead of the simulator above; `nil` for the simulator.
+		/// Remembered per project file name, like the scheme.
+		public var runDeviceId: String?
 
 		public init() {}
 
@@ -55,7 +63,24 @@ public struct SimulatorPaneReducer {
 		}
 
 		public var canRun: Bool {
-			projectPath != nil && selectedScheme != nil && selectedDevice != nil
+			projectPath != nil && selectedScheme != nil && runDestination != nil
+		}
+
+		/// The picked device, while it is still paired.
+		public var runDevice: PhysicalDevice? {
+			runDeviceId.flatMap { id in physicalDevices.first { $0.id == id } }
+		}
+
+		/// What Run builds for: the picked device while it is reachable — no fallback to the
+		/// simulator, which would run somewhere the user did not choose — else the simulator shown.
+		public var runDestination: RunDestination? {
+			guard runDeviceId != nil else {
+				return selectedDevice.map(RunDestination.simulator)
+			}
+			guard let device = runDevice, device.isAvailable else {
+				return nil
+			}
+			return .device(device)
 		}
 
 		public var selectedDevice: SimulatorDevice? {
@@ -138,6 +163,13 @@ public struct SimulatorPaneReducer {
 		case projectChanged(String?)
 		case schemesLoaded([XcodeScheme], storedName: String?)
 		case schemeSelected(String)
+		case physicalDevicesLoaded([PhysicalDevice])
+		case physicalDevicesFailed(String)
+		/// The device last picked for `projectPath`, read when the project changes. A read for a
+		/// project the pane has moved on from is dropped.
+		case runDeviceRestored(String?, projectPath: String)
+		/// A device from the Run bar's destination menu, or `nil` for the simulator above.
+		case runDestinationSelected(deviceId: String?)
 		case runButtonTapped
 		case delegate(Delegate)
 
@@ -157,6 +189,7 @@ public struct SimulatorPaneReducer {
 		case recordings
 		case notice
 		case schemes
+		case physicalDevices
 	}
 
 	@Dependency(SimulatorClient.self)
@@ -241,6 +274,32 @@ public struct SimulatorPaneReducer {
 						}
 					}
 					.cancellable(id: CancelId.polling, cancelInFlight: true),
+					// Paired devices come and go as they are plugged in or join the network.
+					// `devicectl` is a process launch per read, so this polls less often than the
+					// simulators and sends only a change.
+					.run { [simulatorClient, clock, devices = state.physicalDevices, error = state.physicalDevicesError] send in
+						var known = PhysicalDevicesRead(devices: devices, error: error)
+						while !Task.isCancelled {
+							let read: PhysicalDevicesRead
+							do {
+								read = try await PhysicalDevicesRead(devices: simulatorClient.physicalDevices(), error: nil)
+							}
+							catch {
+								read = PhysicalDevicesRead(devices: known.devices, error: error.localizedDescription)
+							}
+							if read != known {
+								known = read
+								if let message = read.error {
+									await send(.physicalDevicesFailed(message))
+								}
+								else {
+									await send(.physicalDevicesLoaded(read.devices))
+								}
+							}
+							try await clock.sleep(for: .seconds(3))
+						}
+					}
+					.cancellable(id: CancelId.physicalDevices, cancelInFlight: true),
 					.run { [simulatorClient] send in
 						for await ids in simulatorClient.recordingDeviceIds() {
 							await send(.recordingDeviceIdsChanged(ids))
@@ -636,12 +695,14 @@ public struct SimulatorPaneReducer {
 					state.schemes = []
 					state.selectedSchemeName = nil
 					state.hasLoadedSchemes = true
+					state.runDeviceId = nil
 					return .cancel(id: CancelId.schemes)
 				}
 				state.hasLoadedSchemes = false
 				return .run { [simulatorClient] send in
-					let schemes = await simulatorClient.runnableSchemes(projectPath)
 					let fileName = (projectPath as NSString).lastPathComponent
+					await send(.runDeviceRestored(simulatorClient.storedRunDeviceId(fileName), projectPath: projectPath))
+					let schemes = await simulatorClient.runnableSchemes(projectPath)
 					await send(.schemesLoaded(schemes, storedName: simulatorClient.storedSchemeName(fileName)))
 				}
 				.cancellable(id: CancelId.schemes, cancelInFlight: true)
@@ -668,8 +729,33 @@ public struct SimulatorPaneReducer {
 					simulatorClient.storeSchemeName(name, (projectPath as NSString).lastPathComponent)
 				}
 
+			case let .physicalDevicesLoaded(devices):
+				state.physicalDevices = devices
+				state.physicalDevicesError = nil
+				return .none
+
+			case let .physicalDevicesFailed(message):
+				state.physicalDevicesError = message
+				return .none
+
+			case let .runDeviceRestored(id, projectPath):
+				guard projectPath == state.projectPath else {
+					return .none
+				}
+				state.runDeviceId = id
+				return .none
+
+			case let .runDestinationSelected(id):
+				state.runDeviceId = id
+				guard let projectPath = state.projectPath else {
+					return .none
+				}
+				return .run { [simulatorClient] _ in
+					simulatorClient.storeRunDeviceId(id, (projectPath as NSString).lastPathComponent)
+				}
+
 			case .runButtonTapped:
-				guard let projectPath = state.projectPath, let scheme = state.selectedScheme, let device = state.selectedDevice else {
+				guard let projectPath = state.projectPath, let scheme = state.selectedScheme, let destination = state.runDestination else {
 					return .none
 				}
 				state.errorMessage = nil
@@ -677,7 +763,7 @@ public struct SimulatorPaneReducer {
 					.run { [simulatorClient] send in
 						simulatorClient.storeSchemeName(scheme.name, (projectPath as NSString).lastPathComponent)
 						do {
-							let command = try simulatorClient.runCommand(projectPath, scheme, device)
+							let command = try simulatorClient.runCommand(projectPath, scheme, destination)
 							await send(.delegate(.runRequested(command: command, title: scheme.name)))
 						}
 						catch {
@@ -686,7 +772,7 @@ public struct SimulatorPaneReducer {
 					},
 				]
 				// Booted while the app builds, rather than by the script once the build is done.
-				if device.state == .shutdown, state.transitioningDeviceId == nil {
+				if case let .simulator(device) = destination, device.state == .shutdown, state.transitioningDeviceId == nil {
 					effects.append(.send(.bootButtonTapped))
 				}
 				return .merge(effects)
@@ -697,4 +783,11 @@ public struct SimulatorPaneReducer {
 		}
 		.ifLet(\.$alert, action: \.alert)
 	}
+}
+
+/// One poll of the paired devices, so the polling sends only a change: a new list, or a failure
+/// that differs from the last one.
+private struct PhysicalDevicesRead: Equatable {
+	var devices: [PhysicalDevice]
+	var error: String?
 }

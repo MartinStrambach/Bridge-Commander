@@ -149,20 +149,22 @@ public struct SimulatorPaneView: View {
 
 	// MARK: - Run
 
-	/// Below the screen: which scheme to build, and Run / Stop for the device shown above. When the
-	/// pane is too narrow, Run and Stop lose their titles first, then the scheme's name truncates
-	/// (last, because a menu that may shrink also stretches, moving its chevron away from the name).
+	/// Below the screen: which scheme to build, where to run it — the simulator shown above or a
+	/// paired device — and Run / Stop. When the pane is too narrow, Run and Stop lose their titles
+	/// first, then the destination its name, then the scheme's name truncates (last, because a
+	/// menu that may shrink also stretches, moving its chevron away from the name).
 	private var runBar: some View {
 		ViewThatFits(in: .horizontal) {
-			runBarRow(iconOnly: false, truncatesScheme: false)
-			runBarRow(iconOnly: true, truncatesScheme: false)
-			runBarRow(iconOnly: true, truncatesScheme: true)
+			runBarRow(iconOnly: false, destinationIconOnly: false, truncatesScheme: false)
+			runBarRow(iconOnly: true, destinationIconOnly: false, truncatesScheme: false)
+			runBarRow(iconOnly: true, destinationIconOnly: true, truncatesScheme: false)
+			runBarRow(iconOnly: true, destinationIconOnly: true, truncatesScheme: true)
 		}
 		.padding(.horizontal, 10)
 		.frame(height: Self.runBarHeight)
 	}
 
-	private func runBarRow(iconOnly: Bool, truncatesScheme: Bool) -> some View {
+	private func runBarRow(iconOnly: Bool, destinationIconOnly: Bool, truncatesScheme: Bool) -> some View {
 		HStack(spacing: 8) {
 			if projectPath == nil {
 				Text("No Xcode project to run")
@@ -179,6 +181,7 @@ public struct SimulatorPaneView: View {
 			}
 			else {
 				schemeMenu(truncates: truncatesScheme)
+				destinationMenu(iconOnly: destinationIconOnly)
 			}
 
 			Spacer(minLength: 4)
@@ -240,11 +243,105 @@ public struct SimulatorPaneView: View {
 		.help("The scheme Run builds")
 	}
 
+	/// The simulator shown above, or a paired iPhone or iPad. Devices out of reach are listed but
+	/// cannot be picked; a picked one that goes out of reach stays picked and disables Run.
+	private func destinationMenu(iconOnly: Bool) -> some View {
+		Menu {
+			Button {
+				store.send(.runDestinationSelected(deviceId: nil))
+			} label: {
+				let title = store.selectedDevice.map { "Simulator: \($0.name)" } ?? "Simulator"
+				if store.runDeviceId == nil {
+					Label(title, systemImage: "checkmark")
+				}
+				else {
+					Text(title)
+				}
+			}
+			Section("Devices") {
+				if let error = store.physicalDevicesError {
+					Text("Could not list devices: \(error)")
+				}
+				else if store.physicalDevices.isEmpty {
+					Text("No paired iPhone or iPad")
+				}
+				ForEach(store.physicalDevices) { device in
+					Button {
+						store.send(.runDestinationSelected(deviceId: device.id))
+					} label: {
+						if device.id == store.runDeviceId {
+							Label(menuTitle(for: device), systemImage: "checkmark")
+						}
+						else {
+							Text(menuTitle(for: device))
+						}
+					}
+					.disabled(!device.isAvailable)
+				}
+			}
+		} label: {
+			runBarLabel(destinationTitle, systemImage: destinationSystemImage, iconOnly: iconOnly)
+				.scaledFont(.subheadline)
+				.lineLimit(1)
+		}
+		.menuStyle(.borderlessButton)
+		.fixedSize()
+		.labelStyle(.titleAndIcon)
+		.help(destinationHelp)
+	}
+
+	private var destinationTitle: String {
+		guard store.runDeviceId != nil else {
+			return "Simulator"
+		}
+		return store.runDevice?.name ?? "Unknown Device"
+	}
+
+	private var destinationSystemImage: String {
+		guard store.runDeviceId != nil else {
+			return "macbook.and.iphone"
+		}
+		guard let device = store.runDevice, device.isAvailable else {
+			return "iphone.slash"
+		}
+		return device.systemImage
+	}
+
+	private var destinationHelp: String {
+		guard store.runDeviceId != nil else {
+			return "Run builds for the simulator shown above; pick a paired device to run there instead"
+		}
+		guard let device = store.runDevice else {
+			if let error = store.physicalDevicesError {
+				return "Could not list devices: \(error)"
+			}
+			return "The device picked for Run is no longer paired with this Mac"
+		}
+		if device.isAvailable {
+			return "Run builds for \(device.name) (\(device.model))"
+		}
+		return device.isPaired
+			? "\(device.name) is not connected: plug it in or bring it onto this Mac's network"
+			: "\(device.name) is not paired: unlock it and tap Trust, or pair it in Xcode's Devices window"
+	}
+
+	private func menuTitle(for device: PhysicalDevice) -> String {
+		let details = [device.model, device.osVersion.map { "iOS \($0)" }].compactMap(\.self).joined(separator: ", ")
+		let reachability = device.isAvailable ? "" : device.isPaired ? " — Not Connected" : " — Not Paired"
+		return "\(device.name) (\(details))\(reachability)"
+	}
+
 	private var runHelp: String {
-		guard let scheme = store.selectedScheme, let device = store.selectedDevice else {
+		guard let scheme = store.selectedScheme else {
+			return "Build and run the app"
+		}
+		if store.runDeviceId != nil, store.runDestination == nil {
+			return "The device picked for Run is not connected"
+		}
+		guard let destination = store.runDestination else {
 			return "Build and run the app on this simulator"
 		}
-		return "Build \(scheme.name) and run it on \(device.name) in a terminal tab"
+		return "Build \(scheme.name) and run it on \(destination.name) in a terminal tab"
 	}
 
 	// MARK: - Header

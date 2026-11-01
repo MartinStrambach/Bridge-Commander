@@ -44,8 +44,16 @@ public struct SimulatorClient: Sendable {
 	/// repository starts on the same one.
 	public var storedSchemeName: @Sendable (_ projectFileName: String) -> String? = { _ in nil }
 	public var storeSchemeName: @Sendable (_ name: String, _ projectFileName: String) -> Void
-	/// Writes the run script and returns the command that builds and launches `scheme` on `device`.
-	public var runCommand: @Sendable (_ projectPath: String, _ scheme: XcodeScheme, _ device: SimulatorDevice) throws -> String
+	/// The iPhones and iPads paired with this Mac (`PhysicalDeviceList`), which Run can build for
+	/// instead of the pane's simulator.
+	public var physicalDevices: @Sendable () async throws -> [PhysicalDevice]
+	/// The device last picked to run a workspace or project on, by its file name like the scheme;
+	/// `nil` for the pane's simulator.
+	public var storedRunDeviceId: @Sendable (_ projectFileName: String) -> String? = { _ in nil }
+	public var storeRunDeviceId: @Sendable (_ id: String?, _ projectFileName: String) -> Void
+	/// Writes the run script and returns the command that builds and launches `scheme` on
+	/// `destination`.
+	public var runCommand: @Sendable (_ projectPath: String, _ scheme: XcodeScheme, _ destination: RunDestination) throws -> String
 }
 
 extension SimulatorClient: DependencyKey {
@@ -88,17 +96,25 @@ extension SimulatorClient: DependencyKey {
 			schemes[projectFileName] = name
 			UserDefaults.standard.set(schemes, forKey: runSchemesKey)
 		},
-		runCommand: { projectPath, scheme, device in
+		physicalDevices: { try await PhysicalDeviceList.devices() },
+		storedRunDeviceId: { UserDefaults.standard.dictionary(forKey: runDevicesKey)?[$0] as? String },
+		storeRunDeviceId: { id, projectFileName in
+			var devices = UserDefaults.standard.dictionary(forKey: runDevicesKey) ?? [:]
+			devices[projectFileName] = id
+			UserDefaults.standard.set(devices, forKey: runDevicesKey)
+		},
+		runCommand: { projectPath, scheme, destination in
 			try SimulatorRunCommand.prepare(
 				in: SimulatorRunCommand.defaultFolder(),
 				projectPath: projectPath,
 				scheme: scheme,
-				device: device
+				destination: destination
 			)
 		}
 	)
 
 	private static let runSchemesKey = "simulatorRunSchemeByProject"
+	private static let runDevicesKey = "simulatorRunDeviceByProject"
 }
 
 extension SimulatorClient: TestDependencyKey {
