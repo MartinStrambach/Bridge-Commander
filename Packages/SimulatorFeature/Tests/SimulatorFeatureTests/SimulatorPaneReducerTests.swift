@@ -104,6 +104,7 @@ struct SimulatorPaneReducerTests {
 			$0[SimulatorClient.self].isClaudeCodeConnected = { true }
 			$0[SimulatorClient.self].prepareInput = { _ in }
 			$0[SimulatorClient.self].recordingDeviceIds = { .finished }
+			$0[SimulatorClient.self].physicalDevices = { [] }
 			$0.continuousClock = clock
 		}
 
@@ -280,6 +281,7 @@ struct SimulatorPaneReducerTests {
 			$0[SimulatorClient.self].isClaudeCodeConnected = { true }
 			$0[SimulatorClient.self].prepareInput = { _ in }
 			$0[SimulatorClient.self].recordingDeviceIds = { .finished }
+			$0[SimulatorClient.self].physicalDevices = { [] }
 			$0.continuousClock = clock
 		}
 
