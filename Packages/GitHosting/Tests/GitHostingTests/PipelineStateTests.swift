@@ -55,4 +55,20 @@ struct PipelineStateTests {
 		#expect(PipelineState.failed.systemImageName(hasConflicts: true) == "xmark.octagon.fill")
 		#expect(PipelineState.running.systemImageName(hasConflicts: true) == "arrow.triangle.2.circlepath")
 	}
+
+	@Test("a merge train pipeline in progress shows a tram; a finished one its result")
+	func mergeTrainIcon() {
+		#expect(PipelineState.running.systemImageName(hasConflicts: false, isMergeTrain: true) == "tram.fill")
+		#expect(PipelineState.pending.systemImageName(hasConflicts: false, isMergeTrain: true) == "tram.fill")
+		#expect(PipelineState.success.systemImageName(hasConflicts: false, isMergeTrain: true) == "checkmark.circle.fill")
+		#expect(PipelineState.failed.systemImageName(hasConflicts: false, isMergeTrain: true) == "xmark.octagon.fill")
+		#expect(PipelineState.running.systemImageName(hasConflicts: false) == "arrow.triangle.2.circlepath")
+	}
+
+	@Test("describes the MR's place on the merge train")
+	func mergeTrainSummary() {
+		#expect(MergeTrainStatus.onTrain(position: 2).summary == "#2 on the merge train")
+		#expect(MergeTrainStatus.onTrain(position: nil).summary == "on the merge train")
+		#expect(MergeTrainStatus.waitingToJoin.summary == "joins the merge train when checks pass")
+	}
 }

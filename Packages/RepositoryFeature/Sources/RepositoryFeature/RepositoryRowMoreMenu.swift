@@ -80,10 +80,14 @@ extension RepositoryRowView {
 			if let pipelineUrl = store.pipelineUrl,
 			   let url = URL(string: pipelineUrl),
 			   let pipelineState = store.pipelineState {
-				PopUpMenuAction(
-					PipelineStatusButton(url: url, state: pipelineState, hasConflicts: store.prHasConflicts).tooltip,
-					systemImage: pipelineState.systemImageName(hasConflicts: store.prHasConflicts)
-				) {
+				let button = PipelineStatusButton(
+					url: url,
+					state: pipelineState,
+					isMergeTrain: store.pipelineIsMergeTrain,
+					mergeTrain: store.prMergeTrain,
+					hasConflicts: store.prHasConflicts
+				)
+				PopUpMenuAction(button.tooltip, systemImage: button.systemImageName) {
 					NSWorkspace.shared.open(url)
 				}
 			}

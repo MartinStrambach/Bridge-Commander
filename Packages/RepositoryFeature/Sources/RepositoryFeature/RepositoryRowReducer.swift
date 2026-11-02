@@ -38,6 +38,10 @@ struct RepositoryRowReducer {
 		var prProvider: PullRequestProvider?
 		var pipelineState: PipelineState?
 		var pipelineUrl: String?
+		/// Whether the pipeline is a merge train's rather than the MR's own; changes its badge.
+		var pipelineIsMergeTrain = false
+		/// The open MR's place on a GitLab merge train, shown in the pipeline badge's tooltip.
+		var prMergeTrain: MergeTrainStatus?
 		/// Whether the open MR conflicts with its target branch; tints the pipeline badge.
 		var prHasConflicts = false
 		var prUnresolvedDiscussions: Int?
@@ -411,6 +415,8 @@ struct RepositoryRowReducer {
 				state.prProvider = details?.provider
 				state.pipelineState = details?.pipeline?.state
 				state.pipelineUrl = details?.pipeline?.url
+				state.pipelineIsMergeTrain = details?.pipeline?.isMergeTrain == true
+				state.prMergeTrain = details?.state.isOpen == true ? details?.mergeTrain : nil
 				state.prHasConflicts = details?.state.isOpen == true && details?.hasConflicts == true
 				// Merged/closed PRs hide the badge — their discussions are no longer actionable.
 				state.prUnresolvedDiscussions = details?.state.isOpen == true
@@ -580,6 +586,8 @@ struct RepositoryRowReducer {
 			state.prProvider = nil
 			state.pipelineState = nil
 			state.pipelineUrl = nil
+			state.pipelineIsMergeTrain = false
+			state.prMergeTrain = nil
 			state.prHasConflicts = false
 			state.prUnresolvedDiscussions = nil
 			state.prApprovals = nil

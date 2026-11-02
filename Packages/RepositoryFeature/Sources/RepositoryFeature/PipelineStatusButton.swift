@@ -8,14 +8,19 @@ import SwiftUI
 ///
 /// A conflict with the target branch turns a passing pipeline yellow with a warning
 /// icon: green would say "ready to merge" about an MR that cannot merge.
+///
+/// A merge train pipeline still in progress shows a tram instead of the running/clock
+/// icon, and the tooltip names it and the MR's place on the train.
 struct PipelineStatusButton: View {
 	let url: URL
 	let state: PipelineState
+	var isMergeTrain = false
+	var mergeTrain: MergeTrainStatus?
 	var hasConflicts = false
 
 	var body: some View {
 		ActionButton(
-			icon: .systemImage(state.systemImageName(hasConflicts: hasConflicts)),
+			icon: .systemImage(systemImageName),
 			tooltip: tooltip,
 			color: color
 		) {
@@ -23,9 +28,15 @@ struct PipelineStatusButton: View {
 		}
 	}
 
+	var systemImageName: String {
+		state.systemImageName(hasConflicts: hasConflicts, isMergeTrain: isMergeTrain)
+	}
+
 	var tooltip: String {
+		let name = isMergeTrain ? "Merge train pipeline" : "Pipeline"
+		let train = mergeTrain.map { " · \($0.summary)" } ?? ""
 		let conflicts = hasConflicts ? " · conflicts with target branch" : ""
-		return "Pipeline: \(state.rawValue)\(conflicts) — open in GitLab"
+		return "\(name): \(state.rawValue)\(train)\(conflicts) — open in GitLab"
 	}
 
 	private var color: Color {

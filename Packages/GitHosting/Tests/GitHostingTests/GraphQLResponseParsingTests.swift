@@ -71,6 +71,45 @@ struct GitLabMergeRequestResponseTests {
 		)
 	}
 
+	@Test("marks a merge train pipeline, and only that one")
+	func mergeTrainPipeline() throws {
+		func isMergeTrain(_ eventType: String) throws -> Bool? {
+			try decode(node(
+				#""state": "opened", "headPipeline": {"status": "RUNNING", "path": "/p", "mergeRequestEventType": "\#(eventType)"}"#
+			)).mergeRequest?.pipelineStatus?.isMergeTrain
+		}
+		#expect(try isMergeTrain("MERGE_TRAIN") == true)
+		#expect(try isMergeTrain("MERGED_RESULT") == false)
+		#expect(try isMergeTrain("DETACHED") == false)
+		#expect(
+			try decode(node(#""state": "opened", "headPipeline": {"status": "RUNNING", "path": "/p"}"#))
+				.mergeRequest?.pipelineStatus?.isMergeTrain == false
+		)
+	}
+
+	@Test("reads the merge train state from the auto-merge strategy")
+	func mergeTrainStatus() throws {
+		func status(_ fields: String) throws -> MergeTrainStatus? {
+			try decode(node(fields)).mergeRequest?.mergeTrainStatus
+		}
+		#expect(
+			try status(#""state": "opened", "autoMergeEnabled": true, "autoMergeStrategy": "MERGE_TRAIN""#)
+				== .onTrain(position: nil)
+		)
+		#expect(
+			try status(
+				#""state": "opened", "autoMergeEnabled": true, "autoMergeStrategy": "ADD_TO_MERGE_TRAIN_WHEN_CHECKS_PASS""#
+			) == .waitingToJoin
+		)
+		#expect(
+			try status(#""state": "opened", "autoMergeEnabled": true, "autoMergeStrategy": "MERGE_WHEN_CHECKS_PASS""#)
+				== nil
+		)
+		#expect(try status(#""state": "opened", "autoMergeEnabled": false, "autoMergeStrategy": null"#) == nil)
+		#expect(try status(#""state": "opened", "autoMergeEnabled": false, "autoMergeStrategy": "MERGE_TRAIN""#) == nil)
+		#expect(try status(#""state": "merged", "autoMergeEnabled": true, "autoMergeStrategy": "MERGE_TRAIN""#) == nil)
+	}
+
 	@Test("detects conflicts from the flag or the detailed merge status")
 	func conflicts() throws {
 		#expect(try decode(node(#""state": "opened", "conflicts": true"#)).mergeRequest?.hasConflicts == true)
@@ -266,6 +305,40 @@ struct GitLabMergeRequestResponseTests {
 		"approvedBy": {"nodes": [{"username": "aberg", "name": null, "avatarUrl": null}]}
 		""")
 		#expect(try #require(decode(json).mergeRequest?.approvalStatus).approvedBy[0].displayName == "aberg")
+	}
+}
+
+@Suite("GitLab merge train car GraphQL response")
+struct GitLabMergeTrainCarResponseTests {
+	private func decode(_ json: String) throws -> GitLabMergeTrainCarResponse {
+		try JSONDecoder().decode(GitLabMergeTrainCarResponse.self, from: Data(json.utf8))
+	}
+
+	@Test("reports the position from 1 and the car's pipeline")
+	func car() throws {
+		let car = try #require(decode(#"""
+		{"data": {"project": {"mergeRequest": {"mergeTrainCar": {"index": 1, "pipeline": {
+			"status": "RUNNING", "path": "/g/p/-/pipelines/9", "mergeRequestEventType": "MERGE_TRAIN"
+		}}}}}}
+		"""#).car)
+		#expect(car.position == 2)
+		#expect(car.pipelineStatus == PipelineStatus(
+			state: .running,
+			url: "https://gitlab.com/g/p/-/pipelines/9",
+			isMergeTrain: true
+		))
+	}
+
+	@Test("an inactive car has no position; a missing car or MR reports none")
+	func missingCar() throws {
+		let inactive = try #require(
+			decode(#"{"data": {"project": {"mergeRequest": {"mergeTrainCar": {"index": null, "pipeline": null}}}}}"#).car
+		)
+		#expect(inactive.position == nil)
+		#expect(inactive.pipelineStatus == nil)
+		#expect(try decode(#"{"data": {"project": {"mergeRequest": {"mergeTrainCar": null}}}}"#).car == nil)
+		#expect(try decode(#"{"data": {"project": {"mergeRequest": null}}}"#).car == nil)
+		#expect(try decode(#"{"errors": [{"message": "Field 'mergeTrainCar' doesn't exist"}]}"#).car == nil)
 	}
 }
 
