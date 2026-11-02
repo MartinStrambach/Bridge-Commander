@@ -6,6 +6,8 @@ struct DeleteWorktreeConfirmationReducer {
 	@ObservableState
 	struct State: Equatable {
 		let name: String
+		/// Whether removing it also deletes its Xcode DerivedData (Settings), so the text can say so.
+		let deletesDerivedData: Bool
 		var forceRemoval: Bool = false
 		var deleteLocalBranch: Bool = true
 	}

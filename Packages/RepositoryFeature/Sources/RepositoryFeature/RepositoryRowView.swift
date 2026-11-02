@@ -200,7 +200,6 @@ struct RepositoryRowView: View {
 									.scaledFont(.caption)
 								Text(branchName)
 									.scaledFont(.caption, design: .monospaced)
-									.tracking(-0.5)
 									.lineLimit(1)
 									.truncationMode(.middle)
 							}
@@ -228,7 +227,6 @@ struct RepositoryRowView: View {
 								.foregroundColor(.secondary)
 							Text("Detached at \(detachedHead.prefix(8))")
 								.scaledFont(.caption, design: .monospaced)
-								.tracking(-0.5)
 								.foregroundColor(.secondary)
 								.lineLimit(1)
 						}
@@ -287,8 +285,8 @@ struct RepositoryRowView: View {
 			.scaledFont(.caption)
 			.fontWeight(.semibold)
 			.foregroundStyle(.blue)
-			.padding(.horizontal, 7)
-			.padding(.vertical, 3)
+			.padding(.horizontal, 8)
+			.padding(.vertical, 2)
 			.background(Color.blue.opacity(0.14), in: Capsule())
 			.lineLimit(1)
 			// Never truncated: a bare "…" badge says nothing, and the code review states beside
@@ -367,8 +365,8 @@ struct RepositoryRowView: View {
 							.lineLimit(1)
 					}
 				}
-				.padding(.horizontal, 7)
-				.padding(.vertical, 3)
+				.padding(.horizontal, 8)
+				.padding(.vertical, 2)
 				.background(color.opacity(0.1), in: Capsule())
 			}
 
@@ -389,8 +387,8 @@ struct RepositoryRowView: View {
 							.lineLimit(1)
 					}
 				}
-				.padding(.horizontal, 7)
-				.padding(.vertical, 3)
+				.padding(.horizontal, 8)
+				.padding(.vertical, 2)
 				.background(color.opacity(0.1), in: Capsule())
 			}
 		}

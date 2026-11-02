@@ -16,7 +16,7 @@ struct UnresolvedDiscussionsBadge: View {
 		Button {
 			NSWorkspace.shared.open(url)
 		} label: {
-			HStack(spacing: 3) {
+			HStack(spacing: 4) {
 				Image(systemName: "bubble.left.and.bubble.right.fill")
 					.scaledFont(.caption2)
 				Text("\(count)")

@@ -142,7 +142,7 @@ struct TerminalPanelView: View {
 						.scaledFont(.caption)
 						.fontWeight(.medium)
 						.foregroundStyle(.secondary)
-						.padding(.horizontal, 5)
+						.padding(.horizontal, 4)
 						.padding(.vertical, 2)
 						.background(.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 4))
 						.layoutPriority(1)

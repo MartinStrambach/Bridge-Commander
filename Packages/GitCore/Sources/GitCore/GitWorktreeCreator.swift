@@ -72,14 +72,14 @@ public nonisolated enum GitWorktreeCreator {
 
 		# Check if worktree already exists (exact match)
 		if git worktree list | grep -qw "$folder"; then
-		  echo "❌ Worktree already exists at: $folder" >&2
+		  echo "Worktree already exists at: $folder" >&2
 		  exit 1
 		fi
 
 		# Check if the new branch already exists (only when creating a new branch)
 		if [ "$create_new_branch" = "true" ]; then
 		  if git show-ref --quiet "refs/heads/$branch"; then
-		    echo "❌ Branch '$branch' already exists locally" >&2
+		    echo "Branch '$branch' already exists locally" >&2
 		    exit 1
 		  fi
 		fi
@@ -99,7 +99,7 @@ public nonisolated enum GitWorktreeCreator {
 		 base_ref="origin/$base_branch"
 		 echo "→ Using remote base branch: $base_ref"
 		else
-		 echo "❌ Base branch '$base_branch' not found locally or remotely" >&2
+		 echo "Base branch '$base_branch' not found locally or remotely" >&2
 		 exit 1
 		fi
 
@@ -111,7 +111,7 @@ public nonisolated enum GitWorktreeCreator {
 		  # push commits straight into A instead of creating a new remote branch for the MR.
 		  # Branching off a local base never sets up tracking, so this makes both paths consistent.
 		  git worktree add "$folder" -b "$branch" --no-track "$base_ref"
-		  echo "✅ Worktree created successfully with branch '$branch' from $base_ref"
+		  echo "Worktree created successfully with branch '$branch' from $base_ref"
 		else
 		  # When base branch is remote-only, create a local tracking branch to avoid detached HEAD
 		  if git show-ref --quiet "refs/heads/$base_branch"; then
@@ -121,7 +121,7 @@ public nonisolated enum GitWorktreeCreator {
 		    echo "→ Creating worktree at: $folder with local tracking branch '$base_branch' from $base_ref"
 		    git worktree add "$folder" -b "$base_branch" "$base_ref"
 		  fi
-		  echo "✅ Worktree created successfully on branch $base_branch"
+		  echo "Worktree created successfully on branch $base_branch"
 		fi
 		"""
 

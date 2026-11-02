@@ -8,15 +8,16 @@ struct DeleteWorktreeConfirmationView: View {
 
 	var body: some View {
 		VStack(spacing: 20) {
-			Image(systemName: "exclamationmark.triangle.fill")
-				.scaledFont(size: 48)
-				.foregroundStyle(.orange)
+			Image(systemName: "trash")
+				.scaledFont(size: 32)
+				.foregroundStyle(.secondary)
 
 			Text("Remove Worktree")
 				.scaledFont(.title2)
-				.bold()
+				.fontWeight(.medium)
 
-			Text("Are you sure you want to remove this worktree?")
+			Text(description)
+				.foregroundStyle(.secondary)
 				.multilineTextAlignment(.center)
 
 			Text(store.name)
@@ -74,6 +75,14 @@ struct DeleteWorktreeConfirmationView: View {
 		}
 		.padding(24)
 		.frame(width: 400)
+	}
+
+	/// Names everything the removal deletes.
+	private var description: String {
+		let folders = store.deletesDerivedData
+			? "Deletes the worktree's folder and its Xcode DerivedData."
+			: "Deletes the worktree's folder."
+		return folders + " The branch stays unless you delete it below."
 	}
 }
 

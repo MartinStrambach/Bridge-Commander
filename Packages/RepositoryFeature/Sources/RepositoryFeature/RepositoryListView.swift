@@ -396,16 +396,14 @@ struct RepositoryListView: View {
 			Image(systemName: "folder.badge.gearshape")
 				.scaledFont(size: 44)
 				.symbolRenderingMode(.hierarchical)
-				.foregroundStyle(.green)
-				.frame(width: 96, height: 96)
-				.background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+				.foregroundStyle(.secondary)
 
 			VStack(spacing: 8) {
-				Text("No Repositories Found")
+				Text("No Repositories")
 					.scaledFont(.title3)
-					.fontWeight(.semibold)
+					.fontWeight(.medium)
 
-				Text("Add a Git repository to get started")
+				Text("Add a Git repository to see its branch, worktrees and changes here")
 					.scaledFont(.body)
 					.foregroundColor(.secondary)
 					.multilineTextAlignment(.center)

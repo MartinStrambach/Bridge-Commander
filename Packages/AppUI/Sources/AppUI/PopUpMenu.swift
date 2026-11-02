@@ -123,7 +123,7 @@ public struct PopUpMenuButton<Label: View>: View {
 			isMenuOpen = true
 		} label: {
 			label
-				.padding(.horizontal, 5)
+				.padding(.horizontal, 4)
 				.padding(.vertical, 2)
 				.background(
 					Color.primary.opacity(isHovered || isMenuOpen ? 0.08 : 0),
@@ -164,7 +164,7 @@ public struct PopUpMenuTitle: View {
 	let title: String
 
 	public var body: some View {
-		HStack(spacing: 3) {
+		HStack(spacing: 4) {
 			Text(title)
 				.scaledFont(size: 12)
 			Image(systemName: "chevron.down")

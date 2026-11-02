@@ -40,7 +40,10 @@ struct DeleteWorktreeButtonReducer {
 		Reduce { state, action in
 			switch action {
 			case .showConfirmation:
-				state.confirmationSheet = DeleteWorktreeConfirmationReducer.State(name: state.name)
+				state.confirmationSheet = DeleteWorktreeConfirmationReducer.State(
+					name: state.name,
+					deletesDerivedData: state.deleteDerivedDataOnWorktreeDelete
+				)
 				return .none
 
 			case let .confirmationSheet(.presented(.confirmTapped(forceRemoval: force, deleteLocalBranch: deleteLocalBranch))):
