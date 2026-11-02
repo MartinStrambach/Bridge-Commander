@@ -45,6 +45,37 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.prUnresolvedDiscussions == 3)
 	}
 
+	@Test("an MR on a merge train carries its train pipeline and place; a merged one drops the place")
+	@MainActor
+	func mergeTrain() async {
+		let store = makeStore(state: makeRow())
+
+		func details(state: PullRequestState) -> PullRequestDetails {
+			PullRequestDetails(
+				url: "https://gitlab.com/g/app/-/merge_requests/7",
+				state: state,
+				provider: .gitlab,
+				pipeline: PipelineStatus(
+					state: .running,
+					url: "https://gitlab.com/g/app/-/pipelines/43",
+					isMergeTrain: true
+				),
+				mergeTrain: .onTrain(position: 2)
+			)
+		}
+
+		await store.send(.didFetchPullRequest(details(state: .ready), branch: "LS-1234_feature"))
+		#expect(store.state.pipelineIsMergeTrain)
+		#expect(store.state.prMergeTrain == .onTrain(position: 2))
+
+		await store.send(.didFetchPullRequest(details(state: .merged), branch: "LS-1234_feature"))
+		#expect(store.state.pipelineIsMergeTrain)
+		#expect(store.state.prMergeTrain == nil)
+
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
+		#expect(!store.state.pipelineIsMergeTrain)
+	}
+
 	@Test("a draft PR still surfaces the unresolved discussion count")
 	@MainActor
 	func draftPullRequestKeepsCount() async {

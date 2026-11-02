@@ -245,6 +245,8 @@ struct TerminalPanelView: View {
 				PipelineStatusButton(
 					url: url,
 					state: pipelineState,
+					isMergeTrain: activeRowStore?.pipelineIsMergeTrain == true,
+					mergeTrain: activeRowStore?.prMergeTrain,
 					hasConflicts: activeRowStore?.prHasConflicts == true
 				)
 			}

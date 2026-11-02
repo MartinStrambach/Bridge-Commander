@@ -28,6 +28,7 @@ public nonisolated enum GitLabService {
 			project(fullPath: $fullPath) {
 				mergeRequests(sourceBranches: [$branch], sort: CREATED_DESC, first: 1) {
 					nodes {
+						iid
 						webUrl
 						state
 						draft
@@ -40,6 +41,8 @@ public nonisolated enum GitLabService {
 						groupedApprovalsLeft
 						detailedMergeStatus
 						conflicts
+						autoMergeEnabled
+						autoMergeStrategy
 						approvedBy {
 							nodes { username name avatarUrl }
 						}
@@ -54,6 +57,7 @@ public nonisolated enum GitLabService {
 						headPipeline {
 							status
 							path
+							mergeRequestEventType
 						}
 					}
 				}
@@ -61,26 +65,15 @@ public nonisolated enum GitLabService {
 		}
 		"""
 
-		var request = URLRequest(url: url)
-		request.httpMethod = "POST"
-		request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-		request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-		request.httpBody = try JSONEncoder().encode(
+		print("GitLabService: Fetching MR for \(projectPath) on branch \(branch)")
+		let data = try await post(
 			GitLabGraphQLRequest(
 				query: query,
 				variables: .init(fullPath: projectPath, branch: branch)
-			)
+			),
+			to: url,
+			token: token
 		)
-
-		print("GitLabService: Fetching MR for \(projectPath) on branch \(branch)")
-		let (data, response) = try await URLSession.shared.loggedData(for: request)
-
-		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-			let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-			throw GitHostingError.httpFailure(statusCode: statusCode)
-		}
 
 		let decoded = try JSONDecoder().decode(GitLabMergeRequestResponse.self, from: data)
 		// A 200 with a null project means the token cannot see the project (missing
@@ -95,15 +88,83 @@ public nonisolated enum GitLabService {
 			return nil
 		}
 
+		var pipeline = mergeRequest.pipelineStatus
+		var mergeTrain = mergeRequest.mergeTrainStatus
+		if case .onTrain = mergeTrain, let iid = mergeRequest.iid,
+		   let car = await fetchMergeTrainCar(projectPath: projectPath, iid: iid, token: token, url: url) {
+			mergeTrain = .onTrain(position: car.position)
+			// The car's pipeline is the one that decides the merge, whatever the MR
+			// reports as its head pipeline.
+			pipeline = car.pipelineStatus ?? pipeline
+		}
+
 		return PullRequestDetails(
 			url: mergeRequest.webUrl,
 			state: mergeRequest.mappedState,
 			provider: .gitlab,
-			pipeline: mergeRequest.pipelineStatus,
+			pipeline: pipeline,
 			unresolvedDiscussionsCount: mergeRequest.unresolvedCount,
 			approvals: mergeRequest.approvalStatus,
-			hasConflicts: mergeRequest.hasConflicts
+			hasConflicts: mergeRequest.hasConflicts,
+			mergeTrain: mergeTrain
 		)
+	}
+
+	/// The MR's car on the merge train: its position and pipeline.
+	///
+	/// Best effort, in its own request: GitLab marks `mergeTrainCar` experimental, and
+	/// were it changed or removed, asking for it in the main query would fail the whole
+	/// MR fetch. Any failure returns `nil` and the row goes without the position.
+	private static func fetchMergeTrainCar(
+		projectPath: String,
+		iid: String,
+		token: String,
+		url: URL
+	) async -> GitLabMergeTrainCarResponse.Car? {
+		let query = """
+		query($fullPath: ID!, $iid: String!) {
+			project(fullPath: $fullPath) {
+				mergeRequest(iid: $iid) {
+					mergeTrainCar {
+						index
+						pipeline {
+							status
+							path
+							mergeRequestEventType
+						}
+					}
+				}
+			}
+		}
+		"""
+		do {
+			let data = try await post(
+				GitLabMergeTrainCarRequest(query: query, variables: .init(fullPath: projectPath, iid: iid)),
+				to: url,
+				token: token
+			)
+			return try JSONDecoder().decode(GitLabMergeTrainCarResponse.self, from: data).car
+		}
+		catch {
+			print("GitLabService: Could not fetch merge train car for \(projectPath)!\(iid): \(error)")
+			return nil
+		}
+	}
+
+	/// POSTs a GraphQL request body and returns the response data of a 200 answer.
+	private static func post(_ body: some Encodable, to url: URL, token: String) async throws -> Data {
+		var request = URLRequest(url: url)
+		request.httpMethod = "POST"
+		request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.setValue("application/json", forHTTPHeaderField: "Accept")
+		request.httpBody = try JSONEncoder().encode(body)
+
+		let (data, response) = try await URLSession.shared.loggedData(for: request)
+		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+			throw GitHostingError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
+		}
+		return data
 	}
 
 	/// Verifies the token against the same GraphQL endpoint the MR fetch uses,
@@ -116,19 +177,11 @@ public nonisolated enum GitLabService {
 			throw GitHostingError.invalidURL
 		}
 
-		var request = URLRequest(url: url)
-		request.httpMethod = "POST"
-		request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-		request.setValue("application/json", forHTTPHeaderField: "Accept")
-		request.httpBody = try JSONEncoder().encode(
-			BareGraphQLRequest(query: "{ currentUser { username } }")
+		let data = try await post(
+			BareGraphQLRequest(query: "{ currentUser { username } }"),
+			to: url,
+			token: token
 		)
-
-		let (data, response) = try await URLSession.shared.loggedData(for: request)
-		guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-			throw GitHostingError.httpFailure(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
-		}
 
 		let decoded = try JSONDecoder().decode(GitLabCurrentUserResponse.self, from: data)
 		guard let username = decoded.username else {
@@ -178,6 +231,52 @@ private struct GitLabGraphQLRequest: Encodable {
 	let variables: Variables
 }
 
+private struct GitLabMergeTrainCarRequest: Encodable {
+	struct Variables: Encodable {
+		let fullPath: String
+		let iid: String
+	}
+
+	let query: String
+	let variables: Variables
+}
+
+/// Internal (not private) so the response mapping is unit-testable from fixture JSON.
+nonisolated struct GitLabMergeTrainCarResponse: Decodable {
+	struct DataContainer: Decodable {
+		let project: Project?
+	}
+
+	struct Project: Decodable {
+		let mergeRequest: MergeRequest?
+	}
+
+	struct MergeRequest: Decodable {
+		let mergeTrainCar: Car?
+	}
+
+	struct Car: Decodable {
+		/// Zero-based; `nil` when the car is not active on a train.
+		let index: Int?
+		let pipeline: GitLabMergeRequestResponse.HeadPipeline?
+
+		/// Position counted from 1, as people say it.
+		var position: Int? {
+			index.map { $0 + 1 }
+		}
+
+		var pipelineStatus: PipelineStatus? {
+			pipeline?.pipelineStatus
+		}
+	}
+
+	let data: DataContainer?
+
+	var car: Car? {
+		data?.project?.mergeRequest?.mergeTrainCar
+	}
+}
+
 /// Internal (not private) so the response mapping is unit-testable from fixture JSON.
 nonisolated struct GitLabMergeRequestResponse: Decodable {
 	struct DataContainer: Decodable {
@@ -193,6 +292,7 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 	}
 
 	struct MergeRequest: Decodable {
+		let iid: String?
 		let webUrl: String
 		let state: String
 		let draft: Bool?
@@ -205,6 +305,8 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 		let groupedApprovalsLeft: Int?
 		let detailedMergeStatus: String?
 		let conflicts: Bool?
+		let autoMergeEnabled: Bool?
+		let autoMergeStrategy: String?
 		let approvedBy: UserConnection?
 		let reviewers: ReviewerConnection?
 		let headPipeline: HeadPipeline?
@@ -236,15 +338,20 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 		}
 
 		var pipelineStatus: PipelineStatus? {
-			guard
-				let headPipeline,
-				// GraphQL reports the same statuses as REST, as uppercase enum cases.
-				let state = PipelineState(gitLabStatus: headPipeline.status.lowercased()),
-				let path = headPipeline.path
-			else {
+			headPipeline?.pipelineStatus
+		}
+
+		/// Merge train state from the auto-merge strategy. The position is not here:
+		/// it needs `mergeTrainCar`, fetched separately. Merged/closed MRs have none.
+		var mergeTrainStatus: MergeTrainStatus? {
+			guard mappedState.isOpen, autoMergeEnabled != false else {
 				return nil
 			}
-			return PipelineStatus(state: state, url: "https://gitlab.com" + path)
+			return switch autoMergeStrategy?.uppercased() {
+			case "MERGE_TRAIN": .onTrain(position: nil)
+			case "ADD_TO_MERGE_TRAIN_WHEN_CHECKS_PASS": .waitingToJoin
+			default: nil
+			}
 		}
 
 		/// Whether the MR cannot merge cleanly into its target branch.
@@ -357,6 +464,23 @@ nonisolated struct GitLabMergeRequestResponse: Decodable {
 	struct HeadPipeline: Decodable {
 		let status: String
 		let path: String?
+		/// `DETACHED`, `MERGED_RESULT` or `MERGE_TRAIN`; absent for branch pipelines.
+		let mergeRequestEventType: String?
+
+		var pipelineStatus: PipelineStatus? {
+			guard
+				// GraphQL reports the same statuses as REST, as uppercase enum cases.
+				let state = PipelineState(gitLabStatus: status.lowercased()),
+				let path
+			else {
+				return nil
+			}
+			return PipelineStatus(
+				state: state,
+				url: "https://gitlab.com" + path,
+				isMergeTrain: mergeRequestEventType?.uppercased() == "MERGE_TRAIN"
+			)
+		}
 	}
 
 	let data: DataContainer?
