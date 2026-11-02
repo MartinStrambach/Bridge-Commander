@@ -16,13 +16,17 @@ struct DeleteWorktreeConfirmationView: View {
 				.scaledFont(.title2)
 				.fontWeight(.medium)
 
+			// Every multi-line text grows vertically: the sheet sizes itself from its content, and
+			// without this it truncates them to one line at the fixed width.
 			Text(description)
 				.foregroundStyle(.secondary)
 				.multilineTextAlignment(.center)
+				.fixedSize(horizontal: false, vertical: true)
 
 			Text(store.name)
 				.scaledFont(.body, design: .monospaced)
 				.multilineTextAlignment(.center)
+				.fixedSize(horizontal: false, vertical: true)
 				.padding(.horizontal)
 				.padding(.vertical, 8)
 				.background(Color.secondary.opacity(0.1))
@@ -36,6 +40,7 @@ struct DeleteWorktreeConfirmationView: View {
 					Text("Remove even if there are uncommitted changes")
 						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
+						.fixedSize(horizontal: false, vertical: true)
 				}
 			}
 			.toggleStyle(.checkbox)
@@ -49,6 +54,7 @@ struct DeleteWorktreeConfirmationView: View {
 					Text("Also delete the checked-out branch, even if it is unmerged; the default branch is never deleted")
 						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
+						.fixedSize(horizontal: false, vertical: true)
 				}
 			}
 			.toggleStyle(.checkbox)
