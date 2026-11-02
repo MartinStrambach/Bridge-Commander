@@ -162,7 +162,7 @@ public struct DiffViewer: View {
 				.foregroundStyle(.secondary)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.padding(.vertical, 60)
+		.padding(.vertical, 64)
 	}
 
 	private var noChangesView: some View {
@@ -179,7 +179,7 @@ public struct DiffViewer: View {
 				.foregroundStyle(.secondary)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.padding(.vertical, 60)
+		.padding(.vertical, 64)
 	}
 
 	// MARK: - Selection

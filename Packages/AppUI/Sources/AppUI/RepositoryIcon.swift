@@ -30,7 +30,7 @@ public struct RepositoryIcon: View {
 			// Merge indicator badge
 			if isMergeInProgress {
 				Image(systemName: "arrow.triangle.swap")
-					.font(.system(size: 10, weight: .bold))
+					.font(.system(size: 10, weight: .semibold))
 					.foregroundColor(.white)
 					.frame(width: 16, height: 16)
 					.background(Circle().fill(Color.red))

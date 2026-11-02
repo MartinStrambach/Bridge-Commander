@@ -105,6 +105,31 @@ struct XcodeDerivedDataHelperTests {
 		#expect(!FileManager.default.fileExists(atPath: second.path))
 	}
 
+	@Test("finds the folders a deletion would remove, and none for a worktree Xcode never built")
+	func findsOnlyFoldersOfTheWorktree() throws {
+		let derivedData = try makeDerivedDataDirectory()
+		defer { try? FileManager.default.removeItem(at: derivedData) }
+
+		let matching = try addFolder(
+			named: "App-abcdef",
+			workspacePath: "\(worktreePath)/App.xcodeproj",
+			in: derivedData
+		)
+		_ = try addFolder(
+			named: "App-ghijkl",
+			workspacePath: "/Users/test/worktrees/feature-2/App.xcodeproj",
+			in: derivedData
+		)
+		_ = try addFolder(named: "ModuleCache.noindex", workspacePath: nil, in: derivedData)
+
+		let found = XcodeDerivedDataHelper.derivedDataFolders(forWorktreePath: worktreePath, in: derivedData)
+		#expect(found.map(\.lastPathComponent) == [matching.lastPathComponent])
+		#expect(XcodeDerivedDataHelper.derivedDataFolders(
+			forWorktreePath: "/Users/test/worktrees/android-only",
+			in: derivedData
+		).isEmpty)
+	}
+
 	@Test("keeps folders without an info.plist")
 	func keepsFoldersWithoutInfoPlist() throws {
 		let derivedData = try makeDerivedDataDirectory()

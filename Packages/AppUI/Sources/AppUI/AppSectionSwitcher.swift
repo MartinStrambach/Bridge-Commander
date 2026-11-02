@@ -58,14 +58,14 @@ public struct AppSectionSwitcher: View {
 			HStack(spacing: 6) {
 				icon(section)
 				Text(section.title)
-					.fontWeight(.semibold)
+					.fontWeight(.medium)
 				if badge > 0 {
 					Text("\(badge)")
 						.scaledFont(.caption2)
-						.fontWeight(.bold)
+						.fontWeight(.semibold)
 						.monospacedDigit()
 						.foregroundStyle(.white)
-						.padding(.horizontal, 5)
+						.padding(.horizontal, 4)
 						.padding(.vertical, 1)
 						.background(.orange, in: Capsule())
 				}
@@ -73,7 +73,7 @@ public struct AppSectionSwitcher: View {
 			.scaledFont(.headline)
 			.foregroundStyle(isSelected ? .primary : .secondary)
 			.padding(.horizontal, 10)
-			.padding(.vertical, 5)
+			.padding(.vertical, 4)
 			.background {
 				if isSelected {
 					RoundedRectangle(cornerRadius: 5)

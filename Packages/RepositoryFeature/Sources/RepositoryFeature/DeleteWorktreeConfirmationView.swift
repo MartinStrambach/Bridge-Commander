@@ -8,20 +8,25 @@ struct DeleteWorktreeConfirmationView: View {
 
 	var body: some View {
 		VStack(spacing: 20) {
-			Image(systemName: "exclamationmark.triangle.fill")
-				.scaledFont(size: 48)
-				.foregroundStyle(.orange)
+			Image(systemName: "trash")
+				.scaledFont(size: 32)
+				.foregroundStyle(.secondary)
 
 			Text("Remove Worktree")
 				.scaledFont(.title2)
-				.bold()
+				.fontWeight(.medium)
 
-			Text("Are you sure you want to remove this worktree?")
+			// Every multi-line text grows vertically: the sheet sizes itself from its content, and
+			// without this it truncates them to one line at the fixed width.
+			Text(description)
+				.foregroundStyle(.secondary)
 				.multilineTextAlignment(.center)
+				.fixedSize(horizontal: false, vertical: true)
 
 			Text(store.name)
 				.scaledFont(.body, design: .monospaced)
 				.multilineTextAlignment(.center)
+				.fixedSize(horizontal: false, vertical: true)
 				.padding(.horizontal)
 				.padding(.vertical, 8)
 				.background(Color.secondary.opacity(0.1))
@@ -35,6 +40,7 @@ struct DeleteWorktreeConfirmationView: View {
 					Text("Remove even if there are uncommitted changes")
 						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
+						.fixedSize(horizontal: false, vertical: true)
 				}
 			}
 			.toggleStyle(.checkbox)
@@ -48,6 +54,7 @@ struct DeleteWorktreeConfirmationView: View {
 					Text("Also delete the checked-out branch, even if it is unmerged; the default branch is never deleted")
 						.scaledFont(.caption)
 						.foregroundStyle(.secondary)
+						.fixedSize(horizontal: false, vertical: true)
 				}
 			}
 			.toggleStyle(.checkbox)
@@ -74,6 +81,14 @@ struct DeleteWorktreeConfirmationView: View {
 		}
 		.padding(24)
 		.frame(width: 400)
+	}
+
+	/// Names everything the removal deletes.
+	private var description: String {
+		let folders = store.deletesDerivedData
+			? "Deletes the worktree's folder and its Xcode DerivedData."
+			: "Deletes the worktree's folder."
+		return folders + " The branch stays unless you delete it below."
 	}
 }
 

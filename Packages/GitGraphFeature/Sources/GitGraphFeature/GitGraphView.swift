@@ -185,7 +185,7 @@ public struct GitGraphView: View {
 					.help("Clear search")
 				}
 			}
-			.padding(.horizontal, 7)
+			.padding(.horizontal, 8)
 			.padding(.vertical, 4)
 			.background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
 			.overlay {
@@ -744,12 +744,12 @@ private struct GitGraphRowView: View {
 	// MARK: - Ref Chips
 
 	private func refChip(_ ref: GitCommitRef) -> some View {
-		HStack(spacing: 3) {
+		HStack(spacing: 4) {
 			Image(systemName: refIcon(ref.kind))
 				.scaledFont(size: 8)
 			Text(ref.name)
 				.scaledFont(.caption2)
-				.fontWeight(ref.isHead ? .bold : .medium)
+				.fontWeight(ref.isHead ? .semibold : .medium)
 				.lineLimit(1)
 		}
 		.padding(.horizontal, 6)

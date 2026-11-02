@@ -74,7 +74,7 @@ struct CommitDetailView: View {
 					// The pane shows the diff against the first parent, which is what git itself
 					// prints for a merge — worth saying so, since it hides the merged-in side.
 					Text("merge, diffed against first parent")
-						.italic()
+						.foregroundStyle(.tertiary)
 				}
 			}
 			.scaledFont(.caption)

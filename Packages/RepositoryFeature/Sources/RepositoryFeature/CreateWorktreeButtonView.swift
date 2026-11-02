@@ -83,20 +83,13 @@ struct CreateWorktreeDialogView: View {
 
 	private var header: some View {
 		HStack(spacing: 12) {
-			RoundedRectangle(cornerRadius: 9, style: .continuous)
-				.fill(.green.gradient)
-				.frame(width: 38, height: 38)
-				.overlay {
-					Image(systemName: "plus.square.on.square")
-						.font(.system(size: 17, weight: .semibold))
-						.foregroundStyle(.white)
-				}
-				.shadow(color: .green.opacity(0.25), radius: 3, y: 1)
+			// The worktree rows' own icon, so the dialog reads as making one of those rows.
+			RepositoryIcon(isWorktree: true, isMergeInProgress: false)
 
 			VStack(alignment: .leading, spacing: 2) {
 				Text("New Worktree")
 					.scaledFont(.title3)
-					.fontWeight(.semibold)
+					.fontWeight(.medium)
 				Label(store.repositoryName, systemImage: "folder")
 					.scaledFont(.callout)
 					.foregroundStyle(.secondary)
@@ -125,7 +118,7 @@ struct CreateWorktreeDialogView: View {
 		}
 		.controlSize(.large)
 		.padding(.horizontal, 20)
-		.padding(.vertical, 14)
+		.padding(.vertical, 16)
 		.background(.bar)
 		.overlay(alignment: .top) {
 			Divider()
@@ -504,7 +497,7 @@ private struct DialogSearchField: View {
 			}
 		}
 		.padding(.horizontal, 8)
-		.padding(.vertical, 5)
+		.padding(.vertical, 4)
 		.background(Color(nsColor: .textBackgroundColor), in: shape)
 		.overlay {
 			shape.strokeBorder(

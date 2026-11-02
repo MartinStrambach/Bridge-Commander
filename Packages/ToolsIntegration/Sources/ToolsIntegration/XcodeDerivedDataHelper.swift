@@ -10,20 +10,30 @@ public nonisolated enum XcodeDerivedDataHelper {
 	}
 
 	static func deleteDerivedData(forWorktreePath path: String, in derivedDataURL: URL) throws {
+		for folderURL in derivedDataFolders(forWorktreePath: path, in: derivedDataURL) {
+			try removeFolder(at: folderURL)
+		}
+	}
+
+	/// Whether ``deleteDerivedData(forWorktreePath:)`` would delete anything, so a confirmation
+	/// names DerivedData only for a worktree Xcode has built. Reads every DerivedData folder's
+	/// `info.plist`; call it off the main thread.
+	public static func hasDerivedData(forWorktreePath path: String) -> Bool {
+		!derivedDataFolders(forWorktreePath: path, in: DerivedDataUsageScanner.defaultDerivedDataURL).isEmpty
+	}
+
+	static func derivedDataFolders(forWorktreePath path: String, in derivedDataURL: URL) -> [URL] {
 		let subfolderURLs = (try? FileManager.default.contentsOfDirectory(
 			at: derivedDataURL,
 			includingPropertiesForKeys: [.isDirectoryKey],
 			options: .skipsHiddenFiles
 		)) ?? []
 
-		for folderURL in subfolderURLs {
+		return subfolderURLs.filter { folderURL in
 			guard let workspacePath = DerivedDataUsageScanner.workspacePath(ofFolderAt: folderURL) else {
-				continue
+				return false
 			}
-
-			if isWorkspacePath(workspacePath, inWorktreeAt: path) {
-				try removeFolder(at: folderURL)
-			}
+			return isWorkspacePath(workspacePath, inWorktreeAt: path)
 		}
 	}
 

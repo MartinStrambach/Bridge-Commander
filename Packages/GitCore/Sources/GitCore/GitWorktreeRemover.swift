@@ -19,7 +19,7 @@ public nonisolated enum GitWorktreeRemover {
 		  echo "→ Removing worktree at: $folder"
 		  git worktree remove \(forceFlag) "$folder"
 		else
-		  echo "❌ No worktree found at: $folder" >&2
+		  echo "No worktree found at: $folder" >&2
 		  exit 1
 		fi
 		"""
