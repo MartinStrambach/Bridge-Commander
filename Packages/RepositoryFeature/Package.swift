@@ -20,7 +20,7 @@ let package = Package(
 		.package(path: "../ActionButtons"),
 		.package(path: "../StagingFeature"),
 		.package(path: "../YouTrackMenu"),
-		.package(url: "https://github.com/MartinStrambach/Homer-console-mac-app", from: "0.5.2"),
+		.package(url: "https://github.com/MartinStrambach/Homer-console-mac-app", from: "0.5.6"),
 		.package(path: "../SimulatorFeature"),
 	],
 	targets: [
