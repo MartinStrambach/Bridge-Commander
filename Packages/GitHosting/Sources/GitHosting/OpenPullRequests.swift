@@ -132,6 +132,26 @@ nonisolated struct GitHubOpenPullRequestsResponse: Decodable {
 		let headRepositoryOwner: Author?
 		let viewerDidAuthor: Bool?
 		let author: Author?
+		/// `OPEN`, `CLOSED` or `MERGED`; asked for only where a lookup can return a PR in any state.
+		let state: String?
+		/// Asked for only by the search, which can return other repositories' PRs.
+		let baseRepository: GitHubPullRequestSearchResponse.BaseRepository?
+
+		var openPullRequest: OpenPullRequest {
+			let isFromFork = isCrossRepository == true
+			return OpenPullRequest(
+				number: number,
+				title: title,
+				sourceBranch: headRefName,
+				author: author?.login,
+				url: url,
+				isDraft: isDraft == true,
+				provider: .github,
+				isFromFork: isFromFork,
+				forkOwner: isFromFork ? headRepositoryOwner?.login : nil,
+				isAuthoredByViewer: viewerDidAuthor == true
+			)
+		}
 	}
 
 	struct Author: Decodable {
@@ -146,21 +166,7 @@ nonisolated struct GitHubOpenPullRequestsResponse: Decodable {
 		guard let repository = data?.repository else {
 			return nil
 		}
-		return (repository.pullRequests?.nodes ?? []).map {
-			let isFromFork = $0.isCrossRepository == true
-			return OpenPullRequest(
-				number: $0.number,
-				title: $0.title,
-				sourceBranch: $0.headRefName,
-				author: $0.author?.login,
-				url: $0.url,
-				isDraft: $0.isDraft == true,
-				provider: .github,
-				isFromFork: isFromFork,
-				forkOwner: isFromFork ? $0.headRepositoryOwner?.login : nil,
-				isAuthoredByViewer: $0.viewerDidAuthor == true
-			)
-		}
+		return (repository.pullRequests?.nodes ?? []).map(\.openPullRequest)
 	}
 }
 
@@ -246,6 +252,25 @@ nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 			}
 			return String(path[..<slash])
 		}
+
+		/// `viewer` is the token's user, whose own MRs are marked; nil for an iid that is no number.
+		func openPullRequest(viewer: String?) -> OpenPullRequest? {
+			guard let number = Int(iid) else {
+				return nil
+			}
+			return OpenPullRequest(
+				number: number,
+				title: title,
+				sourceBranch: sourceBranch,
+				author: author?.username,
+				url: webUrl,
+				isDraft: draft == true,
+				provider: .gitlab,
+				isFromFork: isFromFork,
+				forkOwner: forkOwner,
+				isAuthoredByViewer: viewer != nil && author?.username == viewer
+			)
+		}
 	}
 
 	struct SourceProject: Decodable {
@@ -265,49 +290,37 @@ nonisolated struct GitLabOpenMergeRequestsResponse: Decodable {
 		}
 		// GitLab's merge request has no `viewerDidAuthor`; the viewer is asked for in the same query.
 		let viewer = data?.currentUser?.username
-		return (project.mergeRequests?.nodes ?? []).compactMap { node in
-			guard let number = Int(node.iid) else {
-				return nil
-			}
-			return OpenPullRequest(
-				number: number,
-				title: node.title,
-				sourceBranch: node.sourceBranch,
-				author: node.author?.username,
-				url: node.webUrl,
-				isDraft: node.draft == true,
-				provider: .gitlab,
-				isFromFork: node.isFromFork,
-				forkOwner: node.forkOwner,
-				isAuthoredByViewer: viewer != nil && node.author?.username == viewer
-			)
-		}
+		return (project.mergeRequests?.nodes ?? []).compactMap { $0.openPullRequest(viewer: viewer) }
 	}
 }
 
 // MARK: - Shared request plumbing
 
-private nonisolated enum GraphQLVariable: Encodable {
+nonisolated enum GraphQLVariable: Encodable {
 	case string(String)
 	case int(Int)
+	case bool(Bool)
+	case strings([String])
 
 	func encode(to encoder: any Encoder) throws {
 		var container = encoder.singleValueContainer()
 		switch self {
 		case let .string(value): try container.encode(value)
 		case let .int(value): try container.encode(value)
+		case let .bool(value): try container.encode(value)
+		case let .strings(value): try container.encode(value)
 		}
 	}
 }
 
-private nonisolated struct OpenPullRequestsRequest: Encodable {
+nonisolated struct OpenPullRequestsRequest: Encodable {
 	let query: String
 	let variables: [String: GraphQLVariable]
 }
 
 /// POSTs a GraphQL body with the token and returns the payload of a 200. Same failure contract as
 /// the single PR/MR fetches: no token, a bad URL and a non-200 all throw.
-private nonisolated func postGraphQL(
+nonisolated func postGraphQL(
 	url urlString: String,
 	token: String,
 	body: some Encodable

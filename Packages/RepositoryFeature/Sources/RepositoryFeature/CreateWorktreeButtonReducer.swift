@@ -55,8 +55,15 @@ struct CreateWorktreeButtonReducer {
 
 		var newTicket: NewTicketFormReducer.State
 
+		/// The most recently updated open PRs/MRs, `openPullRequestLimit` of them.
 		var pullRequests: [OpenPullRequest] = []
 		var pullRequestFilter: String = ""
+		/// What the host found for `pullRequestFilter`, `pullRequests` or not: the listing holds only
+		/// the most recently updated, and the host also matches descriptions. Keeps a pick that is
+		/// not listed, so the pick survives a new search as a listed one survives filtering.
+		var searchedPullRequests: [OpenPullRequest] = []
+		var isSearchingPullRequests = false
+		var pullRequestSearchError: String?
 		@Shared(.worktreeOnlyMyPullRequests)
 		var onlyMyPullRequests = false
 		@Shared(.worktreeStartFromLocalBase)
@@ -100,20 +107,22 @@ struct CreateWorktreeButtonReducer {
 			selectedTicketId.flatMap { id in tickets.first { $0.id == id } }
 		}
 
+		/// The listed PRs/MRs the filter matches, then what the host found beyond them.
 		var filteredPullRequests: [OpenPullRequest] {
-			let pullRequests = onlyMyPullRequests ? pullRequests.filter(\.isAuthoredByViewer) : pullRequests
-			let filter = pullRequestFilter.trimmingCharacters(in: .whitespaces)
-			guard !filter.isEmpty else { return pullRequests }
-			return pullRequests.filter {
-				$0.title.localizedCaseInsensitiveContains(filter)
-					|| $0.sourceBranch.localizedCaseInsensitiveContains(filter)
-					|| $0.reference.contains(filter)
-					|| ($0.author?.localizedCaseInsensitiveContains(filter) ?? false)
+			var shown = pullRequests
+			if let query = OpenPullRequestQuery(pullRequestFilter) {
+				let matches = pullRequests.filter(query.matches)
+				shown = matches + searchedPullRequests.filter { found in
+					!matches.contains { $0.number == found.number }
+				}
 			}
+			return onlyMyPullRequests ? shown.filter(\.isAuthoredByViewer) : shown
 		}
 
 		var selectedPullRequest: OpenPullRequest? {
-			selectedPullRequestNumber.flatMap { number in pullRequests.first { $0.number == number } }
+			selectedPullRequestNumber.flatMap { number in
+				pullRequests.first { $0.number == number } ?? searchedPullRequests.first { $0.number == number }
+			}
 		}
 
 		var canCreate: Bool {
@@ -187,6 +196,8 @@ struct CreateWorktreeButtonReducer {
 		case loadPullRequests
 		case pullRequestsLoaded([OpenPullRequest])
 		case pullRequestsFailed(String)
+		case pullRequestSearchLoaded(filter: String, [OpenPullRequest])
+		case pullRequestSearchFailed(filter: String, String)
 		case pullRequestSelected(Int?)
 		case onlyMyPullRequestsChanged(Bool)
 		case startFromLocalBaseChanged(Bool)
@@ -197,10 +208,14 @@ struct CreateWorktreeButtonReducer {
 	private enum CancelID {
 		case ticketSearch
 		case pullRequests
+		case pullRequestSearch
 	}
 
 	/// Typing pauses this long before YouTrack is asked, so a search is not sent per keystroke.
 	static let ticketSearchDebounce = Duration.milliseconds(300)
+
+	/// The same pause before the PR/MR host is searched for the filter text.
+	static let pullRequestSearchDebounce = Duration.milliseconds(300)
 
 	@Dependency(YouTrackClient.self)
 	private var youTrackClient
@@ -229,6 +244,9 @@ struct CreateWorktreeButtonReducer {
 
 			case .binding(\.ticketQuery):
 				return searchTickets(in: &state, debounce: true)
+
+			case .binding(\.pullRequestFilter):
+				return searchPullRequests(in: &state, debounce: true)
 
 			case .showDialog:
 				state.showCreateDialog = true
@@ -351,13 +369,13 @@ struct CreateWorktreeButtonReducer {
 					}
 				}
 				.cancellable(id: CancelID.pullRequests, cancelInFlight: true)
+				.merge(with: searchPullRequests(in: &state, debounce: false))
 
 			case let .pullRequestsLoaded(pullRequests):
 				state.isLoadingPullRequests = false
 				state.pullRequestError = nil
 				state.pullRequests = pullRequests
-				if let selected = state.selectedPullRequestNumber,
-				   !pullRequests.contains(where: { $0.number == selected }) {
+				if state.selectedPullRequestNumber != nil, state.selectedPullRequest == nil {
 					state.selectedPullRequestNumber = nil
 					state.claudePrompt = ""
 				}
@@ -367,6 +385,28 @@ struct CreateWorktreeButtonReducer {
 				state.isLoadingPullRequests = false
 				state.pullRequestError = message
 				state.pullRequests = []
+				// Whatever stopped the listing stops the search too; the error says it once.
+				state.searchedPullRequests = []
+				state.isSearchingPullRequests = false
+				state.pullRequestSearchError = nil
+				return .cancel(id: CancelID.pullRequestSearch)
+
+			case let .pullRequestSearchLoaded(filter, found):
+				// A slower answer to an older filter must not replace the current one's.
+				guard filter == state.pullRequestFilter else {
+					return .none
+				}
+				state.isSearchingPullRequests = false
+				state.pullRequestSearchError = nil
+				setSearchedPullRequests(found, in: &state)
+				return .none
+
+			case let .pullRequestSearchFailed(filter, message):
+				guard filter == state.pullRequestFilter else {
+					return .none
+				}
+				state.isSearchingPullRequests = false
+				state.pullRequestSearchError = message
 				return .none
 
 			case let .pullRequestSelected(number):
@@ -389,7 +429,11 @@ struct CreateWorktreeButtonReducer {
 			case .cancelCreation:
 				state.showCreateDialog = false
 				resetDialog(&state)
-				return .merge(.cancel(id: CancelID.ticketSearch), .cancel(id: CancelID.pullRequests))
+				return .merge(
+					.cancel(id: CancelID.ticketSearch),
+					.cancel(id: CancelID.pullRequests),
+					.cancel(id: CancelID.pullRequestSearch)
+				)
 
 			case .confirmCreation:
 				guard state.canCreate else {
@@ -592,6 +636,58 @@ struct CreateWorktreeButtonReducer {
 		.cancellable(id: CancelID.ticketSearch, cancelInFlight: true)
 	}
 
+	/// Searches the PR/MR host for the filter text, which finds what the listing leaves out. The
+	/// listed matches show at once; the spinner shows from the keystroke on, as for tickets.
+	private func searchPullRequests(in state: inout State, debounce: Bool) -> Effect<Action> {
+		let filter = state.pullRequestFilter
+		// A failed listing (no token, unsupported host) would fail the search the same way.
+		guard let query = OpenPullRequestQuery(filter), state.pullRequestError == nil else {
+			setSearchedPullRequests([], in: &state)
+			state.isSearchingPullRequests = false
+			state.pullRequestSearchError = nil
+			return .cancel(id: CancelID.pullRequestSearch)
+		}
+		// Hits the new text still matches stay while the host is asked again, so the list does not
+		// blink at every keystroke.
+		setSearchedPullRequests(state.searchedPullRequests.filter(query.matches), in: &state)
+		state.isSearchingPullRequests = true
+		state.pullRequestSearchError = nil
+
+		return .run { [path = state.repositoryPath, clock, gitClient, pullRequestClient] send in
+			if debounce {
+				try await clock.sleep(for: Self.pullRequestSearchDebounce)
+			}
+			// The listing reports a missing or unsupported origin.
+			guard let remote = await gitClient.getOriginRemote(at: path) else {
+				await send(.pullRequestSearchLoaded(filter: filter, []))
+				return
+			}
+			do {
+				let found = try await pullRequestClient.searchOpen(remote: remote, query: query)
+				await send(.pullRequestSearchLoaded(filter: filter, found))
+			}
+			catch is CancellationError {}
+			catch {
+				await send(.pullRequestSearchFailed(
+					filter: filter,
+					Self.pullRequestErrorMessage(for: error, host: remote.host, searching: true)
+				))
+			}
+		}
+		.cancellable(id: CancelID.pullRequestSearch, cancelInFlight: true)
+	}
+
+	/// Replaces the search hits, keeping a pick that is not listed.
+	private func setSearchedPullRequests(_ found: [OpenPullRequest], in state: inout State) {
+		var found = found
+		if let picked = state.selectedPullRequest,
+		   !state.pullRequests.contains(where: { $0.number == picked.number }),
+		   !found.contains(where: { $0.number == picked.number }) {
+			found.append(picked)
+		}
+		state.searchedPullRequests = found
+	}
+
 	private func resetDialog(_ state: inout State) {
 		state.branchName = ""
 		state.branchSearchText = ""
@@ -603,6 +699,9 @@ struct CreateWorktreeButtonReducer {
 		state.pullRequests = []
 		state.pullRequestFilter = ""
 		state.pullRequestError = nil
+		state.searchedPullRequests = []
+		state.isSearchingPullRequests = false
+		state.pullRequestSearchError = nil
 		state.isLoadingPullRequests = false
 		state.selectedPullRequestNumber = nil
 		state.claudePrompt = ""
@@ -843,18 +942,20 @@ struct CreateWorktreeButtonReducer {
 		}
 	}
 
-	static func pullRequestErrorMessage(for error: Error, host: String) -> String {
+	/// `searching`: the message is about the filter's search rather than the listing.
+	static func pullRequestErrorMessage(for error: Error, host: String, searching: Bool = false) -> String {
 		let provider = host.lowercased() == "gitlab.com" ? "GitLab" : "GitHub"
+		let failed = "\(provider) \(searching ? "search" : "request") failed"
 		switch error {
 		case GitHostingError.missingToken:
-			return "Add a \(provider) token in Settings to list open \(provider == "GitLab" ? "MRs" : "PRs")."
+			return "Add a \(provider) token in Settings to \(searching ? "search" : "list") open \(provider == "GitLab" ? "MRs" : "PRs")."
 		case GitHostingError.httpFailure(statusCode: 401),
 		     GitHostingError.unauthenticated:
 			return "The \(provider) token can't access this repository — check it in Settings."
 		case let GitHostingError.httpFailure(statusCode):
-			return "\(provider) request failed: HTTP \(statusCode)"
+			return "\(failed): HTTP \(statusCode)"
 		default:
-			return "\(provider) request failed: \(error.localizedDescription)"
+			return "\(failed): \(error.localizedDescription)"
 		}
 	}
 }
