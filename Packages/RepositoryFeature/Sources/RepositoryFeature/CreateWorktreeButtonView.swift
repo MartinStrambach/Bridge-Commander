@@ -277,7 +277,7 @@ struct CreateWorktreeDialogView: View {
 						.toggleStyle(.switch)
 						.controlSize(.mini)
 						.scaledFont(.caption)
-					if store.isLoadingPullRequests {
+					if store.isLoadingPullRequests || store.isSearchingPullRequests {
 						ProgressView()
 							.controlSize(.small)
 					}
@@ -293,7 +293,7 @@ struct CreateWorktreeDialogView: View {
 				}
 			}
 		) {
-			DialogSearchField(prompt: "Filter by title, branch, number or author", text: $store.pullRequestFilter)
+			DialogSearchField(prompt: "Search by title, branch, number or author", text: $store.pullRequestFilter)
 
 			List(selection: Binding(
 				get: { store.selectedPullRequestNumber },
@@ -314,6 +314,9 @@ struct CreateWorktreeDialogView: View {
 				}
 			}
 
+			if let error = store.pullRequestSearchError {
+				sectionNote("\(error) — showing only the most recently updated")
+			}
 			if let pullRequest = store.selectedPullRequest {
 				sectionNote("Checks out \(pullRequest.headBranchLabel)\(pullRequest.isFromFork ? " from a fork" : "")")
 			}
@@ -326,6 +329,9 @@ struct CreateWorktreeDialogView: View {
 		}
 		else if store.onlyMyPullRequests, store.pullRequestFilter.trimmingCharacters(in: .whitespaces).isEmpty {
 			"You have no open PRs/MRs here"
+		}
+		else if store.isSearchingPullRequests {
+			"Searching…"
 		}
 		else {
 			"No matching PRs/MRs"

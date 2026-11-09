@@ -293,6 +293,90 @@ struct CreateWorktreeSourceTests {
 		}
 	}
 
+	@Test("typing searches the host once the user pauses; its finds follow the listed matches")
+	func pullRequestRemoteSearch() async throws {
+		let listed = pullRequest(7, "Login screen")
+		let older = pullRequest(6407, "Country ranking error state")
+		let clock = TestClock()
+		let queries = LockIsolated<[OpenPullRequestQuery]>([])
+		var state = makeState(youtrack: false)
+		state.source = .pullRequest
+		state.pullRequests = [listed]
+		let store = makePullRequestStore(state: state, clock: clock, queries: queries) { query in
+			query.number == 6407 ? [older] : [listed, older]
+		}
+
+		await store.send(.binding(.set(\.pullRequestFilter, "64"))) {
+			$0.pullRequestFilter = "64"
+			$0.isSearchingPullRequests = true
+		}
+		await store.send(.binding(.set(\.pullRequestFilter, "6407"))) {
+			$0.pullRequestFilter = "6407"
+		}
+		await clock.advance(by: CreateWorktreeButtonReducer.pullRequestSearchDebounce)
+		await store.receive(\.pullRequestSearchLoaded) {
+			$0.isSearchingPullRequests = false
+			$0.searchedPullRequests = [older]
+		}
+		#expect(queries.value == [OpenPullRequestQuery("6407")])
+		#expect(store.state.filteredPullRequests == [older])
+
+		await store.send(.pullRequestSelected(6407)) {
+			$0.selectedPullRequestNumber = 6407
+			$0.claudePrompt = CreateWorktreeButtonReducer.claudePrompt(for: older)
+		}
+		#expect(store.state.selectedPullRequest == older)
+
+		// A hit the host also returns for a listed match is shown once, the listed one first.
+		await store.send(.binding(.set(\.pullRequestFilter, "o"))) {
+			$0.pullRequestFilter = "o"
+			$0.isSearchingPullRequests = true
+		}
+		await clock.advance(by: CreateWorktreeButtonReducer.pullRequestSearchDebounce)
+		await store.receive(\.pullRequestSearchLoaded) {
+			$0.isSearchingPullRequests = false
+			$0.searchedPullRequests = [listed, older]
+		}
+		#expect(store.state.filteredPullRequests == [listed, older])
+
+		// Clearing the filter drops the finds, but not the pick among them.
+		await store.send(.binding(.set(\.pullRequestFilter, ""))) {
+			$0.pullRequestFilter = ""
+			$0.isSearchingPullRequests = false
+			$0.searchedPullRequests = [older]
+		}
+		#expect(store.state.filteredPullRequests == [listed])
+		#expect(store.state.selectedPullRequest == older)
+	}
+
+	@Test("an answer to a filter that has since changed is dropped")
+	func pullRequestStaleSearch() async {
+		var state = makeState(youtrack: false)
+		state.source = .pullRequest
+		state.pullRequestFilter = "login"
+		state.isSearchingPullRequests = true
+		let store = TestStore(initialState: state) { CreateWorktreeButtonReducer() }
+
+		await store.send(.pullRequestSearchLoaded(filter: "log", [pullRequest(1, "Old")]))
+		await store.send(.pullRequestSearchFailed(filter: "log", "GitLab search failed: HTTP 500"))
+		await store.send(.pullRequestSearchFailed(filter: "login", "GitLab search failed: HTTP 500")) {
+			$0.isSearchingPullRequests = false
+			$0.pullRequestSearchError = "GitLab search failed: HTTP 500"
+		}
+	}
+
+	@Test("no search is sent while the listing has failed")
+	func pullRequestSearchAfterFailedListing() async {
+		var state = makeState(youtrack: false)
+		state.source = .pullRequest
+		state.pullRequestError = "Add a GitLab token in Settings to list open MRs."
+		let store = TestStore(initialState: state) { CreateWorktreeButtonReducer() }
+
+		await store.send(.binding(.set(\.pullRequestFilter, "6407"))) {
+			$0.pullRequestFilter = "6407"
+		}
+	}
+
 	// MARK: - Follow-up
 
 	@Test("the follow-up becomes what the list opens once the worktree exists")
@@ -371,6 +455,31 @@ struct CreateWorktreeSourceTests {
 	}
 
 	// MARK: - Helpers
+
+	private func pullRequest(_ number: Int, _ title: String) -> OpenPullRequest {
+		OpenPullRequest(
+			number: number, title: title, sourceBranch: "branch-\(number)", author: "x",
+			url: "https://gitlab.com/g/p/-/merge_requests/\(number)", isDraft: false, provider: .gitlab
+		)
+	}
+
+	private func makePullRequestStore(
+		state: CreateWorktreeButtonReducer.State,
+		clock: TestClock<Duration>,
+		queries: LockIsolated<[OpenPullRequestQuery]>,
+		results: @escaping @Sendable (OpenPullRequestQuery) -> [OpenPullRequest]
+	) -> TestStoreOf<CreateWorktreeButtonReducer> {
+		TestStore(initialState: state) {
+			CreateWorktreeButtonReducer()
+		} withDependencies: {
+			$0.continuousClock = clock
+			$0[GitClient.self].getOriginRemote = { _ in GitRemote(host: "gitlab.com", owner: "g", repo: "p") }
+			$0[PullRequestClient.self].searchOpen = { _, query in
+				queries.withValue { $0.append(query) }
+				return results(query)
+			}
+		}
+	}
 
 	private func makeState(youtrack: Bool) -> CreateWorktreeButtonReducer.State {
 		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
