@@ -32,6 +32,11 @@ struct TerminalPaneLinkTests {
 		URL(fileURLWithPath: path).resolvingSymlinksInPath().path
 	}
 
+	/// A link SwiftTerm found in the output, as it hands it over: the text as printed.
+	private func detectedLink(_ text: String) -> TerminalLinkRequest {
+		TerminalLinkRequest(link: text, params: [:], isExplicit: false)
+	}
+
 	@Test func aRelativePathIsLookedUpAtTheRepositoryRootWithItsLine() throws {
 		let repository = try makeRepository()
 		defer { try? FileManager.default.removeItem(at: repository) }
@@ -50,7 +55,7 @@ struct TerminalPaneLinkTests {
 			)
 		)
 
-		pane.requestOpenLink(source: pane, link: "Root.swift:12", params: [:])
+		pane.requestOpenLink(source: pane, request: detectedLink("Root.swift:12"))
 
 		#expect(opened.items.map { resolved($0.path) } == [repository.appending(component: "Root.swift").path])
 		#expect(opened.items.map(\.line) == [12])
@@ -86,8 +91,8 @@ struct TerminalPaneLinkTests {
 		}
 		try #require(pane.currentDirectory.map(resolved) == sub)
 
-		pane.requestOpenLink(source: pane, link: "Shared.swift", params: [:])
-		pane.requestOpenLink(source: pane, link: "Root.swift", params: [:])
+		pane.requestOpenLink(source: pane, request: detectedLink("Shared.swift"))
+		pane.requestOpenLink(source: pane, request: detectedLink("Root.swift"))
 
 		#expect(opened.items.map { resolved($0.path) } == [
 			repository.appending(path: "Sub/Shared.swift").path,

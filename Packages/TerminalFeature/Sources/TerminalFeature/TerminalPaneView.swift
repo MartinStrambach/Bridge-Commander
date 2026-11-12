@@ -153,15 +153,20 @@ public final class TerminalPaneView: LocalProcessTerminalView {
 
 	/// Opens a ⌘-clicked link. A file goes up as an `onOpenFile` event, to open in the repository's
 	/// IDE; a relative path is looked up in the shell's current directory, where the program that
-	/// printed it was started, then at the repository root. Other URLs get the default handler, and
-	/// a link that names nothing beeps rather than doing nothing — see `TerminalLinkTarget`.
-	override public func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+	/// printed it was started, then at the repository root. Other URLs go to SwiftTerm's checked
+	/// default opener, and a link that names nothing beeps rather than doing nothing — see
+	/// `TerminalLinkTarget`.
+	///
+	/// `request.link` is the text as printed, `:line` included. SwiftTerm's check runs only in
+	/// `openDefault()`, so a file sent up here is not checked by it: ToolsIntegration's
+	/// `FileOpener` keeps executables, scripts and applications from running instead.
+	override public func requestOpenLink(source: TerminalView, request: TerminalLinkRequest) {
 		let directories = [currentDirectory, repositoryPath].compactMap(\.self)
-		switch TerminalLinkTarget(link: link, relativeTo: directories) {
+		switch TerminalLinkTarget(link: request.link, relativeTo: directories) {
 		case let .file(file):
 			events.onOpenFile(sessionId, file)
-		case let .url(url):
-			NSWorkspace.shared.open(url)
+		case .url:
+			request.openDefault()
 		case nil:
 			NSSound.beep()
 		}
