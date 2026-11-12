@@ -29,21 +29,8 @@ struct TerminalPanelView: View {
 	@Shared(.terminalMouseReporting)
 	private var terminalMouseReporting = true
 
-	@Shared(.terminalClaudeStatusDetection)
-	private var terminalClaudeStatusDetection = ClaudeStatusDetection.default
-
-	/// The setting in TerminalFeature's terms, mapped here so that package needs no Settings
-	/// dependency.
-	private var claudeStatusSource: ClaudeStatusSource {
-		switch terminalClaudeStatusDetection {
-		case .progressAndScreen:
-			.progressAndScreen
-		case .progressOnly:
-			.progressOnly
-		case .screenOnly:
-			.screenOnly
-		}
-	}
+	@Shared(.terminalReadsImageFiles)
+	private var terminalReadsImageFiles = false
 
 	/// Read here like its sibling settings; the ⌘+/⌘−/⌘0 shortcuts write it through
 	/// `TerminalLayoutReducer` so the zoom actions stay testable.
@@ -70,9 +57,7 @@ struct TerminalPanelView: View {
 	let terminalViewStore: TerminalViewStore
 	let sessions: IdentifiedArrayOf<TerminalSession>
 	let activeSessionId: UUID?
-	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
-	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
-	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
+	let paneEvents: TerminalPaneEvents
 	let onRetry: (UUID) -> Void
 	let onNewTab: () -> Void
 	let onSelectTab: (UUID) -> Void
@@ -448,18 +433,18 @@ struct TerminalPanelView: View {
 				terminalViewStore: terminalViewStore,
 				sessions: sessions,
 				activeSessionId: activeSessionId,
-				foregroundColor: resolvedTheme.foreground,
-				backgroundColor: resolvedTheme.background,
-				ansiPalette: resolvedTheme.ansiPalette,
-				cursorColor: resolvedTheme.cursor,
-				selectionColor: resolvedTheme.selection,
+				colors: TerminalColors(
+					foreground: resolvedTheme.foreground,
+					background: resolvedTheme.background,
+					ansiPalette: resolvedTheme.ansiPalette,
+					cursor: resolvedTheme.cursor,
+					selection: resolvedTheme.selection
+				),
+				readsImageFiles: terminalReadsImageFiles,
 				copyOnSelect: terminalCopyOnSelect,
 				mouseReporting: terminalMouseReporting,
-				statusSource: claudeStatusSource,
 				font: terminalFont,
-				onStatusChange: onStatusChange,
-				onNotification: onNotification,
-				onOpenFile: onOpenFile
+				events: paneEvents
 			)
 
 			if
@@ -602,9 +587,15 @@ struct TerminalPanelView: View {
 					.fontWeight(isActive ? .semibold : .regular)
 			}
 			else {
-				Text("Terminal \(session.tabIndex)")
+				// A program's title can be a sentence (Claude's summary of the conversation), so it
+				// is cut to keep the bar from growing a tab per screen; the tooltip has all of it.
+				Text(session.tabTitle)
 					.scaledFont(.caption)
 					.fontWeight(isActive ? .semibold : .regular)
+					.lineLimit(1)
+					.truncationMode(.tail)
+					.frame(maxWidth: 200)
+					.help(session.tabTitle)
 			}
 
 			if totalCount > 1 {

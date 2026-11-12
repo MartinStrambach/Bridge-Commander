@@ -50,31 +50,26 @@ struct TerminalSessionStartupCommandTests {
 @MainActor
 @Suite("Terminal startup command", .serialized)
 struct TerminalStartupCommandTests {
-	private let processDelegate = TerminalProcessDelegate(onFailed: { _ in })
-
 	private func startPane(
 		command: String?,
 		shell: String = "/bin/cat",
 		arguments: [String] = []
-	) -> (store: TerminalViewStore, session: TerminalSession, view: ClaudeAwareTerminalView) {
+	) -> (store: TerminalViewStore, session: TerminalSession, view: TerminalPaneView) {
 		let store = TerminalViewStore(shellExecutable: shell, shellArguments: arguments)
 		let session = TerminalSession(repositoryPath: "/", startupCommand: command)
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
-			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
-			onNotification: { _, _ in }
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
 		)
 		return (store, session, view)
 	}
 
-	private func screenText(of view: ClaudeAwareTerminalView) -> String {
-		String(decoding: view.getTerminal().getBufferAsData(), as: UTF8.self)
+	private func screenText(of view: TerminalPaneView) -> String {
+		String(decoding: view.getBufferAsData(), as: UTF8.self)
 	}
 
-	private func occurrences(of needle: String, in view: ClaudeAwareTerminalView) -> Int {
+	private func occurrences(of needle: String, in view: TerminalPaneView) -> Int {
 		screenText(of: view).components(separatedBy: needle).count - 1
 	}
 
@@ -123,14 +118,18 @@ struct TerminalStartupCommandTests {
 
 	@Test("later output does not type the command again")
 	func typesOnlyOnce() async throws {
-		let (store, session, view) = startPane(command: "zzcmd")
+		let (store, session, view) = startPane(
+			command: "zzcmd",
+			shell: "/bin/sh",
+			arguments: ["-c", "printf 'ready> '; exec /bin/cat"]
+		)
 		defer { store.killSession(sessionId: session.id) }
 
-		view.dataReceived(slice: Array("ready> ".utf8)[...])
 		#expect(await eventually { occurrences(of: "zzcmd", in: view) == 2 })
 
-		view.dataReceived(slice: Array("more output\r\n".utf8)[...])
-		view.dataReceived(slice: Array("ready> ".utf8)[...])
+		// `cat` writes this line back, which is more output from the child.
+		view.send(txt: "more output\r")
+		#expect(await eventually { screenText(of: view).components(separatedBy: "more output").count - 1 == 2 })
 		try await Task.sleep(for: .milliseconds(500))
 
 		#expect(occurrences(of: "zzcmd", in: view) == 2)
@@ -138,10 +137,14 @@ struct TerminalStartupCommandTests {
 
 	@Test("a pane with no command types nothing on output")
 	func noCommandTypesNothing() async throws {
-		let (store, session, view) = startPane(command: nil)
+		let (store, session, view) = startPane(
+			command: nil,
+			shell: "/bin/sh",
+			arguments: ["-c", "printf 'ready> '; exec /bin/cat"]
+		)
 		defer { store.killSession(sessionId: session.id) }
 
-		view.dataReceived(slice: Array("ready> ".utf8)[...])
+		#expect(await eventually { screenText(of: view).contains("ready>") })
 		try await Task.sleep(for: .milliseconds(500))
 
 		#expect(screenText(of: view).trimmingCharacters(in: .whitespacesAndNewlines) == "ready>")

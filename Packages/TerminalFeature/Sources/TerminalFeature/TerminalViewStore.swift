@@ -6,7 +6,12 @@ import SwiftTerm
 @MainActor
 @Observable
 public final class TerminalViewStore {
-	private var views: [UUID: ClaudeAwareTerminalView] = [:]
+	private var views: [UUID: TerminalPaneView] = [:]
+	/// Each pane's process delegate, which SwiftTerm holds only weakly. Kept here, for as long as
+	/// the pane, rather than by the terminal panel: the panel can close while its panes run on, and
+	/// a pane whose delegate went with the panel reported neither its title nor its shell's exit
+	/// again, even once the panel reopened.
+	private var processDelegates: [UUID: TerminalProcessDelegate] = [:]
 
 	private let shellExecutable: String
 	private let shellArguments: [String]
@@ -30,87 +35,53 @@ public final class TerminalViewStore {
 		self.additionalEnvironment = additionalEnvironment
 	}
 
-	/// Returns the existing terminal view for a session, or creates and starts a new one.
-	/// The caller is responsible for creating `processDelegate` and keeping a strong reference
-	/// to it (e.g. in an NSViewRepresentable Coordinator).
-	/// - Parameter ansiPalette: The 16 ANSI colors to install, or `nil` to keep SwiftTerm's
-	///   default palette — which is Terminal.app's own, so an imported profile that defines no
-	///   ANSI colors renders the same way Terminal renders it.
-	/// - Parameter cursorColor: The caret color, or `nil` to keep SwiftTerm's default. Most
-	///   Terminal profiles set no cursor color, so `nil` is the usual case.
-	/// - Parameter selectionColor: The selection background, or `nil` to keep SwiftTerm's default.
-	/// - Parameter statusSource: What the pane's waiting/active status is based on. Only read when
-	///   the pane is created.
+	/// Returns the existing terminal view for a session, or creates and starts a new one. A new
+	/// pane keeps the colors, image file permission and events it is created with for its whole
+	/// life; later calls' are ignored.
 	public func view(
 		for session: TerminalSession,
-		foregroundColor: NSColor,
-		backgroundColor: NSColor,
-		ansiPalette: [NSColor]? = nil,
-		cursorColor: NSColor? = nil,
-		selectionColor: NSColor? = nil,
-		statusSource: ClaudeStatusSource = .progressAndScreen,
-		processDelegate: TerminalProcessDelegate,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
-	) -> ClaudeAwareTerminalView {
+		colors: TerminalColors,
+		readsImageFiles: Bool = false,
+		events: TerminalPaneEvents
+	) -> TerminalPaneView {
 		if let existing = views[session.id] {
 			return existing
 		}
 
-		let terminalView = ClaudeAwareTerminalView(
+		let terminalView = TerminalPaneView(
 			repositoryPath: session.repositoryPath,
 			sessionId: session.id,
-			statusSource: statusSource,
-			onStatusChange: onStatusChange,
-			onNotification: onNotification,
-			onOpenFile: onOpenFile
+			readsImageFiles: readsImageFiles,
+			events: events
 		)
 
-		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.
-		// Users can toggle back to Meta mode with Option+Command+O if needed.
-		terminalView.optionAsMetaKey = false
+		terminalView.apply(colors)
 
-		terminalView.nativeForegroundColor = foregroundColor
-		terminalView.nativeBackgroundColor = backgroundColor
-		// Installed after the fg/bg assignment: SwiftTerm derives the extended 256-color
-		// palette from the 16 ANSI colors plus the terminal's own background and foreground.
-		if let ansiPalette, let colors = TerminalPaletteMapping.swiftTermColors(from: ansiPalette) {
-			terminalView.installColors(colors)
-		}
-		if let cursorColor {
-			terminalView.caretColor = cursorColor
-		}
-		if let selectionColor {
-			terminalView.selectedTextBackgroundColor = selectionColor
-			// Not optional to set alongside it: SwiftTerm *replaces* the foreground of every
-			// selected cell with `selectedTextForegroundColor`, which defaults to black — fine
-			// against its own teal default, unreadable against the dark selection colors most
-			// Terminal profiles ship. The theme's own text color is the right stand-in: the
-			// profile's author picked a selection color that works behind exactly that text.
-			terminalView.selectedTextForegroundColor = foregroundColor
-		}
-		terminalView.terminal.changeHistorySize(3000)
-
+		let sessionId = session.id
+		let processDelegate = TerminalProcessDelegate(
+			onFailed: { message in events.onStatusChange(sessionId, .failed(message), nil) },
+			onTitleChange: { title in events.onTitleChange(sessionId, title) }
+		)
+		processDelegates[session.id] = processDelegate
 		terminalView.processDelegate = processDelegate
 		terminalView.pendingStartupCommand = session.commandToType
 
 		terminalView.startProcess(
 			executable: shellExecutable,
 			args: shellArguments,
-			environment: TerminalEnvironment.variables(requestingProgress: statusSource.requestsProgress)
+			environment: TerminalEnvironment.variables
 				+ additionalEnvironment(session),
 			execName: nil,
 			currentDirectory: session.startingDirectory
 		)
 
-		// Store the view before calling onStatusChange to prevent re-entrancy:
-		// onStatusChange triggers a TCA state mutation that can cause updateNSView to fire
+		// Store the view before reporting its status to prevent re-entrancy:
+		// the report triggers a TCA state mutation that can cause updateNSView to fire
 		// again synchronously; if views[id] were still nil at that point, a second
-		// ClaudeAwareTerminalView would be created for the same session.
+		// TerminalPaneView would be created for the same session.
 		views[session.id] = terminalView
 
-		onStatusChange(session.id, .active)
+		events.onStatusChange(session.id, .active, nil)
 
 		return terminalView
 	}
@@ -143,6 +114,7 @@ public final class TerminalViewStore {
 			view.removeFromSuperview()
 		}
 		views.removeValue(forKey: sessionId)
+		processDelegates.removeValue(forKey: sessionId)
 	}
 
 	/// Kills every session that is not in `sessionIds`.

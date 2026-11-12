@@ -72,18 +72,22 @@ private func firstChild(of pid: pid_t) async -> pid_t? {
 	return child
 }
 
+/// Collects the titles a pane passed on, in order.
+@MainActor
+private final class Titles {
+	var items: [String?] = []
+}
+
 /// Collects what a pane reported, in order.
 @MainActor
 private final class Reported {
 	var statuses: [TerminalSessionStatus] = []
+	var reports: [TerminalProgramReport?] = []
 }
 
 @MainActor
 @Suite(.serialized)
 struct TerminalViewStoreTests {
-	/// Keeps the process delegate alive for the panes, as the representable's coordinator does.
-	private let processDelegate = TerminalProcessDelegate(onFailed: { _ in })
-
 	/// `cat` sits reading its terminal forever and exits on hangup, which is all a shell needs to
 	/// do for these tests. The real thing is checked once, in the zsh test.
 	private func makeStore(shell: String = "/bin/cat", arguments: [String] = []) -> TerminalViewStore {
@@ -92,17 +96,33 @@ struct TerminalViewStoreTests {
 
 	/// Starts a pane and hands back what the test needs to watch it, without keeping the view
 	/// itself: the store must be the only owner, as it is in the app.
-	private func startSession(in store: TerminalViewStore) -> (session: TerminalSession, pid: pid_t, pty: Int32) {
+	private func startSession(
+		in store: TerminalViewStore,
+		repositoryPath: String = "/"
+	) -> (session: TerminalSession, pid: pid_t, pty: Int32) {
+		let session = TerminalSession(repositoryPath: repositoryPath)
+		let view = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
+		)
+		return (session, view.process.shellPid, view.process.childfd)
+	}
+
+	/// Option composes the layout's characters (Czech ⌥4 = `$`) yet stays Meta on the keys that
+	/// compose nothing, which is what makes ⌥← move a word; SwiftTerm's own tests pin the bytes.
+	@Test func optionComposesTextButIsMetaOnFunctionalKeys() {
+		let store = makeStore()
 		let session = TerminalSession(repositoryPath: "/")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
-			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
-			onNotification: { _, _ in }
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
 		)
-		return (session, view.process.shellPid, view.process.childfd)
+		defer { store.killSession(sessionId: session.id) }
+
+		#expect(!view.optionAsMetaKey)
+		#expect(view.optionAsMetaKeyForFunctionalKeys)
 	}
 
 	@Test func killSessionEndsTheShell() async throws {
@@ -156,32 +176,173 @@ struct TerminalViewStoreTests {
 		store.killSession(sessionId: kept.session.id)
 	}
 
+	@Test func killAllSessionsForARepositoryLeavesOtherRepositoriesAlone() async throws {
+		let store = makeStore()
+		let first = startSession(in: store, repositoryPath: "/tmp/one")
+		let second = startSession(in: store, repositoryPath: "/tmp/one")
+		let other = startSession(in: store, repositoryPath: "/tmp/two")
+		try #require(first.pid > 0 && second.pid > 0 && other.pid > 0)
+
+		store.killAllSessions(for: "/tmp/one")
+
+		#expect(await eventually { !isRunning(first.pid) && !isRunning(second.pid) })
+		#expect(isRunning(other.pid))
+		#expect(store.paneSnapshots().keys.sorted() == [other.session.id])
+		store.killSession(sessionId: other.session.id)
+	}
+
+	/// Ctrl-C reaches the foreground program as the user's keystroke would: the terminal turns it
+	/// into SIGINT, which ends `cat`, and the pane reports its shell gone.
+	@Test func interruptSendsTheForegroundProgramSIGINT() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let view = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				}
+			)
+		)
+		let pid = view.process.shellPid
+		try #require(pid > 0)
+		defer { store.killSession(sessionId: session.id) }
+
+		store.interrupt(sessionId: session.id)
+
+		#expect(await eventually { !isRunning(pid) })
+		#expect(await eventually {
+			reported.statuses.contains { if case .failed = $0 { true } else { false } }
+		})
+	}
+
 	/// A killed pane gets one last burst of output as its shell exits, and the pane can outlive the
-	/// kill for a moment. Judging that screen would report a status for a session the reducer has
-	/// already dropped, and would do so after the terminal panel may have closed.
+	/// kill for a moment. Acting on it would report a status for a session the reducer has already
+	/// dropped, and would do so after the terminal panel may have closed.
 	@Test func killSessionSilencesStatusReports() async throws {
 		let store = makeStore()
 		let session = TerminalSession(repositoryPath: "/")
 		let reported = Reported()
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
-			processDelegate: processDelegate,
-			onStatusChange: { _, status in
-				MainActor.assumeIsolated { reported.statuses.append(status) }
-			},
-			onNotification: { _, _ in }
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				}
+			)
 		)
 		try #require(view.process.shellPid > 0)
 
 		store.killSession(sessionId: session.id)
 		let reportedBeforeOutput = reported.statuses
-		// What Claude's final frame looks like to the detector: the prompt glyph at column 0.
-		view.dataReceived(slice: Array("❯ ".utf8)[...])
-		try await Task.sleep(for: .seconds(2)) // past the detector's idle threshold
+		// What Claude's last word looks like to the detector: its records cleared on exit, after a
+		// report of waiting that would otherwise move the dot.
+		view.feed(text: Self.statusReport("state=done:app=claude-code") + Self.statusReport("state=clear"))
+		view.processOutputReceived()
+		try await Task.sleep(for: .seconds(2)) // past the detector's foreground check
 
 		#expect(reported.statuses == reportedBeforeOutput, "a killed pane has nothing more to say")
+	}
+
+	/// An OSC 7501 report as a program writes it.
+	private static func statusReport(_ body: String) -> String {
+		"\u{1B}]7501;\(body)\u{1B}\\"
+	}
+
+	/// A program's own report, parsed by SwiftTerm, is what moves the pane's status — whichever
+	/// program it is — and it comes with what the program said, for the notification.
+	@Test func aProgramsReportSetsThePanesStatus() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let view = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, report in
+					MainActor.assumeIsolated {
+						reported.statuses.append(status)
+						reported.reports.append(report)
+					}
+				}
+			)
+		)
+		defer { store.killSession(sessionId: session.id) }
+		try #require(view.process.shellPid > 0)
+
+		// "Allow write?"
+		view.feed(text: Self.statusReport("state=blocked:app=codex:kind=permission:msg=QWxsb3cgd3JpdGU/"))
+		#expect(await eventually { reported.statuses.last == .waitingForInput })
+		#expect(reported.reports.last == TerminalProgramReport(program: "codex", state: .blocked(.permission), message: "Allow write?"))
+
+		view.feed(text: Self.statusReport("state=working:app=codex"))
+		#expect(await eventually { reported.statuses.last == .active })
+	}
+
+	/// The pane's own report of its title and of its shell's exit, which SwiftTerm makes through a
+	/// delegate it holds only weakly. The store keeps that delegate: the terminal panel, which
+	/// used to, can close while the pane runs on, and a pane that lost it reported neither again.
+	@Test func thePaneKeepsReportingItsTitleAndItsShellsExit() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let titles = Titles()
+		let view = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				},
+				onTitleChange: { _, title in
+					MainActor.assumeIsolated { titles.items.append(title) }
+				}
+			)
+		)
+		defer { store.killSession(sessionId: session.id) }
+		let pid = view.process.shellPid
+		try #require(pid > 0)
+
+		view.feed(text: "\u{1B}]0;Fix the login bug\u{07}")
+		#expect(await eventually { titles.items == ["Fix the login bug"] })
+
+		kill(pid, SIGKILL)
+		#expect(await eventually {
+			if case .failed = reported.statuses.last {
+				return true
+			}
+			return false
+		})
+	}
+
+	/// A pane's shell leads its own process group, so it holds the foreground exactly while no job
+	/// runs, and a job holds it under a group of its own — what tells a report left behind by a
+	/// crashed or suspended program from a live one.
+	@Test func theShellHoldsTheForegroundOnlyAtItsPrompt() async throws {
+		let store = makeStore(shell: "/bin/zsh", arguments: ["-f"])
+		let session = TerminalSession(repositoryPath: "/")
+		let view = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
+		)
+		defer { store.killSession(sessionId: session.id) }
+		let shell = view.process.shellPid
+		let pty = view.process.childfd
+		try #require(shell > 0)
+		#expect(await eventually { PtyForegroundProcess.foreground(ofShell: shell, ptyDescriptor: pty) == .shell })
+
+		view.send(txt: "sleep 5\r")
+
+		#expect(await eventually {
+			if case let .job(group) = PtyForegroundProcess.foreground(ofShell: shell, ptyDescriptor: pty) {
+				return group != shell
+			}
+			return false
+		})
 	}
 
 	/// What a relaunch reopens a tab in: where its shell is now, which is not where it started once
@@ -191,11 +352,8 @@ struct TerminalViewStoreTests {
 		let session = TerminalSession(repositoryPath: "/", startingDirectory: "/tmp")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
-			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
-			onNotification: { _, _ in }
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
 		)
 		try #require(view.process.shellPid > 0)
 		#expect(await eventually { store.paneSnapshots()[session.id]?.directory == "/private/tmp" })
@@ -228,11 +386,8 @@ struct TerminalViewStoreTests {
 
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
-			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
-			onNotification: { _, _ in }
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
 		)
 		view.process.send(data: Array("sleep 300\n".utf8)[...])
 		let job = try #require(await firstChild(of: shellPid))

@@ -1,28 +1,35 @@
 import Darwin
 
+/// Who holds a pane's foreground: its shell, or a job the shell started.
+enum PaneForeground: Equatable {
+	/// The shell, at its prompt with no job running.
+	case shell
+	/// A job, by its process group. A job suspended and brought back with `fg` keeps its group.
+	case job(processGroup: pid_t)
+}
+
 /// Identifies the process holding the foreground of a pseudo-terminal.
 ///
-/// Used to gate the Claude prompt scan: a `❯` on screen only means "Claude is waiting" when Claude
-/// Code actually owns the pane. In a plain shell the same glyph is a prompt theme, a line of command
-/// output, or leftover scrollback.
+/// Used to set aside a status report a program left behind (its OSC 7501 records outlive a program
+/// that crashed or was suspended without clearing them), and to find the Claude Code conversation
+/// in a pane.
 enum PtyForegroundProcess {
-	/// Whether Claude Code holds the foreground of the terminal behind `descriptor`.
+	/// Who holds the foreground of the terminal behind `descriptor`, whose shell is `pid`: the shell
+	/// itself (it leads its own group, so at its prompt with no job running), or the process group
+	/// of a job it started.
 	///
-	/// Returns `nil` when the foreground process can't be identified (closed descriptor, no
-	/// controlling process group, or a process this app may not inspect). Callers should fall back to
-	/// their own heuristics on `nil` rather than read it as "not Claude", so an unexpected failure
-	/// degrades to the previous behaviour instead of dropping the status entirely.
-	static func isClaude(ptyDescriptor descriptor: Int32) -> Bool? {
-		guard descriptor >= 0 else {
+	/// Returns `nil` when the foreground can't be read (closed descriptor, no foreground group).
+	static func foreground(ofShell pid: pid_t, ptyDescriptor descriptor: Int32) -> PaneForeground? {
+		guard descriptor >= 0, pid > 0 else {
 			return nil
 		}
 
-		let processGroup = tcgetpgrp(descriptor)
-		guard processGroup > 0, let arguments = arguments(ofProcess: processGroup) else {
+		let foreground = tcgetpgrp(descriptor)
+		guard foreground > 0 else {
 			return nil
 		}
 
-		return isClaude(arguments: arguments)
+		return foreground == pid ? .shell : .job(processGroup: foreground)
 	}
 
 	/// Matches the shapes Claude Code is launched in:

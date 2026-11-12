@@ -61,8 +61,8 @@ public struct SettingsReducer {
 		@Shared(.claudeCodeOpeningBehavior)
 		public var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
 
-		@Shared(.androidStudioPath)
-		public var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
+		@Shared(.fileOpenApplications)
+		public var fileOpenApplications = FileOpenApplications()
 
 		@Shared(.misePath)
 		public var misePath = NSHomeDirectory() + "/.local/bin/mise"
@@ -89,6 +89,9 @@ public struct SettingsReducer {
 		@Shared(.terminalMouseReporting)
 		public var terminalMouseReporting = true
 
+		@Shared(.terminalReadsImageFiles)
+		public var terminalReadsImageFiles = false
+
 		@Shared(.terminalStartupCommand)
 		public var terminalStartupCommand = ""
 
@@ -98,8 +101,8 @@ public struct SettingsReducer {
 		@Shared(.terminalNotifications)
 		public var terminalNotifications = true
 
-		@Shared(.terminalClaudeStatusDetection)
-		public var terminalClaudeStatusDetection = ClaudeStatusDetection.default
+		@Shared(.terminalNotificationSource)
+		public var terminalNotificationSource = TerminalNotificationSource.default
 
 		@Shared(.terminalFontSize)
 		public var terminalFontSize = TerminalFontSize.default
@@ -171,17 +174,19 @@ public struct SettingsReducer {
 		case setTerminalApp(TerminalApp)
 		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
-		case setAndroidStudioPath(String)
+		case fileOpenApplicationSelected(fileType: String, application: URL)
+		case removeFileOpenApplicationButtonTapped(fileType: String)
 		case setWorktreeBasePath(String)
 		case setMisePath(String)
 		case setTuistRunMode(TuistRunMode)
 		case setTerminalColorTheme(TerminalThemeSelection)
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
+		case setTerminalReadsImageFiles(Bool)
 		case setTerminalStartupCommand(String)
 		case setTerminalStartupCommandInNewTabs(Bool)
 		case setTerminalNotifications(Bool)
-		case setTerminalClaudeStatusDetection(ClaudeStatusDetection)
+		case setTerminalNotificationSource(TerminalNotificationSource)
 		case setTerminalFontSize(Double)
 		case setTerminalFontName(String)
 		case setUIFontSize(Double)
@@ -707,8 +712,16 @@ public struct SettingsReducer {
 				state.$claudeCodeOpeningBehavior.withLock { $0 = behavior }
 				return .none
 
-			case let .setAndroidStudioPath(path):
-				state.$androidStudioPath.withLock { $0 = path }
+			case let .fileOpenApplicationSelected(fileType, application):
+				// A bundle without an identifier could not be found again, so it is not stored.
+				guard let bundleIdentifier = FileOpenApplications.bundleIdentifier(ofApplicationAt: application) else {
+					return .none
+				}
+				state.$fileOpenApplications.withLock { $0.bundleIdentifiers[fileType] = bundleIdentifier }
+				return .none
+
+			case let .removeFileOpenApplicationButtonTapped(fileType):
+				state.$fileOpenApplications.withLock { $0.bundleIdentifiers[fileType] = nil }
 				return .none
 
 			case let .setWorktreeBasePath(path):
@@ -736,6 +749,10 @@ public struct SettingsReducer {
 				state.$terminalMouseReporting.withLock { $0 = value }
 				return .none
 
+			case let .setTerminalReadsImageFiles(value):
+				state.$terminalReadsImageFiles.withLock { $0 = value }
+				return .none
+
 			case let .setTerminalStartupCommand(value):
 				// Stored untrimmed for the same reason as the group command: consumers trim.
 				state.$terminalStartupCommand.withLock { $0 = value }
@@ -749,8 +766,8 @@ public struct SettingsReducer {
 				state.$terminalNotifications.withLock { $0 = value }
 				return .none
 
-			case let .setTerminalClaudeStatusDetection(value):
-				state.$terminalClaudeStatusDetection.withLock { $0 = value }
+			case let .setTerminalNotificationSource(value):
+				state.$terminalNotificationSource.withLock { $0 = value }
 				return .none
 
 			case let .setTerminalFontSize(size):

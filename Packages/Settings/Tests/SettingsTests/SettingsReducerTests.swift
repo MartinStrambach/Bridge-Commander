@@ -30,6 +30,40 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Applications for files without a default app
+
+	@Test("Choosing an application stores its bundle identifier for the file type")
+	func fileOpenApplicationSelectedStoresTheBundleIdentifier() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.fileOpenApplicationSelected(fileType: "kt", application: URL(filePath: "/System/Applications/TextEdit.app"))) {
+			$0.$fileOpenApplications.withLock { $0.bundleIdentifiers["kt"] = "com.apple.TextEdit" }
+		}
+	}
+
+	@Test("A bundle without an identifier is not stored, since it could not be found again")
+	func fileOpenApplicationSelectedIgnoresABundleWithoutIdentifier() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.fileOpenApplicationSelected(fileType: "kt", application: URL(filePath: "/nonexistent/Nothing.app")))
+	}
+
+	@Test("Removing a choice forgets only that file type")
+	func removeFileOpenApplicationForgetsTheType() async {
+		let state = SettingsReducer.State()
+		state.$fileOpenApplications.withLock {
+			$0 = FileOpenApplications(bundleIdentifiers: ["kt": "com.google.android.studio", "": "com.apple.TextEdit"])
+		}
+		let store = TestStore(initialState: state) {
+			SettingsReducer()
+		}
+		await store.send(.removeFileOpenApplicationButtonTapped(fileType: "kt")) {
+			$0.$fileOpenApplications.withLock { $0.bundleIdentifiers["kt"] = nil }
+		}
+	}
+
 	// MARK: - Group terminal startup command
 
 	@Test("setGroupTerminalStartupCommand stores each keystroke as typed, spaces included")
@@ -120,6 +154,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("reading image files is off until the user turns it on")
+	func terminalReadsImageFilesDefaultsToOff() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalReadsImageFiles == false)
+
+		await store.send(.setTerminalReadsImageFiles(true)) {
+			$0.$terminalReadsImageFiles.withLock { $0 = true }
+		}
+		await store.send(.setTerminalReadsImageFiles(false)) {
+			$0.$terminalReadsImageFiles.withLock { $0 = false }
+		}
+	}
+
 	@Test("mouse reporting is on until the user turns it off")
 	func terminalMouseReportingDefaultsToOn() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {
@@ -135,6 +184,21 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("terminal notifications come from whichever channel a program speaks until changed")
+	func terminalNotificationSourceDefaultsToAutomatic() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		#expect(store.state.terminalNotificationSource == .automatic)
+
+		await store.send(.setTerminalNotificationSource(.statusReports)) {
+			$0.$terminalNotificationSource.withLock { $0 = .statusReports }
+		}
+		await store.send(.setTerminalNotificationSource(.programNotifications)) {
+			$0.$terminalNotificationSource.withLock { $0 = .programNotifications }
+		}
+	}
+
 	@Test("terminal notifications are on until the user turns them off")
 	func terminalNotificationsDefaultToOn() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {
@@ -147,21 +211,6 @@ struct SettingsReducerTests {
 		}
 		await store.send(.setTerminalNotifications(true)) {
 			$0.$terminalNotifications.withLock { $0 = true }
-		}
-	}
-
-	@Test("Claude status detection uses progress reports and the screen until changed")
-	func terminalClaudeStatusDetectionDefaultsToBoth() async {
-		let store = TestStore(initialState: SettingsReducer.State()) {
-			SettingsReducer()
-		}
-		#expect(store.state.terminalClaudeStatusDetection == .progressAndScreen)
-
-		await store.send(.setTerminalClaudeStatusDetection(.progressOnly)) {
-			$0.$terminalClaudeStatusDetection.withLock { $0 = .progressOnly }
-		}
-		await store.send(.setTerminalClaudeStatusDetection(.screenOnly)) {
-			$0.$terminalClaudeStatusDetection.withLock { $0 = .screenOnly }
 		}
 	}
 

@@ -9,10 +9,6 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 		appStorage("branchNameRegex")
 	}
 
-	static var androidStudioPath: Self {
-		appStorage("androidStudioPath")
-	}
-
 	static var worktreeBasePath: Self {
 		appStorage("worktreeBasePath")
 	}
@@ -91,6 +87,15 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("terminalMouseReporting")
 	}
 
+	/// Whether the built-in terminal draws Kitty graphics images that a program names by file path,
+	/// reading the file itself, rather than only images whose bytes the program sends. Off by
+	/// default: anything that prints to a pane, a remote host over ssh included, could then make the
+	/// app read and show any image file the user can read. Claude Code plugins such as floofbot
+	/// draw their pictures this way. Applies to terminals opened after the change.
+	static var terminalReadsImageFiles: Self {
+		appStorage("terminalReadsImageFiles")
+	}
+
 	/// Whether tabs opened with "+" / ⌘T also run the startup command. Off by default: the
 	/// command (typically a long-running tool such as `claude`) belongs in the repository's first
 	/// tab, and extra tabs are usually opened for a plain shell next to it.
@@ -98,9 +103,10 @@ public extension SharedReaderKey where Self == AppStorageKey<Bool> {
 		appStorage("terminalStartupCommandInNewTabs")
 	}
 
-	/// Whether built-in terminal tabs post system notifications: when Claude Code in one starts
-	/// waiting for the user, and when a program asks for one with OSC 9 / OSC 777 (as Ghostty and
-	/// iTerm2 do). On by default. Clicking the notification opens that tab.
+	/// Whether built-in terminal tabs post system notifications: when a program in one reports
+	/// that it is waiting for the user (OSC 7501), and when a program asks for one with OSC 9 /
+	/// OSC 777 (as Ghostty and iTerm2 do) — which of the two, `terminalNotificationSource` decides.
+	/// On by default. Clicking the notification opens that tab.
 	static var terminalNotifications: Self {
 		appStorage("terminalNotifications")
 	}
@@ -155,11 +161,11 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<Reposit
 	}
 }
 
-public nonisolated extension SharedReaderKey where Self == AppStorageKey<ClaudeStatusDetection> {
-	/// How built-in terminal tabs judge whether Claude is working or waiting. Read when a tab is
-	/// opened; tabs already open keep what they started with.
-	static var terminalClaudeStatusDetection: Self {
-		appStorage("terminalClaudeStatusDetection")
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<TerminalNotificationSource> {
+	/// Which notifications built-in terminal tabs post: a program's status reports, its own
+	/// notifications, or (by default) the one its program speaks.
+	static var terminalNotificationSource: Self {
+		appStorage("terminalNotificationSource")
 	}
 }
 

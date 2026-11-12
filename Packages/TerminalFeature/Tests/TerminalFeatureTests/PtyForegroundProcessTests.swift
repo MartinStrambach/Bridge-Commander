@@ -26,8 +26,4 @@ struct PtyForegroundProcessTests {
 		#expect(!PtyForegroundProcess.isClaude(arguments: ["vim", "/Users/me/.claude/settings.json"]))
 		#expect(!PtyForegroundProcess.isClaude(arguments: ["git", "commit", "claude"]))
 	}
-
-	@Test func closedDescriptorIsUnknown() {
-		#expect(PtyForegroundProcess.isClaude(ptyDescriptor: -1) == nil)
-	}
 }

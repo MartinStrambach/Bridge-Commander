@@ -16,12 +16,11 @@ struct CopyOnSelectTests {
 	private func makeView(
 		writingTo pasteboard: NSPasteboard,
 		copyOnSelect: Bool
-	) -> ClaudeAwareTerminalView {
-		let view = ClaudeAwareTerminalView(
+	) -> TerminalPaneView {
+		let view = TerminalPaneView(
 			repositoryPath: "/tmp/repo",
 			sessionId: UUID(),
-			onStatusChange: { _, _ in },
-			onNotification: { _, _ in }
+			events: TerminalPaneEvents()
 		)
 		view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
 		view.selectionPasteboard = pasteboard
@@ -44,14 +43,10 @@ struct CopyOnSelectTests {
 		let pasteboard = makePasteboard()
 		let view = makeView(writingTo: pasteboard, copyOnSelect: true)
 
-		view.selection.setSelection(
-			start: Position(col: 0, row: 0),
-			// The end column is exclusive, so this is "git".
-			end: Position(col: 3, row: 0)
-		)
+		view.selectAll()
 		view.copySelectionToPasteboard()
 
-		#expect(pasteboard.string(forType: .string) == "git")
+		#expect(pasteboard.string(forType: .string) == "git status")
 	}
 
 	@Test("releasing the mouse over a highlight copies it")
@@ -59,14 +54,10 @@ struct CopyOnSelectTests {
 		let pasteboard = makePasteboard()
 		let view = makeView(writingTo: pasteboard, copyOnSelect: true)
 
-		view.selection.setSelection(
-			start: Position(col: 0, row: 0),
-			// The end column is exclusive, so this is "git".
-			end: Position(col: 3, row: 0)
-		)
+		view.selectAll()
 		view.mouseUp(with: mouseUpEvent(in: view))
 
-		#expect(pasteboard.string(forType: .string) == "git")
+		#expect(pasteboard.string(forType: .string) == "git status")
 	}
 
 	@Test("a pane left untouched writes nothing")
@@ -86,11 +77,7 @@ struct CopyOnSelectTests {
 		pasteboard.setString("something the user copied elsewhere", forType: .string)
 		let view = makeView(writingTo: pasteboard, copyOnSelect: false)
 
-		view.selection.setSelection(
-			start: Position(col: 0, row: 0),
-			// The end column is exclusive, so this is "git".
-			end: Position(col: 3, row: 0)
-		)
+		view.selectAll()
 		view.mouseUp(with: mouseUpEvent(in: view))
 
 		#expect(pasteboard.string(forType: .string) == "something the user copied elsewhere")

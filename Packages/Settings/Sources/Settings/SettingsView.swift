@@ -55,6 +55,14 @@ public struct SettingsView<Updates: View>: View {
 	@State
 	private var isImportingProfileFiles = false
 
+	@State
+	private var isChoosingFileOpenApplication = false
+
+	/// The file type whose application "Change…" is choosing. Kept apart from the presentation
+	/// flag, which is cleared before the importer's completion runs.
+	@State
+	private var fileTypeChangingApplication: String?
+
 	/// Groups start collapsed each time Settings opens, so a long list of groups stays scannable.
 	@State
 	private var expandedGroupIds: Set<String> = []
@@ -149,13 +157,14 @@ public struct SettingsView<Updates: View>: View {
 			terminalFontSection
 			terminalColorThemeSection
 			terminalInputSection
+			terminalImagesSection
 			terminalStartupCommandSection
 			terminalNotificationsSection
 
 		case .externalApps:
 			terminalAppSection
 			claudeCodeBehaviorSection
-			androidStudioPathSection
+			fileOpenApplicationsSection
 
 		case .tuist:
 			tuistExecutionSection
@@ -788,6 +797,21 @@ public struct SettingsView<Updates: View>: View {
 		}
 	}
 
+	private var terminalImagesSection: some View {
+		SettingsSection("Images") {
+			Toggle(
+				"Show images from files",
+				isOn: $store.terminalReadsImageFiles.sending(\.setTerminalReadsImageFiles)
+			)
+
+			Text(
+				"Lets programs show a picture by naming its file, which the terminal then reads, as Claude Code plugins like floofbot do. Anything printed to the terminal could then show any image file you can open, including output from a remote host over ssh. Applies to terminals opened after the change."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+		}
+	}
+
 	private var terminalStartupCommandSection: some View {
 		SettingsSection("Startup Command") {
 			HStack {
@@ -827,22 +851,23 @@ public struct SettingsView<Updates: View>: View {
 			)
 
 			Text(
-				"Posts a notification when Claude Code in a built-in terminal tab you are not looking at needs a response, or when a program asks for one (OSC 9 / OSC 777, as in Ghostty). Click it to open that tab. For Claude's own permission notifications, set its notification channel to Ghostty in /config."
+				"Posts a notification when a program in a built-in terminal tab you are not looking at is waiting for you: Claude Code, or another program that reports its status (OSC 7501), or one that asks for a notification itself (OSC 9 / OSC 777, as in Ghostty). Click it to open that tab. Claude Code reports its status from version 2.1.295 on (not inside tmux)."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
 			Picker(
-				"Detect Claude waiting from:",
-				selection: $store.terminalClaudeStatusDetection.sending(\.setTerminalClaudeStatusDetection)
+				"Notify from:",
+				selection: $store.terminalNotificationSource.sending(\.setTerminalNotificationSource)
 			) {
-				ForEach(ClaudeStatusDetection.allCases, id: \.self) { detection in
-					Text(detection.displayName).tag(detection)
+				ForEach(TerminalNotificationSource.allCases, id: \.self) { source in
+					Text(source.displayName).tag(source)
 				}
 			}
 			.fixedSize()
+			.disabled(!store.terminalNotifications)
 
-			Text("\(store.terminalClaudeStatusDetection.explanation) Applies to terminals opened after the change.")
+			Text(store.terminalNotificationSource.explanation)
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 		}
@@ -901,17 +926,76 @@ public struct SettingsView<Updates: View>: View {
 		}
 	}
 
-	private var androidStudioPathSection: some View {
-		SettingsSection("Android Studio") {
+	private var fileOpenApplicationsSection: some View {
+		SettingsSection("Files Without a Default App") {
 			Text(
-				"Specify the full path to the Android Studio executable. This is used to open Kotlin files within the project context."
+				"A file no application on this Mac opens by default, such as Package.resolved or a .kt file when Android Studio is not set for it, opens in the application chosen for its type here when you ⌘-click it in the terminal or use Open in IDE. You are asked the first time; this does not change what Finder does."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
-			TextField("Android Studio Path", text: $store.androidStudioPath.sending(\.setAndroidStudioPath))
-				.textFieldStyle(.roundedBorder)
-				.scaledFont(.body, design: .monospaced)
+			let fileTypes = store.fileOpenApplications.bundleIdentifiers.keys.sorted()
+			if fileTypes.isEmpty {
+				Text("No applications chosen yet.")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+			else {
+				VStack(alignment: .leading, spacing: 6) {
+					ForEach(fileTypes, id: \.self) { fileType in
+						fileOpenApplicationRow(fileType)
+					}
+				}
+				.padding(.top, 4)
+			}
+		}
+		.fileImporter(
+			isPresented: $isChoosingFileOpenApplication,
+			allowedContentTypes: [.application]
+		) { result in
+			if case let .success(application) = result, let fileType = fileTypeChangingApplication {
+				store.send(.fileOpenApplicationSelected(fileType: fileType, application: application))
+			}
+		}
+		.fileDialogDefaultDirectory(URL(filePath: "/Applications"))
+	}
+
+	private func fileOpenApplicationRow(_ fileType: String) -> some View {
+		let application = store.fileOpenApplications.application(forFileType: fileType)
+		return HStack(spacing: 8) {
+			Text(fileType.isEmpty ? "No extension" : ".\(fileType)")
+				.scaledFont(.caption, design: .monospaced)
+				.frame(width: 100, alignment: .leading)
+
+			if let application {
+				Image(nsImage: NSWorkspace.shared.icon(forFile: application.path))
+					.resizable()
+					.frame(width: 16, height: 16)
+				Text(application.deletingPathExtension().lastPathComponent)
+					.scaledFont(.caption)
+			}
+			else {
+				// Uninstalled: the next file of this type asks again.
+				Text("Not installed (\(store.fileOpenApplications.bundleIdentifiers[fileType] ?? ""))")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+
+			Spacer()
+
+			Button("Change…") {
+				fileTypeChangingApplication = fileType
+				isChoosingFileOpenApplication = true
+			}
+			.buttonStyle(.scaledBordered)
+
+			Button {
+				store.send(.removeFileOpenApplicationButtonTapped(fileType: fileType))
+			} label: {
+				Image(systemName: "minus.circle")
+			}
+			.buttonStyle(.borderless)
+			.help("Forget this choice; the next such file asks again")
 		}
 	}
 

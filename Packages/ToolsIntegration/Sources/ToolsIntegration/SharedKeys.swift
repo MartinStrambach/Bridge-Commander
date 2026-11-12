@@ -39,3 +39,10 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<Termina
 		appStorage("terminalApp")
 	}
 }
+
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<FileOpenApplications> {
+	/// The applications chosen for files no application claims; see `FileOpenApplications`.
+	static var fileOpenApplications: Self {
+		appStorage("fileOpenApplications")
+	}
+}

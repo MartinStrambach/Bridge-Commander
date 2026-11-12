@@ -15,6 +15,9 @@ AXCheckBox
 SimulatorFrameworkBridge
 
 # SwiftTerm
+terminalDimensions
+terminalStateSnapshot
+visibleRowsText
 mouseMode
 shiftBypassesMouseReporting
 selectNone
