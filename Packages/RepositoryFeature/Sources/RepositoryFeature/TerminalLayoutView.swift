@@ -33,6 +33,19 @@ struct TerminalLayoutView: View {
 	/// `RepositoryListView`'s `windowMinSize`).
 	private static let sidebarWidthRange: ClosedRange<Double> = 160 ... 480
 
+	/// Read off the group stores, so the caller observes the row it names.
+	private func xcodeProjectPath(for repositoryPath: String) -> String? {
+		for group in repositoryGroups {
+			if group.header.path == repositoryPath {
+				return group.header.xcodeButton.projectPath
+			}
+			if let row = group.worktrees[id: repositoryPath] {
+				return row.xcodeButton.projectPath
+			}
+		}
+		return nil
+	}
+
 	var body: some View {
 		// Build a path → status map once so each sidebar row, the home row and the terminal
 		// filter all do an O(1) lookup instead of scanning the whole sessions array.
@@ -50,9 +63,9 @@ struct TerminalLayoutView: View {
 			TerminalPanelView(
 				store: store,
 				activeRowStore: activeRowStore,
+				xcodeProjectPath: xcodeProjectPath(for:),
 				terminalViewStore: terminalViewStore,
 				sessions: sessions,
-				activeSessionId: store.activeSessionId,
 				onStatusChange: onStatusChange,
 				onNotification: onNotification,
 				onOpenFile: onOpenFile,
@@ -211,6 +224,7 @@ struct TerminalLayoutView: View {
 
 	private func homeSessionRow(status: TerminalSessionStatus) -> some View {
 		let isActive = store.activeRepositoryPath == NSHomeDirectory()
+		let isInSplit = !isActive && isOnScreen(NSHomeDirectory())
 		return Button {
 			store.send(.selectRepo(repositoryPath: NSHomeDirectory()))
 		} label: {
@@ -220,7 +234,7 @@ struct TerminalLayoutView: View {
 					Text("Home Directory")
 						.scaledFont(.caption)
 						.fontWeight(isActive ? .semibold : .regular)
-						.foregroundColor(isActive ? .primary : .secondary)
+						.foregroundColor(isActive || isInSplit ? .primary : .secondary)
 						.lineLimit(1)
 					Text("~")
 						.scaledFont(.caption2)
@@ -231,18 +245,38 @@ struct TerminalLayoutView: View {
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 6)
-			.background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
+			.background(Color.accentColor.opacity(isActive ? 0.15 : isInSplit ? 0.07 : 0))
 			.cornerRadius(6)
 			.contentShape(Rectangle())
 		}
 		.buttonStyle(.plain)
 		.padding(.horizontal, 4)
 		.contextMenu {
+			Button("Open in Split", systemImage: "rectangle.split.2x1") {
+				store.send(.openRepoInSplit(repositoryPath: NSHomeDirectory()))
+			}
+			.disabled(!canOpenInSplit(NSHomeDirectory()))
+			.labelStyle(.titleAndIcon)
 			Button("Kill Terminal", role: .destructive) {
 				terminalViewStore.killAllSessions(for: NSHomeDirectory())
 				store.send(.killRepo(repositoryPath: NSHomeDirectory()))
 			}
 		}
+	}
+
+	/// Whether one of the repository's terminals is in a pane on screen. Every such repository
+	/// is highlighted in the sidebar, the one with the keyboard more strongly.
+	private func isOnScreen(_ path: String) -> Bool {
+		store.paneSessionIds.contains { sessions[id: $0]?.repositoryPath == path }
+	}
+
+	/// Whether a repository can go in a pane beside the ones on screen: there is one to go
+	/// beside, room for another pane, and the repository is not on screen already — its tabs
+	/// belong to the pane that shows it.
+	private func canOpenInSplit(_ path: String) -> Bool {
+		store.activeSessionId != nil
+			&& store.paneSessionIds.count < TerminalTabs.maxPanes
+			&& !isOnScreen(path)
 	}
 
 	private func sidebarRow(
@@ -253,6 +287,7 @@ struct TerminalLayoutView: View {
 		return SidebarRepositoryRowView(
 			store: rowStore,
 			isActive: store.activeRepositoryPath == path,
+			isInSplit: store.activeRepositoryPath != path && isOnScreen(path),
 			sessionStatus: statusByPath[path],
 			showsActiveDot: !showOnlyWithTerminals,
 			onTap: {
@@ -261,7 +296,8 @@ struct TerminalLayoutView: View {
 			onKill: {
 				terminalViewStore.killAllSessions(for: path)
 				store.send(.killRepo(repositoryPath: path))
-			}
+			},
+			onOpenInSplit: canOpenInSplit(path) ? { store.send(.openRepoInSplit(repositoryPath: path)) } : nil
 		)
 		.padding(.horizontal, 4)
 	}

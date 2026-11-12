@@ -13,7 +13,9 @@ import StagingFeature
 struct TerminalLayoutReducer {
 	@ObservableState
 	struct State: Equatable {
+		/// The repository of the terminal with the keyboard; the toolbar and the tab bar are its.
 		var activeRepositoryPath: String?
+		/// The terminal with the keyboard.
 		var activeSessionId: UUID?
 		var isPushing = false
 		var isFinishingMerge = false
@@ -23,13 +25,48 @@ struct TerminalLayoutReducer {
 		@Shared(.terminalFontSize)
 		var terminalFontSize = TerminalFontSize.default
 
+		/// The terminals side by side while the panel is split; empty while it shows one. See
+		/// `TerminalFocus`, which this and the four properties around it make up.
+		var splitSessionIds: [UUID] = []
+
+		/// The tabs each pane of the split owns, in step with `splitSessionIds`.
+		var splitTabIds: [[UUID]] = []
+
 		/// The tab that was last shown for each repository, so switching away from a
 		/// repository and back reopens the tab the user left, not its first tab.
 		var lastActiveSessionByRepo: [String: UUID] = [:]
 
-		/// Every tab that has been on screen since the panel opened, most recent last, so closing
-		/// the tab on screen goes back to the one the user was in before it.
+		/// Every tab that has had the keyboard since the panel opened, most recent last, so
+		/// closing the tab on screen goes back to the one the user was in before it.
 		var recentSessionIds: [UUID] = []
+
+		/// What the panel shows and remembers, as the value `TerminalTabs` works on. The rules
+		/// live there; the properties stay here so views and tests read them off the panel.
+		var focus: TerminalFocus {
+			get {
+				TerminalFocus(
+					activeRepositoryPath: activeRepositoryPath,
+					activeSessionId: activeSessionId,
+					splitSessionIds: splitSessionIds,
+					splitTabIds: splitTabIds,
+					lastActiveSessionByRepo: lastActiveSessionByRepo,
+					recentSessionIds: recentSessionIds
+				)
+			}
+			set {
+				activeRepositoryPath = newValue.activeRepositoryPath
+				activeSessionId = newValue.activeSessionId
+				splitSessionIds = newValue.splitSessionIds
+				splitTabIds = newValue.splitTabIds
+				lastActiveSessionByRepo = newValue.lastActiveSessionByRepo
+				recentSessionIds = newValue.recentSessionIds
+			}
+		}
+
+		/// The terminals on screen, left to right.
+		var paneSessionIds: [UUID] {
+			focus.paneSessionIds
+		}
 
 		/// What the panel remembers about the tabs it has shown. Hiding the panel drops this whole
 		/// state, so `RepositoryListReducer` keeps the memory meanwhile and hands it back to the
@@ -37,44 +74,43 @@ struct TerminalLayoutReducer {
 		struct TabMemory: Equatable {
 			var lastActiveSessionByRepo: [String: UUID] = [:]
 			var recentSessionIds: [UUID] = []
+			/// The split the panel was showing, which the next panel shows again, and the tabs
+			/// each of its panes had.
+			var splitSessionIds: [UUID] = []
+			var splitTabIds: [[UUID]] = []
 		}
 
 		var tabMemory: TabMemory {
 			get {
-				TabMemory(lastActiveSessionByRepo: lastActiveSessionByRepo, recentSessionIds: recentSessionIds)
+				TabMemory(
+					lastActiveSessionByRepo: lastActiveSessionByRepo,
+					recentSessionIds: recentSessionIds,
+					splitSessionIds: splitSessionIds,
+					splitTabIds: splitTabIds
+				)
 			}
 			set {
 				lastActiveSessionByRepo = newValue.lastActiveSessionByRepo
 				recentSessionIds = newValue.recentSessionIds
+				splitSessionIds = newValue.splitSessionIds
+				splitTabIds = newValue.splitTabIds
 			}
 		}
 
 		/// Show `session` and remember it as the repository's current tab.
 		mutating func activate(_ session: TerminalSession) {
-			activeRepositoryPath = session.repositoryPath
-			activeSessionId = session.id
-			lastActiveSessionByRepo[session.repositoryPath] = session.id
-			recentSessionIds.removeAll { $0 == session.id }
-			recentSessionIds.append(session.id)
+			focus.activate(session)
 		}
 
 		/// Drop a closed tab from the per-repository memory so it is never restored.
 		mutating func forget(sessionId: UUID, repositoryPath: String) {
-			if lastActiveSessionByRepo[repositoryPath] == sessionId {
-				lastActiveSessionByRepo[repositoryPath] = nil
-			}
-			recentSessionIds.removeAll { $0 == sessionId }
+			focus.forget(sessionId: sessionId, repositoryPath: repositoryPath)
 		}
 
 		/// Of `sessions`, the one most recently on screen — nil when none of them has been shown
 		/// since the panel opened (tabs restored from the previous launch, say).
 		func mostRecent(among sessions: some Collection<TerminalSession>) -> TerminalSession? {
-			for id in recentSessionIds.reversed() {
-				if let session = sessions.first(where: { $0.id == id }) {
-					return session
-				}
-			}
-			return nil
+			focus.mostRecent(among: sessions)
 		}
 
 		// The Xcode and Tuist buttons are deliberately not copied here: the toolbar scopes the
@@ -107,14 +143,28 @@ struct TerminalLayoutReducer {
 		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
+		/// Closes a tab, hanging its shell up.
 		case killTab(sessionId: UUID)
+		/// ⌘D: a new pane beside the active one, up to `TerminalTabs.maxPanes`, with one tab: a
+		/// new terminal of the active repository, opened in `directory` — where the active
+		/// terminal's shell is — or at the repository's root.
+		case splitRequested(directory: String?)
+		/// A repository in a pane of its own beside the active one, with its tabs: showing the
+		/// one it was last showing, or its first one, opened now if it has none.
+		case openRepoInSplit(repositoryPath: String)
+		/// A pane was clicked and takes the keyboard.
+		case paneFocused(sessionId: UUID)
+		/// ⌘] / ⌘[: the next or previous pane, wrapping around.
+		case cyclePaneRequested(forward: Bool)
+		/// Takes a pane out of the split; its tabs stay open.
+		case closePane(sessionId: UUID)
 		case closeActiveTabRequested
 		case killRepo(repositoryPath: String)
 		case newTabRequested
 		case selectTab(sessionId: UUID)
 		/// ⌃Tab / ⌃⇧Tab: the next or previous tab of the active repository, wrapping around.
 		case cycleTabRequested(forward: Bool)
-		/// A tab was dropped on another tab of the same repository and takes its place.
+		/// A tab was dropped on another tab of the same pane and takes its place.
 		case moveTab(sessionId: UUID, ontoSessionId: UUID)
 		case retryTab(sessionId: UUID)
 		case refreshActiveRepoRequested
@@ -224,7 +274,12 @@ struct TerminalLayoutReducer {
 			case .gitGraph:
 				return .none
 
-			case .killTab:
+			case .killTab,
+			     .splitRequested,
+			     .openRepoInSplit,
+			     .paneFocused,
+			     .cyclePaneRequested,
+			     .closePane:
 				// Forwarded up to RepositoryListReducer
 				return .none
 

@@ -146,9 +146,10 @@ public struct SimulatorPaneReducer {
 		}
 
 		public enum Delegate: Equatable {
-			/// Type `command` into the repository's run tab, named `title`, replacing what ran
-			/// there before.
-			case runRequested(command: String, title: String)
+			/// Type `command` into `repositoryPath`'s run tab, named `title`, replacing what ran
+			/// there before. The repository is the one the pane was beside when Run was pressed
+			/// (nil before the pane has been told), which it may have left by the time this lands.
+			case runRequested(command: String, title: String, repositoryPath: String?)
 		}
 	}
 
@@ -674,11 +675,15 @@ public struct SimulatorPaneReducer {
 				}
 				state.errorMessage = nil
 				var effects: [Effect<Action>] = [
-					.run { [simulatorClient] send in
+					.run { [simulatorClient, repositoryPath = state.repositoryPath] send in
 						simulatorClient.storeSchemeName(scheme.name, (projectPath as NSString).lastPathComponent)
 						do {
 							let command = try simulatorClient.runCommand(projectPath, scheme, device)
-							await send(.delegate(.runRequested(command: command, title: scheme.name)))
+							await send(.delegate(.runRequested(
+								command: command,
+								title: scheme.name,
+								repositoryPath: repositoryPath
+							)))
 						}
 						catch {
 							await send(.featureFinished(nil, errorMessage: "Could not run \(scheme.name): \(error.localizedDescription)"))

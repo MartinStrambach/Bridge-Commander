@@ -19,7 +19,7 @@ struct TerminalRunTabTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.terminalLayout(.simulatorPane(.delegate(.runRequested(command: "/bin/bash run.sh", title: "App")))))
+		await store.send(.terminalLayout(.simulatorPane(.delegate(.runRequested(command: "/bin/bash run.sh", title: "App", repositoryPath: nil)))))
 
 		let sessions = store.state.terminalSessions
 		#expect(sessions.count == 4)
@@ -41,7 +41,7 @@ struct TerminalRunTabTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.terminalLayout(.simulatorPane(.delegate(.runRequested(command: "new", title: "Widgets")))))
+		await store.send(.terminalLayout(.simulatorPane(.delegate(.runRequested(command: "new", title: "Widgets", repositoryPath: nil)))))
 
 		let sessions = store.state.terminalSessions
 		#expect(sessions[id: oldRun.id] == nil)
@@ -62,7 +62,7 @@ struct TerminalRunTabTests {
 		}
 		store.exhaustivity = .off
 
-		await store.send(.terminalLayout(.simulatorPane(.delegate(.runRequested(command: "new", title: "App")))))
+		await store.send(.terminalLayout(.simulatorPane(.delegate(.runRequested(command: "new", title: "App", repositoryPath: nil)))))
 
 		let run = store.state.terminalSessions[1]
 		#expect(run.id != oldRun.id)

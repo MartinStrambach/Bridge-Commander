@@ -356,7 +356,9 @@ struct RepositoryListReducer {
 				// comes forward, it just opens on nothing new.
 				if let session = state.terminalSessions[id: sessionId] {
 					openTerminal(for: session.repositoryPath, in: &state)
-					state.terminalLayout?.activate(session)
+					withTerminalTabs(in: &state) { tabs, _ in
+						tabs.show(session)
+					}
 				}
 				return .run { [terminalNotificationClient] _ in
 					await terminalNotificationClient.activateApp()
@@ -535,7 +537,9 @@ struct RepositoryListReducer {
 					return .none
 				}
 				state.terminalLayout = layout
-				state.terminalLayout?.activate(session)
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.show(session)
+				}
 				syncTerminalButtons(for: session.repositoryPath, in: &state)
 				return .none
 
@@ -640,21 +644,8 @@ struct RepositoryListReducer {
 				return rescanGroup(groupId, in: &state)
 
 			case let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(id: worktreePath, .worktreeDeleted)))):
-				let toRemove = state.terminalSessions
-					.filter { $0.repositoryPath == worktreePath }
-					.map(\.id)
-				for sessionId in toRemove {
-					state.terminalSessions.remove(id: sessionId)
-					state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: worktreePath)
-				}
-				state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
-				if state.terminalLayout?.activeRepositoryPath == worktreePath {
-					if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
-					}
-					else {
-						state.terminalLayout = nil
-					}
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.close(tabs.tabs(of: worktreePath).map(\.id))
 				}
 				return rescanGroup(groupId, in: &state)
 
@@ -848,26 +839,13 @@ struct RepositoryListReducer {
 			// MARK: - Terminal Layout
 
 			case let .terminalLayout(.selectRepo(repositoryPath)):
-				if let existing = lastActiveSession(for: repositoryPath, in: state) {
-					state.terminalLayout?.activate(existing)
-				}
-				else {
-					let repoSettings = groupSettings(for: repositoryPath, in: state)
-					let subfolder: String =
-						if repoSettings.supportsIOS, repoSettings.supportsAndroid {
-							repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-						}
-						else {
-							""
-						}
-					let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
-					let session = TerminalSession(
-						repositoryPath: repositoryPath,
-						startingDirectory: startingDirectory,
-						startupCommand: startupCommand(for: repoSettings, in: state)
-					)
-					state.terminalSessions.append(session)
-					state.terminalLayout?.activate(session)
+				withTerminalTabs(in: &state) { tabs, state in
+					if let existing = tabs.lastActiveSession(for: repositoryPath) {
+						tabs.show(existing)
+					}
+					else {
+						tabs.open(firstTerminalSession(for: repositoryPath, in: state))
+					}
 				}
 				syncTerminalButtons(for: repositoryPath, in: &state)
 				return .none
@@ -882,139 +860,107 @@ struct RepositoryListReducer {
 					return .none
 				}
 
-				let maxIndex = state.terminalSessions
-					.filter { $0.repositoryPath == path }
-					.map(\.tabIndex)
-					.max() ?? 0
-				// Only the repository's first tab runs the startup command by default; extra tabs
-				// are usually wanted as a plain shell beside it.
-				let session = TerminalSession(
-					repositoryPath: path,
-					startupCommand: state.terminalStartupCommandInNewTabs
-						? startupCommand(for: groupSettings(for: path, in: state), in: state)
-						: nil,
-					tabIndex: maxIndex + 1
-				)
-				state.terminalSessions.append(session)
-				state.terminalLayout?.activate(session)
+				withTerminalTabs(in: &state) { tabs, state in
+					tabs.open(extraTerminalSession(for: path, tabs: tabs, in: state))
+				}
 				return .none
 
 			case let .terminalLayout(.selectTab(sessionId)):
-				if let session = state.terminalSessions[id: sessionId] {
-					state.terminalLayout?.activate(session)
+				withTerminalTabs(in: &state) { tabs, _ in
+					if let session = tabs.sessions[id: sessionId] {
+						tabs.show(session)
+					}
 				}
 				return .none
 
-			// ⌃Tab / ⌃⇧Tab, as in Terminal.app: step through the tabs the bar shows — the active
-			// repository's, in their bar order (`terminalSessions` filtered, so a dragged tab is
-			// stepped through where it now sits) — wrapping at either end. Like ⌘W it names no
-			// session and resolves the active tab when it fires, so a stale closure cannot misfire.
+			// ⌘D: a new pane to the right of the active one, whose one tab is a new terminal of
+			// the active repository. Like any extra tab it is a plain shell unless the startup command is
+			// wanted in new tabs.
+			case let .terminalLayout(.splitRequested(directory)):
+				withTerminalTabs(in: &state) { tabs, state in
+					guard tabs.canSplit, let path = tabs.focus?.activeRepositoryPath else {
+						return
+					}
+
+					tabs.split(showing: extraTerminalSession(for: path, directory: directory, tabs: tabs, in: state))
+				}
+				return .none
+
+			// The sidebar's "Open in Split": another repository beside the ones on screen, with
+			// its tabs — showing the one it was last showing, or its first one, opened now.
+			case let .terminalLayout(.openRepoInSplit(repositoryPath)):
+				withTerminalTabs(in: &state) { tabs, state in
+					let session = tabs.lastActiveSession(for: repositoryPath)
+						?? firstTerminalSession(for: repositoryPath, in: state)
+					tabs.split(showing: session)
+				}
+				return .none
+
+			case let .terminalLayout(.paneFocused(sessionId)):
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.focusPane(sessionId)
+				}
+				return .none
+
+			case let .terminalLayout(.cyclePaneRequested(forward)):
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.cyclePane(forward: forward)
+				}
+				return .none
+
+			case let .terminalLayout(.closePane(sessionId)):
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.closePane(sessionId)
+				}
+				return .none
+
+			// ⌃Tab / ⌃⇧Tab, as in Terminal.app: step through the tabs the bar shows, wrapping at
+			// either end. Like ⌘W it names no session and resolves the active tab when it fires,
+			// so a stale closure cannot misfire.
 			case let .terminalLayout(.cycleTabRequested(forward)):
-				guard
-					let layout = state.terminalLayout,
-					let path = layout.activeRepositoryPath
-				else {
-					return .none
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.cycleTab(forward: forward)
 				}
-				let repoSessions = Array(state.terminalSessions.filter { $0.repositoryPath == path })
-				guard repoSessions.count > 1 else {
-					return .none
-				}
-				let current = repoSessions.firstIndex { $0.id == layout.activeSessionId } ?? 0
-				let step = forward ? 1 : repoSessions.count - 1
-				state.terminalLayout?.activate(repoSessions[(current + step) % repoSessions.count])
 				return .none
 
-			// The dragged tab takes the target's place, pushing the target out of the way — the
-			// same rule as reordering repositories. Only a tab of the same repository can be a
-			// target: the bar shows one repository's tabs, and the payload is plain text that any
-			// app could have dropped, so anything that names no tab, or one of another repository,
-			// is ignored. `terminalSessions` interleaves every repository's tabs in insertion
-			// order and the bar filters it, so moving within the shared array reorders just this
-			// repository's tabs relative to each other. The tab keeps its number: "Terminal 2" is
-			// the shell the user started second, wherever it now sits.
 			case let .terminalLayout(.moveTab(sessionId, ontoSessionId)):
-				guard
-					sessionId != ontoSessionId,
-					let dragged = state.terminalSessions[id: sessionId],
-					let target = state.terminalSessions[id: ontoSessionId],
-					dragged.repositoryPath == target.repositoryPath,
-					let from = state.terminalSessions.index(id: sessionId),
-					let to = state.terminalSessions.index(id: ontoSessionId)
-				else {
-					return .none
-				}
-				var sessions = Array(state.terminalSessions)
-				let moved = sessions.remove(at: from)
-				sessions.insert(moved, at: to)
 				// Inside an animation so the pills slide into their new places rather than jump;
 				// the `ForEach` in the tab bar is keyed by session id, which is what makes the
 				// move animatable at all.
 				withAnimation(.snappy) {
-					state.terminalSessions = IdentifiedArray(uniqueElements: sessions)
+					withTerminalTabs(in: &state) { tabs, _ in
+						tabs.moveTab(sessionId, onto: ontoSessionId)
+					}
 				}
 				return .none
 
+			// The shell is hung up by the view layer once the session has left the state.
 			case let .terminalLayout(.killTab(sessionId)):
-				guard let session = state.terminalSessions[id: sessionId] else {
-					return .none
-				}
-
-				let repoPath = session.repositoryPath
-				// Where the closed tab sat among the repo's tabs, in the order the tab bar lays
-				// them out — `terminalSessions` is in insertion order and the bar filters it.
-				let closedIndex = state.terminalSessions
-					.filter { $0.repositoryPath == repoPath }
-					.firstIndex { $0.id == sessionId }
-				state.terminalSessions.remove(id: sessionId)
-				state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: repoPath)
-				if state.terminalLayout?.activeSessionId == sessionId {
-					// Move to the tab that took the closed one's place — the one to its right —
-					// or to the new last tab when the closed one was rightmost. Activating the
-					// repo's first tab instead threw the user back to tab 1 on every close.
-					let remaining = Array(state.terminalSessions.filter { $0.repositoryPath == repoPath })
-					let neighbour: TerminalSession? = if remaining.isEmpty {
-						nil
-					} else if let closedIndex {
-						remaining[min(closedIndex, remaining.count - 1)]
-					} else {
-						remaining.first
-					}
-
-					if let neighbour {
-						// Through `activate`, so the repo remembers the tab that took over and
-						// restores it when the user switches back.
-						state.terminalLayout?.activate(neighbour)
-					}
-					else if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
-					}
-					else {
-						state.terminalLayout = nil
-					}
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.close([sessionId])
 				}
 				return .none
 
 			// ⌘W names no session: it closes whichever tab is active at the moment it fires.
 			// The shortcut used to hand `killTab` the id captured when its hidden button was
 			// laid out, and SwiftUI kept firing that first closure — so the second press asked
-			// to kill a session that had already left the state, hit the guard above and did
-			// nothing, for good. Resolving the target here cannot go stale.
-			// While the repo has a second tab to fall back to this just closes the active one.
-			// On the repo's *last* tab it asks first, because the two things the user could mean
-			// are far apart: leave this repo (other repos still have terminals running, and the
-			// panel would switch to one of them) or quit the app outright, which is what ⌘W does
-			// on the last tab when nothing else is running — the shortcut is left unregistered
-			// there so it falls through to File ▸ Close.
+			// to kill a session that had already left the state and did nothing, for good.
+			// Resolving the target here cannot go stale.
+			// While the repo has a second tab to fall back to, or the panel another pane, this
+			// just closes the active one. On the repo's *last* tab with nothing beside it, it
+			// asks first, because the two things the user could mean are far apart: leave this
+			// repo (other repos still have terminals running, and the panel would switch to one
+			// of them) or quit the app outright, which is what ⌘W does on the last tab when
+			// nothing else is running — the shortcut is left unregistered there so it falls
+			// through to File ▸ Close.
 			case .terminalLayout(.closeActiveTabRequested):
-				guard let sessionId = state.terminalLayout?.activeSessionId,
-					  let session = state.terminalSessions[id: sessionId]
-				else {
+				let tabs = terminalTabs(in: state)
+				guard let session = tabs.activeSession else {
 					return .none
 				}
 				let repoPath = session.repositoryPath
-				if state.terminalSessions.count(where: { $0.repositoryPath == repoPath }) > 1 {
-					return .send(.terminalLayout(.killTab(sessionId: sessionId)))
+				if tabs.tabs(of: repoPath).count > 1 || tabs.panes.count > 1 {
+					return .send(.terminalLayout(.killTab(sessionId: session.id)))
 				}
 				let otherRepoCount = Set(
 					state.terminalSessions
@@ -1025,98 +971,82 @@ struct RepositoryListReducer {
 					// No other terminals to keep the app open for — leave it to File ▸ Close.
 					return .none
 				}
-				state.alert = Self.lastTabAlert(sessionId: sessionId, otherRepoCount: otherRepoCount)
+				state.alert = Self.lastTabAlert(sessionId: session.id, otherRepoCount: otherRepoCount)
 				return .none
 
 			case let .terminalLayout(.killRepo(repositoryPath)):
-				let toRemove = state.terminalSessions
-					.filter { $0.repositoryPath == repositoryPath }
-					.map(\.id)
-				for id in toRemove {
-					state.terminalSessions.remove(id: id)
-					state.terminalLayout?.forget(sessionId: id, repositoryPath: repositoryPath)
-				}
-				state.terminalLayout?.lastActiveSessionByRepo[repositoryPath] = nil
-				if state.terminalLayout?.activeRepositoryPath == repositoryPath {
-					if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
-					}
-					else {
-						state.terminalLayout = nil
-					}
+				withTerminalTabs(in: &state) { tabs, _ in
+					tabs.close(tabs.tabs(of: repositoryPath).map(\.id))
 				}
 				return .none
 
-			case let .terminalLayout(.simulatorPane(.delegate(.runRequested(command, title)))):
+			case let .terminalLayout(.simulatorPane(.delegate(.runRequested(command, title, repositoryPath)))):
 				// The simulator pane's Run: into the repository's run tab, replacing what ran there
 				// (its shell is hung up with it), so running again is a fresh build and launch with
 				// a clean log, as in Xcode.
-				guard let path = state.terminalLayout?.activeRepositoryPath else {
+				// The repository the pane was beside when Run was pressed, which in a split need not
+				// be the active one: the pane stays beside the repository that has it open while
+				// the keyboard is elsewhere.
+				guard let path = repositoryPath ?? state.terminalLayout?.activeRepositoryPath else {
 					return .none
 				}
 
-				let existing = state.terminalSessions.first { $0.repositoryPath == path && $0.isRunTab }
-				let tabIndex = existing?.tabIndex
-					?? (state.terminalSessions.filter { $0.repositoryPath == path }.map(\.tabIndex).max() ?? 0) + 1
-				let session = TerminalSession(
-					repositoryPath: path,
-					startupCommand: command,
-					runTitle: title,
-					tabIndex: tabIndex
-				)
-				// The tab on screen stays on screen: the run is followed in the simulator pane, and
-				// switching tabs took the user away from the Claude or shell they were typing in. Only
-				// a run tab being replaced while on screen hands the screen to its successor.
-				let replacesTabOnScreen = existing != nil && existing?.id == state.terminalLayout?.activeSessionId
-				if let existing, let position = state.terminalSessions.index(id: existing.id) {
-					state.terminalSessions.remove(id: existing.id)
-					state.terminalSessions.insert(session, at: position)
-					state.terminalLayout?.forget(sessionId: existing.id, repositoryPath: path)
-				}
-				else {
-					state.terminalSessions.append(session)
-				}
-				if replacesTabOnScreen || state.terminalLayout?.activeSessionId == nil {
-					state.terminalLayout?.activate(session)
+				withTerminalTabs(in: &state) { tabs, _ in
+					let existing = tabs.tabs(of: path).first(where: \.isRunTab)
+					let session = TerminalSession(
+						repositoryPath: path,
+						startupCommand: command,
+						runTitle: title,
+						tabIndex: existing?.tabIndex ?? tabs.nextTabIndex(for: path)
+					)
+					// The tab on screen stays on screen: the run is followed in the simulator pane,
+					// and switching tabs took the user away from the Claude or shell they were
+					// typing in. Only a run tab being replaced while on screen hands its pane to
+					// its successor.
+					if let existing {
+						tabs.replace(existing.id, with: session)
+					}
+					else {
+						tabs.add(session)
+					}
+					if tabs.focus?.activeSessionId == nil {
+						tabs.show(session)
+					}
 				}
 				return .none
 
 			case let .terminalLayout(.retryTab(sessionId)):
-				guard
-					let old = state.terminalSessions[id: sessionId],
-					let position = state.terminalSessions.index(id: sessionId)
-				else {
-					return .none
-				}
+				withTerminalTabs(in: &state) { tabs, state in
+					guard let old = tabs.sessions[id: sessionId] else {
+						return
+					}
 
-				let repoPath = old.repositoryPath
-				let tabIndex = old.tabIndex
-				// A retried tab runs the command only if the tab it replaces did, so retrying a
-				// plain-shell tab does not suddenly start the command in it. A run tab runs its own
-				// command again, not the group's.
-				let newSession = if old.isRunTab {
-					TerminalSession(
-						repositoryPath: repoPath,
-						startupCommand: old.startupCommand,
-						runTitle: old.runTitle,
-						tabIndex: tabIndex
-					)
+					let repoPath = old.repositoryPath
+					// A retried tab runs the command only if the tab it replaces did, so retrying a
+					// plain-shell tab does not suddenly start the command in it. A run tab runs its
+					// own command again, not the group's.
+					let newSession = if old.isRunTab {
+						TerminalSession(
+							repositoryPath: repoPath,
+							startupCommand: old.startupCommand,
+							runTitle: old.runTitle,
+							tabIndex: old.tabIndex
+						)
+					}
+					else {
+						TerminalSession(
+							repositoryPath: repoPath,
+							startupCommand: old.startupCommand == nil
+								? nil
+								: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
+							tabIndex: old.tabIndex
+						)
+					}
+					// In the old one's place, not appended: the tab bar lays tabs out in array
+					// order, so appending moved the retried tab to the end of the bar.
+					tabs.replace(sessionId, with: newSession)
+					tabs.show(newSession)
 				}
-				else {
-					TerminalSession(
-						repositoryPath: repoPath,
-						startupCommand: old.startupCommand == nil
-							? nil
-							: startupCommand(for: groupSettings(for: repoPath, in: state), in: state),
-						tabIndex: tabIndex
-					)
-				}
-				// In the old one's place, not appended: the tab bar lays tabs out in array order,
-				// so appending moved the retried tab to the end of the bar.
-				state.terminalSessions.remove(id: sessionId)
-				state.terminalSessions.insert(newSession, at: position)
-				state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: repoPath)
-				state.terminalLayout?.activate(newSession)
 				return .none
 
 			case let .terminalLayout(.finishMergeCompleted(repositoryPath, error)):
@@ -1358,8 +1288,8 @@ struct RepositoryListReducer {
 		)
 	}
 
-	/// Nothing is posted for the tab on screen while the app is frontmost: the user is already
-	/// looking at it.
+	/// Nothing is posted for a terminal on screen while the app is frontmost: the user is already
+	/// looking at it, whichever pane has the keyboard.
 	private func postNotification(
 		_ content: TerminalNotificationContent,
 		for session: TerminalSession,
@@ -1370,7 +1300,7 @@ struct RepositoryListReducer {
 		}
 
 		let client = terminalNotificationClient
-		let isOnScreen = state.terminalLayout?.activeSessionId == session.id
+		let isOnScreen = state.terminalLayout?.paneSessionIds.contains(session.id) ?? false
 		return .run { _ in
 			if isOnScreen, await client.isAppActive() {
 				return
@@ -1383,7 +1313,7 @@ struct RepositoryListReducer {
 	private func notificationLocation(for session: TerminalSession, in state: State) -> String {
 		let name = findRowState(for: session.repositoryPath, in: state)?.name
 			?? URL(fileURLWithPath: session.repositoryPath).lastPathComponent
-		let tabCount = state.terminalSessions.filter { $0.repositoryPath == session.repositoryPath }.count
+		let tabCount = state.terminalSessions.count { $0.repositoryPath == session.repositoryPath }
 		return tabCount > 1 ? "\(name) · Terminal \(session.tabIndex)" : name
 	}
 }
@@ -1435,20 +1365,72 @@ private func normalizePath(_ path: String) -> String {
 	URL(fileURLWithPath: path).standardizedFileURL.path
 }
 
-/// The tab to show when a repository becomes active again: the one the user last
-/// looked at, falling back to its first tab (and to nothing when it has none).
-private func lastActiveSession(
-	for repositoryPath: String,
-	in state: RepositoryListReducer.State
-) -> TerminalSession? {
-	if
-		let rememberedId = state.terminalLayout?.lastActiveSessionByRepo[repositoryPath],
-		let remembered = state.terminalSessions[id: rememberedId],
-		remembered.repositoryPath == repositoryPath
-	{
-		return remembered
+/// The open terminals and what the panel shows of them, as the value that knows the rules.
+private func terminalTabs(in state: RepositoryListReducer.State) -> TerminalTabs {
+	TerminalTabs(sessions: state.terminalSessions, focus: state.terminalLayout?.focus)
+}
+
+/// Runs a change to the tabs and writes the result back: the sessions, what the panel shows —
+/// closing the panel when the change left it nothing to show — and, when the keyboard ended up
+/// in another repository's terminal, the toolbar buttons, which are copies of that row's state
+/// (the Xcode button otherwise kept opening the repository the user had left).
+private func withTerminalTabs(
+	in state: inout RepositoryListReducer.State,
+	_ change: (inout TerminalTabs, RepositoryListReducer.State) -> Void
+) {
+	let previousPath = state.terminalLayout?.activeRepositoryPath
+	var tabs = terminalTabs(in: state)
+	change(&tabs, state)
+	state.terminalSessions = tabs.sessions
+	if let focus = tabs.focus {
+		state.terminalLayout?.focus = focus
 	}
-	return state.terminalSessions.first(where: { $0.repositoryPath == repositoryPath })
+	else {
+		state.terminalLayout = nil
+	}
+	if let path = state.terminalLayout?.activeRepositoryPath, path != previousPath {
+		syncTerminalButtons(for: path, in: &state)
+	}
+}
+
+/// A repository's first tab: in its mobile subfolder when it has both platforms, running the
+/// group's startup command unless `startupCommandOverride` replaces it.
+private func firstTerminalSession(
+	for repositoryPath: String,
+	startupCommandOverride: String? = nil,
+	in state: RepositoryListReducer.State
+) -> TerminalSession {
+	let repoSettings = groupSettings(for: repositoryPath, in: state)
+	let subfolder: String =
+		if repoSettings.supportsIOS, repoSettings.supportsAndroid {
+			repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+		}
+		else {
+			""
+		}
+	return TerminalSession(
+		repositoryPath: repositoryPath,
+		startingDirectory: (repositoryPath as NSString).appendingPathComponent(subfolder),
+		startupCommand: startupCommandOverride ?? startupCommand(for: repoSettings, in: state)
+	)
+}
+
+/// A tab beside the ones a repository already has. Only the first tab runs the startup command
+/// by default; extra ones are usually wanted as a plain shell beside it.
+private func extraTerminalSession(
+	for repositoryPath: String,
+	directory: String? = nil,
+	tabs: TerminalTabs,
+	in state: RepositoryListReducer.State
+) -> TerminalSession {
+	TerminalSession(
+		repositoryPath: repositoryPath,
+		startingDirectory: directory,
+		startupCommand: state.terminalStartupCommandInNewTabs
+			? startupCommand(for: groupSettings(for: repositoryPath, in: state), in: state)
+			: nil,
+		tabIndex: tabs.nextTabIndex(for: repositoryPath)
+	)
 }
 
 /// Reopens the tabs saved by the previous launch, each in the directory its shell was in and
@@ -1465,6 +1447,8 @@ private func restoreTerminalTabs(
 
 	var onScreen: TerminalSession?
 	var currentTabByRepo: [String: UUID] = [:]
+	var paneTabs: [Int: [UUID]] = [:]
+	var paneShown: [Int: UUID] = [:]
 	for tab in saved.tabs {
 		let session = TerminalSession(
 			repositoryPath: tab.repositoryPath,
@@ -1480,6 +1464,13 @@ private func restoreTerminalTabs(
 		if tab.isOnScreen {
 			onScreen = session
 		}
+		if let paneIndex = tab.paneIndex {
+			paneTabs[paneIndex, default: []].append(session.id)
+			// A file written before panes had tabs of their own names one tab per pane.
+			if tab.isPaneCurrentTab ?? true {
+				paneShown[paneIndex] = session.id
+			}
+		}
 	}
 
 	guard let onScreen else {
@@ -1488,8 +1479,19 @@ private func restoreTerminalTabs(
 
 	var layout = TerminalLayoutReducer.State()
 	layout.lastActiveSessionByRepo = currentTabByRepo
+	// The split comes back only whole enough to be one: a pane whose tab on screen was not saved
+	// (a run tab, a failed one) is closed up, and what is left must still be several, the
+	// terminal with the keyboard among them.
+	let slots = paneShown.keys.sorted().prefix(TerminalTabs.maxPanes)
+	let panes = slots.compactMap { paneShown[$0] }
+	if panes.count > 1, panes.contains(onScreen.id) {
+		layout.splitSessionIds = panes
+		layout.splitTabIds = slots.map { paneTabs[$0] ?? [] }
+	}
 	state.terminalLayout = layout
-	state.terminalLayout?.activate(onScreen)
+	withTerminalTabs(in: &state) { tabs, _ in
+		tabs.show(onScreen)
+	}
 	syncTerminalButtons(for: onScreen.repositoryPath, in: &state)
 }
 
@@ -1528,28 +1530,16 @@ private func openTerminal(
 	if state.terminalLayout == nil {
 		state.terminalLayout = reopenedTerminalLayout(in: &state)
 	}
-	let session: TerminalSession
-	if let existing = lastActiveSession(for: repositoryPath, in: state) {
-		session = existing
+	withTerminalTabs(in: &state) { tabs, state in
+		if let existing = tabs.lastActiveSession(for: repositoryPath) {
+			tabs.show(existing)
+		}
+		else {
+			tabs.open(
+				firstTerminalSession(for: repositoryPath, startupCommandOverride: startupCommandOverride, in: state)
+			)
+		}
 	}
-	else {
-		let repoSettings = groupSettings(for: repositoryPath, in: state)
-		let subfolder: String =
-			if repoSettings.supportsIOS, repoSettings.supportsAndroid {
-				repoSettings.mobileSubfolderPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-			}
-			else {
-				""
-			}
-		let startingDirectory = (repositoryPath as NSString).appendingPathComponent(subfolder)
-		session = TerminalSession(
-			repositoryPath: repositoryPath,
-			startingDirectory: startingDirectory,
-			startupCommand: startupCommandOverride ?? startupCommand(for: repoSettings, in: state)
-		)
-		state.terminalSessions.append(session)
-	}
-	state.terminalLayout?.activate(session)
 	syncTerminalButtons(for: repositoryPath, in: &state)
 	return .none
 }
@@ -1740,26 +1730,18 @@ private func reopenedTerminalLayout(in state: inout RepositoryListReducer.State)
 	if let memory = state.hiddenTerminalTabMemory {
 		layout.tabMemory = memory
 		state.hiddenTerminalTabMemory = nil
+		// The split comes back with what is left of it: tabs closed while the panel was hidden
+		// are gone from it, and one terminal alone is no split. The pane that had the keyboard is
+		// the active one again, so a terminal opened from outside the split takes its place.
+		let slots = memory.splitSessionIds.indices.filter { state.terminalSessions[id: memory.splitSessionIds[$0]] != nil }
+		layout.splitSessionIds = slots.count > 1 ? slots.map { memory.splitSessionIds[$0] } : []
+		layout.splitTabIds = slots.count > 1
+			? slots.map { memory.splitTabIds.indices.contains($0) ? memory.splitTabIds[$0] : [] }
+			: []
+		layout.activeSessionId = memory.recentSessionIds.last { layout.splitSessionIds.contains($0) }
+			?? layout.splitSessionIds.first
 	}
 	return layout
-}
-
-/// The tab to show once the repository on screen has none left: the one the user was in most
-/// recently, or the first one when none of the remaining tabs has been on screen yet.
-private func mostRecentRemainingSession(in state: RepositoryListReducer.State) -> TerminalSession? {
-	state.terminalLayout?.mostRecent(among: state.terminalSessions) ?? state.terminalSessions.first
-}
-
-/// Switch the panel to a session of a different repository after the active repository's last
-/// tab went away. The toolbar buttons are copies of the row's state, so they have to be re-synced
-/// too — `activate` alone left them pointing at the closed repository (the Xcode button kept
-/// opening the old repository's project).
-private func activateOtherRepository(
-	_ session: TerminalSession,
-	in state: inout RepositoryListReducer.State
-) {
-	state.terminalLayout?.activate(session)
-	syncTerminalButtons(for: session.repositoryPath, in: &state)
 }
 
 private func syncTerminalButtons(for path: String, in state: inout RepositoryListReducer.State) {

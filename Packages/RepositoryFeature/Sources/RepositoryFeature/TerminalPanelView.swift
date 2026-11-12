@@ -16,60 +16,14 @@ import YouTrackMenu
 struct TerminalPanelView: View {
 	@Bindable
 	var store: StoreOf<TerminalLayoutReducer>
-
-	@Shared(.terminalColorTheme)
-	private var terminalColorTheme = TerminalThemeSelection.builtIn(.basicDark)
-
-	@Shared(.terminalProfiles)
-	private var terminalProfiles: [TerminalProfile] = []
-
-	@Shared(.terminalCopyOnSelect)
-	private var terminalCopyOnSelect = false
-
-	@Shared(.terminalMouseReporting)
-	private var terminalMouseReporting = true
-
-	@Shared(.terminalClaudeStatusDetection)
-	private var terminalClaudeStatusDetection = ClaudeStatusDetection.default
-
-	/// The setting in TerminalFeature's terms, mapped here so that package needs no Settings
-	/// dependency.
-	private var claudeStatusSource: ClaudeStatusSource {
-		switch terminalClaudeStatusDetection {
-		case .progressAndScreen:
-			.progressAndScreen
-		case .progressOnly:
-			.progressOnly
-		case .screenOnly:
-			.screenOnly
-		}
-	}
-
-	/// Read here like its sibling settings; the ⌘+/⌘−/⌘0 shortcuts write it through
-	/// `TerminalLayoutReducer` so the zoom actions stay testable.
-	@Shared(.terminalFontSize)
-	private var terminalFontSize = TerminalFontSize.default
-
-	@Shared(.terminalFontName)
-	private var terminalFontName = TerminalFontFamily.systemDefault
-
-	/// The two font settings resolved into the one font the panes render with. Resolved here, like
-	/// the theme above, so TerminalFeature needs no Settings dependency.
-	private var terminalFont: NSFont {
-		TerminalFontFamily.resolve(name: terminalFontName, size: terminalFontSize)
-	}
-
-	/// The selected theme looked up against the imported profiles.
-	private var resolvedTheme: ResolvedTerminalTheme {
-		terminalColorTheme.resolve(profiles: terminalProfiles)
-	}
-
 	/// The opened repository's row. A store rather than a plain value so the counts and badges
 	/// in the toolbar track the row's refreshes — see `SidebarRepositoryRowView.store`.
 	let activeRowStore: StoreOf<RepositoryRowReducer>?
+	/// The Xcode project of a repository's row, for the simulator pane, which in a split can be
+	/// beside a repository other than the active one.
+	let xcodeProjectPath: (String) -> String?
 	let terminalViewStore: TerminalViewStore
 	let sessions: IdentifiedArrayOf<TerminalSession>
-	let activeSessionId: UUID?
 	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
 	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
 	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
@@ -77,12 +31,6 @@ struct TerminalPanelView: View {
 	let onNewTab: () -> Void
 	let onSelectTab: (UUID) -> Void
 	let onKillTab: (UUID) -> Void
-
-	/// The tab being dragged, set when its drag starts and read by every other tab's drop
-	/// delegate to move it as the pointer passes over them. Local to the view: nothing outside
-	/// it reads a drag in flight.
-	@State
-	private var draggedTabId: UUID?
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -94,10 +42,6 @@ struct TerminalPanelView: View {
 			// that the row is a store — this keeps banner and menu on one source.
 			if store.gitActionsMenu?.isMergeInProgress == true {
 				mergeStatusBanner
-			}
-			if store.activeRepositoryPath != nil {
-				tabBar
-				Divider()
 			}
 			terminalContent
 		}
@@ -354,82 +298,53 @@ struct TerminalPanelView: View {
 			}
 		)
 	}
-
-	// MARK: - Tab Bar
-
-	private var tabBar: some View {
-		let repoSessions = store.activeRepositoryPath.map { path in
-			sessions.filter { $0.repositoryPath == path }
-		} ?? []
-
-		return ScrollView(.horizontal, showsIndicators: false) {
-			HStack(spacing: 4) {
-				ForEach(repoSessions) { session in
-					tabPill(session: session, totalCount: repoSessions.count)
-				}
-
-				Button(action: onNewTab) {
-					Image(systemName: "plus")
-						.scaledFont(size: 11)
-						.padding(.horizontal, 6)
-						.padding(.vertical, 4)
-						.contentShape(Rectangle())
-				}
-				.buttonStyle(.borderless)
-				.help("New Tab")
-				.keyboardShortcut("t", modifiers: .command)
-
-				// Hidden buttons for Cmd+1…Cmd+9 tab switching
-				ForEach(Array(repoSessions.prefix(9).enumerated()), id: \.element.id) { index, session in
-					let key = KeyEquivalent(Character(String(index + 1)))
-					Button("") { onSelectTab(session.id) }
-						.keyboardShortcut(key, modifiers: .command)
-						.hidden()
-				}
-
-				cycleTabShortcuts
-				closeTabShortcut(repoSessions: repoSessions)
-				refreshShortcut
-				zoomShortcuts
-				findShortcuts
-			}
-			.padding(.horizontal, 8)
-			.padding(.vertical, 4)
-		}
-		.background(Color(NSColor.windowBackgroundColor))
-	}
-
 	// MARK: - Terminal Content
 
-	/// A single NSView container hosts all terminal sessions as direct subviews
-	/// and shows/hides them via isHidden. This keeps every LocalProcessTerminalView
-	/// in a stable position in the view hierarchy across repo switches and
-	/// hide/show cycles, preventing the zero-frame setFrameSize that would
-	/// send a spurious SIGWINCH and cause zsh to clear visible terminal output.
-	///
-	/// The simulator pane sits to the right of that container, as a sibling in an `HStack` whose
-	/// first child is always the container — showing or hiding the pane changes the terminal's
-	/// width (one deliberate SIGWINCH), never its place in the hierarchy. The container resizes
-	/// only the pane on screen, so the width change does not reach other repositories' shells.
-	/// Whether the repository on screen has the simulator open beside its terminal — each
-	/// repository's is shown or hidden on its own.
+	/// The simulator pane sits to the right of the terminals, as a sibling in an `HStack` whose
+	/// first child is always the split — showing or hiding the pane changes the terminals' width
+	/// (one deliberate SIGWINCH for each on screen), never their place in the hierarchy. Hidden
+	/// terminals are not resized, so the width change does not reach other repositories' shells.
+	/// Whether the active repository has the simulator open, which is what its toolbar button
+	/// shows and toggles.
 	private var isSimulatorPaneVisible: Bool {
 		store.simulatorPane.isVisible(in: store.activeRepositoryPath)
+	}
+
+	/// The repository whose simulator is shown beside the terminals — each repository's is shown
+	/// or hidden on its own. It is the active repository's when that has it open, and otherwise
+	/// that of the first pane whose repository does: in a split of a repository with the simulator
+	/// and one without, moving the keyboard between the panes must not show and hide it, which
+	/// would resize every terminal on screen each time.
+	private var simulatorRepositoryPath: String? {
+		let panePaths = store.paneSessionIds.compactMap { sessions[id: $0]?.repositoryPath }
+		return ([store.activeRepositoryPath].compactMap(\.self) + panePaths)
+			.first { store.simulatorPane.isVisible(in: $0) }
 	}
 
 	private var terminalContent: some View {
 		GeometryReader { proxy in
 			HStack(spacing: 0) {
-				terminalStack
+				TerminalSplitView(
+					store: store,
+					sessions: sessions,
+					terminalViewStore: terminalViewStore,
+					onStatusChange: onStatusChange,
+					onNotification: onNotification,
+					onOpenFile: onOpenFile,
+					onRetry: onRetry,
+					onNewTab: onNewTab,
+					onSelectTab: onSelectTab,
+					onKillTab: onKillTab
+				)
 
-				if let path = store.activeRepositoryPath, isSimulatorPaneVisible {
+				if let path = simulatorRepositoryPath {
 					let runTab = sessions.first { $0.repositoryPath == path && $0.isRunTab }
 					Divider()
 					SimulatorPaneView(
 						store: store.scope(\.simulatorPane, action: \.simulatorPane),
 						availableSize: proxy.size,
 						repositoryPath: path,
-						projectPath: activeRowStore?.xcodeButton.projectPath,
+						projectPath: xcodeProjectPath(path),
 						hasRunTab: runTab != nil,
 						onStop: {
 							if let runTab {
@@ -440,219 +355,5 @@ struct TerminalPanelView: View {
 				}
 			}
 		}
-	}
-
-	private var terminalStack: some View {
-		ZStack {
-			TerminalContainerRepresentable(
-				terminalViewStore: terminalViewStore,
-				sessions: sessions,
-				activeSessionId: activeSessionId,
-				foregroundColor: resolvedTheme.foreground,
-				backgroundColor: resolvedTheme.background,
-				ansiPalette: resolvedTheme.ansiPalette,
-				cursorColor: resolvedTheme.cursor,
-				selectionColor: resolvedTheme.selection,
-				copyOnSelect: terminalCopyOnSelect,
-				mouseReporting: terminalMouseReporting,
-				statusSource: claudeStatusSource,
-				font: terminalFont,
-				onStatusChange: onStatusChange,
-				onNotification: onNotification,
-				onOpenFile: onOpenFile
-			)
-
-			if
-				let activeId = activeSessionId,
-				let session = sessions[id: activeId],
-				case let .failed(message) = session.status
-			{
-				terminalErrorView(message: message, sessionId: activeId)
-			}
-
-			if store.activeRepositoryPath == nil {
-				VStack {
-					Spacer()
-					Text("Select a repository from the sidebar")
-						.foregroundColor(.secondary)
-					Spacer()
-				}
-			}
-		}
-	}
-
-	/// ⌘W closes the active tab. On the repo's last tab it is registered only while *another*
-	/// repository still has terminals running — there the reducer asks whether to close just this
-	/// tab or quit the app, since either reading is plausible. With nothing else running the
-	/// shortcut is deliberately left unregistered so it falls back to the standard File ▸ Close
-	/// and shuts the window — a view-level `keyboardShortcut` wins over the menu item (same as
-	/// ⌘A in `RepositoryListView`), so registering it unconditionally would strand the window.
-	/// Yielded while a sheet is up: the staging panel and the graph are their own windows to close.
-	///
-	/// The action deliberately carries no session id and does not go through `onKillTab`: SwiftUI
-	/// held on to the closure this button was first laid out with, so a captured id killed the
-	/// same, already-removed session on every press after the first. The reducer resolves the
-	/// active tab instead, and hangs the shell up via `killSessions(notIn:)` in `RepositoryListView`.
-	@ViewBuilder
-	private func closeTabShortcut(repoSessions: some Collection<TerminalSession>) -> some View {
-		let hasOtherRepoSessions = sessions.contains { $0.repositoryPath != store.activeRepositoryPath }
-		if repoSessions.count > 1 || hasOtherRepoSessions,
-		   let activeSessionId,
-		   repoSessions.contains(where: { $0.id == activeSessionId }),
-		   store.stagingDetail == nil,
-		   store.gitGraph == nil {
-			Button("") { store.send(.closeActiveTabRequested) }
-				.keyboardShortcut("w", modifiers: .command)
-				.hidden()
-		}
-	}
-
-	/// ⌃Tab / ⌃⇧Tab cycle through the repository's tabs, the shortcut Terminal.app uses. The
-	/// reducer resolves the active tab when the key fires, for the reason ⌘W documents. Yielded
-	/// while a sheet is up for the same reason the zoom shortcuts are.
-	@ViewBuilder
-	private var cycleTabShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			Group {
-				Button("") { store.send(.cycleTabRequested(forward: true)) }
-					.keyboardShortcut(.tab, modifiers: .control)
-				Button("") { store.send(.cycleTabRequested(forward: false)) }
-					.keyboardShortcut(.tab, modifiers: [.control, .shift])
-			}
-			.hidden()
-		}
-	}
-
-	/// ⌘R refreshes only the repo opened in the terminal; the full-list refresh in
-	/// `RepositoryListView` hands the shortcut off while the panel is open. The staging sheet and
-	/// the commit graph claim ⌘R for their own refresh, so yield it there — a shortcut registered
-	/// twice dispatches to either owner at random.
-	///
-	/// Registered here beside the other hidden shortcuts rather than in the sidebar's
-	/// `.background`: on macOS 27 a conditionally inserted shortcut button inside a `.background`
-	/// never fires (the unconditional ⌘§ beside it still does), so ⌘R silently did nothing.
-	@ViewBuilder
-	private var refreshShortcut: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			Button("") { store.send(.refreshActiveRepoRequested) }
-				.keyboardShortcut("r", modifiers: .command)
-				.hidden()
-		}
-	}
-
-	/// ⌘+ / ⌘− / ⌘0 zoom the terminal font, the shortcuts every terminal emulator uses.
-	///
-	/// "+" is registered alongside "=" because on a US layout the plus key *is* ⇧=, and SwiftUI
-	/// matches the literal key equivalent — with only "+" registered the user has to hold shift.
-	/// Yielded while a sheet is up for the same reason ⌘W is: the staging panel and the graph are
-	/// separate windows with their own idea of what a keystroke means.
-	@ViewBuilder
-	private var zoomShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			Group {
-				Button("") { store.send(.zoomInRequested) }
-					.keyboardShortcut("+", modifiers: .command)
-				Button("") { store.send(.zoomInRequested) }
-					.keyboardShortcut("=", modifiers: .command)
-				Button("") { store.send(.zoomOutRequested) }
-					.keyboardShortcut("-", modifiers: .command)
-				Button("") { store.send(.resetZoomRequested) }
-					.keyboardShortcut("0", modifiers: .command)
-			}
-			.hidden()
-		}
-	}
-
-	/// ⌘G / ⇧⌘G / ⌘E drive SwiftTerm's find bar in the active pane — the standard Find menu
-	/// shortcuts, registered here because the app has no Find menu for SwiftTerm to hang them on.
-	/// ⌘F, which opens the bar, is `RepositoryListView`'s (it doubles as the list's filter shortcut);
-	/// Escape and Return are the find bar's own (close, next; ⇧Return for previous).
-	///
-	/// The session is read from the store when the key is pressed, not captured, for the reason
-	/// ⌘W documents: SwiftUI can keep the closure a hidden button was first laid out with. Yielded
-	/// while a sheet is up for the same reason the zoom shortcuts are.
-	@ViewBuilder
-	private var findShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			Group {
-				Button("") { find(.next) }
-					.keyboardShortcut("g", modifiers: .command)
-				Button("") { find(.previous) }
-					.keyboardShortcut("g", modifiers: [.command, .shift])
-				Button("") { find(.useSelection) }
-					.keyboardShortcut("e", modifiers: .command)
-			}
-			.hidden()
-		}
-	}
-
-	private func find(_ command: TerminalFindCommand) {
-		if let sessionId = store.activeSessionId {
-			terminalViewStore.performFind(command, sessionId: sessionId)
-		}
-	}
-
-	private func tabPill(session: TerminalSession, totalCount: Int) -> some View {
-		let isActive = session.id == activeSessionId
-		return HStack(spacing: 4) {
-			if let runTitle = session.runTitle {
-				Label(runTitle, systemImage: "play.fill")
-					.labelStyle(.titleAndIcon)
-					.scaledFont(.caption)
-					.fontWeight(isActive ? .semibold : .regular)
-			}
-			else {
-				Text("Terminal \(session.tabIndex)")
-					.scaledFont(.caption)
-					.fontWeight(isActive ? .semibold : .regular)
-			}
-
-			if totalCount > 1 {
-				Button(action: { onKillTab(session.id) }) {
-					Image(systemName: "xmark")
-						.scaledFont(size: 8)
-						.padding(4)
-						.contentShape(Rectangle())
-				}
-				.buttonStyle(.borderless)
-			}
-		}
-		.padding(.horizontal, 10)
-		.padding(.vertical, 6)
-		.background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
-		.cornerRadius(6)
-		.contentShape(Rectangle())
-		.onTapGesture {
-			onSelectTab(session.id)
-		}
-		.liveReorderable(
-			id: session.id,
-			isEnabled: totalCount > 1,
-			draggedId: $draggedTabId,
-			onMove: { dragged, target in
-				store.send(.moveTab(sessionId: dragged, ontoSessionId: target))
-			}
-		)
-	}
-
-	// MARK: - Error View
-
-	private func terminalErrorView(message: String, sessionId: UUID) -> some View {
-		VStack(spacing: 16) {
-			Image(systemName: "exclamationmark.triangle.fill")
-				.scaledFont(.largeTitle)
-				.foregroundColor(.red)
-			Text("Terminal failed to start")
-				.scaledFont(.headline)
-			Text(message)
-				.scaledFont(.caption)
-				.foregroundColor(.secondary)
-			Button("Retry") {
-				onRetry(sessionId)
-			}
-			.buttonStyle(.scaledBorderedProminent)
-		}
-		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.background(Color(NSColor.textBackgroundColor))
 	}
 }

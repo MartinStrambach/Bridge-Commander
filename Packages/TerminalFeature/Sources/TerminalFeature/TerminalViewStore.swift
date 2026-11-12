@@ -8,6 +8,40 @@ import SwiftTerm
 public final class TerminalViewStore {
 	private var views: [UUID: ClaudeAwareTerminalView] = [:]
 
+	/// Each pane's process delegate, which `LocalProcessTerminalView` holds only weakly. Kept here,
+	/// for as long as the pane, rather than by the view that shows it: a pane moves between the
+	/// containers of a split panel, and those come and go with the split.
+	@ObservationIgnored
+	private var processDelegates: [UUID: TerminalProcessDelegate] = [:]
+
+	/// The terminals on screen, left to right, as the first slot's container last heard it. The
+	/// one copy every container goes by — see `TerminalContainerRepresentable.updateNSView`.
+	/// Not observed, like the containers below: both are written from `updateNSView`, and an
+	/// observed write there makes SwiftUI update the same views again, without end.
+	@ObservationIgnored
+	var shownSessionIds: [UUID] = []
+	@ObservationIgnored
+	private var slotContainers: [Int: WeakContainer] = [:]
+
+	private struct WeakContainer {
+		weak var view: NSView?
+	}
+
+	func register(container: NSView, slot: Int) {
+		slotContainers[slot] = WeakContainer(view: container)
+	}
+
+	/// Forgets a container SwiftUI dropped, unless the slot has a newer one already.
+	func unregister(container: NSView, slot: Int) {
+		if slotContainers[slot]?.view === container {
+			slotContainers[slot] = nil
+		}
+	}
+
+	func container(forSlot slot: Int) -> NSView? {
+		slotContainers[slot]?.view
+	}
+
 	private let shellExecutable: String
 	private let shellArguments: [String]
 	private let additionalEnvironment: @MainActor (TerminalSession) -> [String]
@@ -31,8 +65,8 @@ public final class TerminalViewStore {
 	}
 
 	/// Returns the existing terminal view for a session, or creates and starts a new one.
-	/// The caller is responsible for creating `processDelegate` and keeping a strong reference
-	/// to it (e.g. in an NSViewRepresentable Coordinator).
+	/// - Parameter processDelegate: Told when the shell exits. Kept by the store for as long as the
+	///   pane; `nil` for one that reports the exit as a `.failed` status through `onStatusChange`.
 	/// - Parameter ansiPalette: The 16 ANSI colors to install, or `nil` to keep SwiftTerm's
 	///   default palette — which is Terminal.app's own, so an imported profile that defines no
 	///   ANSI colors renders the same way Terminal renders it.
@@ -49,7 +83,7 @@ public final class TerminalViewStore {
 		cursorColor: NSColor? = nil,
 		selectionColor: NSColor? = nil,
 		statusSource: ClaudeStatusSource = .progressAndScreen,
-		processDelegate: TerminalProcessDelegate,
+		processDelegate: TerminalProcessDelegate? = nil,
 		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
 		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
 		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
@@ -92,6 +126,11 @@ public final class TerminalViewStore {
 		}
 		terminalView.terminal.changeHistorySize(3000)
 
+		let sessionId = session.id
+		let processDelegate = processDelegate ?? TerminalProcessDelegate(
+			onFailed: { message in onStatusChange(sessionId, .failed(message)) }
+		)
+		processDelegates[sessionId] = processDelegate
 		terminalView.processDelegate = processDelegate
 		terminalView.pendingStartupCommand = session.commandToType
 
@@ -130,6 +169,12 @@ public final class TerminalViewStore {
 		}
 	}
 
+	/// Where the session's shell is now, or `nil` when it has no pane or its shell has exited.
+	/// Asks the kernel only, unlike `paneSnapshots()`, which also reads Claude's records from disk.
+	public func currentDirectory(sessionId: UUID) -> String? {
+		views[sessionId]?.currentDirectory
+	}
+
 	/// Types Ctrl-C into the session, stopping what runs in its foreground the way the user would.
 	public func interrupt(sessionId: UUID) {
 		views[sessionId]?.send(txt: "\u{03}")
@@ -143,6 +188,7 @@ public final class TerminalViewStore {
 			view.removeFromSuperview()
 		}
 		views.removeValue(forKey: sessionId)
+		processDelegates.removeValue(forKey: sessionId)
 	}
 
 	/// Kills every session that is not in `sessionIds`.

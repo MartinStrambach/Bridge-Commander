@@ -19,8 +19,15 @@ struct SavedTerminalTab: Codable, Equatable, Sendable {
 	var tabIndex: Int
 	/// The tab the repository was showing (`lastActiveSessionByRepo`).
 	var isRepositoryCurrentTab: Bool
-	/// The tab on screen; no tab has it when the panel was closed.
+	/// The tab with the keyboard; no tab has it when the panel was closed.
 	var isOnScreen: Bool
+	/// The pane of the split the tab belonged to, from the left, when the panel showed several
+	/// side by side. Nil for a tab that was in none, and in a file written before the panel
+	/// could split.
+	var paneIndex: Int?
+	/// Whether the tab was the one its pane showed. Nil in a file written before panes had tabs
+	/// of their own, where a tab with a `paneIndex` is the one its pane showed.
+	var isPaneCurrentTab: Bool?
 }
 
 /// Every open tab, in tab-bar order.
@@ -40,17 +47,23 @@ struct SavedTerminalTabs: Codable, Equatable, Sendable {
 		layout: TerminalLayoutReducer.State?,
 		panes: [UUID: TerminalPaneSnapshot]
 	) {
+		let paneTabIds = layout.map { layout in
+			layout.splitSessionIds.isEmpty ? [] : TerminalTabs(sessions: sessions, focus: layout.focus).paneTabIds
+		} ?? []
 		tabs = sessions
 			.filter { $0.status.isLive && !$0.isRunTab }
 			.map { session in
-				SavedTerminalTab(
+				let paneIndex = paneTabIds.firstIndex { $0.contains(session.id) }
+				return SavedTerminalTab(
 					repositoryPath: session.repositoryPath,
 					directory: panes[session.id]?.directory ?? session.startingDirectory,
 					startupCommand: session.startupCommand,
 					claudeSessionId: panes[session.id].map(\.claudeSessionId) ?? session.resumedClaudeSessionId,
 					tabIndex: session.tabIndex,
 					isRepositoryCurrentTab: layout?.lastActiveSessionByRepo[session.repositoryPath] == session.id,
-					isOnScreen: layout?.activeSessionId == session.id
+					isOnScreen: layout?.activeSessionId == session.id,
+					paneIndex: paneIndex,
+					isPaneCurrentTab: paneIndex.map { _ in layout?.splitSessionIds.contains(session.id) ?? false }
 				)
 			}
 	}

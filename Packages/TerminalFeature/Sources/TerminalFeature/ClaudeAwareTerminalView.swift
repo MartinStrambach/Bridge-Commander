@@ -220,6 +220,16 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 
 	// MARK: - Focus
 
+	/// Called when the pane is clicked, before the click is handled. A split panel shows several
+	/// panes, and the one clicked becomes the active one. A click is the hook because SwiftTerm's
+	/// `becomeFirstResponder` is `public`, not `open`.
+	public var onMouseDown: (() -> Void)?
+
+	override public func mouseDown(with event: NSEvent) {
+		onMouseDown?()
+		super.mouseDown(with: event)
+	}
+
 	/// Set when the pane was asked to take keyboard focus before it had a window to take it in.
 	private var wantsFocusOnceInWindow = false
 

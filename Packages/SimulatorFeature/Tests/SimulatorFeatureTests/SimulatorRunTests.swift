@@ -269,6 +269,7 @@ struct SimulatorPaneRunTests {
 		initial.selectedSchemeName = "Widgets"
 		initial.devices = [Self.device]
 		initial.selectedDeviceId = "A"
+		initial.repositoryPath = "/repo"
 		let stored = LockIsolated<[String: String]>([:])
 		let store = TestStore(initialState: initial) {
 			SimulatorPaneReducer()
@@ -280,7 +281,7 @@ struct SimulatorPaneRunTests {
 		}
 
 		await store.send(.runButtonTapped)
-		await store.receive(.delegate(.runRequested(command: "run /repo/App.xcworkspace Widgets A", title: "Widgets")))
+		await store.receive(.delegate(.runRequested(command: "run /repo/App.xcworkspace Widgets A", title: "Widgets", repositoryPath: "/repo")))
 		#expect(stored.value == ["App.xcworkspace": "Widgets"])
 	}
 
