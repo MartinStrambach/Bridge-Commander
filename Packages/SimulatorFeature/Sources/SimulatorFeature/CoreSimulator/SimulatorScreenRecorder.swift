@@ -50,6 +50,11 @@ public final class SimulatorScreenRecorder: @unchecked Sendable {
 			ContinuousClock.now - started
 		}
 
+		/// simctl said the recording runs.
+		var hasStarted: Bool {
+			output.withLock { $0.contains("Recording started") }
+		}
+
 		/// What simctl said, without its "Note: No display specified…" chatter.
 		var message: String {
 			output.withLock { $0 }
@@ -85,18 +90,26 @@ public final class SimulatorScreenRecorder: @unchecked Sendable {
 	public func recordingDeviceIdChanges() -> AsyncStream<Set<String>> {
 		let (stream, continuation) = AsyncStream<Set<String>>.makeStream(bufferingPolicy: .bufferingNewest(1))
 		let id = UUID()
-		changes.withLock { $0[id] = continuation }
 		continuation.onTermination = { [weak self] _ in
 			self?.changes.withLock { $0[id] = nil }
 		}
-		continuation.yield(recordingDeviceIds)
+		state.withLock { state in
+			changes.withLock { $0[id] = continuation }
+			continuation.yield(Set(state.active.keys))
+		}
 		return stream
 	}
 
+	/// Yields the current set to every subscriber. The set is read and yielded under the `state`
+	/// lock (a yield does not block): read outside it, a start and a stop on two threads could
+	/// yield their sets in the opposite order, and the stream keeps only the newest — a stopped
+	/// recording would stay on the pane's record button.
 	private func publishChange() {
-		let ids = recordingDeviceIds
-		for continuation in changes.withLock({ Array($0.values) }) {
-			continuation.yield(ids)
+		state.withLock { state in
+			let ids = Set(state.active.keys)
+			for continuation in changes.withLock({ Array($0.values) }) {
+				continuation.yield(ids)
+			}
 		}
 	}
 
@@ -157,7 +170,7 @@ public final class SimulatorScreenRecorder: @unchecked Sendable {
 		// simctl takes a moment to find the display and set up the writer.
 		let clock = ContinuousClock()
 		let deadline = clock.now + .seconds(10)
-		while !active.output.withLock({ $0.contains("Recording started") }) {
+		while !active.hasStarted {
 			guard process.isRunning else {
 				remove(active, udid: udid)
 				throw SimulatorError.recordingFailed(active.message.isEmpty ? "simctl quit without recording" : active.message)
@@ -245,11 +258,16 @@ public final class SimulatorScreenRecorder: @unchecked Sendable {
 	}
 
 	/// simctl quit: on its own (the device shut down) unless `stop` already took the recording.
+	/// Before "Recording started" it is `start` that fails, so nothing is kept for a `stop` to
+	/// report in place of "not recording".
 	private func processExited(udid: String, active: Active) {
 		guard remove(active, udid: udid) else {
 			return
 		}
 		active.limitTask.withLock { $0?.cancel() }
+		guard active.hasStarted else {
+			return
+		}
 		let detail = active.message.isEmpty ? "" : " (\(active.message))"
 		let result = Self.result(of: active, endedEarly: "simctl stopped recording, probably because the device shut down\(detail)")
 		state.withLock { $0.ended[udid] = result }

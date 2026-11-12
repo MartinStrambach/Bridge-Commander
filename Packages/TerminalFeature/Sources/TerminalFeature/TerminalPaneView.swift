@@ -324,7 +324,7 @@ public final class TerminalPaneView: LocalProcessTerminalView {
 		guard
 			let text = copyDecider.textToCopy(
 				selectionIsActive: selectedText != nil,
-				selectedText: selectedText ?? ""
+				selectedText: ClaudeQuoteGutter.strip(selectedText ?? "")
 			)
 		else {
 			return
@@ -332,6 +332,19 @@ public final class TerminalPaneView: LocalProcessTerminalView {
 
 		selectionPasteboard.clearContents()
 		selectionPasteboard.setString(text, forType: .string)
+	}
+
+	/// ⌘C. SwiftTerm's own copies the selected cells as they are; this drops Claude Code's quote
+	/// gutter from them first (`ClaudeQuoteGutter`).
+	override public func copy(_ sender: Any) {
+		// `nil` while no selection is active.
+		guard let selectedText = getSelection() else {
+			return
+		}
+
+		let pasteboard = NSPasteboard.general
+		pasteboard.clearContents()
+		pasteboard.setString(ClaudeQuoteGutter.strip(selectedText), forType: .string)
 	}
 
 	/// A command to type into the shell, held until the shell first writes something.

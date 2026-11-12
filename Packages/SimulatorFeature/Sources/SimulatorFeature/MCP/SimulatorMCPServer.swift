@@ -27,6 +27,10 @@ public final class SimulatorMCPServer: @unchecked Sendable {
 	public static let sessionEnvironmentVariable = "BC_TERMINAL_SESSION_ID"
 
 	private struct State {
+		/// Set by the one caller of `startIfNeeded` that starts the server, under the lock, before
+		/// the listener exists: `listener` is only stored once `start` has made it, so it cannot
+		/// tell a concurrent caller that one is on its way.
+		var isStarted = false
 		var listener: NWListener?
 		var port: UInt16?
 		var subscribers: [UUID: AsyncStream<SimulatorActivity>.Continuation] = [:]
@@ -73,10 +77,11 @@ public final class SimulatorMCPServer: @unchecked Sendable {
 
 	public func startIfNeeded() {
 		let needsStart = state.withLock { state in
-			guard state.listener == nil else {
+			guard !state.isStarted else {
 				return false
 			}
 			// Claimed before the listener exists so concurrent callers start only one.
+			state.isStarted = true
 			state.port = Self.preferredPort
 			return true
 		}
@@ -327,6 +332,30 @@ private struct LiveSimulatorToolActions: SimulatorToolActions {
 
 	func setLocation(device: SimulatorDevice, _ command: SimulatorLocationCommand) async throws {
 		try await host.setLocation(udid: device.id, command)
+	}
+
+	func setUISettings(device: SimulatorDevice, _ settings: SimulatorUISettings) async throws {
+		try await host.setUISettings(udid: device.id, settings)
+	}
+
+	func setStatusBar(device: SimulatorDevice, _ command: SimulatorStatusBarCommand) async throws {
+		try await host.setStatusBar(udid: device.id, command)
+	}
+
+	func erase(device: SimulatorDevice) async throws -> Bool {
+		try await host.erase(udid: device.id)
+	}
+
+	func launchApp(device: SimulatorDevice, _ request: SimulatorAppLaunchRequest) async throws -> SimulatorAppLaunch {
+		try await SimulatorAppLauncher.shared.launch(udid: device.id, deviceName: device.name, request)
+	}
+
+	func terminateApp(device: SimulatorDevice, bundleId: String) async throws -> URL? {
+		try await SimulatorAppLauncher.shared.terminate(udid: device.id, bundleId: bundleId)
+	}
+
+	func openURL(device: SimulatorDevice, _ url: String) async throws {
+		try await host.openURL(udid: device.id, url)
 	}
 
 	func startRecording(device: SimulatorDevice, path: String?) async throws -> URL {

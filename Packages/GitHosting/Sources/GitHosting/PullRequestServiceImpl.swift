@@ -13,6 +13,10 @@ public struct PullRequestClient: Sendable {
 	/// The remote's open PRs/MRs, those from forks included, most recently updated
 	/// first. Empty for a host that is neither github.com nor gitlab.com.
 	public var listOpen: @Sendable (_ remote: GitRemote) async throws -> [OpenPullRequest]
+	/// The remote's open PRs/MRs the query finds on the host, beyond the ones `listOpen` returns:
+	/// the one it names by number or link, those from the branch it names, then those whose title
+	/// or description matches. Empty for a host that is neither github.com nor gitlab.com.
+	public var searchOpen: @Sendable (_ remote: GitRemote, _ query: OpenPullRequestQuery) async throws -> [OpenPullRequest]
 }
 
 extension PullRequestClient: DependencyKey {
@@ -31,6 +35,14 @@ extension PullRequestClient: DependencyKey {
 				unless: isMissingToken
 			) {
 				try await listOpen(remote: remote)
+			}
+		},
+		searchOpen: { remote, query in
+			try await ActivityLog.shared.recordingErrors(
+				"Search for \"\(query.filter)\" in open pull requests of \(remote.host)/\(remote.projectPath)",
+				unless: isMissingToken
+			) {
+				try await searchOpen(remote: remote, query: query)
 			}
 		}
 	)
@@ -87,6 +99,32 @@ extension PullRequestClient: DependencyKey {
 			var token = ""
 			return try await GitLabService.fetchOpenMergeRequests(
 				projectPath: remote.projectPath,
+				token: token.trimmingCharacters(in: .whitespacesAndNewlines)
+			)
+
+		default:
+			return []
+		}
+	}
+
+	private static func searchOpen(remote: GitRemote, query: OpenPullRequestQuery) async throws -> [OpenPullRequest] {
+		switch remote.host.lowercased() {
+		case "github.com":
+			@Shared(.githubToken)
+			var token = ""
+			return try await GitHubService.searchOpenPullRequests(
+				owner: remote.owner,
+				repo: remote.repo,
+				query: query,
+				token: token.trimmingCharacters(in: .whitespacesAndNewlines)
+			)
+
+		case "gitlab.com":
+			@Shared(.gitlabToken)
+			var token = ""
+			return try await GitLabService.searchOpenMergeRequests(
+				projectPath: remote.projectPath,
+				query: query,
 				token: token.trimmingCharacters(in: .whitespacesAndNewlines)
 			)
 

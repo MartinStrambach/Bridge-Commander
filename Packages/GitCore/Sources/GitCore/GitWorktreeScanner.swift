@@ -40,7 +40,10 @@ public nonisolated enum GitWorktreeScanner {
 			// Merge state is deliberately not probed here: each row resolves it from its own
 			// status fetch (see RepositoryRowReducer.fetchBranchInfo), so doing it per worktree
 			// during the scan was a filesystem hit nothing ever read.
+			// A rebase detaches HEAD until it finishes; the row stays on the branch being rebased,
+			// as `GitStatusDetector.getStatus` reports it.
 			let branchName = extractBranch(from: trimmed)
+				?? GitMergeDetector.branchBeingRebased(at: worktreePath)
 
 			let repo = ScannedRepository(
 				path: worktreePath,

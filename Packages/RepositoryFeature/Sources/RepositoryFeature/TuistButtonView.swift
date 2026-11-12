@@ -9,12 +9,6 @@ struct TuistButtonView: View {
 	@Bindable
 	var store: StoreOf<TuistButtonReducer>
 
-	/// Read here and applied to the menu's label as a plain font: a `.borderlessButton` menu's
-	/// label is flattened by AppKit, which drops `scaledFont`'s environment lookup and keeps only
-	/// a font set directly on the `Text`.
-	@Environment(\.uiFontScale)
-	private var uiFontScale
-
 	var body: some View {
 		Group {
 			if let runningAction = store.runningAction {
@@ -25,13 +19,9 @@ struct TuistButtonView: View {
 				)
 			}
 			else {
-				Menu {
-					TuistMenuItems(store: store)
-				} label: {
-					Text("Tuist")
-						.font(.system(size: 12 * uiFontScale))
+				PopUpMenuButton("Tuist") {
+					store.menuEntries
 				}
-				.menuStyle(.borderlessButton)
 			}
 		}
 		.fixedSize()
@@ -88,116 +78,72 @@ struct TuistButtonView: View {
 	}
 }
 
-/// The Tuist menu as a submenu of another menu (the repository row's "⋯" menu). While a command
-/// runs it is a disabled entry naming it instead.
-///
-/// A menu entry cannot present anything, so whoever shows this must also apply
-/// `tuistPresentations(store:)` to a view outside the menu.
-struct TuistSubmenu: View {
-	let store: StoreOf<TuistButtonReducer>
-
-	var body: some View {
-		if let runningAction = store.runningAction {
-			Button {} label: {
-				Label("Tuist: \(TuistButtonView.progressText(for: runningAction))", systemImage: "hammer")
-			}
-			.disabled(true)
+extension Store where State == TuistButtonReducer.State, Action == TuistButtonReducer.Action {
+	/// The Tuist menu as an entry of another menu (the repository row's "⋯" menu): a submenu, or
+	/// while a command runs a disabled entry naming it.
+	///
+	/// A menu entry cannot present anything, so whoever shows this must also apply
+	/// `tuistPresentations(store:)` to a view outside the menu.
+	var submenuEntry: PopUpMenuEntry {
+		if let runningAction = self.runningAction {
+			.action(PopUpMenuAction(
+				"Tuist: \(TuistButtonView.progressText(for: runningAction))",
+				systemImage: "hammer",
+				isEnabled: false
+			) {})
 		}
 		else {
-			Menu {
-				TuistMenuItems(store: store)
-			} label: {
-				Label("Tuist", systemImage: "hammer")
+			.submenu("Tuist", systemImage: "hammer") {
+				self.menuEntries
 			}
 		}
 	}
 }
 
-/// The menu's entries, shared by `TuistButtonView` and `TuistSubmenu`.
-private struct TuistMenuItems: View {
-	let store: StoreOf<TuistButtonReducer>
-
-	var body: some View {
-		Group {
-			Button {
-				store.send(.generateTapped)
-			} label: {
-				Label("Generate", systemImage: "hammer")
+/// The menu's entries, shared by `TuistButtonView` and `submenuEntry`.
+private extension Store where State == TuistButtonReducer.State, Action == TuistButtonReducer.Action {
+	@PopUpMenuBuilder
+	var menuEntries: [PopUpMenuEntry] {
+		PopUpMenuAction("Generate", systemImage: "hammer") {
+			self.send(.generateTapped)
+		}
+		PopUpMenuAction("Generate (No Cache)", systemImage: "hammer.circle") {
+			self.send(.generateWithoutCacheTapped)
+		}
+		PopUpMenuAction("Install", systemImage: "arrow.down.circle") {
+			self.send(.installTapped)
+		}
+		PopUpMenuAction("Install (Update)", systemImage: "arrow.down.circle.dotted") {
+			self.send(.installUpdateTapped)
+		}
+		PopUpMenuAction("Cache", systemImage: "tray") {
+			self.send(.cacheTapped)
+		}
+		PopUpMenuAction("Install, Cache & Generate", systemImage: "wand.and.stars") {
+			self.send(.installCacheAndGenerateTapped)
+		}
+		PopUpMenuAction("Edit", systemImage: "pencil") {
+			self.send(.editTapped)
+		}
+		PopUpMenuAction("Inspect", systemImage: "magnifyingglass") {
+			self.send(.inspectDependenciesTapped)
+		}
+		PopUpMenuEntry.submenu("Clean", systemImage: "paintbrush") {
+			PopUpMenuAction("Everything", systemImage: "paintbrush") {
+				self.send(.cleanTapped(nil))
 			}
-
-			Button {
-				store.send(.generateWithoutCacheTapped)
-			} label: {
-				Label("Generate (No Cache)", systemImage: "hammer.circle")
-			}
-
-			Button {
-				store.send(.installTapped)
-			} label: {
-				Label("Install", systemImage: "arrow.down.circle")
-			}
-
-			Button {
-				store.send(.installUpdateTapped)
-			} label: {
-				Label("Install (Update)", systemImage: "arrow.down.circle.dotted")
-			}
-
-			Button {
-				store.send(.cacheTapped)
-			} label: {
-				Label("Cache", systemImage: "tray")
-			}
-
-			Button {
-				store.send(.installCacheAndGenerateTapped)
-			} label: {
-				Label("Install, Cache & Generate", systemImage: "wand.and.stars")
-			}
-
-			Button {
-				store.send(.editTapped)
-			} label: {
-				Label("Edit", systemImage: "pencil")
-			}
-
-			Button {
-				store.send(.inspectDependenciesTapped)
-			} label: {
-				Label("Inspect", systemImage: "magnifyingglass")
-			}
-
-			Menu {
-				Group {
-					Button {
-						store.send(.cleanTapped(nil))
-					} label: {
-						Label("Everything", systemImage: "paintbrush")
-					}
-
-					Divider()
-
-					ForEach(TuistCleanCategory.allCases, id: \.self) { category in
-						Button {
-							store.send(.cleanTapped(category))
-						} label: {
-							Label(category.displayName, systemImage: category.systemImage)
-						}
-					}
+			PopUpMenuEntry.divider
+			for category in TuistCleanCategory.allCases {
+				PopUpMenuAction(category.displayName, systemImage: category.systemImage) {
+					self.send(.cleanTapped(category))
 				}
-				// A submenu's content does not inherit the style applied around it.
-				.labelStyle(.titleAndIcon)
-			} label: {
-				Label("Clean", systemImage: "paintbrush")
 			}
 		}
-		// macOS 27 no longer draws a menu item's icon for a bare `Label`; ask for it explicitly.
-		.labelStyle(.titleAndIcon)
 	}
 }
 
 extension View {
-	/// The Tuist menu's error sheet. Applied by `TuistButtonView` itself; a `TuistSubmenu` needs
+	/// The Tuist menu's error sheet. Applied by `TuistButtonView` itself; a `submenuEntry` needs
 	/// it on a view outside the menu it sits in.
 	func tuistPresentations(store: StoreOf<TuistButtonReducer>) -> some View {
 		modifier(TuistPresentations(store: store))

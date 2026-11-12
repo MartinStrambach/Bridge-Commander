@@ -195,14 +195,14 @@ struct TerminalLayoutView: View {
 	}
 
 	private func sidebarGroupLabel(rootPath: String) -> some View {
-		Text(URL(fileURLWithPath: rootPath).lastPathComponent.uppercased())
-			.scaledFont(.caption2)
-			.fontWeight(.semibold)
+		Text(URL(fileURLWithPath: rootPath).lastPathComponent)
+			.scaledFont(.caption)
+			.fontWeight(.medium)
 			.foregroundColor(.secondary)
 			.frame(maxWidth: .infinity, alignment: .leading)
 			.padding(.horizontal, 8)
-			.padding(.top, 8)
-			.padding(.bottom, 2)
+			.padding(.top, 12)
+			.padding(.bottom, 4)
 	}
 
 	private func homeSessionRow(status: TerminalSessionStatus) -> some View {

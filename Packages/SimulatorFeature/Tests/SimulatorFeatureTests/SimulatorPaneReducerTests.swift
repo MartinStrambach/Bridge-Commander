@@ -29,7 +29,7 @@ struct SimulatorPaneReducerTests {
 
 		let shutdown = Self.device("A", state: .shutdown)
 		let booted = Self.device("B", state: .booted)
-		await store.send(.devicesLoaded([shutdown, booted], storedSelection: nil)) {
+		await store.send(.devicesLoaded([shutdown, booted], storedSelection: nil, repositoryPath: nil)) {
 			$0.devices = [shutdown, booted]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "B"
@@ -45,7 +45,7 @@ struct SimulatorPaneReducerTests {
 
 		let shutdown = Self.device("A", state: .shutdown)
 		let booted = Self.device("B", state: .booted)
-		await store.send(.devicesLoaded([shutdown, booted], storedSelection: "A")) {
+		await store.send(.devicesLoaded([shutdown, booted], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [shutdown, booted]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "A"
@@ -111,7 +111,7 @@ struct SimulatorPaneReducerTests {
 			$0.repositoryPath = "/repos/app"
 		}
 		await store.receive(.claudeCodeStatusChecked(true))
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", repositoryPath: "/repos/app")) {
 			$0.devices = [iPhone, iPad]
 			$0.hasLoadedDevices = true
 			$0.selectedDeviceId = "A"
@@ -123,7 +123,7 @@ struct SimulatorPaneReducerTests {
 			$0.selectedDeviceId = nil
 		}
 		await store.receive(.claudeCodeStatusChecked(true))
-		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B")) {
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", repositoryPath: "/repos/app-ipad")) {
 			$0.selectedDeviceId = "B"
 		}
 
@@ -181,6 +181,40 @@ struct SimulatorPaneReducerTests {
 		}
 	}
 
+	/// A Home press or a rotation is not a transition: its failure is reported without ending the
+	/// fold, boot or shutdown running meanwhile, whose spinner keeps the other controls hidden.
+	@Test
+	func aFailedButtonPressOrRotationLeavesARunningTransition() async {
+		struct PressFailure: LocalizedError {
+			var errorDescription: String? { "Unable to press" }
+		}
+		struct RotationFailure: LocalizedError {
+			var errorDescription: String? { "Unable to rotate" }
+		}
+
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		// A fold is running.
+		initial.transitioningDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].pressButton = { _, _ in throw PressFailure() }
+			$0[SimulatorClient.self].rotate = { _, _ in throw RotationFailure() }
+		}
+
+		await store.send(.hardwareButtonTapped(.home))
+		await store.receive(.featureFinished(nil, errorMessage: "Unable to press")) {
+			$0.errorMessage = "Unable to press"
+		}
+		await store.send(.rotateButtonTapped(clockwise: true))
+		await store.receive(.featureFinished(nil, errorMessage: "Unable to rotate")) {
+			$0.errorMessage = "Unable to rotate"
+		}
+		#expect(store.state.transitioningDeviceId == "A")
+	}
+
 	@Test
 	func rotatingReloadsTheDevicesSoThePaneTakesTheNewShape() async {
 		let booted = Self.device("A", state: .booted)
@@ -211,10 +245,58 @@ struct SimulatorPaneReducerTests {
 		}
 
 		await store.send(.rotateButtonTapped(clockwise: false))
-		await store.receive(.devicesLoaded([rotated], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([rotated], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [rotated]
 		}
 		#expect(turns.value == [false])
+	}
+
+	/// A rotation can take seconds; when it ends after the pane moved to another repository, its
+	/// device list carries the first repository's device and must not replace the one shown.
+	@Test
+	func aRotationFinishingAfterARepositorySwitchLeavesTheNewRepositorysDevice() async {
+		let iPhone = Self.device("A", state: .booted)
+		let iPad = Self.device("B", state: .booted)
+		let choices = ["/repos/app": "A", "/repos/app-ipad": "B"]
+		let (rotationGate, finishRotation) = AsyncStream<Void>.makeStream()
+		let clock = TestClock()
+
+		var initial = SimulatorPaneReducer.State()
+		initial.repositoryPath = "/repos/app"
+		initial.devices = [iPhone, iPad]
+		initial.selectedDeviceId = "A"
+		initial.hasLoadedDevices = true
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].rotate = { _, _ in
+				for await _ in rotationGate {
+					break
+				}
+				return SimulatorRotation(orientation: .landscapeLeft, interfaceRotation: .counterclockwise, interfaceFollowed: true)
+			}
+			$0[SimulatorClient.self].devices = { [iPhone, iPad] }
+			$0[SimulatorClient.self].selectedDeviceId = { path in path.flatMap { choices[$0] } }
+			$0[SimulatorClient.self].isClaudeCodeConnected = { true }
+			$0[SimulatorClient.self].prepareInput = { _ in }
+			$0[SimulatorClient.self].recordingDeviceIds = { .finished }
+			$0.continuousClock = clock
+		}
+
+		await store.send(.rotateButtonTapped(clockwise: false))
+		let iPadTask = await store.send(.task(repositoryPath: "/repos/app-ipad")) {
+			$0.repositoryPath = "/repos/app-ipad"
+			$0.selectedDeviceId = nil
+		}
+		await store.receive(.claudeCodeStatusChecked(true))
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "B", repositoryPath: "/repos/app-ipad")) {
+			$0.selectedDeviceId = "B"
+		}
+
+		finishRotation.yield()
+		await store.receive(.devicesLoaded([iPhone, iPad], storedSelection: "A", repositoryPath: "/repos/app"))
+		#expect(store.state.selectedDeviceId == "B")
+		await iPadTask.cancel()
 	}
 
 	/// The device turns but the app stays put: without a word the button would seem broken.
@@ -239,7 +321,7 @@ struct SimulatorPaneReducerTests {
 		}
 
 		await store.send(.rotateButtonTapped(clockwise: true))
-		await store.receive(.devicesLoaded([booted], storedSelection: "A"))
+		await store.receive(.devicesLoaded([booted], storedSelection: "A", repositoryPath: nil))
 		let notice = SimulatorPaneReducer.Notice(
 			icon: "rotate.right",
 			title: "Turned to landscape right",
@@ -293,7 +375,7 @@ struct SimulatorPaneReducerTests {
 		await store.send(.foldButtonTapped) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([open], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([open], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [open]
 		}
 		await store.receive(.transitionFinished(errorMessage: nil)) {
@@ -342,7 +424,7 @@ struct SimulatorPaneReducerTests {
 		await store.send(.foldSelected(.partiallyOpen)) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A")) {
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", repositoryPath: nil)) {
 			$0.devices = [partlyOpen]
 		}
 		await store.receive(.transitionFinished(errorMessage: nil)) {
@@ -354,7 +436,7 @@ struct SimulatorPaneReducerTests {
 		await store.send(.foldButtonTapped) {
 			$0.transitioningDeviceId = "A"
 		}
-		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A"))
+		await store.receive(.devicesLoaded([partlyOpen], storedSelection: "A", repositoryPath: nil))
 		await store.receive(.transitionFinished(errorMessage: nil)) {
 			$0.transitioningDeviceId = nil
 		}
@@ -548,6 +630,99 @@ struct SimulatorPaneReducerTests {
 			$0.notice = .init(icon: "location.fill", title: "Location: Prague")
 		}
 		#expect(locations.value == [.scenario("City Run"), .set(prague)])
+		await store.send(.noticeDismissed) {
+			$0.notice = nil
+		}
+	}
+
+	@Test
+	func appearanceAndStatusBarReportWhatTheyDid() async {
+		let settings = LockIsolated<[SimulatorUISettings]>([])
+		let statusBars = LockIsolated<[SimulatorStatusBarCommand]>([])
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].setUISettings = { _, value in settings.withValue { $0.append(value) } }
+			$0[SimulatorClient.self].setStatusBar = { _, command in statusBars.withValue { $0.append(command) } }
+			$0.continuousClock = TestClock()
+		}
+
+		await store.send(.appearanceSelected(.dark))
+		await store.receive(.featureFinished(.init(icon: "moon.fill", title: "Dark appearance"), errorMessage: nil)) {
+			$0.notice = .init(icon: "moon.fill", title: "Dark appearance")
+		}
+		await store.send(.statusBarSelected(.override(.clean)))
+		await store.receive(.featureFinished(.init(icon: "cellularbars", title: "Status bar overridden"), errorMessage: nil)) {
+			$0.notice = .init(icon: "cellularbars", title: "Status bar overridden")
+		}
+		#expect(settings.value == [SimulatorUISettings(appearance: .dark)])
+		#expect(statusBars.value == [.override(.clean)])
+		await store.send(.noticeDismissed) {
+			$0.notice = nil
+		}
+	}
+
+	@Test
+	func eraseAsksFirst() async {
+		let erased = LockIsolated<[String]>([])
+		var initial = SimulatorPaneReducer.State()
+		initial.devices = [Self.device("A", state: .booted)]
+		initial.selectedDeviceId = "A"
+		let store = TestStore(initialState: initial) {
+			SimulatorPaneReducer()
+		} withDependencies: {
+			$0[SimulatorClient.self].erase = { id in erased.withValue { $0.append(id) } }
+			$0.continuousClock = TestClock()
+		}
+		let name = initial.devices[0].name
+
+		await store.send(.eraseButtonTapped) {
+			$0.alert = AlertState {
+				TextState("Erase \(name)?")
+			} actions: {
+				ButtonState(role: .destructive, action: .confirmErase(deviceId: "A")) {
+					TextState("Erase")
+				}
+				ButtonState(role: .cancel) {
+					TextState("Cancel")
+				}
+			} message: {
+				TextState("All apps, their data and the device's settings are deleted. A booted device is shut down and booted again.")
+			}
+		}
+		await store.send(.alert(.dismiss)) {
+			$0.alert = nil
+		}
+		#expect(erased.value.isEmpty)
+
+		await store.send(.eraseButtonTapped) {
+			$0.alert = AlertState {
+				TextState("Erase \(name)?")
+			} actions: {
+				ButtonState(role: .destructive, action: .confirmErase(deviceId: "A")) {
+					TextState("Erase")
+				}
+				ButtonState(role: .cancel) {
+					TextState("Cancel")
+				}
+			} message: {
+				TextState("All apps, their data and the device's settings are deleted. A booted device is shut down and booted again.")
+			}
+		}
+		await store.send(.alert(.presented(.confirmErase(deviceId: "A")))) {
+			$0.alert = nil
+			$0.transitioningDeviceId = "A"
+		}
+		await store.receive(.transitionFinished(errorMessage: nil)) {
+			$0.transitioningDeviceId = nil
+		}
+		await store.receive(.featureFinished(.init(icon: "trash", title: "Erased \(name)"), errorMessage: nil)) {
+			$0.notice = .init(icon: "trash", title: "Erased \(name)")
+		}
+		#expect(erased.value == ["A"])
 		await store.send(.noticeDismissed) {
 			$0.notice = nil
 		}

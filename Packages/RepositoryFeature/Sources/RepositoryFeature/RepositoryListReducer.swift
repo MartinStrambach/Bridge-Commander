@@ -1089,6 +1089,10 @@ struct RepositoryListReducer {
 					runTitle: title,
 					tabIndex: tabIndex
 				)
+				// The tab on screen stays on screen: the run is followed in the simulator pane, and
+				// switching tabs took the user away from the Claude or shell they were typing in. Only
+				// a run tab being replaced while on screen hands the screen to its successor.
+				let replacesTabOnScreen = existing != nil && existing?.id == state.terminalLayout?.activeSessionId
 				if let existing, let position = state.terminalSessions.index(id: existing.id) {
 					state.terminalSessions.remove(id: existing.id)
 					state.terminalSessions.insert(session, at: position)
@@ -1097,7 +1101,9 @@ struct RepositoryListReducer {
 				else {
 					state.terminalSessions.append(session)
 				}
-				state.terminalLayout?.activate(session)
+				if replacesTabOnScreen || state.terminalLayout?.activeSessionId == nil {
+					state.terminalLayout?.activate(session)
+				}
 				return .none
 
 			case let .terminalLayout(.retryTab(sessionId)):
@@ -1214,6 +1220,7 @@ struct RepositoryListReducer {
 				// operation re-runs the row's status fetch, which then syncs back into this copy.
 				switch menuAction {
 				case .abortMergeButton(.abortMergeCompleted),
+				     .checkoutDefaultBranchButton(.checkoutAndPullCompleted),
 				     .checkoutDefaultBranchButton(.checkoutCompleted),
 				     .discardButton(.discardCompleted),
 				     .fetchButton(.fetchCompleted),

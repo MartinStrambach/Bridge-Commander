@@ -4,7 +4,7 @@ import ProcessExecution
 /// A scheme whose Run action launches an app — what the pane's Run button can build and start.
 public struct XcodeScheme: Equatable, Identifiable, Sendable {
 	public var name: String
-	/// The app the Run action launches, as it is named in the build products ("FlashScore.app");
+	/// The app the Run action launches, as it is named in the build products ("MyApp.app");
 	/// `nil` for a scheme Xcode makes up, which has no file to read it from — the run script then
 	/// takes the first app among the targets the scheme builds.
 	public var productName: String?

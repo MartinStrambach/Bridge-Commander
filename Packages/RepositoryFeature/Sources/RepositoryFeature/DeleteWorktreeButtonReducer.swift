@@ -25,6 +25,7 @@ struct DeleteWorktreeButtonReducer {
 
 	enum Action {
 		case showConfirmation
+		case derivedDataChecked(found: Bool)
 		case confirmationSheet(PresentationAction<DeleteWorktreeConfirmationReducer.Action>)
 		case errorAlert(PresentationAction<ErrorAlert>)
 		case removalWarningAlert(PresentationAction<RemovalWarningAlert>)
@@ -41,6 +42,15 @@ struct DeleteWorktreeButtonReducer {
 			switch action {
 			case .showConfirmation:
 				state.confirmationSheet = DeleteWorktreeConfirmationReducer.State(name: state.name)
+				guard state.deleteDerivedDataOnWorktreeDelete else {
+					return .none
+				}
+				return .run { [path = state.path] send in
+					await send(.derivedDataChecked(found: XcodeDerivedDataHelper.hasDerivedData(forWorktreePath: path)))
+				}
+
+			case let .derivedDataChecked(found):
+				state.confirmationSheet?.deletesDerivedData = found
 				return .none
 
 			case let .confirmationSheet(.presented(.confirmTapped(forceRemoval: force, deleteLocalBranch: deleteLocalBranch))):

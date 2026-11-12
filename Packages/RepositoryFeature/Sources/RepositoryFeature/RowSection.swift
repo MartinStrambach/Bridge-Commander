@@ -41,8 +41,8 @@ enum RowSection: Equatable {
 		}
 	}
 
-	/// The header's background — the tint the ticket state used to paint whole rows with, or a
-	/// neutral strip for the sections that never had one.
+	/// The header pill's fill — the tint the ticket state used to paint whole rows with, or a
+	/// neutral one for the sections that never had one.
 	var background: Color {
 		switch self {
 		case let .ticketState(section): section.background ?? Self.neutralBackground

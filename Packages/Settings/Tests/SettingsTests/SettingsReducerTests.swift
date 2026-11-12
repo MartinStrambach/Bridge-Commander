@@ -507,6 +507,101 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Token test cancellation
+
+	@Test("editing the GitHub token cancels a test still in flight for the old one")
+	func gitHubTokenEditCancelsTest() async {
+		let clock = TestClock()
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitHubToken = { _ in
+				try await clock.sleep(for: .seconds(1))
+				return "old-login"
+			}
+		}
+		await store.send(.testGitHubTokenButtonTapped) {
+			$0.githubTokenTest = .testing
+		}
+		await store.send(.setGitHubToken("ghp_new")) {
+			$0.$githubToken.withLock { $0 = "ghp_new" }
+			$0.githubTokenTest = .idle
+		}
+		// Had the old run survived, it would now deliver "authenticated as old-login" for the new token.
+		await clock.advance(by: .seconds(1))
+		#expect(store.state.githubTokenTest == .idle)
+	}
+
+	@Test("clearing the GitLab token cancels a test still in flight")
+	func gitLabTokenClearCancelsTest() async {
+		let clock = TestClock()
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitLabToken = { _ in
+				try await clock.sleep(for: .seconds(1))
+				return "old-user"
+			}
+		}
+		await store.send(.setGitLabToken("glpat-old")) {
+			$0.$gitlabToken.withLock { $0 = "glpat-old" }
+		}
+		await store.send(.testGitLabTokenButtonTapped) {
+			$0.gitlabTokenTest = .testing
+		}
+		await store.send(.clearGitLabToken) {
+			$0.$gitlabToken.withLock { $0 = "" }
+			$0.gitlabTokenTest = .idle
+		}
+		await clock.advance(by: .seconds(1))
+		#expect(store.state.gitlabTokenTest == .idle)
+	}
+
+	@Test("changing the YouTrack token, a group's URL, or clearing the token cancels a test in flight")
+	func youTrackEditsCancelTest() async {
+		let clock = TestClock()
+		var state = SettingsReducer.State()
+		state.alert = AlertState { TextState("Clear Token") }
+		let store = TestStore(initialState: state) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[YouTrackClient.self].verifyToken = { _, _ in
+				try await clock.sleep(for: .seconds(1))
+				return "jdoe"
+			}
+		}
+		seedYouTrack(urls: ["/repo": "https://org.youtrack.cloud"])
+
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.send(.setGroupYouTrackBaseURL(groupId: "/repo", value: "https://new.youtrack.cloud")) {
+			$0.$groupSettings.withLock { $0["/repo"] = RepoGroupSettings(youtrackBaseURL: "https://new.youtrack.cloud") }
+			$0.youtrackTokenTest = .idle
+		}
+		await clock.advance(by: .seconds(1))
+
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.send(.setYouTrackToken("perm:new")) {
+			$0.$youtrackAuthToken.withLock { $0 = "perm:new" }
+			$0.youtrackTokenTest = .idle
+		}
+		await clock.advance(by: .seconds(1))
+
+		await store.send(.testYouTrackTokenButtonTapped) {
+			$0.youtrackTokenTest = .testing
+		}
+		await store.send(.alert(.presented(.confirmClearToken))) {
+			$0.$youtrackAuthToken.withLock { $0 = "" }
+			$0.youtrackTokenTest = .idle
+			$0.alert = nil
+		}
+		await clock.advance(by: .seconds(1))
+		#expect(store.state.youtrackTokenTest == .idle)
+	}
+
 	// MARK: - Group default insertion
 
 	@Test("mutating an unknown group inserts a default RepoGroupSettings with only that field changed")
@@ -618,6 +713,118 @@ struct SettingsReducerTests {
 			$0.alert = nil
 		}
 		#expect(store.state.youtrackAuthToken == "keep-me")
+	}
+
+	// MARK: - DerivedData usage
+
+	@Test("measuring DerivedData shows each partial usage and ends when the scan does")
+	func measuresDerivedDataUsage() async {
+		let partial = DerivedDataUsage(
+			tallies: [.inUse: .init(folders: 1), .orphaned: .init(folders: 1)],
+			measuredFolders: 0,
+			totalFolders: 2
+		)
+		var complete = partial
+		complete.tallies[.inUse]?.bytes = 2048
+		complete.tallies[.orphaned]?.bytes = 1024
+		complete.measuredFolders = 2
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: { [partial, complete] in
+			$0[DerivedDataUsageClient.self].measure = {
+				AsyncStream { continuation in
+					continuation.yield(partial)
+					continuation.yield(complete)
+					continuation.finish()
+				}
+			}
+		}
+		await store.send(.measureDerivedDataButtonTapped) {
+			$0.isMeasuringDerivedData = true
+		}
+		await store.receive(\.derivedDataUsageUpdated) {
+			$0.derivedDataUsage = partial
+		}
+		await store.receive(\.derivedDataUsageUpdated) {
+			$0.derivedDataUsage = complete
+		}
+		await store.receive(\.derivedDataMeasurementFinished) {
+			$0.isMeasuringDerivedData = false
+		}
+	}
+
+	@Test("deleting orphaned DerivedData asks first, then deletes and subtracts the deleted folders")
+	func deletesOrphanedDerivedData() async {
+		let measured = DerivedDataUsage(
+			tallies: [.inUse: .init(folders: 1, bytes: 4096), .orphaned: .init(folders: 2, bytes: 2048)],
+			measuredFolders: 3,
+			totalFolders: 3,
+			folders: [
+				"App": .init(kind: .inUse, bytes: 4096),
+				"GoneA": .init(kind: .orphaned, bytes: 1024),
+				"GoneB": .init(kind: .orphaned, bytes: 1024),
+			]
+		)
+		var initialState = SettingsReducer.State()
+		initialState.derivedDataUsage = measured
+		let deletedKinds = LockIsolated<[DerivedDataUsage.Kind]>([])
+		let store = TestStore(initialState: initialState) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[DerivedDataUsageClient.self].deleteFolders = { kind in
+				deletedKinds.withValue { $0.append(kind) }
+				return DerivedDataDeletion(deletedFolders: ["GoneA", "GoneB"])
+			}
+		}
+
+		await store.send(.deleteDerivedDataButtonTapped(.orphaned)) {
+			$0.alert = SettingsReducer.deleteDerivedDataAlert(kind: .orphaned, tally: .init(folders: 2, bytes: 2048))
+		}
+		await store.send(.alert(.presented(.confirmDeleteDerivedData(.orphaned)))) {
+			$0.alert = nil
+			$0.deletingDerivedDataKind = .orphaned
+		}
+		await store.receive(\.derivedDataDeletionFinished) {
+			$0.deletingDerivedDataKind = nil
+			$0.derivedDataUsage = DerivedDataUsage(
+				tallies: [.inUse: .init(folders: 1, bytes: 4096), .orphaned: .init()],
+				measuredFolders: 1,
+				totalFolders: 1,
+				folders: ["App": .init(kind: .inUse, bytes: 4096)]
+			)
+		}
+		#expect(deletedKinds.value == [.orphaned])
+	}
+
+	@Test("folders that could not be deleted are named in an alert")
+	func reportsDerivedDataDeletionFailures() async {
+		var initialState = SettingsReducer.State()
+		initialState.deletingDerivedDataKind = .leftover
+		let store = TestStore(initialState: initialState) {
+			SettingsReducer()
+		}
+		await store.send(.derivedDataDeletionFinished(DerivedDataDeletion(deletedFolders: ["B"], failures: ["“A” could not be removed."]))) {
+			$0.deletingDerivedDataKind = nil
+			$0.alert = AlertState {
+				TextState("Some Folders Were Not Deleted")
+			} actions: {
+				ButtonState(role: .cancel) {
+					TextState("OK")
+				}
+			} message: {
+				TextState("“A” could not be removed.")
+			}
+		}
+	}
+
+	@Test("a kind with no folders offers nothing to delete")
+	func ignoresDeletingAnEmptyKind() async {
+		var initialState = SettingsReducer.State()
+		initialState.derivedDataUsage = DerivedDataUsage(tallies: [.inUse: .init(folders: 1)], measuredFolders: 1, totalFolders: 1)
+		let store = TestStore(initialState: initialState) {
+			SettingsReducer()
+		}
+		await store.send(.deleteDerivedDataButtonTapped(.leftover))
 	}
 
 	// MARK: - Representative scalar setters

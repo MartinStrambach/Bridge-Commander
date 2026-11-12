@@ -4,7 +4,7 @@ import Foundation
 /// The MCP tools: their schemas, and what a call does.
 enum SimulatorMCPTools {
 	static let definitions: [JSONValue] = inputDefinitions + SimulatorElementTools.definitions + [gestureDefinition, SimulatorBatchTool.definition]
-		+ SimulatorFeatureTools.definitions
+		+ SimulatorFeatureTools.definitions + SimulatorDeviceTools.definitions + SimulatorAppTools.definitions
 
 	private static let inputDefinitions: [JSONValue] = [
 		tool(
@@ -405,6 +405,16 @@ enum SimulatorMCPTools {
 
 			case _ where SimulatorFeatureTools.names.contains(name):
 				return text(try await SimulatorFeatureTools.call(name: name, arguments: arguments, actions: actions) {
+					try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				})
+
+			case _ where SimulatorDeviceTools.names.contains(name):
+				return text(try await SimulatorDeviceTools.call(name: name, arguments: arguments, actions: actions) {
+					try await device(for: arguments, actions: actions, reportActivity: reportActivity)
+				})
+
+			case _ where SimulatorAppTools.names.contains(name):
+				return text(try await SimulatorAppTools.call(name: name, arguments: arguments, actions: actions) {
 					try await device(for: arguments, actions: actions, reportActivity: reportActivity)
 				})
 

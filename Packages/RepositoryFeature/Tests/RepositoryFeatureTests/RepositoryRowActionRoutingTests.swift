@@ -203,12 +203,14 @@ struct RepositoryRowActionRoutingTests {
 	/// Each finished operation the git menu can report, success or failure alike — a failed pull
 	/// or merge can still have moved the branch or left conflicts.
 	enum Completion: String, CaseIterable, Sendable {
-		case abortMerge, checkoutDefaultBranch, discard, fetch, mergeMaster, pull, push
+		case abortMerge, checkoutAndPullDefaultBranch, checkoutDefaultBranch, discard, fetch, mergeMaster, pull, push
 		case stash, stashApply, stashClear, stashPop
 
 		var action: GitActionsMenuReducer.Action {
 			switch self {
 			case .abortMerge: .abortMergeButton(.abortMergeCompleted(success: true, error: nil))
+			case .checkoutAndPullDefaultBranch:
+				.checkoutDefaultBranchButton(.checkoutAndPullCompleted(result: .failure(.checkoutFailed("dirty tree"))))
 			case .checkoutDefaultBranch: .checkoutDefaultBranchButton(.checkoutCompleted(result: .success("master")))
 			case .discard: .discardButton(.discardCompleted(success: true, error: nil))
 			case .fetch: .fetchButton(.fetchCompleted(result: nil, error: nil))

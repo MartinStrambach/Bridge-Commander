@@ -41,6 +41,7 @@ struct BridgeCommanderApp: App {
 		WindowGroup(id: "main") {
 			RootRepositoryView()
 				.appUIFontSize()
+				.tracksMainWindow()
 		}
 		.windowStyle(.hiddenTitleBar)
 		.windowResizability(.contentSize)
@@ -51,6 +52,10 @@ struct BridgeCommanderApp: App {
 		}
 		.restorationBehavior(.disabled)
 		.commands {
+			// One main window at most: a second would build a second set of stores.
+			CommandGroup(replacing: .newItem) {
+				NewMainWindowCommand()
+			}
 			CommandGroup(after: .appInfo) {
 				CheckForUpdatesView(updater: updaterController.updater)
 			}

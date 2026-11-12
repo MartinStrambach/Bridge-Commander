@@ -22,6 +22,10 @@ public struct SimulatorClient: Sendable {
 	public var revealInFinder: @Sendable (_ url: URL) async -> Void
 	public var simulateMemoryWarning: @Sendable (_ id: String) async throws -> Void
 	public var setLocation: @Sendable (_ id: String, _ command: SimulatorLocationCommand) async throws -> Void
+	public var setUISettings: @Sendable (_ id: String, _ settings: SimulatorUISettings) async throws -> Void
+	public var setStatusBar: @Sendable (_ id: String, _ command: SimulatorStatusBarCommand) async throws -> Void
+	/// Erases all content and settings, rebooting a booted device.
+	public var erase: @Sendable (_ id: String) async throws -> Void
 	/// Starts recording the device's screen into the folder screenshots go to.
 	public var startRecording: @Sendable (_ device: SimulatorDevice) async throws -> Void
 	public var stopRecording: @Sendable (_ device: SimulatorDevice) async throws -> SimulatorRecording
@@ -60,6 +64,9 @@ extension SimulatorClient: DependencyKey {
 		},
 		simulateMemoryWarning: { try SimulatorHost.shared.simulateMemoryWarning(udid: $0) },
 		setLocation: { try await SimulatorHost.shared.setLocation(udid: $0, $1) },
+		setUISettings: { try await SimulatorHost.shared.setUISettings(udid: $0, $1) },
+		setStatusBar: { try await SimulatorHost.shared.setStatusBar(udid: $0, $1) },
+		erase: { _ = try await SimulatorHost.shared.erase(udid: $0) },
 		startRecording: { device in
 			let url = SimulatorScreenshotFile.unusedURL(
 				in: SimulatorScreenshotFile.defaultFolder(),

@@ -232,6 +232,45 @@ public struct GitActionsMenuReducer {
 				}
 				return refreshStashStatusEffect
 
+			case let .checkoutDefaultBranchButton(.checkoutAndPullCompleted(result)):
+				switch result {
+				case let .success(outcome):
+					switch outcome.pull {
+					case let .success(pullResult):
+						let pulled =
+							if pullResult.isAlreadyUpToDate {
+								"It is already up to date with the remote branch."
+							}
+							else if pullResult.commitCount > 0 {
+								"Pulled \(pullResult.commitCount) commit\(pullResult.commitCount == 1 ? "" : "s") from the remote branch."
+							}
+							else {
+								"Pull completed successfully."
+							}
+						state.alert = ScrollableAlertReducer.State(
+							title: "Checkout & Pull Successful",
+							message: "Switched to \(outcome.branch). \(pulled)",
+							isError: false
+						)
+
+					case let .failure(error):
+						// The checkout stands; only the pull needs the user's attention.
+						state.alert = ScrollableAlertReducer.State(
+							title: "Pull Failed",
+							message: "Switched to \(outcome.branch), but the pull failed:\n\(error.localizedDescription)",
+							isError: true
+						)
+					}
+
+				case let .failure(error):
+					state.alert = ScrollableAlertReducer.State(
+						title: "Checkout Failed",
+						message: error.localizedDescription,
+						isError: true
+					)
+				}
+				return refreshStashStatusEffect
+
 			case let .abortMergeButton(.abortMergeCompleted(success, error)):
 				if let error {
 					state.alert = ScrollableAlertReducer.State(title: "Abort Merge Failed", message: error, isError: true)

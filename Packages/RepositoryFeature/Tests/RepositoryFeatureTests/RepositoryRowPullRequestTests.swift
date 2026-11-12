@@ -35,7 +35,7 @@ struct RepositoryRowPullRequestTests {
 			pipeline: PipelineStatus(state: .running, url: "https://gitlab.com/g/app/-/pipelines/42"),
 			unresolvedDiscussionsCount: 3
 		)
-		await store.send(.didFetchPullRequest(details))
+		await store.send(.didFetchPullRequest(details, branch: "LS-1234_feature"))
 
 		#expect(store.state.prUrl == "https://gitlab.com/g/app/-/merge_requests/7")
 		#expect(store.state.prState == .ready)
@@ -43,6 +43,37 @@ struct RepositoryRowPullRequestTests {
 		#expect(store.state.pipelineState == .running)
 		#expect(store.state.pipelineUrl == "https://gitlab.com/g/app/-/pipelines/42")
 		#expect(store.state.prUnresolvedDiscussions == 3)
+	}
+
+	@Test("an MR on a merge train carries its train pipeline and place; a merged one drops the place")
+	@MainActor
+	func mergeTrain() async {
+		let store = makeStore(state: makeRow())
+
+		func details(state: PullRequestState) -> PullRequestDetails {
+			PullRequestDetails(
+				url: "https://gitlab.com/g/app/-/merge_requests/7",
+				state: state,
+				provider: .gitlab,
+				pipeline: PipelineStatus(
+					state: .running,
+					url: "https://gitlab.com/g/app/-/pipelines/43",
+					isMergeTrain: true
+				),
+				mergeTrain: .onTrain(position: 2)
+			)
+		}
+
+		await store.send(.didFetchPullRequest(details(state: .ready), branch: "LS-1234_feature"))
+		#expect(store.state.pipelineIsMergeTrain)
+		#expect(store.state.prMergeTrain == .onTrain(position: 2))
+
+		await store.send(.didFetchPullRequest(details(state: .merged), branch: "LS-1234_feature"))
+		#expect(store.state.pipelineIsMergeTrain)
+		#expect(store.state.prMergeTrain == nil)
+
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
+		#expect(!store.state.pipelineIsMergeTrain)
 	}
 
 	@Test("a draft PR still surfaces the unresolved discussion count")
@@ -55,7 +86,7 @@ struct RepositoryRowPullRequestTests {
 			state: .draft,
 			provider: .github,
 			unresolvedDiscussionsCount: 2
-		)))
+		), branch: "LS-1234_feature"))
 
 		#expect(store.state.prUnresolvedDiscussions == 2)
 	}
@@ -73,7 +104,7 @@ struct RepositoryRowPullRequestTests {
 				state: state,
 				provider: .gitlab,
 				unresolvedDiscussionsCount: 3
-			)))
+			), branch: "LS-1234_feature"))
 
 			#expect(store.state.prState == state)
 			#expect(store.state.prUnresolvedDiscussions == nil)
@@ -93,7 +124,7 @@ struct RepositoryRowPullRequestTests {
 		row.prApprovals = ApprovalStatus(decision: .approved, approvedBy: [Self.astrid])
 		let store = makeStore(state: row)
 
-		await store.send(.didFetchPullRequest(nil))
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
 
 		#expect(store.state.prUrl == nil)
 		#expect(store.state.prState == nil)
@@ -227,7 +258,7 @@ struct RepositoryRowPullRequestTests {
 		row.prFetchError = "GitLab MR fetch failed: HTTP 500"
 		let store = makeStore(state: row)
 
-		await store.send(.didFetchPullRequest(nil))
+		await store.send(.didFetchPullRequest(nil, branch: "LS-1234_feature"))
 
 		#expect(store.state.prFetchError == nil)
 	}
@@ -268,7 +299,7 @@ struct RepositoryRowPullRequestTests {
 			state: state,
 			provider: .gitlab,
 			approvals: approvals
-		)))
+		), branch: "LS-1234_feature"))
 	}
 
 	@Test("an open PR keeps its approval status and shows it in the slot")

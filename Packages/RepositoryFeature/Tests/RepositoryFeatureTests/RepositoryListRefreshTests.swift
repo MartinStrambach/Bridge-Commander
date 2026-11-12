@@ -78,7 +78,7 @@ struct RepositoryListRefreshTests {
 
 		await store.send(.repositoryGroups(.element(
 			id: "/repos/alpha",
-			action: .header(.didFetchYouTrack(nil))
+			action: .header(.didFetchYouTrack(nil, ticketId: nil))
 		)))
 
 		await clock.advance(by: .milliseconds(300))
@@ -102,12 +102,12 @@ struct RepositoryListRefreshTests {
 		// cancelled in flight, so the burst produces one sort rather than one per fetch.
 		await store.send(.repositoryGroups(.element(
 			id: "/repos/alpha",
-			action: .header(.didFetchYouTrack(nil))
+			action: .header(.didFetchYouTrack(nil, ticketId: nil))
 		)))
 		await clock.advance(by: .milliseconds(200))
 		await store.send(.repositoryGroups(.element(
 			id: "/repos/alpha",
-			action: .worktrees(.element(id: "/repos/alpha-one", action: .didFetchYouTrack(nil)))
+			action: .worktrees(.element(id: "/repos/alpha-one", action: .didFetchYouTrack(nil, ticketId: nil)))
 		)))
 		await clock.advance(by: .milliseconds(300))
 
@@ -132,7 +132,7 @@ struct RepositoryListRefreshTests {
 
 		await store.send(.repositoryGroups(.element(
 			id: "/repos/alpha",
-			action: .header(.didFetchYouTrack(nil))
+			action: .header(.didFetchYouTrack(nil, ticketId: nil))
 		)))
 		await clock.advance(by: .seconds(1))
 

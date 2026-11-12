@@ -63,21 +63,60 @@ public nonisolated enum PipelineState: String, Sendable, Equatable {
 		}
 	}
 
+	/// Whether the pipeline has not finished yet: running, or waiting to start.
+	public var isInProgress: Bool {
+		switch self {
+		case .running, .pending, .created, .preparing, .waitingForResource, .scheduled: true
+		case .success, .failed, .canceled, .skipped, .manual: false
+		}
+	}
+
 	/// Icon for the pipeline badge when the MR's merge state is taken into account:
 	/// a passing pipeline on a conflicting MR must not read as "good to go", so it
 	/// shows a warning instead of the checkmark. Other states already say "not done".
-	public func systemImageName(hasConflicts: Bool) -> String {
-		hasConflicts && self == .success ? "exclamationmark.triangle.fill" : systemImageName
+	/// A merge train pipeline still in progress shows a tram, so it reads differently
+	/// from the MR's own pipeline; once finished it shows the usual result icon.
+	public func systemImageName(hasConflicts: Bool, isMergeTrain: Bool = false) -> String {
+		if isMergeTrain, isInProgress {
+			return "tram.fill"
+		}
+		return hasConflicts && self == .success ? "exclamationmark.triangle.fill" : systemImageName
 	}
 }
 
 public nonisolated struct PipelineStatus: Equatable, Sendable {
 	public let state: PipelineState
 	public let url: String
+	/// Whether this is a merge train pipeline (GitLab's `mergeRequestEventType` `MERGE_TRAIN`)
+	/// rather than one on the MR's source branch or its merged result.
+	public let isMergeTrain: Bool
 
-	public init(state: PipelineState, url: String) {
+	public init(state: PipelineState, url: String, isMergeTrain: Bool = false) {
 		self.state = state
 		self.url = url
+		self.isMergeTrain = isMergeTrain
+	}
+}
+
+/// Where an open MR stands with GitLab's merge train.
+public nonisolated enum MergeTrainStatus: Equatable, Sendable {
+	/// Set to join the train once its own pipeline passes
+	/// (auto-merge strategy `ADD_TO_MERGE_TRAIN_WHEN_CHECKS_PASS`).
+	case waitingToJoin
+	/// On the train. `position` counts from 1 (1 = next to merge); `nil` when GitLab
+	/// did not report it.
+	case onTrain(position: Int?)
+
+	/// Tooltip text for the pipeline badge.
+	public var summary: String {
+		switch self {
+		case .waitingToJoin:
+			"joins the merge train when checks pass"
+		case let .onTrain(position?):
+			"#\(position) on the merge train"
+		case .onTrain(position: nil):
+			"on the merge train"
+		}
 	}
 }
 
@@ -93,6 +132,8 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 	public let approvals: ApprovalStatus?
 	/// Whether the MR/PR conflicts with its base branch. `false` when not reported.
 	public let hasConflicts: Bool
+	/// Merge train state of an open GitLab MR; `nil` when it is not queued for one.
+	public let mergeTrain: MergeTrainStatus?
 
 	public init(
 		url: String,
@@ -101,7 +142,8 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 		pipeline: PipelineStatus? = nil,
 		unresolvedDiscussionsCount: Int? = nil,
 		approvals: ApprovalStatus? = nil,
-		hasConflicts: Bool = false
+		hasConflicts: Bool = false,
+		mergeTrain: MergeTrainStatus? = nil
 	) {
 		self.url = url
 		self.state = state
@@ -110,5 +152,6 @@ public nonisolated struct PullRequestDetails: Equatable, Sendable {
 		self.unresolvedDiscussionsCount = unresolvedDiscussionsCount
 		self.approvals = approvals
 		self.hasConflicts = hasConflicts
+		self.mergeTrain = mergeTrain
 	}
 }

@@ -9,7 +9,7 @@ import Testing
 @Suite("Terminal run tab")
 @MainActor
 struct TerminalRunTabTests {
-	@Test("the first run opens a run tab after the repository's tabs and shows it")
+	@Test("the first run opens a run tab after the repository's tabs, leaving the tab on screen")
 	func firstRunAppendsTab() async {
 		let alphaOne = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
 		let alphaTwo = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
@@ -28,7 +28,7 @@ struct TerminalRunTabTests {
 		#expect(run.runTitle == "App")
 		#expect(run.startupCommand == "/bin/bash run.sh")
 		#expect(run.tabIndex == 3)
-		#expect(store.state.terminalLayout?.activeSessionId == run.id)
+		#expect(store.state.terminalLayout?.activeSessionId == alphaOne.id)
 	}
 
 	@Test("running again replaces the run tab in its place")
@@ -49,6 +49,23 @@ struct TerminalRunTabTests {
 		let run = sessions[1]
 		#expect(run.runTitle == "Widgets")
 		#expect(run.startupCommand == "new")
+		#expect(store.state.terminalLayout?.activeSessionId == alphaOne.id)
+		#expect(store.state.terminalLayout?.recentSessionIds.contains(oldRun.id) == false)
+	}
+
+	@Test("running again from the run tab shows its replacement")
+	func runAgainFromRunTabShowsReplacement() async {
+		let alphaOne = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
+		let oldRun = TerminalSession(repositoryPath: "/repos/alpha", startupCommand: "old", runTitle: "App", tabIndex: 2)
+		let store = TestStore(initialState: state(sessions: [alphaOne, oldRun], active: oldRun)) {
+			RepositoryListReducer()
+		}
+		store.exhaustivity = .off
+
+		await store.send(.terminalLayout(.simulatorPane(.delegate(.runRequested(command: "new", title: "App")))))
+
+		let run = store.state.terminalSessions[1]
+		#expect(run.id != oldRun.id)
 		#expect(store.state.terminalLayout?.activeSessionId == run.id)
 		#expect(store.state.terminalLayout?.recentSessionIds.contains(oldRun.id) == false)
 	}

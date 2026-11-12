@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that the agent-facing docs still describe the code.
 
-- Every `identifier` in backticks in CLAUDE.md and the READMEs (a type, a
+- Every `identifier` in backticks in CLAUDE.md, CODING_STANDARDS.md and the READMEs (a type, a
   member, a function like `runGit(arguments:at:)`, a dotted path like
   `RepositoryRowReducer.State`) must appear in the repository's sources.
 - Every backticked file name (`GitService.swift`) and repository path
@@ -34,7 +34,7 @@ def tracked_files():
 
 
 def docs(files):
-    return [f for f in files if f == "CLAUDE.md" or (f.endswith("/README.md") and f.count("/") >= 1)]
+    return [f for f in files if f in ("CLAUDE.md", "CODING_STANDARDS.md") or (f.endswith("/README.md") and f.count("/") >= 1)]
 
 
 def is_checked_identifier(span):

@@ -14,7 +14,7 @@ public struct HunkActionButton: View {
 			Text(title)
 				.scaledFont(.caption)
 				.padding(.horizontal, 10)
-				.padding(.vertical, 5)
+				.padding(.vertical, 4)
 				.background(Color(nsColor: .controlBackgroundColor))
 				.foregroundStyle(.primary)
 				.cornerRadius(4)

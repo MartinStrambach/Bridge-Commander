@@ -37,6 +37,8 @@ public struct SimulatorPaneReducer {
 		/// What just happened — a file saved, a memory warning sent — shown in a banner until it
 		/// times out or is dismissed.
 		public var notice: Notice?
+		/// Asks before erasing a device.
+		@Presents public var alert: AlertState<Action.Alert>?
 
 		/// The workspace or project the Run button builds — the repository's, as its Xcode button
 		/// finds it; `nil` when it has none (a Tuist project not generated yet).
@@ -90,7 +92,9 @@ public struct SimulatorPaneReducer {
 		/// The pane is on screen beside `repositoryPath`'s terminal; runs until it leaves or shows
 		/// another repository.
 		case task(repositoryPath: String)
-		case devicesLoaded([SimulatorDevice], storedSelection: String?)
+		/// The device list and `repositoryPath`'s stored device, read for that repository. A read
+		/// for another one (a fold or rotation that finished after the pane moved on) is dropped.
+		case devicesLoaded([SimulatorDevice], storedSelection: String?, repositoryPath: String?)
 		case devicesFailed(String)
 		case deviceSelected(String)
 		case bootButtonTapped
@@ -112,7 +116,13 @@ public struct SimulatorPaneReducer {
 		case recordingDeviceIdsChanged(Set<String>)
 		case memoryWarningButtonTapped
 		case locationSelected(SimulatorLocationCommand)
-		/// A feature (memory warning, location) did its thing, or failed with a message.
+		case appearanceSelected(SimulatorAppearance)
+		case statusBarSelected(SimulatorStatusBarCommand)
+		/// Asks to confirm, then erases the device's content and settings.
+		case eraseButtonTapped
+		case alert(PresentationAction<Alert>)
+		/// A feature (memory warning, location) did its thing, or failed with a message. Anything
+		/// that is not a boot, shutdown, fold or erase reports here, leaving `transitioningDeviceId`.
 		case featureFinished(Notice?, errorMessage: String?)
 		case showNoticeFileInFinderTapped
 		case noticeDismissed
@@ -130,6 +140,10 @@ public struct SimulatorPaneReducer {
 		case schemeSelected(String)
 		case runButtonTapped
 		case delegate(Delegate)
+
+		public enum Alert: Equatable {
+			case confirmErase(deviceId: String)
+		}
 
 		public enum Delegate: Equatable {
 			/// Type `command` into the repository's run tab, named `title`, replacing what ran
@@ -179,7 +193,11 @@ public struct SimulatorPaneReducer {
 			do {
 				try await simulatorClient.setFold(device, fold)
 				let devices = try await simulatorClient.devices()
-				await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
+				await send(.devicesLoaded(
+					devices,
+					storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+					repositoryPath: repositoryPath
+				))
 				await send(.transitionFinished(errorMessage: nil))
 			}
 			catch {
@@ -212,7 +230,8 @@ public struct SimulatorPaneReducer {
 								let devices = try await simulatorClient.devices()
 								await send(.devicesLoaded(
 									devices,
-									storedSelection: simulatorClient.selectedDeviceId(repositoryPath)
+									storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+									repositoryPath: repositoryPath
 								))
 							}
 							catch {
@@ -230,7 +249,12 @@ public struct SimulatorPaneReducer {
 					.cancellable(id: CancelId.recordings, cancelInFlight: true)
 				)
 
-			case let .devicesLoaded(devices, storedSelection):
+			case let .devicesLoaded(devices, storedSelection, repositoryPath):
+				// The selection read is the other repository's; storing a fallback would even give
+				// this one that repository's device. The next poll brings this one's.
+				guard repositoryPath == state.repositoryPath else {
+					return .none
+				}
 				let previouslyBooted = state.selectedDevice?.isBooted ?? false
 				state.devices = devices
 				state.hasLoadedDevices = true
@@ -312,7 +336,8 @@ public struct SimulatorPaneReducer {
 						try await simulatorClient.pressButton(device.id, button)
 					}
 					catch {
-						await send(.transitionFinished(errorMessage: error.localizedDescription))
+						// Not `transitionFinished`: that would end a fold or boot running meanwhile.
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
 					}
 				}
 
@@ -327,7 +352,11 @@ public struct SimulatorPaneReducer {
 					do {
 						let rotation = try await simulatorClient.rotate(device.id, clockwise)
 						let devices = try await simulatorClient.devices()
-						await send(.devicesLoaded(devices, storedSelection: simulatorClient.selectedDeviceId(repositoryPath)))
+						await send(.devicesLoaded(
+							devices,
+							storedSelection: simulatorClient.selectedDeviceId(repositoryPath),
+							repositoryPath: repositoryPath
+						))
 						if !rotation.interfaceFollowed {
 							let notice = Notice(
 								icon: clockwise ? "rotate.right" : "rotate.left",
@@ -338,7 +367,7 @@ public struct SimulatorPaneReducer {
 						}
 					}
 					catch {
-						await send(.transitionFinished(errorMessage: error.localizedDescription))
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
 					}
 				}
 
@@ -458,6 +487,74 @@ public struct SimulatorPaneReducer {
 						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
 					}
 				}
+
+			case let .appearanceSelected(appearance):
+				guard let device = state.selectedDevice, device.isBooted else {
+					return .none
+				}
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.setUISettings(device.id, SimulatorUISettings(appearance: appearance))
+						let icon = appearance == .dark ? "moon.fill" : "sun.max.fill"
+						await send(.featureFinished(Notice(icon: icon, title: "\(appearance.title) appearance"), errorMessage: nil))
+					}
+					catch {
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
+					}
+				}
+
+			case let .statusBarSelected(command):
+				guard let device = state.selectedDevice, device.isBooted else {
+					return .none
+				}
+				let title = command == .clear ? "Status bar override cleared" : "Status bar overridden"
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.setStatusBar(device.id, command)
+						await send(.featureFinished(Notice(icon: "cellularbars", title: title), errorMessage: nil))
+					}
+					catch {
+						await send(.featureFinished(nil, errorMessage: error.localizedDescription))
+					}
+				}
+
+			case .eraseButtonTapped:
+				guard let device = state.selectedDevice, state.transitioningDeviceId == nil else {
+					return .none
+				}
+				state.alert = AlertState {
+					TextState("Erase \(device.name)?")
+				} actions: {
+					ButtonState(role: .destructive, action: .confirmErase(deviceId: device.id)) {
+						TextState("Erase")
+					}
+					ButtonState(role: .cancel) {
+						TextState("Cancel")
+					}
+				} message: {
+					TextState("All apps, their data and the device's settings are deleted. A booted device is shut down and booted again.")
+				}
+				return .none
+
+			case let .alert(.presented(.confirmErase(deviceId))):
+				guard let device = state.devices.first(where: { $0.id == deviceId }), state.transitioningDeviceId == nil else {
+					return .none
+				}
+				state.transitioningDeviceId = device.id
+				state.errorMessage = nil
+				return .run { [simulatorClient] send in
+					do {
+						try await simulatorClient.erase(device.id)
+						await send(.transitionFinished(errorMessage: nil))
+						await send(.featureFinished(Notice(icon: "trash", title: "Erased \(device.name)"), errorMessage: nil))
+					}
+					catch {
+						await send(.transitionFinished(errorMessage: error.localizedDescription))
+					}
+				}
+
+			case .alert:
+				return .none
 
 			case let .featureFinished(notice, errorMessage):
 				state.errorMessage = errorMessage
@@ -598,5 +695,6 @@ public struct SimulatorPaneReducer {
 				return .none
 			}
 		}
+		.ifLet(\.$alert, action: \.alert)
 	}
 }

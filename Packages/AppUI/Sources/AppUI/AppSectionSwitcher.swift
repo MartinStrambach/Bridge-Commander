@@ -26,6 +26,12 @@ public struct AppSectionSwitcher: View {
 	private var uiFontScale
 	private let badges: [AppSection: Int]
 
+	/// A TIFF holding the 1x and 2x bitmaps, read once. `Bundle.image(forResource:)` would look in
+	/// the bundle's asset catalog first, and CoreUI logs a "unable to find a bundle" line for a
+	/// resource bundle that has none, on every render.
+	private static let homerIcon = Bundle.module.url(forResource: "HomerIcon", withExtension: "tiff")
+		.flatMap(NSImage.init(contentsOf:))
+
 	public init(selection: Binding<AppSection>, badges: [AppSection: Int] = [:]) {
 		self._selection = selection
 		self.badges = badges
@@ -52,14 +58,14 @@ public struct AppSectionSwitcher: View {
 			HStack(spacing: 6) {
 				icon(section)
 				Text(section.title)
-					.fontWeight(.semibold)
+					.fontWeight(.medium)
 				if badge > 0 {
 					Text("\(badge)")
 						.scaledFont(.caption2)
-						.fontWeight(.bold)
+						.fontWeight(.semibold)
 						.monospacedDigit()
 						.foregroundStyle(.white)
-						.padding(.horizontal, 5)
+						.padding(.horizontal, 4)
 						.padding(.vertical, 1)
 						.background(.orange, in: Capsule())
 				}
@@ -67,7 +73,7 @@ public struct AppSectionSwitcher: View {
 			.scaledFont(.headline)
 			.foregroundStyle(isSelected ? .primary : .secondary)
 			.padding(.horizontal, 10)
-			.padding(.vertical, 5)
+			.padding(.vertical, 4)
 			.background {
 				if isSelected {
 					RoundedRectangle(cornerRadius: 5)
@@ -89,7 +95,7 @@ public struct AppSectionSwitcher: View {
 		case .homer:
 			// The Homer console app's icon, cropped to its rounded square. A bitmap is not sized by
 			// the font like a symbol, so it is framed to the headline's size times the text scale.
-			if let image = Bundle.module.image(forResource: "HomerIcon") {
+			if let image = Self.homerIcon {
 				let side = (UIFontScale.pointSize(of: .headline) + 3) * uiFontScale
 				Image(nsImage: image)
 					.resizable()

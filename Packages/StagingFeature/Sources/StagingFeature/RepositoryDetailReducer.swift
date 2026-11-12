@@ -8,7 +8,7 @@ import ToolsIntegration
 public typealias FileChange = GitCore.FileChange
 typealias FileChangeStatus = GitCore.FileChangeStatus
 
-struct PendingSelection: Equatable {
+public struct PendingSelection: Equatable, Sendable {
 	let sourceIndex: Int
 	let sourceWasUnstaged: Bool
 }
@@ -68,9 +68,9 @@ public struct RepositoryDetail: Sendable {
 		case openTerminalButtonTapped
 		case selectFile(FileChange, isStaged: Bool)
 		case staged(FileChangeList.Action)
-		case stageFilesCompleted
+		case stageFilesCompleted(PendingSelection)
 		case unstaged(FileChangeList.Action)
-		case unstageFilesCompleted
+		case unstageFilesCompleted(PendingSelection)
 		case operationCompleted(Result<Void, Error>)
 	}
 
@@ -105,23 +105,7 @@ public struct RepositoryDetail: Sendable {
 			switch action {
 			case .loadChanges,
 			     .operationCompleted(.success):
-				state.isLoadingChanges = true
-				return .merge(
-					.run { [path = state.repositoryPath] send in
-						// Retry logic to handle git index race conditions
-						var changes = await gitStagingClient.fetchFileChanges(path)
-						if changes.staged.isEmpty, changes.unstaged.isEmpty {
-							try await Task.sleep(nanoseconds: 200_000_000) // 200ms
-							changes = await gitStagingClient.fetchFileChanges(path)
-						}
-						await send(.loadChangesResponse(changes))
-					},
-					.run { [path = state.repositoryPath] send in
-						let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
-						await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
-					}
-				)
-				.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
+				return loadChanges(state: &state)
 
 			case let .loadChangesResponse(changes):
 				state.isLoadingChanges = false
@@ -157,19 +141,13 @@ public struct RepositoryDetail: Sendable {
 
 				let stagedFileIds = Set(files.map(\.id))
 				let lastIndex = state.unstaged.files.lastIndex(where: { stagedFileIds.contains($0.id) }) ?? 0
-				state.pendingSelection = PendingSelection(sourceIndex: lastIndex, sourceWasUnstaged: true)
+				let selection = PendingSelection(sourceIndex: lastIndex, sourceWasUnstaged: true)
 				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
 					do {
 						try await gitStagingClient.stageFiles(path, paths)
-						await send(.stageFilesCompleted)
+						await send(.stageFilesCompleted(selection))
 					}
 					catch { await send(.operationCompleted(.failure(error))) }
-				}
-
-			case .stageFilesCompleted:
-				return .run { [path = state.repositoryPath] send in
-					let changes = await gitStagingClient.fetchFileChanges(path)
-					await send(.loadChangesResponse(changes))
 				}
 
 			case let .staged(.delegate(.toggleAll(files))):
@@ -179,20 +157,21 @@ public struct RepositoryDetail: Sendable {
 
 				let unstagingFileIds = Set(files.map(\.id))
 				let lastIndex = state.staged.files.lastIndex(where: { unstagingFileIds.contains($0.id) }) ?? 0
-				state.pendingSelection = PendingSelection(sourceIndex: lastIndex, sourceWasUnstaged: false)
+				let selection = PendingSelection(sourceIndex: lastIndex, sourceWasUnstaged: false)
 				return .run { [path = state.repositoryPath, paths = files.map(\.path)] send in
 					do {
 						try await gitStagingClient.unstageFiles(path, paths)
-						await send(.unstageFilesCompleted)
+						await send(.unstageFilesCompleted(selection))
 					}
 					catch { await send(.operationCompleted(.failure(error))) }
 				}
 
-			case .unstageFilesCompleted:
-				return .run { [path = state.repositoryPath] send in
-					let changes = await gitStagingClient.fetchFileChanges(path)
-					await send(.loadChangesResponse(changes))
-				}
+			// The selection is stored only now, so a refresh that answers while git is still
+			// staging cannot take it; the load below cancels any refresh still in flight.
+			case let .stageFilesCompleted(selection),
+			     let .unstageFilesCompleted(selection):
+				state.pendingSelection = selection
+				return loadChanges(state: &state)
 
 			case let .unstaged(.delegate(.discardChanges(files))):
 				guard !files.isEmpty else {
@@ -371,6 +350,28 @@ public struct RepositoryDetail: Sendable {
 	}
 
 	// MARK: - Helpers
+
+	/// Every file-list load goes through here, under one cancel id: a newer load cancels the one
+	/// in flight, so an older snapshot can never answer last and overwrite a newer one.
+	private func loadChanges(state: inout State) -> EffectOf<RepositoryDetail> {
+		state.isLoadingChanges = true
+		return .merge(
+			.run { [path = state.repositoryPath] send in
+				// Retry logic to handle git index race conditions
+				var changes = await gitStagingClient.fetchFileChanges(path)
+				if changes.staged.isEmpty, changes.unstaged.isEmpty {
+					try await Task.sleep(nanoseconds: 200_000_000) // 200ms
+					changes = await gitStagingClient.fetchFileChanges(path)
+				}
+				await send(.loadChangesResponse(changes))
+			},
+			.run { [path = state.repositoryPath] send in
+				let isMergeInProgress = GitMergeDetector.isGitOperationInProgress(at: path)
+				await send(.mergeStatus(.loadStatusResponse(isMergeInProgress)))
+			}
+		)
+		.cancellable(id: CancellableId.loadChanges, cancelInFlight: true)
+	}
 
 	private func removeFromUnstaged(_ files: [FileChange], state: inout State) -> EffectOf<RepositoryDetail> {
 		let fileIds = Set(files.map(\.id))

@@ -4,6 +4,8 @@ public nonisolated enum WorktreeSource: String, CaseIterable, Codable, Equatable
 	case branch
 	/// A new branch named after a YouTrack ticket, off a base branch.
 	case ticket
+	/// A new branch named after a YouTrack ticket filed from the dialog itself, off a base branch.
+	case newTicket
 	/// An open PR/MR's own branch, checked out as is.
 	case pullRequest
 
@@ -11,6 +13,7 @@ public nonisolated enum WorktreeSource: String, CaseIterable, Codable, Equatable
 		switch self {
 		case .branch: "Branch"
 		case .ticket: "Ticket"
+		case .newTicket: "New Ticket"
 		case .pullRequest: "PR / MR"
 		}
 	}

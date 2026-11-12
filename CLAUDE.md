@@ -88,14 +88,16 @@ TCA throughout. Dependencies are `@DependencyClient` structs of closures, confor
 - Write `.scaledFont(.caption)` / `.scaledFont(size: 12)` instead of `.font(...)`, and `.buttonStyle(.scaledBordered)` / `.scaledBorderedProminent` / `.scaledAutomatic` on text buttons, so text follows Settings ▸ General ▸ Appearance. Exceptions and the reasons behind them are in `Packages/AppUI/README.md`
 
 **Menus with icons:**
-- macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `GitActionsMenuView`, `TuistButtonView`). A nested `Menu`'s content does not inherit it and needs its own
+- macOS 27 no longer draws the icon of a bare `Label` inside a `Menu` (macOS 26 did). Menus whose items should show icons apply `.labelStyle(.titleAndIcon)` to their content (see `SimulatorPaneView`, `TerminalPanelView`). A nested `Menu`'s content does not inherit it and needs its own
 
 ## Build, Test & Run
 
 **`make check` before calling a change done.** It checks the package setup and the docs, builds the app, and tests the packages changed since `origin/main` plus the packages that depend on them. Each step prints only errors, failures and a result line; full logs go to `$TMPDIR/bridge-commander-check/`. The steps also run alone:
 - `make build`: the app, Debug (`scripts/build.sh`; extra arguments go to `xcodebuild`)
 - `make test`: the changed packages; `make test PKG=all`, or `PKG="GitCore AppUI"`. It runs TerminalFeature through `xcodebuild test`, because `swift test` cannot build SwiftTerm's Metal shader
-- `scripts/check-packages.sh` and `scripts/check-docs.py`. The second fails when a backticked name in CLAUDE.md or a README is gone from the code, or when this file grows past its line budget
+- `scripts/check-packages.sh` and `scripts/check-docs.py`. The second fails when a backticked name in CLAUDE.md, CODING_STANDARDS.md or a README is gone from the code, or when this file grows past its line budget
+
+**Before opening a pull request**, after `make check`, run the `reviewer` agent: it checks the diff against `CODING_STANDARDS.md`, the review checklist for what the build and tests cannot catch.
 
 **Run:**
 - The installed release app: `open -a "Bridge Commander"`
