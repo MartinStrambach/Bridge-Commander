@@ -61,8 +61,8 @@ public struct SettingsReducer {
 		@Shared(.claudeCodeOpeningBehavior)
 		public var claudeCodeOpeningBehavior = TerminalOpeningBehavior.newWindow
 
-		@Shared(.androidStudioPath)
-		public var androidStudioPath = "/Applications/Android Studio.app/Contents/MacOS/studio"
+		@Shared(.fileOpenApplications)
+		public var fileOpenApplications = FileOpenApplications()
 
 		@Shared(.misePath)
 		public var misePath = NSHomeDirectory() + "/.local/bin/mise"
@@ -163,7 +163,8 @@ public struct SettingsReducer {
 		case setTerminalApp(TerminalApp)
 		case setTerminalOpeningBehavior(TerminalOpeningBehavior)
 		case setClaudeCodeOpeningBehavior(TerminalOpeningBehavior)
-		case setAndroidStudioPath(String)
+		case fileOpenApplicationSelected(fileType: String, application: URL)
+		case removeFileOpenApplicationButtonTapped(fileType: String)
 		case setWorktreeBasePath(String)
 		case setMisePath(String)
 		case setTuistRunMode(TuistRunMode)
@@ -601,8 +602,16 @@ public struct SettingsReducer {
 				state.$claudeCodeOpeningBehavior.withLock { $0 = behavior }
 				return .none
 
-			case let .setAndroidStudioPath(path):
-				state.$androidStudioPath.withLock { $0 = path }
+			case let .fileOpenApplicationSelected(fileType, application):
+				// A bundle without an identifier could not be found again, so it is not stored.
+				guard let bundleIdentifier = FileOpenApplications.bundleIdentifier(ofApplicationAt: application) else {
+					return .none
+				}
+				state.$fileOpenApplications.withLock { $0.bundleIdentifiers[fileType] = bundleIdentifier }
+				return .none
+
+			case let .removeFileOpenApplicationButtonTapped(fileType):
+				state.$fileOpenApplications.withLock { $0.bundleIdentifiers[fileType] = nil }
 				return .none
 
 			case let .setWorktreeBasePath(path):

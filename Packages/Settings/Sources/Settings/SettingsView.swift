@@ -55,6 +55,14 @@ public struct SettingsView<Updates: View>: View {
 	@State
 	private var isImportingProfileFiles = false
 
+	@State
+	private var isChoosingFileOpenApplication = false
+
+	/// The file type whose application "Change…" is choosing. Kept apart from the presentation
+	/// flag, which is cleared before the importer's completion runs.
+	@State
+	private var fileTypeChangingApplication: String?
+
 	/// Groups start collapsed each time Settings opens, so a long list of groups stays scannable.
 	@State
 	private var expandedGroupIds: Set<String> = []
@@ -155,7 +163,7 @@ public struct SettingsView<Updates: View>: View {
 		case .externalApps:
 			terminalAppSection
 			claudeCodeBehaviorSection
-			androidStudioPathSection
+			fileOpenApplicationsSection
 
 		case .tuist:
 			tuistExecutionSection
@@ -905,17 +913,76 @@ public struct SettingsView<Updates: View>: View {
 		}
 	}
 
-	private var androidStudioPathSection: some View {
-		SettingsSection("Android Studio") {
+	private var fileOpenApplicationsSection: some View {
+		SettingsSection("Files Without a Default App") {
 			Text(
-				"Specify the full path to the Android Studio executable. This is used to open Kotlin files within the project context."
+				"A file no application on this Mac opens by default, such as Package.resolved or a .kt file when Android Studio is not set for it, opens in the application chosen for its type here when you ⌘-click it in the terminal or use Open in IDE. You are asked the first time; this does not change what Finder does."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
 
-			TextField("Android Studio Path", text: $store.androidStudioPath.sending(\.setAndroidStudioPath))
-				.textFieldStyle(.roundedBorder)
-				.scaledFont(.body, design: .monospaced)
+			let fileTypes = store.fileOpenApplications.bundleIdentifiers.keys.sorted()
+			if fileTypes.isEmpty {
+				Text("No applications chosen yet.")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+			else {
+				VStack(alignment: .leading, spacing: 6) {
+					ForEach(fileTypes, id: \.self) { fileType in
+						fileOpenApplicationRow(fileType)
+					}
+				}
+				.padding(.top, 4)
+			}
+		}
+		.fileImporter(
+			isPresented: $isChoosingFileOpenApplication,
+			allowedContentTypes: [.application]
+		) { result in
+			if case let .success(application) = result, let fileType = fileTypeChangingApplication {
+				store.send(.fileOpenApplicationSelected(fileType: fileType, application: application))
+			}
+		}
+		.fileDialogDefaultDirectory(URL(filePath: "/Applications"))
+	}
+
+	private func fileOpenApplicationRow(_ fileType: String) -> some View {
+		let application = store.fileOpenApplications.application(forFileType: fileType)
+		return HStack(spacing: 8) {
+			Text(fileType.isEmpty ? "No extension" : ".\(fileType)")
+				.scaledFont(.caption, design: .monospaced)
+				.frame(width: 100, alignment: .leading)
+
+			if let application {
+				Image(nsImage: NSWorkspace.shared.icon(forFile: application.path))
+					.resizable()
+					.frame(width: 16, height: 16)
+				Text(application.deletingPathExtension().lastPathComponent)
+					.scaledFont(.caption)
+			}
+			else {
+				// Uninstalled: the next file of this type asks again.
+				Text("Not installed (\(store.fileOpenApplications.bundleIdentifiers[fileType] ?? ""))")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+
+			Spacer()
+
+			Button("Change…") {
+				fileTypeChangingApplication = fileType
+				isChoosingFileOpenApplication = true
+			}
+			.buttonStyle(.scaledBordered)
+
+			Button {
+				store.send(.removeFileOpenApplicationButtonTapped(fileType: fileType))
+			} label: {
+				Image(systemName: "minus.circle")
+			}
+			.buttonStyle(.borderless)
+			.help("Forget this choice; the next such file asks again")
 		}
 	}
 

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 
 public nonisolated enum AndroidStudioDetector {
+	public static let bundleIdentifier = "com.google.android.studio"
 
 	/// Checks if Android Studio is running
 	/// - Returns: true if Android Studio process is found
@@ -15,13 +16,18 @@ public nonisolated enum AndroidStudioDetector {
 		return false
 	}
 
-	/// Checks if the specified project is already open in Android Studio
-	/// - Parameter projectPath: The full path to the project directory
-	/// - Returns: true if the project is open in any Android Studio window
-	public static func isProjectAlreadyOpen(at projectPath: String) -> Bool {
+	/// Checks if the specified project is already open in Android Studio, or in another JetBrains IDE
+	/// - Parameters:
+	///   - projectPath: The full path to the project directory
+	///   - bundleIdentifier: The IDE to look in
+	/// - Returns: true if the project is open in any of the IDE's windows
+	public static func isProjectAlreadyOpen(
+		at projectPath: String,
+		bundleIdentifier: String = AndroidStudioDetector.bundleIdentifier
+	) -> Bool {
 		guard
 			let androidStudioApp = NSRunningApplication
-				.runningApplications(withBundleIdentifier: "com.google.android.studio")
+				.runningApplications(withBundleIdentifier: bundleIdentifier)
 				.first
 		else {
 			return false
@@ -57,13 +63,18 @@ public nonisolated enum AndroidStudioDetector {
 		return false
 	}
 
-	/// Activates (focuses) the Android Studio window containing the specified project
-	/// - Parameter projectPath: The full path to the project directory
+	/// Activates (focuses) the Android Studio (or other JetBrains IDE) window containing the specified project
+	/// - Parameters:
+	///   - projectPath: The full path to the project directory
+	///   - bundleIdentifier: The IDE to look in
 	/// - Returns: true if a window was found and activated
-	public static func focusProjectWindow(at projectPath: String) -> Bool {
+	public static func focusProjectWindow(
+		at projectPath: String,
+		bundleIdentifier: String = AndroidStudioDetector.bundleIdentifier
+	) -> Bool {
 		guard
 			let androidStudioApp = NSRunningApplication
-				.runningApplications(withBundleIdentifier: "com.google.android.studio")
+				.runningApplications(withBundleIdentifier: bundleIdentifier)
 				.first
 		else {
 			return false

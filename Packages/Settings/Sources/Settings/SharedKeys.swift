@@ -9,10 +9,6 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 		appStorage("branchNameRegex")
 	}
 
-	static var androidStudioPath: Self {
-		appStorage("androidStudioPath")
-	}
-
 	static var worktreeBasePath: Self {
 		appStorage("worktreeBasePath")
 	}

@@ -30,6 +30,40 @@ struct SettingsReducerTests {
 		}
 	}
 
+	// MARK: - Applications for files without a default app
+
+	@Test("Choosing an application stores its bundle identifier for the file type")
+	func fileOpenApplicationSelectedStoresTheBundleIdentifier() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.fileOpenApplicationSelected(fileType: "kt", application: URL(filePath: "/System/Applications/TextEdit.app"))) {
+			$0.$fileOpenApplications.withLock { $0.bundleIdentifiers["kt"] = "com.apple.TextEdit" }
+		}
+	}
+
+	@Test("A bundle without an identifier is not stored, since it could not be found again")
+	func fileOpenApplicationSelectedIgnoresABundleWithoutIdentifier() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.fileOpenApplicationSelected(fileType: "kt", application: URL(filePath: "/nonexistent/Nothing.app")))
+	}
+
+	@Test("Removing a choice forgets only that file type")
+	func removeFileOpenApplicationForgetsTheType() async {
+		let state = SettingsReducer.State()
+		state.$fileOpenApplications.withLock {
+			$0 = FileOpenApplications(bundleIdentifiers: ["kt": "com.google.android.studio", "": "com.apple.TextEdit"])
+		}
+		let store = TestStore(initialState: state) {
+			SettingsReducer()
+		}
+		await store.send(.removeFileOpenApplicationButtonTapped(fileType: "kt")) {
+			$0.$fileOpenApplications.withLock { $0.bundleIdentifiers["kt"] = nil }
+		}
+	}
+
 	// MARK: - Group terminal startup command
 
 	@Test("setGroupTerminalStartupCommand stores each keystroke as typed, spaces included")
