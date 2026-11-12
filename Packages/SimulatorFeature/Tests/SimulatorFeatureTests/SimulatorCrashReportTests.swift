@@ -268,6 +268,23 @@ struct SimulatorCrashReportsTests {
 		])
 	}
 
+	/// The same fixtures with the crashes moved to yesterday, for callers that cannot pass `now`:
+	/// the tool handler lists against the real clock and looks back 30 days at most, so the
+	/// fixtures' own dates would fall out of its window.
+	static func recentSource() -> FakeSource {
+		let formatter = DateFormatter()
+		formatter.locale = Locale(identifier: "en_US_POSIX")
+		formatter.timeZone = TimeZone(secondsFromGMT: 2 * 3600)
+		formatter.dateFormat = "yyyy-MM-dd"
+		// Yesterday in the fixtures' time zone, so their evening times are in the past.
+		let day = formatter.string(from: Date().addingTimeInterval(-86400))
+		let source = source()
+		source.files = source.files.mapValues {
+			($0.contents.replacingOccurrences(of: "2026-10-07", with: day), Date())
+		}
+		return source
+	}
+
 	@Test
 	func listsTheDevicesAppCrashesNewestFirst() async throws {
 		let text = try await SimulatorCrashReports.list(
