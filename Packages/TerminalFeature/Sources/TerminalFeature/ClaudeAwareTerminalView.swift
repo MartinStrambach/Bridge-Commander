@@ -10,9 +10,9 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 	public let repositoryPath: String
 	public let sessionId: UUID
 
-	private let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
-	private let onNotification: @Sendable (UUID, TerminalNotification) -> Void
-	private let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
+	private let onStatusChange: @MainActor (UUID, TerminalSessionStatus) -> Void
+	private let onNotification: @MainActor (UUID, TerminalNotification) -> Void
+	private let onOpenFile: @MainActor (UUID, TerminalFileLink) -> Void
 
 	/// Built on first use, since it takes this view as its screen and `self` isn't available until
 	/// `super.init` has run.
@@ -35,9 +35,9 @@ public final class ClaudeAwareTerminalView: LocalProcessTerminalView {
 		repositoryPath: String,
 		sessionId: UUID,
 		statusSource: ClaudeStatusSource = .progressAndScreen,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
+		onStatusChange: @escaping @MainActor (UUID, TerminalSessionStatus) -> Void,
+		onNotification: @escaping @MainActor (UUID, TerminalNotification) -> Void,
+		onOpenFile: @escaping @MainActor (UUID, TerminalFileLink) -> Void = { _, _ in }
 	) {
 		self.repositoryPath = repositoryPath
 		self.sessionId = sessionId

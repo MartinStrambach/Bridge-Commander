@@ -165,18 +165,27 @@ private struct GitActionsMenuPresentations: ViewModifier {
 	@Bindable
 	var store: StoreOf<GitActionsMenuReducer>
 
+	/// Off under the repository list while the terminal panel covers it: the panel's toolbar
+	/// shows the same store, and one alert or dialog bound by two presenters is shown twice.
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	func body(content: Content) -> some View {
 		content
-			.sheet(item: $store.scope(\.$alert, action: \.alert)) { alertStore in
+			.sheet(item: presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil)) { alertStore in
 				ScrollableAlertView(store: alertStore)
 			}
 			.confirmationDialog(
-				$store.scope(\.discardButton.$confirmationDialog, action: \.discardButton.confirmationDialog)
+				presentsAlerts
+					? $store.scope(\.discardButton.$confirmationDialog, action: \.discardButton.confirmationDialog)
+					: .constant(nil)
 			)
 			// Presented here rather than on the menu item, for the same reason as the discard
 			// dialog above: dialogs attached inside a macOS `Menu` do not present reliably.
 			.confirmationDialog(
-				$store.scope(\.stashButton.$confirmationDialog, action: \.stashButton.confirmationDialog)
+				presentsAlerts
+					? $store.scope(\.stashButton.$confirmationDialog, action: \.stashButton.confirmationDialog)
+					: .constant(nil)
 			)
 	}
 }

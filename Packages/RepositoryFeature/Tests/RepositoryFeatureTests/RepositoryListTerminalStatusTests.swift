@@ -16,7 +16,7 @@ struct RepositoryListTerminalStatusTests {
 	func updatesSessionWhilePanelClosed() async {
 		let session = TerminalSession(repositoryPath: "/repos/alpha")
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
 		} withDependencies: {
@@ -24,7 +24,7 @@ struct RepositoryListTerminalStatusTests {
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
 		}
 	}
 

@@ -1,22 +1,20 @@
-import ActionButtons
 import ComposableArchitecture
 import Foundation
-import TerminalFeature
-import GitActionsMenu
 import GitCore
 import GitGraphFeature
 import Settings
 import SimulatorFeature
 import StagingFeature
+import TerminalFeature
 
+/// The terminal panel's toolbar and sheets: what exists only while the panel is on screen. The
+/// tabs and panes are `TerminalWorkspaceReducer`'s, which outlives the panel being hidden; this
+/// state is made when the panel is shown and dropped when it hides, which also cancels whatever
+/// it had running.
 @Reducer
 struct TerminalLayoutReducer {
 	@ObservableState
 	struct State: Equatable {
-		/// The repository of the terminal with the keyboard; the toolbar and the tab bar are its.
-		var activeRepositoryPath: String?
-		/// The terminal with the keyboard.
-		var activeSessionId: UUID?
 		var isPushing = false
 		var isFinishingMerge = false
 
@@ -25,101 +23,9 @@ struct TerminalLayoutReducer {
 		@Shared(.terminalFontSize)
 		var terminalFontSize = TerminalFontSize.default
 
-		/// The terminals side by side while the panel is split; empty while it shows one. See
-		/// `TerminalFocus`, which this and the four properties around it make up.
-		var splitSessionIds: [UUID] = []
-
-		/// The tabs each pane of the split owns, in step with `splitSessionIds`.
-		var splitTabIds: [[UUID]] = []
-
-		/// The tab that was last shown for each repository, so switching away from a
-		/// repository and back reopens the tab the user left, not its first tab.
-		var lastActiveSessionByRepo: [String: UUID] = [:]
-
-		/// Every tab that has had the keyboard since the panel opened, most recent last, so
-		/// closing the tab on screen goes back to the one the user was in before it.
-		var recentSessionIds: [UUID] = []
-
-		/// What the panel shows and remembers, as the value `TerminalTabs` works on. The rules
-		/// live there; the properties stay here so views and tests read them off the panel.
-		var focus: TerminalFocus {
-			get {
-				TerminalFocus(
-					activeRepositoryPath: activeRepositoryPath,
-					activeSessionId: activeSessionId,
-					splitSessionIds: splitSessionIds,
-					splitTabIds: splitTabIds,
-					lastActiveSessionByRepo: lastActiveSessionByRepo,
-					recentSessionIds: recentSessionIds
-				)
-			}
-			set {
-				activeRepositoryPath = newValue.activeRepositoryPath
-				activeSessionId = newValue.activeSessionId
-				splitSessionIds = newValue.splitSessionIds
-				splitTabIds = newValue.splitTabIds
-				lastActiveSessionByRepo = newValue.lastActiveSessionByRepo
-				recentSessionIds = newValue.recentSessionIds
-			}
-		}
-
-		/// The terminals on screen, left to right.
-		var paneSessionIds: [UUID] {
-			focus.paneSessionIds
-		}
-
-		/// What the panel remembers about the tabs it has shown. Hiding the panel drops this whole
-		/// state, so `RepositoryListReducer` keeps the memory meanwhile and hands it back to the
-		/// next panel, which then reopens where the user left off.
-		struct TabMemory: Equatable {
-			var lastActiveSessionByRepo: [String: UUID] = [:]
-			var recentSessionIds: [UUID] = []
-			/// The split the panel was showing, which the next panel shows again, and the tabs
-			/// each of its panes had.
-			var splitSessionIds: [UUID] = []
-			var splitTabIds: [[UUID]] = []
-		}
-
-		var tabMemory: TabMemory {
-			get {
-				TabMemory(
-					lastActiveSessionByRepo: lastActiveSessionByRepo,
-					recentSessionIds: recentSessionIds,
-					splitSessionIds: splitSessionIds,
-					splitTabIds: splitTabIds
-				)
-			}
-			set {
-				lastActiveSessionByRepo = newValue.lastActiveSessionByRepo
-				recentSessionIds = newValue.recentSessionIds
-				splitSessionIds = newValue.splitSessionIds
-				splitTabIds = newValue.splitTabIds
-			}
-		}
-
-		/// Show `session` and remember it as the repository's current tab.
-		mutating func activate(_ session: TerminalSession) {
-			focus.activate(session)
-		}
-
-		/// Drop a closed tab from the per-repository memory so it is never restored.
-		mutating func forget(sessionId: UUID, repositoryPath: String) {
-			focus.forget(sessionId: sessionId, repositoryPath: repositoryPath)
-		}
-
-		/// Of `sessions`, the one most recently on screen — nil when none of them has been shown
-		/// since the panel opened (tabs restored from the previous launch, say).
-		func mostRecent(among sessions: some Collection<TerminalSession>) -> TerminalSession? {
-			focus.mostRecent(among: sessions)
-		}
-
-		// The Xcode and Tuist buttons are deliberately not copied here: the toolbar scopes the
-		// opened row's own stores, so a generate started from either view shows its progress in
-		// both, and hiding the panel (which nils this state and cancels its effects) cannot kill it.
-		var androidStudioButton: AndroidStudioButtonReducer.State?
-		var webButton: WebButtonReducer.State?
-		var ticketButton: TicketButtonReducer.State?
-		var gitActionsMenu: GitActionsMenuReducer.State?
+		// No button state here: the toolbar scopes the opened row's own stores, so an operation
+		// started from either view shows its progress in both, and hiding the panel (which drops
+		// this state and cancels its effects) cannot kill it.
 
 		/// The iOS simulator beside the terminal. Which repositories show it is a stored setting, so it survives
 		/// this state being dropped when the panel hides.
@@ -133,8 +39,6 @@ struct TerminalLayoutReducer {
 	}
 
 	enum Action {
-		case selectRepo(repositoryPath: String)
-		case hideTerminalMode
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case gitGraphButtonTapped(repositoryPath: String, repositoryName: String)
 		case pushButtonTapped(repositoryPath: String)
@@ -143,83 +47,23 @@ struct TerminalLayoutReducer {
 		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
-		/// Closes a tab, hanging its shell up.
-		case killTab(sessionId: UUID)
-		/// ⌘D: a new pane beside the active one, up to `TerminalTabs.maxPanes`, with one tab: a
-		/// new terminal of the active repository, opened in `directory` — where the active
-		/// terminal's shell is — or at the repository's root.
-		case splitRequested(directory: String?)
-		/// A repository in a pane of its own beside the active one, with its tabs: showing the
-		/// one it was last showing, or its first one, opened now if it has none.
-		case openRepoInSplit(repositoryPath: String)
-		/// A pane was clicked and takes the keyboard.
-		case paneFocused(sessionId: UUID)
-		/// ⌘] / ⌘[: the next or previous pane, wrapping around.
-		case cyclePaneRequested(forward: Bool)
-		/// Takes a pane out of the split; its tabs stay open.
-		case closePane(sessionId: UUID)
-		case closeActiveTabRequested
-		case killRepo(repositoryPath: String)
-		case newTabRequested
-		case selectTab(sessionId: UUID)
-		/// ⌃Tab / ⌃⇧Tab: the next or previous tab of the active repository, wrapping around.
-		case cycleTabRequested(forward: Bool)
-		/// A tab was dropped on another tab of the same pane and takes its place.
-		case moveTab(sessionId: UUID, ontoSessionId: UUID)
-		case retryTab(sessionId: UUID)
+		/// ⌘R: refreshes the row of the repository with the keyboard.
 		case refreshActiveRepoRequested
 		case zoomInRequested
 		case zoomOutRequested
 		case resetZoomRequested
-		case androidStudioButton(AndroidStudioButtonReducer.Action)
-		case webButton(WebButtonReducer.Action)
-		case ticketButton(TicketButtonReducer.Action)
-		case gitActionsMenu(GitActionsMenuReducer.Action)
 		case simulatorPane(SimulatorPaneReducer.Action)
 	}
+
+	@Dependency(GitClient.self)
+	private var gitClient
 
 	var body: some Reducer<State, Action> {
 		Scope(\.simulatorPane, action: \.simulatorPane) {
 			SimulatorPaneReducer()
 		}
-		// The core and its children are split into separate properties because
-		// one long .ifLet chain exceeds the type-checker's expression budget.
-		core
-			.ifLet(\.$stagingDetail, action: \.stagingDetail) {
-				RepositoryDetail()
-			}
-			.ifLet(\.$gitGraph, action: \.gitGraph) {
-				GitGraphReducer()
-			}
-			.ifLet(\.gitActionsMenu, action: \.gitActionsMenu) {
-				GitActionsMenuReducer()
-			}
-	}
-
-	private var core: some Reducer<State, Action> {
-		coreReduce
-			.ifLet(\.androidStudioButton, action: \.androidStudioButton) {
-				AndroidStudioButtonReducer()
-			}
-			.ifLet(\.webButton, action: \.webButton) {
-				WebButtonReducer()
-			}
-			.ifLet(\.ticketButton, action: \.ticketButton) {
-				TicketButtonReducer()
-			}
-	}
-
-	private var coreReduce: some Reducer<State, Action> {
 		Reduce { state, action in
 			switch action {
-			case let .selectRepo(repositoryPath):
-				state.activeRepositoryPath = repositoryPath
-				return .none
-
-			case .hideTerminalMode:
-				// Parent RepositoryListReducer handles this by setting terminalLayout = nil
-				return .none
-
 			case let .stagingButtonTapped(repositoryPath, iosSubfolderPath):
 				state.stagingDetail = RepositoryDetail.State(repositoryPath: repositoryPath, iosSubfolderPath: iosSubfolderPath)
 				return .none
@@ -230,9 +74,9 @@ struct TerminalLayoutReducer {
 
 			case let .pushButtonTapped(repositoryPath):
 				state.isPushing = true
-				return .run { send in
+				return .run { [gitClient] send in
 					do {
-						let result = try await GitPushHelper.push(at: repositoryPath)
+						let result = try await gitClient.push(repositoryPath)
 						await send(.pushCompleted(result: result, error: nil))
 					}
 					catch let error as GitError {
@@ -249,9 +93,9 @@ struct TerminalLayoutReducer {
 
 			case let .finishMergeButtonTapped(repositoryPath):
 				state.isFinishingMerge = true
-				return .run { send in
+				return .run { [gitClient] send in
 					do {
-						try await GitMergeHelper.finishMerge(at: repositoryPath)
+						try await gitClient.finishMerge(repositoryPath)
 						await send(.finishMergeCompleted(repositoryPath: repositoryPath, error: nil))
 					}
 					catch {
@@ -265,50 +109,8 @@ struct TerminalLayoutReducer {
 				// Alert and row refresh are handled by RepositoryListReducer
 				return .none
 
-			case .stagingDetail(.dismiss):
-				return .none
-
-			case .stagingDetail:
-				return .none
-
-			case .gitGraph:
-				return .none
-
-			case .killTab,
-			     .splitRequested,
-			     .openRepoInSplit,
-			     .paneFocused,
-			     .cyclePaneRequested,
-			     .closePane:
-				// Forwarded up to RepositoryListReducer
-				return .none
-
-			case .closeActiveTabRequested:
-				// Forwarded up to RepositoryListReducer
-				return .none
-
-			case .killRepo:
-				// Forwarded up to RepositoryListReducer
-				return .none
-
-			case .newTabRequested:
-				// Forwarded up to RepositoryListReducer
-				return .none
-
-			case .selectTab:
-				// Forwarded up to RepositoryListReducer
-				return .none
-
-			case .cycleTabRequested:
-				// Forwarded up to RepositoryListReducer
-				return .none
-
-			case .moveTab:
-				// Forwarded up to RepositoryListReducer
-				return .none
-
-			case .retryTab:
-				// Forwarded up to RepositoryListReducer
+			case .stagingDetail,
+			     .gitGraph:
 				return .none
 
 			case .refreshActiveRepoRequested:
@@ -331,22 +133,15 @@ struct TerminalLayoutReducer {
 				state.$terminalFontSize.withLock { $0 = TerminalFontSize.default }
 				return .none
 
-			case .androidStudioButton:
-				return .none
-
-			case .webButton:
-				return .none
-
-			case .ticketButton:
-				return .none
-
-			case .gitActionsMenu:
-				// Completions are routed to a row refresh by RepositoryListReducer
-				return .none
-
 			case .simulatorPane:
 				return .none
 			}
+		}
+		.ifLet(\.$stagingDetail, action: \.stagingDetail) {
+			RepositoryDetail()
+		}
+		.ifLet(\.$gitGraph, action: \.gitGraph) {
+			GitGraphReducer()
 		}
 	}
 }

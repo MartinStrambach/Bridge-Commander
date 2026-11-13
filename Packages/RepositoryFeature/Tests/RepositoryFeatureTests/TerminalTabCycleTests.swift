@@ -9,19 +9,34 @@ import Testing
 @Suite("Terminal tab cycling")
 @MainActor
 struct TerminalTabCycleTests {
+	/// The panel open on `active`'s repository: one pane with that repository's tabs in the order
+	/// `sessions` has them, `recent` being the tabs that have had the keyboard, `active` last.
+	private func terminals(
+		_ sessions: [TerminalSession],
+		active: TerminalSession,
+		recent: [TerminalSession]
+	) -> TerminalTabs {
+		TerminalTabs(
+			sessions: IdentifiedArray(uniqueElements: sessions),
+			panes: [
+				TerminalPane(
+					shown: active.id,
+					tabs: sessions.filter { $0.repositoryPath == active.repositoryPath }.map(\.id)
+				)
+			],
+			isPanelVisible: true,
+			lastActiveSessionByRepo: [active.repositoryPath: active.id],
+			recentSessionIds: recent.map(\.id)
+		)
+	}
+
 	private func makeStore(
 		sessions: [TerminalSession],
 		active: TerminalSession
 	) -> TestStoreOf<RepositoryListReducer> {
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = IdentifiedArray(uniqueElements: sessions)
-		var layout = TerminalLayoutReducer.State(
-			activeRepositoryPath: active.repositoryPath,
-			activeSessionId: active.id
-		)
-		layout.lastActiveSessionByRepo[active.repositoryPath] = active.id
-		layout.recentSessionIds = [active.id]
-		state.terminalLayout = layout
+		state.terminals = terminals(sessions, active: active, recent: [active])
+		state.terminalLayout = TerminalLayoutReducer.State()
 		return TestStore(initialState: state) {
 			RepositoryListReducer()
 		}
@@ -33,15 +48,11 @@ struct TerminalTabCycleTests {
 		let two = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
 		let store = makeStore(sessions: [one, two], active: one)
 
-		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
-			$0.terminalLayout?.activeSessionId = two.id
-			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = two.id
-			$0.terminalLayout?.recentSessionIds = [one.id, two.id]
+		await store.send(.terminals(.cycleTabRequested(forward: true))) {
+			$0.terminals = terminals([one, two], active: two, recent: [one, two])
 		}
-		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
-			$0.terminalLayout?.activeSessionId = one.id
-			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = one.id
-			$0.terminalLayout?.recentSessionIds = [two.id, one.id]
+		await store.send(.terminals(.cycleTabRequested(forward: true))) {
+			$0.terminals = terminals([one, two], active: one, recent: [two, one])
 		}
 	}
 
@@ -52,15 +63,11 @@ struct TerminalTabCycleTests {
 		let three = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 3)
 		let store = makeStore(sessions: [one, two, three], active: one)
 
-		await store.send(.terminalLayout(.cycleTabRequested(forward: false))) {
-			$0.terminalLayout?.activeSessionId = three.id
-			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = three.id
-			$0.terminalLayout?.recentSessionIds = [one.id, three.id]
+		await store.send(.terminals(.cycleTabRequested(forward: false))) {
+			$0.terminals = terminals([one, two, three], active: three, recent: [one, three])
 		}
-		await store.send(.terminalLayout(.cycleTabRequested(forward: false))) {
-			$0.terminalLayout?.activeSessionId = two.id
-			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = two.id
-			$0.terminalLayout?.recentSessionIds = [one.id, three.id, two.id]
+		await store.send(.terminals(.cycleTabRequested(forward: false))) {
+			$0.terminals = terminals([one, two, three], active: two, recent: [one, three, two])
 		}
 	}
 
@@ -72,15 +79,11 @@ struct TerminalTabCycleTests {
 		// Tab 2 was dragged in front of tab 1, so the bar reads "Terminal 2, Terminal 1".
 		let store = makeStore(sessions: [alphaTwo, beta, alphaOne], active: alphaTwo)
 
-		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
-			$0.terminalLayout?.activeSessionId = alphaOne.id
-			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = alphaOne.id
-			$0.terminalLayout?.recentSessionIds = [alphaTwo.id, alphaOne.id]
+		await store.send(.terminals(.cycleTabRequested(forward: true))) {
+			$0.terminals = terminals([alphaTwo, beta, alphaOne], active: alphaOne, recent: [alphaTwo, alphaOne])
 		}
-		await store.send(.terminalLayout(.cycleTabRequested(forward: true))) {
-			$0.terminalLayout?.activeSessionId = alphaTwo.id
-			$0.terminalLayout?.lastActiveSessionByRepo["/repos/alpha"] = alphaTwo.id
-			$0.terminalLayout?.recentSessionIds = [alphaOne.id, alphaTwo.id]
+		await store.send(.terminals(.cycleTabRequested(forward: true))) {
+			$0.terminals = terminals([alphaTwo, beta, alphaOne], active: alphaTwo, recent: [alphaOne, alphaTwo])
 		}
 	}
 
@@ -90,7 +93,7 @@ struct TerminalTabCycleTests {
 		let beta = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
 		let store = makeStore(sessions: [alpha, beta], active: alpha)
 
-		await store.send(.terminalLayout(.cycleTabRequested(forward: true)))
-		await store.send(.terminalLayout(.cycleTabRequested(forward: false)))
+		await store.send(.terminals(.cycleTabRequested(forward: true)))
+		await store.send(.terminals(.cycleTabRequested(forward: false)))
 	}
 }

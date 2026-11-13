@@ -42,28 +42,25 @@ struct SavedTerminalTabs: Codable, Equatable, Sendable {
 	///   never created, because the panel has not been opened since the tabs were restored) keeps
 	///   the directory it starts in and the conversation it was going to resume — nothing has
 	///   happened in it since.
-	init(
-		sessions: IdentifiedArrayOf<TerminalSession>,
-		layout: TerminalLayoutReducer.State?,
-		panes: [UUID: TerminalPaneSnapshot]
-	) {
-		let paneTabIds = layout.map { layout in
-			layout.splitSessionIds.isEmpty ? [] : TerminalTabs(sessions: sessions, focus: layout.focus).paneTabIds
-		} ?? []
-		tabs = sessions
+	init(_ terminals: TerminalTabs, panes: [UUID: TerminalPaneSnapshot]) {
+		// What is on screen is saved only while the panel is: a panel closed at quit stays closed
+		// at the next launch, and its tabs' shells start the first time it opens.
+		let isVisible = terminals.isPanelVisible
+		let isSplit = isVisible && terminals.panes.count > 1
+		tabs = terminals.sessions
 			.filter { $0.status.isLive && !$0.isRunTab }
 			.map { session in
-				let paneIndex = paneTabIds.firstIndex { $0.contains(session.id) }
+				let paneIndex = isSplit ? terminals.paneIndex(owning: session.id) : nil
 				return SavedTerminalTab(
 					repositoryPath: session.repositoryPath,
 					directory: panes[session.id]?.directory ?? session.startingDirectory,
 					startupCommand: session.startupCommand,
 					claudeSessionId: panes[session.id].map(\.claudeSessionId) ?? session.resumedClaudeSessionId,
 					tabIndex: session.tabIndex,
-					isRepositoryCurrentTab: layout?.lastActiveSessionByRepo[session.repositoryPath] == session.id,
-					isOnScreen: layout?.activeSessionId == session.id,
+					isRepositoryCurrentTab: terminals.lastActiveSessionByRepo[session.repositoryPath] == session.id,
+					isOnScreen: isVisible && terminals.activeSessionId == session.id,
 					paneIndex: paneIndex,
-					isPaneCurrentTab: paneIndex.map { _ in layout?.splitSessionIds.contains(session.id) ?? false }
+					isPaneCurrentTab: paneIndex.map { terminals.panes[$0].shown == session.id }
 				)
 			}
 	}

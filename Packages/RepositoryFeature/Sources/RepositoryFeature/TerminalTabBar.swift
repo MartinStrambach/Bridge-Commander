@@ -8,9 +8,10 @@ import TerminalFeature
 /// The bar of the first pane also carries the panel's keyboard shortcuts, as hidden buttons, so
 /// they are registered once however many panes there are.
 struct TerminalTabBar: View {
+	/// The toolbar's store, for the shortcuts that are its (zoom, refresh) and for whether a
+	/// sheet is up.
 	let store: StoreOf<TerminalLayoutReducer>
-	let sessions: IdentifiedArrayOf<TerminalSession>
-	let terminalViewStore: TerminalViewStore
+	let workspace: StoreOf<TerminalWorkspaceReducer>
 	/// The pane's tabs, in bar order.
 	let tabs: [TerminalSession]
 	/// The tab the pane shows.
@@ -20,9 +21,6 @@ struct TerminalTabBar: View {
 	/// bar also has no button that takes the pane away.
 	var paneTitle: String?
 	var hostsShortcuts = true
-	let onNewTab: () -> Void
-	let onSelectTab: (UUID) -> Void
-	let onKillTab: (UUID) -> Void
 
 	/// The tab being dragged, set when its drag starts and read by every other tab's drop
 	/// delegate to move it as the pointer passes over them. Local to this bar, so a tab dragged
@@ -31,7 +29,7 @@ struct TerminalTabBar: View {
 	private var draggedTabId: UUID?
 
 	private var activeSessionId: UUID? {
-		store.activeSessionId
+		workspace.activeSessionId
 	}
 
 	/// Whether this bar's pane has the keyboard.
@@ -39,18 +37,9 @@ struct TerminalTabBar: View {
 		shownSessionId != nil && shownSessionId == activeSessionId
 	}
 
-	/// Whether the panel has room for another pane.
-	private var canSplit: Bool {
-		activeSessionId != nil && store.paneSessionIds.count < TerminalTabs.maxPanes
-	}
-
 	/// The tabs of the pane with the keyboard, which ⌘1…⌘9 choose among.
 	private var activePaneTabs: [TerminalSession] {
-		guard let activeSessionId, let slot = store.paneSessionIds.firstIndex(of: activeSessionId) else {
-			return []
-		}
-
-		return TerminalTabs(sessions: sessions, focus: store.focus).paneTabs(at: slot)
+		workspace.state.tabs(inPane: workspace.activePaneIndex)
 	}
 
 	var body: some View {
@@ -74,7 +63,7 @@ struct TerminalTabBar: View {
 
 					Button {
 						takeKeyboard()
-						onNewTab()
+						workspace.send(.newTabRequested)
 					} label: {
 						Image(systemName: "plus")
 							.scaledFont(size: 11)
@@ -87,7 +76,7 @@ struct TerminalTabBar: View {
 
 					Button {
 						takeKeyboard()
-						requestSplit()
+						workspace.send(.splitRequested)
 					} label: {
 						Image(systemName: "rectangle.split.2x1")
 							.scaledFont(size: 11)
@@ -97,7 +86,7 @@ struct TerminalTabBar: View {
 					}
 					.buttonStyle(.borderless)
 					.help("Split: a new terminal beside this one (⌘D), up to \(TerminalTabs.maxPanes) side by side")
-					.disabled(!canSplit)
+					.disabled(!workspace.canSplit)
 
 					if hostsShortcuts {
 						shortcuts
@@ -108,7 +97,7 @@ struct TerminalTabBar: View {
 			}
 
 			if paneTitle != nil, let shownSessionId {
-				Button(action: { store.send(.closePane(sessionId: shownSessionId)) }) {
+				Button(action: { workspace.send(.closePane(sessionId: shownSessionId)) }) {
 					Image(systemName: "xmark")
 						.scaledFont(size: 9)
 						.padding(6)
@@ -130,15 +119,8 @@ struct TerminalTabBar: View {
 	/// Gives this bar's pane the keyboard, so what its buttons open lands in it.
 	private func takeKeyboard() {
 		if let shownSessionId, shownSessionId != activeSessionId {
-			store.send(.paneFocused(sessionId: shownSessionId))
+			workspace.send(.paneFocused(sessionId: shownSessionId))
 		}
-	}
-
-	/// The directory is read when the split is asked for, not captured: it is wherever the
-	/// active terminal's shell is by then.
-	private func requestSplit() {
-		let directory = store.activeSessionId.flatMap { terminalViewStore.currentDirectory(sessionId: $0) }
-		store.send(.splitRequested(directory: directory))
 	}
 
 	// MARK: - Tab Pill
@@ -162,7 +144,7 @@ struct TerminalTabBar: View {
 			}
 
 			if totalCount > 1 {
-				Button(action: { onKillTab(session.id) }) {
+				Button(action: { workspace.send(.killTab(sessionId: session.id)) }) {
 					Image(systemName: "xmark")
 						.scaledFont(size: 8)
 						.padding(4)
@@ -177,39 +159,67 @@ struct TerminalTabBar: View {
 		.cornerRadius(6)
 		.contentShape(Rectangle())
 		.onTapGesture {
-			onSelectTab(session.id)
+			workspace.send(.selectTab(sessionId: session.id))
 		}
 		.liveReorderable(
 			id: session.id,
 			isEnabled: totalCount > 1,
 			draggedId: $draggedTabId,
 			onMove: { dragged, target in
-				store.send(.moveTab(sessionId: dragged, ontoSessionId: target))
+				// Animated so the pills slide into their new places rather than jump; the
+				// `ForEach` is keyed by session id, which is what makes the move animatable.
+				withAnimation(.snappy) {
+					_ = workspace.send(.moveTab(sessionId: dragged, ontoSessionId: target))
+				}
 			}
 		)
 	}
 
 	// MARK: - Shortcuts
 
+	/// Whether the staging panel or the commit graph is up. They are their own windows with their
+	/// own idea of what a keystroke means, so the panel's shortcuts do nothing meanwhile.
+	///
+	/// Most shortcuts stay registered and check this when the key is pressed: a shortcut button
+	/// inserted and removed with the sheets can stop being delivered on macOS 27. ⌘W and ⌘R are
+	/// the exceptions, taken out while a sheet is up — ⌘W has to fall through to File ▸ Close,
+	/// and the sheets register ⌘R themselves, where two owners get the key at random.
+	private var isSheetUp: Bool {
+		store.stagingDetail != nil || store.gitGraph != nil
+	}
+
+	/// Sends a shortcut's action unless a sheet is up.
+	private func sendUnlessSheetUp(_ action: TerminalLayoutReducer.Action) {
+		if !isSheetUp {
+			store.send(action)
+		}
+	}
+
+	private func sendUnlessSheetUp(_ action: TerminalWorkspaceReducer.Action) {
+		if !isSheetUp {
+			workspace.send(action)
+		}
+	}
+
 	/// Every shortcut of the panel. They act on the pane with the keyboard, whichever bar hosts
 	/// them.
 	@ViewBuilder
 	private var shortcuts: some View {
-		let repoSessions = sessions.filter { $0.repositoryPath == store.activeRepositoryPath }
+		let repoSessions = workspace.sessions.filter { $0.repositoryPath == workspace.activeRepositoryPath }
 
 		Group {
-			Button("", action: onNewTab)
+			Button("") { workspace.send(.newTabRequested) }
 				.keyboardShortcut("t", modifiers: .command)
-			Button("", action: requestSplit)
+			Button("") { workspace.send(.splitRequested) }
 				.keyboardShortcut("d", modifiers: .command)
-				.disabled(!canSplit)
+				.disabled(!workspace.canSplit)
 		}
 		.hidden()
 
 		// Hidden buttons for Cmd+1…Cmd+9 tab switching
 		ForEach(Array(activePaneTabs.prefix(9).enumerated()), id: \.element.id) { index, session in
 			let key = KeyEquivalent(Character(String(index + 1)))
-			Button("") { onSelectTab(session.id) }
+			Button("") { workspace.send(.selectTab(sessionId: session.id)) }
 				.keyboardShortcut(key, modifiers: .command)
 				.hidden()
 		}
@@ -230,58 +240,45 @@ struct TerminalTabBar: View {
 	/// ⌘A in `RepositoryListView`), so registering it unconditionally would strand the window.
 	/// Yielded while a sheet is up: the staging panel and the graph are their own windows to close.
 	///
-	/// The action deliberately carries no session id and does not go through `onKillTab`: SwiftUI
-	/// held on to the closure this button was first laid out with, so a captured id killed the
-	/// same, already-removed session on every press after the first. The reducer resolves the
-	/// active tab instead, and hangs the shell up via `killSessions(notIn:)` in `RepositoryListView`.
+	/// The action deliberately carries no session id, unlike `killTab`: SwiftUI held on to the
+	/// closure this button was first laid out with, so a captured id killed the same,
+	/// already-removed session on every press after the first. The reducer resolves the active
+	/// tab instead.
 	@ViewBuilder
 	private func closeTabShortcut(repoSessions: some Collection<TerminalSession>) -> some View {
-		let hasOtherRepoSessions = sessions.contains { $0.repositoryPath != store.activeRepositoryPath }
+		let hasOtherRepoSessions = workspace.sessions.contains { $0.repositoryPath != workspace.activeRepositoryPath }
 		if repoSessions.count > 1 || hasOtherRepoSessions,
 		   let activeSessionId,
 		   repoSessions.contains(where: { $0.id == activeSessionId }),
-		   store.stagingDetail == nil,
-		   store.gitGraph == nil {
-			Button("") { store.send(.closeActiveTabRequested) }
+		   !isSheetUp {
+			Button("") { workspace.send(.closeActiveTabRequested) }
 				.keyboardShortcut("w", modifiers: .command)
 				.hidden()
 		}
 	}
 
 	/// ⌃Tab / ⌃⇧Tab cycle through the active pane's tabs, the shortcut Terminal.app uses. The
-	/// reducer resolves the active tab when the key fires, for the reason ⌘W documents. Yielded
-	/// while a sheet is up for the same reason the zoom shortcuts are.
-	@ViewBuilder
+	/// reducer resolves the active tab when the key fires, for the reason ⌘W documents.
 	private var cycleTabShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			Group {
-				Button("") { store.send(.cycleTabRequested(forward: true)) }
-					.keyboardShortcut(.tab, modifiers: .control)
-				Button("") { store.send(.cycleTabRequested(forward: false)) }
-					.keyboardShortcut(.tab, modifiers: [.control, .shift])
-			}
-			.hidden()
-		}
-	}
-
-	/// ⌘] / ⌘[ move the keyboard between the panes of the split, the shortcuts iTerm uses. The
-	/// reducer resolves the active pane when the key fires, for the reason ⌘W documents. Always
-	/// registered, deciding at press time whether a sheet is up: a shortcut button inserted and
-	/// removed with the sheets can stop being delivered on macOS 27.
-	private var cyclePaneShortcuts: some View {
 		Group {
-			Button("") { cyclePane(forward: true) }
-				.keyboardShortcut("]", modifiers: .command)
-			Button("") { cyclePane(forward: false) }
-				.keyboardShortcut("[", modifiers: .command)
+			Button("") { sendUnlessSheetUp(.cycleTabRequested(forward: true)) }
+				.keyboardShortcut(.tab, modifiers: .control)
+			Button("") { sendUnlessSheetUp(.cycleTabRequested(forward: false)) }
+				.keyboardShortcut(.tab, modifiers: [.control, .shift])
 		}
 		.hidden()
 	}
 
-	private func cyclePane(forward: Bool) {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			store.send(.cyclePaneRequested(forward: forward))
+	/// ⌘] / ⌘[ move the keyboard between the panes of the split, the shortcuts iTerm uses. The
+	/// reducer resolves the active pane when the key fires, for the reason ⌘W documents.
+	private var cyclePaneShortcuts: some View {
+		Group {
+			Button("") { sendUnlessSheetUp(.cyclePaneRequested(forward: true)) }
+				.keyboardShortcut("]", modifiers: .command)
+			Button("") { sendUnlessSheetUp(.cyclePaneRequested(forward: false)) }
+				.keyboardShortcut("[", modifiers: .command)
 		}
+		.hidden()
 	}
 
 	/// ⌘R refreshes only the repo opened in the terminal; the full-list refresh in
@@ -294,7 +291,7 @@ struct TerminalTabBar: View {
 	/// never fires (the unconditional ⌘§ beside it still does), so ⌘R silently did nothing.
 	@ViewBuilder
 	private var refreshShortcut: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
+		if !isSheetUp {
 			Button("") { store.send(.refreshActiveRepoRequested) }
 				.keyboardShortcut("r", modifiers: .command)
 				.hidden()
@@ -305,23 +302,18 @@ struct TerminalTabBar: View {
 	///
 	/// "+" is registered alongside "=" because on a US layout the plus key *is* ⇧=, and SwiftUI
 	/// matches the literal key equivalent — with only "+" registered the user has to hold shift.
-	/// Yielded while a sheet is up for the same reason ⌘W is: the staging panel and the graph are
-	/// separate windows with their own idea of what a keystroke means.
-	@ViewBuilder
 	private var zoomShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			Group {
-				Button("") { store.send(.zoomInRequested) }
-					.keyboardShortcut("+", modifiers: .command)
-				Button("") { store.send(.zoomInRequested) }
-					.keyboardShortcut("=", modifiers: .command)
-				Button("") { store.send(.zoomOutRequested) }
-					.keyboardShortcut("-", modifiers: .command)
-				Button("") { store.send(.resetZoomRequested) }
-					.keyboardShortcut("0", modifiers: .command)
-			}
-			.hidden()
+		Group {
+			Button("") { sendUnlessSheetUp(.zoomInRequested) }
+				.keyboardShortcut("+", modifiers: .command)
+			Button("") { sendUnlessSheetUp(.zoomInRequested) }
+				.keyboardShortcut("=", modifiers: .command)
+			Button("") { sendUnlessSheetUp(.zoomOutRequested) }
+				.keyboardShortcut("-", modifiers: .command)
+			Button("") { sendUnlessSheetUp(.resetZoomRequested) }
+				.keyboardShortcut("0", modifiers: .command)
 		}
+		.hidden()
 	}
 
 	/// ⌘G / ⇧⌘G / ⌘E drive SwiftTerm's find bar in the active pane — the standard Find menu
@@ -329,27 +321,21 @@ struct TerminalTabBar: View {
 	/// ⌘F, which opens the bar, is `RepositoryListView`'s (it doubles as the list's filter shortcut);
 	/// Escape and Return are the find bar's own (close, next; ⇧Return for previous).
 	///
-	/// The session is read from the store when the key is pressed, not captured, for the reason
-	/// ⌘W documents: SwiftUI can keep the closure a hidden button was first laid out with. Yielded
-	/// while a sheet is up for the same reason the zoom shortcuts are.
-	@ViewBuilder
+	/// The reducer resolves the session when the key is pressed, for the reason ⌘W documents:
+	/// SwiftUI can keep the closure a hidden button was first laid out with.
 	private var findShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
-			Group {
-				Button("") { find(.next) }
-					.keyboardShortcut("g", modifiers: .command)
-				Button("") { find(.previous) }
-					.keyboardShortcut("g", modifiers: [.command, .shift])
-				Button("") { find(.useSelection) }
-					.keyboardShortcut("e", modifiers: .command)
-			}
-			.hidden()
+		Group {
+			Button("") { find(.next) }
+				.keyboardShortcut("g", modifiers: .command)
+			Button("") { find(.previous) }
+				.keyboardShortcut("g", modifiers: [.command, .shift])
+			Button("") { find(.useSelection) }
+				.keyboardShortcut("e", modifiers: .command)
 		}
+		.hidden()
 	}
 
 	private func find(_ command: TerminalFindCommand) {
-		if let sessionId = store.activeSessionId {
-			terminalViewStore.performFind(command, sessionId: sessionId)
-		}
+		sendUnlessSheetUp(.findRequested(command))
 	}
 }

@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Foundation
 import GitCore
 import GitHosting
+import TerminalFeature
 import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
@@ -306,20 +307,6 @@ struct RepositoryListRefreshTests {
 		await store.finish()
 	}
 
-	@Test("terminal ⌘R is a no-op while no repository is selected in the sidebar")
-	func terminalRefreshWithoutActiveRepoIsANoOp() async {
-		let store = makeStore(terminalActiveRepositoryPath: nil, terminalLayoutOpen: true)
-
-		store.exhaustivity = .off
-		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
-			mainRepo("/repos/alpha", name: "alpha"),
-		]))
-		store.exhaustivity = .on
-
-		await store.send(.terminalLayout(.refreshActiveRepoRequested))
-		await store.finish()
-	}
-
 	// MARK: - Terminal-mode refresh after an in-panel operation
 
 	@Test("a successful push from the terminal toolbar refreshes the opened repo's row")
@@ -372,6 +359,54 @@ struct RepositoryListRefreshTests {
 		await store.finish()
 	}
 
+	@Test("a finished merge from the terminal's banner refreshes the row it names")
+	func toolbarFinishMergeRefreshesItsRow() async {
+		// The keyboard is in the main repository; the merge was finished in the worktree, which
+		// is the row the completion names and the one whose merge flag has to clear.
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+			worktree("/repos/alpha-one", name: "alpha-one", branch: "feature-one"),
+		]))
+		store.exhaustivity = .on
+
+		await store.send(.terminalLayout(.finishMergeCompleted(repositoryPath: "/repos/alpha-one", error: nil)))
+
+		// Exhaustive: a refresh of the active repository's row instead, or an alert, fails here.
+		await store.receive {
+			isWorktreeRefresh($0, groupId: "/repos/alpha", worktreeId: "/repos/alpha-one")
+		} assert: {
+			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.worktrees[id: "/repos/alpha-one"]?.isRefreshingStatus = true
+		}
+
+		store.exhaustivity = .off
+		await store.finish()
+	}
+
+	@Test("a failed finish-merge from the terminal's banner alerts instead of refreshing")
+	func toolbarFinishMergeFailureAlertsWithoutRefreshing() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		store.exhaustivity = .on
+
+		let error = GitError.mergeFailed("conflicts remain")
+		// Exhaustive: a row refresh reaching the queue fails here.
+		await store.send(.terminalLayout(.finishMergeCompleted(repositoryPath: "/repos/alpha", error: error))) {
+			$0.alert = AlertState {
+				TextState("Finish Merge Failed")
+			} message: {
+				TextState(error.localizedDescription)
+			}
+		}
+		await store.finish()
+	}
+
 	@Test("closing the staging sheet in terminal mode refreshes the opened repo's row")
 	func stagingSheetDismissalRefreshesActiveRow() async {
 		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
@@ -403,14 +438,18 @@ struct RepositoryListRefreshTests {
 
 	private func makeStore(
 		clock: any Clock<Duration> = ImmediateClock(),
-		terminalActiveRepositoryPath: String? = nil,
-		terminalLayoutOpen: Bool = false
+		terminalActiveRepositoryPath: String? = nil
 	) -> TestStoreOf<RepositoryListReducer> {
 		var initialState = RepositoryListReducer.State()
-		if terminalActiveRepositoryPath != nil || terminalLayoutOpen {
-			initialState.terminalLayout = TerminalLayoutReducer.State(
-				activeRepositoryPath: terminalActiveRepositoryPath
+		if let terminalActiveRepositoryPath {
+			// The panel on screen with one terminal, in that repository.
+			let session = TerminalSession(repositoryPath: terminalActiveRepositoryPath)
+			initialState.terminals = TerminalTabs(
+				sessions: [session],
+				panes: [TerminalPane(shown: session.id, tabs: [session.id])],
+				isPanelVisible: true
 			)
+			initialState.terminalLayout = TerminalLayoutReducer.State()
 		}
 		return TestStore(initialState: initialState) {
 			RepositoryListReducer()

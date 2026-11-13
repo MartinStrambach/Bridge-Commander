@@ -44,10 +44,10 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	/// The font every pane renders with. Resolved by the caller — the family and its point size are
 	/// both settings, and this package stays free of a Settings dependency.
 	public let font: NSFont
-	public let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
-	public let onNotification: @Sendable (UUID, TerminalNotification) -> Void
+	public let onStatusChange: @MainActor (UUID, TerminalSessionStatus) -> Void
+	public let onNotification: @MainActor (UUID, TerminalNotification) -> Void
 	/// A ⌘-clicked link that names a file.
-	public let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
+	public let onOpenFile: @MainActor (UUID, TerminalFileLink) -> Void
 	/// A pane was clicked, and so took keyboard focus.
 	public let onPaneClicked: @MainActor (UUID) -> Void
 
@@ -66,9 +66,9 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		mouseReporting: Bool,
 		statusSource: ClaudeStatusSource = .progressAndScreen,
 		font: NSFont,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void,
+		onStatusChange: @escaping @MainActor (UUID, TerminalSessionStatus) -> Void,
+		onNotification: @escaping @MainActor (UUID, TerminalNotification) -> Void,
+		onOpenFile: @escaping @MainActor (UUID, TerminalFileLink) -> Void,
 		onPaneClicked: @escaping @MainActor (UUID) -> Void = { _ in }
 	) {
 		self.terminalViewStore = terminalViewStore

@@ -1,26 +1,21 @@
 import AppKit
 import Foundation
-import Observation
 import SwiftTerm
 
+/// Not `@Observable`: no view reads anything off it, and `updateNSView` both reads and writes it,
+/// where an observed write makes SwiftUI update the same views again.
 @MainActor
-@Observable
 public final class TerminalViewStore {
 	private var views: [UUID: ClaudeAwareTerminalView] = [:]
 
 	/// Each pane's process delegate, which `LocalProcessTerminalView` holds only weakly. Kept here,
 	/// for as long as the pane, rather than by the view that shows it: a pane moves between the
 	/// containers of a split panel, and those come and go with the split.
-	@ObservationIgnored
 	private var processDelegates: [UUID: TerminalProcessDelegate] = [:]
 
 	/// The terminals on screen, left to right, as the first slot's container last heard it. The
 	/// one copy every container goes by — see `TerminalContainerRepresentable.updateNSView`.
-	/// Not observed, like the containers below: both are written from `updateNSView`, and an
-	/// observed write there makes SwiftUI update the same views again, without end.
-	@ObservationIgnored
 	var shownSessionIds: [UUID] = []
-	@ObservationIgnored
 	private var slotContainers: [Int: WeakContainer] = [:]
 
 	private struct WeakContainer {
@@ -84,9 +79,9 @@ public final class TerminalViewStore {
 		selectionColor: NSColor? = nil,
 		statusSource: ClaudeStatusSource = .progressAndScreen,
 		processDelegate: TerminalProcessDelegate? = nil,
-		onStatusChange: @escaping @Sendable (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @Sendable (UUID, TerminalNotification) -> Void,
-		onOpenFile: @escaping @Sendable (UUID, TerminalFileLink) -> Void = { _, _ in }
+		onStatusChange: @escaping @MainActor (UUID, TerminalSessionStatus) -> Void,
+		onNotification: @escaping @MainActor (UUID, TerminalNotification) -> Void,
+		onOpenFile: @escaping @MainActor (UUID, TerminalFileLink) -> Void = { _, _ in }
 	) -> ClaudeAwareTerminalView {
 		if let existing = views[session.id] {
 			return existing
@@ -143,13 +138,16 @@ public final class TerminalViewStore {
 			currentDirectory: session.startingDirectory
 		)
 
-		// Store the view before calling onStatusChange to prevent re-entrancy:
-		// onStatusChange triggers a TCA state mutation that can cause updateNSView to fire
-		// again synchronously; if views[id] were still nil at that point, a second
-		// ClaudeAwareTerminalView would be created for the same session.
 		views[session.id] = terminalView
 
-		onStatusChange(session.id, .active)
+		// Reported on the next turn of the main queue, not here: panes are created from
+		// `updateNSView`, and the report changes the state that update is drawing. A pane killed
+		// in between has nothing to report.
+		DispatchQueue.main.async { [weak self] in
+			if self?.views[sessionId] === terminalView {
+				onStatusChange(sessionId, .active)
+			}
+		}
 
 		return terminalView
 	}
@@ -191,23 +189,9 @@ public final class TerminalViewStore {
 		processDelegates.removeValue(forKey: sessionId)
 	}
 
-	/// Kills every session that is not in `sessionIds`.
-	///
-	/// The reducer owns the list of sessions and can drop one without going through this store,
-	/// as it does when a worktree is deleted. The view layer calls this whenever that list
-	/// changes, so no pane outlives its session whichever way the session went.
-	public func killSessions(notIn sessionIds: Set<UUID>) {
-		let stale = views.keys.filter { !sessionIds.contains($0) }
-		for id in stale {
-			killSession(sessionId: id)
-		}
-	}
-
-	public func killAllSessions(for repositoryPath: String) {
-		let sessionIds = views.compactMap { id, view -> UUID? in
-			view.repositoryPath == repositoryPath ? id : nil
-		}
-		for id in sessionIds {
+	/// Kills every session: the window that showed them is closing.
+	public func killAllSessions() {
+		for id in Array(views.keys) {
 			killSession(sessionId: id)
 		}
 	}

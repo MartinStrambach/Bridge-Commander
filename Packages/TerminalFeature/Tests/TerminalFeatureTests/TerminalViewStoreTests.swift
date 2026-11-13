@@ -143,17 +143,16 @@ struct TerminalViewStoreTests {
 		store.killSession(sessionId: survivor.session.id)
 	}
 
-	@Test func killSessionsNotInHangsUpOnlyTheSessionsThatVanished() async throws {
+	@Test func killAllSessionsHangsUpEveryShell() async throws {
 		let store = makeStore()
-		let kept = startSession(in: store)
-		let vanished = startSession(in: store)
-		try #require(kept.pid > 0 && vanished.pid > 0)
+		let first = startSession(in: store)
+		let second = startSession(in: store)
+		try #require(first.pid > 0 && second.pid > 0)
 
-		store.killSessions(notIn: [kept.session.id])
+		store.killAllSessions()
 
-		#expect(await eventually { !isRunning(vanished.pid) })
-		#expect(isRunning(kept.pid))
-		store.killSession(sessionId: kept.session.id)
+		#expect(await eventually { !isRunning(first.pid) })
+		#expect(await eventually { !isRunning(second.pid) })
 	}
 
 	/// A killed pane gets one last burst of output as its shell exits, and the pane can outlive the

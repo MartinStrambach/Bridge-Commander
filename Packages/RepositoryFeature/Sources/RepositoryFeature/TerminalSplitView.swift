@@ -61,15 +61,10 @@ struct TerminalSplitWidths: Equatable {
 /// equal widths whenever one is added or removed (`TerminalSplitWidths`).
 struct TerminalSplitView: View {
 	let store: StoreOf<TerminalLayoutReducer>
-	let sessions: IdentifiedArrayOf<TerminalSession>
-	let terminalViewStore: TerminalViewStore
-	let onStatusChange: @Sendable (UUID, TerminalSessionStatus) -> Void
-	let onNotification: @Sendable (UUID, TerminalNotification) -> Void
-	let onOpenFile: @Sendable (UUID, TerminalFileLink) -> Void
-	let onRetry: (UUID) -> Void
-	let onNewTab: () -> Void
-	let onSelectTab: (UUID) -> Void
-	let onKillTab: (UUID) -> Void
+	let workspace: StoreOf<TerminalWorkspaceReducer>
+	let onStatusChange: @MainActor (UUID, TerminalSessionStatus) -> Void
+	let onNotification: @MainActor (UUID, TerminalNotification) -> Void
+	let onOpenFile: @MainActor (UUID, TerminalFileLink) -> Void
 
 	@Shared(.terminalColorTheme)
 	private var terminalColorTheme = TerminalThemeSelection.builtIn(.basicDark)
@@ -126,20 +121,15 @@ struct TerminalSplitView: View {
 	@GestureState private var widthsAtDragStart: TerminalSplitWidths?
 
 	var body: some View {
-		let panes = store.paneSessionIds.compactMap { sessions[id: $0] }
+		let panes = workspace.shownSessionIds.compactMap { workspace.sessions[id: $0] }
 		let count = max(panes.count, 1)
-		let paneTabs = TerminalTabs(sessions: sessions, focus: store.focus).paneTabIds
 		return GeometryReader { proxy in
 			let shares = draggedWidths.flatMap { $0.fractions.count == count ? $0 : nil }
 				?? TerminalSplitWidths(count: count)
 			let widths = shares.widths(total: proxy.size.width)
 			HStack(spacing: 0) {
 				ForEach(0 ..< count, id: \.self) { slot in
-					paneView(
-						slot: slot,
-						panes: panes,
-						tabs: paneTabs.indices.contains(slot) ? paneTabs[slot].compactMap { sessions[id: $0] } : []
-					)
+					paneView(slot: slot, panes: panes, tabs: workspace.state.tabs(inPane: slot))
 						.frame(width: widths[slot])
 						.frame(maxHeight: .infinity)
 					if slot < count - 1 {
@@ -185,26 +175,22 @@ struct TerminalSplitView: View {
 			if let session {
 				TerminalTabBar(
 					store: store,
-					sessions: sessions,
-					terminalViewStore: terminalViewStore,
+					workspace: workspace,
 					tabs: tabs,
 					shownSessionId: session.id,
 					paneTitle: panes.count > 1 ? repositoryTitle(for: session) : nil,
-					hostsShortcuts: slot == 0,
-					onNewTab: onNewTab,
-					onSelectTab: onSelectTab,
-					onKillTab: onKillTab
+					hostsShortcuts: slot == 0
 				)
 				Divider()
 			}
 
 			ZStack {
 				TerminalContainerRepresentable(
-					terminalViewStore: terminalViewStore,
-					sessions: sessions,
+					terminalViewStore: .shared,
+					sessions: workspace.sessions,
 					shownSessionIds: panes.map(\.id),
 					slot: slot,
-					activeSessionId: store.activeSessionId,
+					activeSessionId: workspace.activeSessionId,
 					foregroundColor: resolvedTheme.foreground,
 					backgroundColor: resolvedTheme.background,
 					ansiPalette: resolvedTheme.ansiPalette,
@@ -218,7 +204,7 @@ struct TerminalSplitView: View {
 					onNotification: onNotification,
 					onOpenFile: onOpenFile,
 					onPaneClicked: { sessionId in
-						store.send(.paneFocused(sessionId: sessionId))
+						workspace.send(.paneFocused(sessionId: sessionId))
 					}
 				)
 
@@ -226,7 +212,7 @@ struct TerminalSplitView: View {
 					terminalErrorView(message: message, sessionId: session.id)
 				}
 
-				if store.activeRepositoryPath == nil {
+				if workspace.activeRepositoryPath == nil {
 					VStack {
 						Spacer()
 						Text("Select a repository from the sidebar")
@@ -259,7 +245,7 @@ struct TerminalSplitView: View {
 				.scaledFont(.caption)
 				.foregroundColor(.secondary)
 			Button("Retry") {
-				onRetry(sessionId)
+				workspace.send(.retryTab(sessionId: sessionId))
 			}
 			.buttonStyle(.scaledBorderedProminent)
 		}

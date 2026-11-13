@@ -4,9 +4,9 @@ import SwiftTerm
 /// Reports a pane whose shell has exited. `LocalProcessTerminalView` holds its process delegate
 /// weakly, so whoever creates one has to keep it alive for as long as the pane.
 public final class TerminalProcessDelegate: LocalProcessTerminalViewDelegate {
-	private let onFailed: @Sendable (String) -> Void
+	private let onFailed: @MainActor (String) -> Void
 
-	public init(onFailed: @escaping @Sendable (String) -> Void) {
+	public init(onFailed: @escaping @MainActor (String) -> Void) {
 		self.onFailed = onFailed
 	}
 

@@ -13,7 +13,7 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let posted = LockIsolated<[TerminalNotificationContent]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -22,7 +22,7 @@ struct RepositoryListNotificationTests {
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
 		}
 		#expect(posted.value == [
 			TerminalNotificationContent(sessionId: session.id, title: "alpha", body: "Claude is waiting for your input."),
@@ -34,7 +34,7 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha", startupCommand: "claude")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let posted = LockIsolated<[TerminalNotificationContent]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -44,16 +44,16 @@ struct RepositoryListNotificationTests {
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
-			$0.terminalSessions[id: session.id]?.awaitsStartupPrompt = false
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.awaitsStartupPrompt = false
 		}
 		#expect(posted.value.isEmpty)
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .active))) {
-			$0.terminalSessions[id: session.id]?.status = .active
+			$0.terminals.sessions[id: session.id]?.status = .active
 		}
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
 		}
 		#expect(posted.value.map(\.sessionId) == [session.id])
 	}
@@ -63,7 +63,7 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha", startupCommand: "claude")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let posted = LockIsolated<[TerminalNotificationContent]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -73,8 +73,8 @@ struct RepositoryListNotificationTests {
 
 		let notification = TerminalNotification(title: nil, body: "build finished")
 		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
-			$0.terminalSessions[id: session.id]?.awaitsStartupPrompt = false
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.awaitsStartupPrompt = false
 		}
 		#expect(posted.value.map(\.body) == ["build finished"])
 	}
@@ -84,9 +84,12 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals = TerminalTabs(
+			sessions: [session],
+			panes: [TerminalPane(shown: session.id, tabs: [session.id])],
+			isPanelVisible: true
+		)
 		state.terminalLayout = TerminalLayoutReducer.State()
-		state.terminalLayout?.activate(session)
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
 		} withDependencies: {
@@ -94,7 +97,7 @@ struct RepositoryListNotificationTests {
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
 		}
 	}
 
@@ -103,9 +106,12 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals = TerminalTabs(
+			sessions: [session],
+			panes: [TerminalPane(shown: session.id, tabs: [session.id])],
+			isPanelVisible: true
+		)
 		state.terminalLayout = TerminalLayoutReducer.State()
-		state.terminalLayout?.activate(session)
 		let posted = LockIsolated<[TerminalNotificationContent]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -115,9 +121,74 @@ struct RepositoryListNotificationTests {
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
 		}
 		#expect(posted.value.map(\.sessionId) == [session.id])
+	}
+
+	@Test("posts for a tab shown in a pane while the panel is hidden, even with the app active")
+	func postsForShownTabWhilePanelHidden() async {
+		var session = TerminalSession(repositoryPath: "/repos/alpha")
+		session.status = .active
+		var state = RepositoryListReducer.State()
+		// Hiding the panel keeps its panes: the tab is still the one its pane shows, but the
+		// user cannot see it.
+		state.terminals = TerminalTabs(
+			sessions: [session],
+			panes: [TerminalPane(shown: session.id, tabs: [session.id])],
+			isPanelVisible: false
+		)
+		let posted = LockIsolated<[TerminalNotificationContent]>([])
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].isAppActive = { true }
+			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
+		}
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
+		}
+		#expect(posted.value.map(\.sessionId) == [session.id])
+	}
+
+	@Test("in a split, posts only for a tab that no pane shows while the app is active")
+	func splitPostsOnlyForTabsOffScreen() async {
+		var alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		alpha.status = .active
+		var beta = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
+		beta.status = .active
+		var betaBehind = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 2)
+		betaBehind.status = .active
+		var state = RepositoryListReducer.State()
+		// The keyboard is in alpha's pane; beta's pane shows its first tab, the second is behind it.
+		state.terminals = TerminalTabs(
+			sessions: [alpha, beta, betaBehind],
+			panes: [
+				TerminalPane(shown: alpha.id, tabs: [alpha.id]),
+				TerminalPane(shown: beta.id, tabs: [beta.id, betaBehind.id]),
+			],
+			isPanelVisible: true
+		)
+		state.terminalLayout = TerminalLayoutReducer.State()
+		let posted = LockIsolated<[TerminalNotificationContent]>([])
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].isAppActive = { true }
+			$0[TerminalNotificationClient.self].post = { content in posted.withValue { $0.append(content) } }
+		}
+
+		// On screen, though its pane does not have the keyboard.
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: beta.id, status: .waitingForInput))) {
+			$0.terminals.sessions[id: beta.id]?.status = .waitingForInput
+		}
+		#expect(posted.value.isEmpty)
+
+		await store.send(.view(.terminalSessionStatusChanged(sessionId: betaBehind.id, status: .waitingForInput))) {
+			$0.terminals.sessions[id: betaBehind.id]?.status = .waitingForInput
+		}
+		#expect(posted.value.map(\.sessionId) == [betaBehind.id])
 	}
 
 	@Test("withdraws the notification once the session is back at work")
@@ -125,7 +196,7 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .waitingForInput
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let removed = LockIsolated<[UUID]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -134,7 +205,7 @@ struct RepositoryListNotificationTests {
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .active))) {
-			$0.terminalSessions[id: session.id]?.status = .active
+			$0.terminals.sessions[id: session.id]?.status = .active
 		}
 		#expect(removed.value == [session.id])
 	}
@@ -144,20 +215,63 @@ struct RepositoryListNotificationTests {
 		let first = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
 		let second = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [first, second]
+		state.terminals.sessions = [first, second]
 		let activated = LockIsolated(false)
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
 		} withDependencies: {
 			$0[TerminalNotificationClient.self].activateApp = { activated.setValue(true) }
 		}
-		store.exhaustivity = .off
 
-		await store.send(.terminalNotificationTapped(sessionId: second.id))
-		#expect(store.state.terminalLayout?.activeSessionId == second.id)
-		#expect(store.state.terminalLayout?.activeRepositoryPath == "/repos/alpha")
+		await store.send(.terminalNotificationTapped(sessionId: second.id)) {
+			$0.terminals = TerminalTabs(
+				sessions: [first, second],
+				panes: [TerminalPane(shown: second.id, tabs: [first.id, second.id])],
+				isPanelVisible: true,
+				lastActiveSessionByRepo: ["/repos/alpha": second.id],
+				recentSessionIds: [second.id]
+			)
+			$0.terminalLayout = TerminalLayoutReducer.State()
+		}
 		await store.finish()
 		#expect(activated.value)
+	}
+
+	@Test("clicking the notification of a tab in a hidden panel shows the panel as it was, on that tab")
+	func tapShowsHiddenPanel() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		var state = RepositoryListReducer.State()
+		// A split left behind when the panel was hidden, the keyboard in alpha's pane.
+		state.terminals = TerminalTabs(
+			sessions: [alpha, beta],
+			panes: [
+				TerminalPane(shown: alpha.id, tabs: [alpha.id]),
+				TerminalPane(shown: beta.id, tabs: [beta.id]),
+			],
+			lastActiveSessionByRepo: ["/repos/alpha": alpha.id, "/repos/beta": beta.id],
+			recentSessionIds: [beta.id, alpha.id]
+		)
+		let store = TestStore(initialState: state) {
+			RepositoryListReducer()
+		} withDependencies: {
+			$0[TerminalNotificationClient.self].activateApp = {}
+		}
+
+		await store.send(.terminalNotificationTapped(sessionId: beta.id)) {
+			$0.terminals = TerminalTabs(
+				sessions: [alpha, beta],
+				panes: [
+					TerminalPane(shown: alpha.id, tabs: [alpha.id]),
+					TerminalPane(shown: beta.id, tabs: [beta.id]),
+				],
+				activePaneIndex: 1,
+				isPanelVisible: true,
+				lastActiveSessionByRepo: ["/repos/alpha": alpha.id, "/repos/beta": beta.id],
+				recentSessionIds: [alpha.id, beta.id]
+			)
+			$0.terminalLayout = TerminalLayoutReducer.State()
+		}
 	}
 
 	@Test("posts nothing when terminal notifications are turned off")
@@ -165,14 +279,14 @@ struct RepositoryListNotificationTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.status = .active
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		state.$terminalNotifications.withLock { $0 = false }
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .waitingForInput))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
 		}
 		let notification = TerminalNotification(title: nil, body: "build finished")
 		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification)))
@@ -182,16 +296,16 @@ struct RepositoryListNotificationTests {
 	func ignoresTransitionsOutsideWaiting() async {
 		let session = TerminalSession(repositoryPath: "/repos/alpha")
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
 		}
 
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .active))) {
-			$0.terminalSessions[id: session.id]?.status = .active
+			$0.terminals.sessions[id: session.id]?.status = .active
 		}
 		await store.send(.view(.terminalSessionStatusChanged(sessionId: session.id, status: .failed("exited")))) {
-			$0.terminalSessions[id: session.id]?.status = .failed("exited")
+			$0.terminals.sessions[id: session.id]?.status = .failed("exited")
 		}
 	}
 
@@ -217,7 +331,7 @@ struct RepositoryListNotificationTests {
 		var second = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
 		second.status = .active
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [first, second]
+		state.terminals.sessions = [first, second]
 		let posted = LockIsolated<[TerminalNotificationContent]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -227,7 +341,7 @@ struct RepositoryListNotificationTests {
 
 		let notification = TerminalNotification(title: "Claude Code", body: "Claude needs your permission to use Bash")
 		await store.send(.view(.terminalNotificationReceived(sessionId: second.id, notification: notification))) {
-			$0.terminalSessions[id: second.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: second.id]?.status = .waitingForInput
 		}
 		#expect(posted.value == [
 			TerminalNotificationContent(
@@ -243,7 +357,7 @@ struct RepositoryListNotificationTests {
 	func untitledProgramNotification() async {
 		let session = TerminalSession(repositoryPath: "/repos/alpha")
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let posted = LockIsolated<[TerminalNotificationContent]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -253,7 +367,7 @@ struct RepositoryListNotificationTests {
 
 		let notification = TerminalNotification(title: nil, body: "build finished")
 		await store.send(.view(.terminalNotificationReceived(sessionId: session.id, notification: notification))) {
-			$0.terminalSessions[id: session.id]?.status = .waitingForInput
+			$0.terminals.sessions[id: session.id]?.status = .waitingForInput
 		}
 		#expect(posted.value == [TerminalNotificationContent(sessionId: session.id, title: "alpha", body: "build finished")])
 	}

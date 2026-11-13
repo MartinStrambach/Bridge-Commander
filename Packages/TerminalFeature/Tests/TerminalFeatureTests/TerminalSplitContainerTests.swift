@@ -91,7 +91,7 @@ struct TerminalSplitContainerTests {
 		model.shown = [left.id, right.id]
 		show()
 		defer {
-			store.killSessions(notIn: [])
+			store.killAllSessions()
 			window.close()
 		}
 		try await settle()
@@ -137,7 +137,7 @@ struct TerminalSplitContainerTests {
 		model.shown = [left.id, right.id]
 		show()
 		defer {
-			store.killSessions(notIn: [])
+			store.killAllSessions()
 			window.close()
 		}
 		try await settle()
@@ -145,7 +145,7 @@ struct TerminalSplitContainerTests {
 
 		model.sessions = [right]
 		model.shown = [right.id]
-		store.killSessions(notIn: [right.id])
+		store.killSession(sessionId: left.id)
 		try await settle()
 
 		#expect(pane(right).superview === firstContainer)

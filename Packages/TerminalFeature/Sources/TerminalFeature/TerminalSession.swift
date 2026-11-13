@@ -17,6 +17,35 @@ public enum TerminalSessionStatus: Equatable, Sendable {
 			false
 		}
 	}
+
+	/// How much a status says when a repository's tabs are summed up in one dot: a tab waiting
+	/// for the user outranks one at work, which outranks one still starting, and a dead tab
+	/// counts only when the repository has nothing else.
+	private var summaryRank: Int {
+		switch self {
+		case .waitingForInput:
+			3
+		case .active:
+			2
+		case .launching:
+			1
+		case .failed:
+			0
+		}
+	}
+
+	/// The one of two tabs' statuses that stands for both.
+	public func summarized(with other: Self) -> Self {
+		other.summaryRank > summaryRank ? other : self
+	}
+}
+
+extension Collection<TerminalSession> {
+	/// One status per repository, for the dot beside it: the most pressing among its tabs, so a
+	/// second tab waiting for the user shows while the first is at work.
+	public var statusByRepository: [String: TerminalSessionStatus] {
+		Dictionary(map { ($0.repositoryPath, $0.status) }, uniquingKeysWith: { $0.summarized(with: $1) })
+	}
 }
 
 public struct TerminalSession: Identifiable, Equatable, Sendable {
@@ -48,7 +77,10 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		runTitle != nil
 	}
 
+	/// - Parameter id: Reducers pass one from the `uuid` dependency, so a test can name the
+	///   session a reducer opened; the default is for fixtures and call sites outside a reducer.
 	public init(
+		id: UUID = UUID(),
 		repositoryPath: String,
 		startingDirectory: String? = nil,
 		startupCommand: String? = nil,
@@ -56,7 +88,7 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
 		runTitle: String? = nil,
 		tabIndex: Int = 1
 	) {
-		self.id = UUID()
+		self.id = id
 		self.repositoryPath = repositoryPath
 		self.startingDirectory = startingDirectory ?? repositoryPath
 		let command = startupCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
