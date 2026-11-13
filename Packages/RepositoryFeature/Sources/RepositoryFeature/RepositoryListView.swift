@@ -93,13 +93,6 @@ struct RepositoryListView: View {
 	/// Stands where the window title used to; see `RootRepositoryView`.
 	let sectionSwitcher: AppSectionSwitcher
 
-	/// Every pane's shell is told where the simulator MCP server listens and which session it is,
-	/// so a `claude` started in it reaches the pane beside it (`ClaudeCodeRegistration`) and acts on
-	/// its repository's device.
-	@State
-	private var terminalViewStore = TerminalViewStore(additionalEnvironment: { session in
-		SimulatorMCPServer.shared.terminalEnvironment(sessionId: session.id, repositoryPath: session.repositoryPath)
-	})
 	@FocusState
 	private var isSearchFocused: Bool
 
@@ -155,14 +148,12 @@ struct RepositoryListView: View {
 			}
 		}
 		.onAppear { send(.onAppear) }
-		// Saved on both: quitting with the window open never takes it off screen, and closing the
-		// window releases the panes — which hangs up their shells — long before any quit.
-		.onDisappear {
-			saveTerminalTabs()
-			send(.onDisappear)
-		}
+		// The tabs are saved on both: quitting with the window open never takes it off screen, and
+		// closing the window (`onDisappear`) hangs up their shells long before any quit. The
+		// reducer writes the file before `send` returns — while Claude is still running.
+		.onDisappear { send(.onDisappear) }
 		.onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-			saveTerminalTabs()
+			send(.saveTerminalTabsRequested)
 		}
 		// Returning to the app is when a permission granted in System Settings should take
 		// effect. Nothing re-probes on refresh any more, so this is what clears the banners.
@@ -174,12 +165,6 @@ struct RepositoryListView: View {
 		}
 		.onChange(of: store.groupSettings) { _, _ in
 			send(.groupSettingsChanged)
-		}
-		// The reducer can drop a session without going through the buttons that kill panes
-		// directly, as it does when a worktree is deleted. Whatever the reason, a session that
-		// has left the state must hang up its shell rather than run on unseen.
-		.onChange(of: store.terminalSessions.ids) { _, ids in
-			terminalViewStore.killSessions(notIn: Set(ids))
 		}
 		.alert($store.scope(\.$alert, action: \.alert))
 	}
@@ -209,7 +194,7 @@ struct RepositoryListView: View {
 	/// array here — which is all that TCA's `IdentifiedArray` observation reports, and all this
 	/// lookup needs; the row's own fields are observed through the returned scope.
 	private var activeRowStore: StoreOf<RepositoryRowReducer>? {
-		guard let path = store.terminalLayout?.activeRepositoryPath else {
+		guard let path = store.terminals.activeRepositoryPath else {
 			return nil
 		}
 
@@ -242,12 +227,11 @@ struct RepositoryListView: View {
 		if let terminalLayoutStore = store.scope(\.terminalLayout, action: \.terminalLayout) {
 			TerminalLayoutView(
 				store: terminalLayoutStore,
+				workspace: store.scope(\.terminals, action: \.terminals),
 				// Eagerly materialised: the sidebar puts these in a LazyVStack, and a scoped
 				// store collection must not be indexed from a lazy view's own render pass.
 				repositoryGroups: Array(store.scope(\.repositoryGroups, action: \.repositoryGroups)),
 				activeRowStore: activeRowStore,
-				sessions: store.terminalSessions,
-				terminalViewStore: terminalViewStore,
 				paneEvents: TerminalPaneEvents(
 					onStatusChange: { sessionId, status, report in
 						MainActor.assumeIsolated {
@@ -290,7 +274,7 @@ struct RepositoryListView: View {
 						"Active terminals",
 						isOn: Binding(
 							get: { store.showsActiveTerminalsOnly },
-							set: { send(.activeTerminalFilterChanged($0)) }
+							set: { isOn in withAnimation { _ = send(.activeTerminalFilterChanged(isOn)) } }
 						)
 					)
 					.toggleStyle(.switch)
@@ -319,7 +303,7 @@ struct RepositoryListView: View {
 					HeaderButton(
 						icon: sortModeIcon,
 						tooltip: sortModeTooltip,
-						action: { send(.sortModeButtonTapped) }
+						action: { withAnimation { _ = send(.sortModeButtonTapped) } }
 					)
 				}
 			}
@@ -441,8 +425,8 @@ struct RepositoryListView: View {
 			if let layout = store.terminalLayout {
 				// Yielded while a sheet is up, like the panel's own shortcuts: the find bar
 				// would open behind it.
-				if layout.stagingDetail == nil, layout.gitGraph == nil, let sessionId = layout.activeSessionId {
-					terminalViewStore.performFind(.show, sessionId: sessionId)
+				if layout.stagingDetail == nil, layout.gitGraph == nil {
+					send(.terminalFindRequested)
 				}
 			}
 			else {
@@ -454,7 +438,7 @@ struct RepositoryListView: View {
 	}
 
 	private var toggleActiveTerminalsShortcut: some View {
-		Button("") { send(.activeTerminalFilterChanged(!store.showsActiveTerminalsOnly)) }
+		Button("") { withAnimation { _ = send(.activeTerminalFilterChanged(!store.showsActiveTerminalsOnly)) } }
 			.keyboardShortcut("a", modifiers: .command)
 			.hidden()
 	}
@@ -507,15 +491,12 @@ struct RepositoryListView: View {
 	private var repositoryListView: some View {
 		// Build a path → status map once so each row does an O(1) lookup instead of
 		// scanning the whole sessions array.
-		let statusByPath = Dictionary(
-			store.terminalSessions.map { ($0.repositoryPath, $0.status) },
-			uniquingKeysWith: { first, _ in first }
-		)
+		let statusByPath = store.terminals.sessions.statusByRepository
 		// Only sessions with a usable terminal count; `.failed` ones linger in state but show no
 		// dot. Built from the sessions array rather than `statusByPath` so a repo whose first tab
 		// died but whose second is alive still counts as active.
 		let livePaths: Set<String>? = store.showsActiveTerminalsOnly
-			? Set(store.terminalSessions.filter(\.status.isLive).map(\.repositoryPath))
+			? Set(store.terminals.sessions.filter(\.status.isLive).map(\.repositoryPath))
 			: nil
 
 		// Checked per group rather than as `livePaths.isEmpty` so a live session that maps to no
@@ -546,7 +527,7 @@ struct RepositoryListView: View {
 						// Repositories only: the header row is the repo, so a drag moves the
 						// whole group with its worktrees. Worktrees stay under `sortMode`.
 						onRepositoryDropped: { draggedPath in
-							send(.repositoryGroupDropped(draggedPath: draggedPath, ontoPath: groupStore.id))
+							withAnimation { _ = send(.repositoryGroupDropped(draggedPath: draggedPath, ontoPath: groupStore.id)) }
 						}
 					)
 				}
@@ -556,15 +537,6 @@ struct RepositoryListView: View {
 			.scrollContentBackground(.hidden)
 			.onDrop(of: [UTType.folder], isTargeted: nil, perform: handleDrop)
 		}
-	}
-
-	// MARK: - Terminal Tabs
-
-	/// Records the open tabs for the next launch. The shells' directories and Claude conversations
-	/// are read here because only the panes know them; the reducer writes the file before `send`
-	/// returns — while Claude is still running, before quitting hangs it up.
-	private func saveTerminalTabs() {
-		send(.saveTerminalTabsRequested(panes: terminalViewStore.paneSnapshots()))
 	}
 
 	// MARK: - Repository Selection

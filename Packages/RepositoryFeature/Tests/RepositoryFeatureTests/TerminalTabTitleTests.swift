@@ -14,16 +14,16 @@ struct TerminalTabTitleTests {
 	func titleChangesAreKept() async {
 		let session = TerminalSession(repositoryPath: "/repos/alpha")
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
 		}
 
 		await store.send(.view(.terminalSessionTitleChanged(sessionId: session.id, title: "Fix the login bug"))) {
-			$0.terminalSessions[id: session.id]?.title = "Fix the login bug"
+			$0.terminals.sessions[id: session.id]?.title = "Fix the login bug"
 		}
 		await store.send(.view(.terminalSessionTitleChanged(sessionId: session.id, title: nil))) {
-			$0.terminalSessions[id: session.id]?.title = nil
+			$0.terminals.sessions[id: session.id]?.title = nil
 		}
 	}
 
@@ -41,7 +41,7 @@ struct TerminalTabTitleTests {
 		var session = TerminalSession(repositoryPath: "/repos/alpha")
 		session.title = "Fix the login bug"
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = [session]
+		state.terminals.sessions = [session]
 		let posted = LockIsolated<[TerminalNotificationContent]>([])
 		let store = TestStore(initialState: state) {
 			RepositoryListReducer()
@@ -60,17 +60,18 @@ struct TerminalTabTitleTests {
 		titled.title = "Fix the login bug"
 		let untitled = TerminalSession(repositoryPath: "/repos/beta")
 
-		let saved = SavedTerminalTabs(sessions: [titled, untitled], layout: nil, panes: [:])
+		let saved = SavedTerminalTabs(TerminalTabs(sessions: [titled, untitled]), panes: [:])
 		#expect(saved.tabs.map(\.title) == ["Fix the login bug", nil])
 
 		let store = TestStore(initialState: RepositoryListReducer.State()) {
 			RepositoryListReducer()
 		} withDependencies: {
 			$0[TerminalTabArchiveClient.self].load = { saved }
+			$0.uuid = .incrementing
 		}
 		store.exhaustivity = .off
 		await store.send(.restoreTerminalTabs)
-		#expect(store.state.terminalSessions.map(\.title) == ["Fix the login bug", nil])
+		#expect(store.state.terminals.sessions.map(\.title) == ["Fix the login bug", nil])
 	}
 
 	@Test("tabs saved before titles were still load")

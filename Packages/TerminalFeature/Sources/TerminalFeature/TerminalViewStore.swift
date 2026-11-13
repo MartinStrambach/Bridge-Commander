@@ -1,17 +1,42 @@
 import AppKit
 import Foundation
-import Observation
 import SwiftTerm
 
+/// Not `@Observable`: no view reads anything off it, and `updateNSView` both reads and writes it,
+/// where an observed write makes SwiftUI update the same views again.
 @MainActor
-@Observable
 public final class TerminalViewStore {
 	private var views: [UUID: TerminalPaneView] = [:]
 	/// Each pane's process delegate, which SwiftTerm holds only weakly. Kept here, for as long as
 	/// the pane, rather than by the terminal panel: the panel can close while its panes run on, and
 	/// a pane whose delegate went with the panel reported neither its title nor its shell's exit
-	/// again, even once the panel reopened.
+	/// again, even once the panel reopened. A pane also moves between the containers of a split
+	/// panel, which come and go with the split.
 	private var processDelegates: [UUID: TerminalProcessDelegate] = [:]
+
+	/// The terminals on screen, left to right, as the first slot's container last heard it. The
+	/// one copy every container goes by — see `TerminalContainerRepresentable.updateNSView`.
+	var shownSessionIds: [UUID] = []
+	private var slotContainers: [Int: WeakContainer] = [:]
+
+	private struct WeakContainer {
+		weak var view: NSView?
+	}
+
+	func register(container: NSView, slot: Int) {
+		slotContainers[slot] = WeakContainer(view: container)
+	}
+
+	/// Forgets a container SwiftUI dropped, unless the slot has a newer one already.
+	func unregister(container: NSView, slot: Int) {
+		if slotContainers[slot]?.view === container {
+			slotContainers[slot] = nil
+		}
+	}
+
+	func container(forSlot slot: Int) -> NSView? {
+		slotContainers[slot]?.view
+	}
 
 	private let shellExecutable: String
 	private let shellArguments: [String]
@@ -62,7 +87,7 @@ public final class TerminalViewStore {
 			onFailed: { message in events.onStatusChange(sessionId, .failed(message), nil) },
 			onTitleChange: { title in events.onTitleChange(sessionId, title) }
 		)
-		processDelegates[session.id] = processDelegate
+		processDelegates[sessionId] = processDelegate
 		terminalView.processDelegate = processDelegate
 		terminalView.pendingStartupCommand = session.commandToType
 
@@ -75,13 +100,17 @@ public final class TerminalViewStore {
 			currentDirectory: session.startingDirectory
 		)
 
-		// Store the view before reporting its status to prevent re-entrancy:
-		// the report triggers a TCA state mutation that can cause updateNSView to fire
-		// again synchronously; if views[id] were still nil at that point, a second
-		// TerminalPaneView would be created for the same session.
 		views[session.id] = terminalView
 
-		events.onStatusChange(session.id, .active, nil)
+		// Reported on the next turn of the main queue, not here: panes are created from
+		// `updateNSView`, and the report changes the state that update is drawing. A pane killed
+		// in between has nothing to report, and one whose program reported its own status first
+		// keeps that.
+		DispatchQueue.main.async { [weak self] in
+			if self?.views[sessionId] === terminalView, !terminalView.hasReportedStatus {
+				events.onStatusChange(sessionId, .active, nil)
+			}
+		}
 
 		return terminalView
 	}
@@ -101,6 +130,12 @@ public final class TerminalViewStore {
 		}
 	}
 
+	/// Where the session's shell is now, or `nil` when it has no pane or its shell has exited.
+	/// Asks the kernel only, unlike `paneSnapshots()`, which also reads Claude's records from disk.
+	public func currentDirectory(sessionId: UUID) -> String? {
+		views[sessionId]?.currentDirectory
+	}
+
 	/// Types Ctrl-C into the session, stopping what runs in its foreground the way the user would.
 	public func interrupt(sessionId: UUID) {
 		views[sessionId]?.send(txt: "\u{03}")
@@ -117,23 +152,9 @@ public final class TerminalViewStore {
 		processDelegates.removeValue(forKey: sessionId)
 	}
 
-	/// Kills every session that is not in `sessionIds`.
-	///
-	/// The reducer owns the list of sessions and can drop one without going through this store,
-	/// as it does when a worktree is deleted. The view layer calls this whenever that list
-	/// changes, so no pane outlives its session whichever way the session went.
-	public func killSessions(notIn sessionIds: Set<UUID>) {
-		let stale = views.keys.filter { !sessionIds.contains($0) }
-		for id in stale {
-			killSession(sessionId: id)
-		}
-	}
-
-	public func killAllSessions(for repositoryPath: String) {
-		let sessionIds = views.compactMap { id, view -> UUID? in
-			view.repositoryPath == repositoryPath ? id : nil
-		}
-		for id in sessionIds {
+	/// Kills every session: the window that showed them is closing.
+	public func killAllSessions() {
+		for id in Array(views.keys) {
 			killSession(sessionId: id)
 		}
 	}

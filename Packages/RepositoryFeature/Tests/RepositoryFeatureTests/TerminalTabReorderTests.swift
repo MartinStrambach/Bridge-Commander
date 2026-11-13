@@ -4,24 +4,35 @@ import TerminalFeature
 import Testing
 @testable import RepositoryFeature
 
-// Covers dragging a terminal tab onto another tab of the same repository. These tests start
+// Covers dragging a terminal tab onto another tab of the same pane. These tests start
 // where `TerminalPanelView` hands the dropped session id to the reducer; the drag itself is
 // AppKit's and is not observable from a unit test (see `View.reorderable`).
 @Suite("Terminal tab reordering")
 @MainActor
 struct TerminalTabReorderTests {
+	/// The panel open on `active`'s repository: one pane with that repository's tabs in the order
+	/// `sessions` has them.
+	private func terminals(_ sessions: [TerminalSession], active: TerminalSession) -> TerminalTabs {
+		TerminalTabs(
+			sessions: IdentifiedArray(uniqueElements: sessions),
+			panes: [
+				TerminalPane(
+					shown: active.id,
+					tabs: sessions.filter { $0.repositoryPath == active.repositoryPath }.map(\.id)
+				)
+			],
+			isPanelVisible: true,
+			lastActiveSessionByRepo: [active.repositoryPath: active.id]
+		)
+	}
+
 	private func makeStore(
 		sessions: [TerminalSession],
 		active: TerminalSession
 	) -> TestStoreOf<RepositoryListReducer> {
 		var state = RepositoryListReducer.State()
-		state.terminalSessions = IdentifiedArray(uniqueElements: sessions)
-		var layout = TerminalLayoutReducer.State(
-			activeRepositoryPath: active.repositoryPath,
-			activeSessionId: active.id
-		)
-		layout.lastActiveSessionByRepo[active.repositoryPath] = active.id
-		state.terminalLayout = layout
+		state.terminals = terminals(sessions, active: active)
+		state.terminalLayout = TerminalLayoutReducer.State()
 		return TestStore(initialState: state) {
 			RepositoryListReducer()
 		}
@@ -34,8 +45,8 @@ struct TerminalTabReorderTests {
 		let three = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 3)
 		let store = makeStore(sessions: [one, two, three], active: one)
 
-		await store.send(.terminalLayout(.moveTab(sessionId: three.id, ontoSessionId: one.id))) {
-			$0.terminalSessions = IdentifiedArray(uniqueElements: [three, one, two])
+		await store.send(.terminals(.moveTab(sessionId: three.id, ontoSessionId: one.id))) {
+			$0.terminals = terminals([three, one, two], active: one)
 		}
 	}
 
@@ -46,8 +57,8 @@ struct TerminalTabReorderTests {
 		let three = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 3)
 		let store = makeStore(sessions: [one, two, three], active: one)
 
-		await store.send(.terminalLayout(.moveTab(sessionId: one.id, ontoSessionId: two.id))) {
-			$0.terminalSessions = IdentifiedArray(uniqueElements: [two, one, three])
+		await store.send(.terminals(.moveTab(sessionId: one.id, ontoSessionId: two.id))) {
+			$0.terminals = terminals([two, one, three], active: one)
 		}
 	}
 
@@ -57,11 +68,11 @@ struct TerminalTabReorderTests {
 		let two = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
 		let store = makeStore(sessions: [one, two], active: two)
 
-		await store.send(.terminalLayout(.moveTab(sessionId: two.id, ontoSessionId: one.id))) {
-			$0.terminalSessions = IdentifiedArray(uniqueElements: [two, one])
+		await store.send(.terminals(.moveTab(sessionId: two.id, ontoSessionId: one.id))) {
+			$0.terminals = terminals([two, one], active: two)
 		}
-		#expect(store.state.terminalSessions.map(\.tabIndex) == [2, 1])
-		#expect(store.state.terminalLayout?.activeSessionId == two.id)
+		#expect(store.state.terminals.sessions.map(\.tabIndex) == [2, 1])
+		#expect(store.state.terminals.activeSessionId == two.id)
 	}
 
 	@Test("other repositories' tabs keep their order around the moved one")
@@ -71,10 +82,10 @@ struct TerminalTabReorderTests {
 		let alphaTwo = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
 		let store = makeStore(sessions: [alphaOne, beta, alphaTwo], active: alphaOne)
 
-		await store.send(.terminalLayout(.moveTab(sessionId: alphaTwo.id, ontoSessionId: alphaOne.id))) {
-			$0.terminalSessions = IdentifiedArray(uniqueElements: [alphaTwo, alphaOne, beta])
+		await store.send(.terminals(.moveTab(sessionId: alphaTwo.id, ontoSessionId: alphaOne.id))) {
+			$0.terminals = terminals([alphaTwo, alphaOne, beta], active: alphaOne)
 		}
-		let alphaOrder = store.state.terminalSessions
+		let alphaOrder = store.state.terminals.sessions
 			.filter { $0.repositoryPath == "/repos/alpha" }
 			.map(\.id)
 		#expect(alphaOrder == [alphaTwo.id, alphaOne.id])
@@ -88,7 +99,7 @@ struct TerminalTabReorderTests {
 		let beta = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
 		let store = makeStore(sessions: [alpha, beta], active: alpha)
 
-		await store.send(.terminalLayout(.moveTab(sessionId: beta.id, ontoSessionId: alpha.id)))
+		await store.send(.terminals(.moveTab(sessionId: beta.id, ontoSessionId: alpha.id)))
 	}
 
 	@Test("a tab dropped on itself, or an id that names no tab, changes nothing")
@@ -97,8 +108,8 @@ struct TerminalTabReorderTests {
 		let two = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
 		let store = makeStore(sessions: [one, two], active: one)
 
-		await store.send(.terminalLayout(.moveTab(sessionId: one.id, ontoSessionId: one.id)))
-		await store.send(.terminalLayout(.moveTab(sessionId: UUID(), ontoSessionId: one.id)))
-		await store.send(.terminalLayout(.moveTab(sessionId: one.id, ontoSessionId: UUID())))
+		await store.send(.terminals(.moveTab(sessionId: one.id, ontoSessionId: one.id)))
+		await store.send(.terminals(.moveTab(sessionId: UUID(), ontoSessionId: one.id)))
+		await store.send(.terminals(.moveTab(sessionId: one.id, ontoSessionId: UUID())))
 	}
 }

@@ -95,7 +95,7 @@ struct SimulatorMCPHandlerTests {
 			record("two \(from.first.x),\(from.second.x) -> \(to.first.x),\(to.second.x)")
 		}
 		var crashReports: any SimulatorCrashReportSource { crashSource }
-		let crashSource = SimulatorCrashReportsTests.source()
+		let crashSource = SimulatorCrashReportsTests.recentSource()
 
 		static let baseline = ScreenFingerprint(columns: 1, rows: 1, cells: [7])
 		func screenFingerprint(device: SimulatorDevice) async -> ScreenFingerprint? {

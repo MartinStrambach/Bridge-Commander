@@ -11,12 +11,17 @@ struct SidebarRepositoryRowView: View {
 	/// rebuilt (TCA compares element ids only). Same wiring as the list's `RepositoryRowView`.
 	let store: StoreOf<RepositoryRowReducer>
 	let isActive: Bool
+	/// One of the repository's terminals is on screen in a split, in a pane without the keyboard.
+	var isInSplit = false
 	let sessionStatus: TerminalSessionStatus?
 	/// Off while the sidebar shows only rows with a terminal, where a green dot on every row says
 	/// nothing; the waiting-for-input dot still shows.
 	var showsActiveDot = true
 	let onTap: () -> Void
 	var onKill: (() -> Void)?
+	/// Opens the repository in a pane beside the ones on screen. Nil when the panel has no room
+	/// for another pane, or the repository is on screen already.
+	var onOpenInSplit: (() -> Void)?
 
 	var hasTerminalSession: Bool {
 		sessionStatus != nil
@@ -44,7 +49,7 @@ struct SidebarRepositoryRowView: View {
 							.scaledFont(.caption)
 							.fontWeight(isActive ? .semibold : .regular)
 							.lineLimit(1)
-							.foregroundColor(isActive ? .primary : .secondary)
+							.foregroundColor(isActive || isInSplit ? .primary : .secondary)
 					}
 
 					Text(store.name)
@@ -76,12 +81,17 @@ struct SidebarRepositoryRowView: View {
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 6)
-			.background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
+			.background(Color.accentColor.opacity(isActive ? 0.15 : isInSplit ? 0.07 : 0))
 			.cornerRadius(6)
 			.contentShape(Rectangle())
 		}
 		.buttonStyle(.plain)
 		.contextMenu {
+			Button("Open in Split", systemImage: "rectangle.split.2x1") {
+				onOpenInSplit?()
+			}
+			.disabled(onOpenInSplit == nil)
+			.labelStyle(.titleAndIcon)
 			if hasTerminalSession, onKill != nil {
 				Button("Kill Terminal", role: .destructive) {
 					showKillConfirmation = true

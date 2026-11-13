@@ -18,12 +18,14 @@ struct CreatedWorktreeTerminalTests {
 		await scanAlpha(store, worktrees: [])
 
 		await store.send(created("/repos/alpha-new", launch: .command("claude 'Work on MOB-1'")))
-		#expect(store.state.terminalSessions.isEmpty)
+		#expect(store.state.terminals.sessions.isEmpty)
 
 		await scanAlpha(store, worktrees: ["/repos/alpha-new"])
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == ["/repos/alpha-new"])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude 'Work on MOB-1'"])
-		#expect(store.state.terminalLayout?.activeRepositoryPath == "/repos/alpha-new")
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == ["/repos/alpha-new"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude 'Work on MOB-1'"])
+		#expect(store.state.terminals.activeRepositoryPath == "/repos/alpha-new")
+		#expect(store.state.terminals.isPanelVisible)
+		#expect(store.state.terminalLayout != nil)
 		#expect(store.state.pendingWorktreeLaunches.isEmpty)
 	}
 
@@ -35,7 +37,7 @@ struct CreatedWorktreeTerminalTests {
 		await store.send(created("/repos/alpha-new", launch: .terminal))
 		await scanAlpha(store, worktrees: ["/repos/alpha-new"])
 
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["mise install"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["mise install"])
 	}
 
 	@Test("without a follow-up nothing opens")
@@ -46,7 +48,8 @@ struct CreatedWorktreeTerminalTests {
 		await store.send(created("/repos/alpha-new", launch: nil))
 		await scanAlpha(store, worktrees: ["/repos/alpha-new"])
 
-		#expect(store.state.terminalSessions.isEmpty)
+		#expect(store.state.terminals.sessions.isEmpty)
+		#expect(!store.state.terminals.isPanelVisible)
 		#expect(store.state.terminalLayout == nil)
 	}
 
@@ -57,11 +60,11 @@ struct CreatedWorktreeTerminalTests {
 
 		await store.send(created("/repos/alpha-new", launch: .command("claude")))
 		await scanAlpha(store, worktrees: ["/repos/alpha-other"])
-		#expect(store.state.terminalSessions.isEmpty)
+		#expect(store.state.terminals.sessions.isEmpty)
 
 		await scanAlpha(store, worktrees: ["/repos/alpha-other", "/repos/alpha-new"])
 		await scanAlpha(store, worktrees: ["/repos/alpha-other", "/repos/alpha-new"])
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == ["/repos/alpha-new"])
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == ["/repos/alpha-new"])
 	}
 
 	@Test("the creator's path and git's realpath meet")
@@ -79,7 +82,7 @@ struct CreatedWorktreeTerminalTests {
 		await store.send(created(link.appending(component: "wt").path, launch: .command("claude")))
 		await scanAlpha(store, worktrees: [real.appending(component: "wt").path])
 
-		#expect(store.state.terminalSessions.count == 1)
+		#expect(store.state.terminals.sessions.count == 1)
 	}
 
 	// MARK: - Helpers
@@ -92,6 +95,7 @@ struct CreatedWorktreeTerminalTests {
 		let store = TestStore(initialState: RepositoryListReducer.State()) {
 			RepositoryListReducer()
 		} withDependencies: {
+			$0.uuid = .incrementing
 			$0[GitClient.self].getCurrentBranch = { _ in
 				GitPorcelainStatus(parsing: "", didSucceed: false)
 			}

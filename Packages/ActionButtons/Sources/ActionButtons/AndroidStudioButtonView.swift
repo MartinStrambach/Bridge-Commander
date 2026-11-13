@@ -35,7 +35,7 @@ public struct AndroidStudioButtonView: View {
 				tint: store.isOpening ? .green : nil,
 				action: { store.send(.openAndroidStudioButtonTapped) }
 			)
-			.alert($store.scope(\.$alert, action: \.alert))
+			.androidStudioPresentations(store: store)
 
 		case .compact:
 			ActionButton(
@@ -43,7 +43,7 @@ public struct AndroidStudioButtonView: View {
 				tooltip: buttonTooltip,
 				action: { store.send(.openAndroidStudioButtonTapped) }
 			)
-			.alert($store.scope(\.$alert, action: \.alert))
+			.androidStudioPresentations(store: store)
 		}
 	}
 
@@ -78,8 +78,13 @@ private struct AndroidStudioPresentations: ViewModifier {
 	@Bindable
 	var store: StoreOf<AndroidStudioButtonReducer>
 
+	/// Off under the repository list while the terminal panel covers it: the panel's toolbar
+	/// shows the same store, and one alert state bound by two presenters is shown twice.
+	@Environment(\.presentsButtonAlerts)
+	private var presentsAlerts
+
 	func body(content: Content) -> some View {
-		content.alert($store.scope(\.$alert, action: \.alert))
+		content.alert(presentsAlerts ? $store.scope(\.$alert, action: \.alert) : .constant(nil))
 	}
 }
 

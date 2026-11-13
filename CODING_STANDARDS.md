@@ -127,7 +127,7 @@ judgement those cannot make.
 ## Terminals
 
 - **A terminal session ends through `TerminalViewStore.killSession` or
-  `killSessions(notIn:)`**, which send SIGHUP. Dropping the pane leaves the PTY open, and
+  `killAllSessions()`**, which send SIGHUP. Reducers reach them through `TerminalPanesClient`; views do not kill sessions. Dropping the pane leaves the PTY open, and
   SwiftTerm's `terminate()` sends SIGTERM, which interactive zsh ignores.
   [`Packages/TerminalFeature/README.md`](Packages/TerminalFeature/README.md).
 - **A pane is resized or re-fonted only when something actually changed, and only the visible

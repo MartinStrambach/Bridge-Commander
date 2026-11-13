@@ -5,9 +5,10 @@ import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
 
-// The terminal toolbar's Xcode button is the opened row's own store. It used to be a copy held in
-// `TerminalLayoutReducer.State`, and hiding the panel nils that state — `ifLet` then cancelled the
-// generate effect, SIGTERMing tuist with no error shown, and the row never learned it had run.
+// The terminal toolbar's buttons are the opened row's own stores. The Xcode button used to be a
+// copy held in `TerminalLayoutReducer.State`, and hiding the panel nils that state — `ifLet` then
+// cancelled the generate effect, SIGTERMing tuist with no error shown, and the row never learned
+// it had run.
 @Suite("Terminal toolbar Xcode button shares the row's state")
 @MainActor
 struct TerminalSharedXcodeButtonTests {
@@ -33,7 +34,8 @@ struct TerminalSharedXcodeButtonTests {
 		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.xcodeButton.projectGenerationProgress)
 		#expect(alphaXcodeButton(in: store)?.projectState == .runningTi)
 
-		await store.send(.terminalLayout(.hideTerminalMode))
+		await store.send(.terminals(.hidePanelRequested))
+		#expect(!store.state.terminals.isPanelVisible)
 		#expect(store.state.terminalLayout == nil)
 		// Still in progress on the row, which is what the list shows once the terminal is gone.
 		#expect(alphaXcodeButton(in: store)?.projectState == .runningTi)
@@ -49,16 +51,18 @@ struct TerminalSharedXcodeButtonTests {
 		#expect(opened.value == ["/repos/alpha/App.xcworkspace"])
 	}
 
-	@Test("the terminal toolbar keeps no Xcode button state of its own")
-	func terminalLayoutHoldsNoXcodeCopy() async throws {
-		// Opening a repository in the terminal re-syncs the toolbar's copied buttons. The Xcode
-		// button must not be among them, or progress shown in one view would not show in the other.
+	@Test("the terminal toolbar keeps no button state of its own")
+	func terminalLayoutHoldsNoButtonCopies() async throws {
+		// The toolbar scopes the row's stores. A copy of a button or of the git menu in the
+		// toolbar's state would show progress in one view and not the other, and lose its
+		// running operation when the panel hides.
 		let store = await makeStoreShowingAlpha { _ in }
 		let layout = try #require(store.state.terminalLayout)
 
 		let labels = Mirror(reflecting: layout).children.compactMap(\.label)
-		#expect(!labels.contains { $0.localizedCaseInsensitiveContains("xcode") })
-		#expect(!labels.contains { $0.localizedCaseInsensitiveContains("tuist") })
+		for copied in ["xcode", "tuist", "button", "menu"] {
+			#expect(!labels.contains { $0.localizedCaseInsensitiveContains(copied) })
+		}
 	}
 
 	// MARK: - Helpers
@@ -77,11 +81,10 @@ struct TerminalSharedXcodeButtonTests {
 	private func makeStoreShowingAlpha(
 		_ dependencies: @escaping (inout DependencyValues) -> Void
 	) async -> TestStoreOf<RepositoryListReducer> {
-		var initialState = RepositoryListReducer.State()
-		initialState.terminalLayout = TerminalLayoutReducer.State()
-		let store = TestStore(initialState: initialState) {
+		let store = TestStore(initialState: RepositoryListReducer.State()) {
 			RepositoryListReducer()
 		} withDependencies: {
+			$0.uuid = .incrementing
 			$0.continuousClock = ImmediateClock()
 			$0[GitClient.self].getCurrentBranch = { _ in
 				GitPorcelainStatus(parsing: "", didSucceed: false)
@@ -101,7 +104,11 @@ struct TerminalSharedXcodeButtonTests {
 				branchName: "master"
 			),
 		]))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
+		// The repository has no tab yet, so the list builds its first one and the panel opens on it.
+		await store.send(.terminals(.selectRepo(repositoryPath: "/repos/alpha")))
+		await store.receive(\.terminals.sessionBuilt)
+		#expect(store.state.terminals.activeRepositoryPath == "/repos/alpha")
+		#expect(store.state.terminalLayout != nil)
 		return store
 	}
 }

@@ -7,56 +7,12 @@ import TerminalFeature
 import Testing
 @testable import RepositoryFeature
 
-// The layout reducer on its own, without the list that handles most of its actions: the
-// per-repository tab memory, the sheets it presents, and the in-flight flags behind the
-// toolbar's Push and Finish Merge buttons.
+// The layout reducer on its own, without the list that handles most of its actions: the sheets
+// it presents and the in-flight flags behind the toolbar's Push and Finish Merge buttons. The
+// tabs and panes are `TerminalTabs`'s.
 @Suite("Terminal layout reducer")
 @MainActor
 struct TerminalLayoutReducerTests {
-	// MARK: - Tab memory
-
-	@Test("activating a tab shows it and remembers it for its repository only")
-	func activateRemembersPerRepository() {
-		let alpha = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
-		let beta = TerminalSession(repositoryPath: "/repos/beta")
-		var layout = TerminalLayoutReducer.State()
-
-		layout.activate(alpha)
-		layout.activate(beta)
-
-		#expect(layout.activeRepositoryPath == "/repos/beta")
-		#expect(layout.activeSessionId == beta.id)
-		#expect(layout.lastActiveSessionByRepo == ["/repos/alpha": alpha.id, "/repos/beta": beta.id])
-	}
-
-	@Test("forgetting a tab the repository was not left on keeps the one it was")
-	func forgetOnlyDropsTheRememberedTab() {
-		let alphaOne = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
-		let alphaTwo = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
-		var layout = TerminalLayoutReducer.State()
-		layout.activate(alphaTwo)
-
-		// Closing a background tab must not cost the repository the tab the user is on.
-		layout.forget(sessionId: alphaOne.id, repositoryPath: "/repos/alpha")
-		#expect(layout.lastActiveSessionByRepo["/repos/alpha"] == alphaTwo.id)
-
-		layout.forget(sessionId: alphaTwo.id, repositoryPath: "/repos/alpha")
-		#expect(layout.lastActiveSessionByRepo["/repos/alpha"] == nil)
-	}
-
-	@Test("forgetting a tab under another repository's path leaves both memories alone")
-	func forgetIsScopedToRepository() {
-		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
-		let beta = TerminalSession(repositoryPath: "/repos/beta")
-		var layout = TerminalLayoutReducer.State()
-		layout.activate(alpha)
-		layout.activate(beta)
-
-		layout.forget(sessionId: alpha.id, repositoryPath: "/repos/beta")
-
-		#expect(layout.lastActiveSessionByRepo == ["/repos/alpha": alpha.id, "/repos/beta": beta.id])
-	}
-
 	// MARK: - Sheets
 
 	@Test("the staging button opens the sheet on the repository and its iOS subfolder")
@@ -89,6 +45,36 @@ struct TerminalLayoutReducerTests {
 
 	// MARK: - In-flight flags
 
+	@Test("a push reports the repository it pushed, whether it succeeded or failed", arguments: [true, false])
+	func pushReportsItsRepository(failed: Bool) async {
+		let store = TestStore(initialState: TerminalLayoutReducer.State()) {
+			TerminalLayoutReducer()
+		} withDependencies: {
+			$0[GitClient.self].push = { path in
+				#expect(path == "/repos/alpha")
+				if failed {
+					throw GitError.pushFailed("rejected")
+				}
+				return GitPushHelper.PushResult(isUpToDate: false, message: "pushed")
+			}
+		}
+
+		await store.send(.pushButtonTapped(repositoryPath: "/repos/alpha")) {
+			$0.isPushing = true
+		}
+		// The list refreshes the row named here, so it has to be the one pushed and not whichever
+		// has the keyboard when the push ends.
+		await store.receive { action in
+			guard case let .pushCompleted(repositoryPath, result, error) = action else {
+				return false
+			}
+
+			return repositoryPath == "/repos/alpha" && (result == nil) == failed && (error != nil) == failed
+		} assert: {
+			$0.isPushing = false
+		}
+	}
+
 	@Test("a push completion stops the spinner whether it succeeded or failed", arguments: [true, false])
 	func pushCompletionClearsFlag(failed: Bool) async {
 		var layout = TerminalLayoutReducer.State()
@@ -97,7 +83,7 @@ struct TerminalLayoutReducerTests {
 			TerminalLayoutReducer()
 		}
 
-		await store.send(.pushCompleted(result: nil, error: failed ? .pushFailed("rejected") : nil)) {
+		await store.send(.pushCompleted(repositoryPath: "/repos/alpha", result: nil, error: failed ? .pushFailed("rejected") : nil)) {
 			$0.isPushing = false
 		}
 	}
@@ -116,5 +102,42 @@ struct TerminalLayoutReducerTests {
 		)) {
 			$0.isFinishingMerge = false
 		}
+	}
+}
+
+// The per-repository tab memory the layout state used to hold is `TerminalTabs`'s now.
+@Suite("Terminal tab memory")
+struct TerminalTabMemoryTests {
+	@Test("showing a tab gives it the keyboard and remembers it for its repository only")
+	func showRemembersPerRepository() {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		var tabs = TerminalTabs(sessions: [alpha, beta])
+
+		tabs.show(alpha)
+		tabs.show(beta)
+
+		#expect(tabs.activeRepositoryPath == "/repos/beta")
+		#expect(tabs.activeSessionId == beta.id)
+		#expect(tabs.lastActiveSessionByRepo == ["/repos/alpha": alpha.id, "/repos/beta": beta.id])
+		#expect(tabs.recentSessionIds == [alpha.id, beta.id])
+	}
+
+	@Test("closing a tab the repository was not left on keeps the one it was")
+	func closingBackgroundTabKeepsTheRememberedTab() {
+		let alphaOne = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
+		let alphaTwo = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
+		let beta = TerminalSession(repositoryPath: "/repos/beta")
+		var tabs = TerminalTabs(sessions: [alphaOne, alphaTwo, beta])
+		tabs.show(alphaTwo)
+		tabs.show(beta)
+
+		// Closing a background tab must not cost the repository the tab the user was on.
+		tabs.close([alphaOne.id])
+		#expect(tabs.lastActiveSessionByRepo == ["/repos/alpha": alphaTwo.id, "/repos/beta": beta.id])
+
+		// Closing the remembered one, off screen, leaves the repository with no tab to go back to.
+		tabs.close([alphaTwo.id])
+		#expect(tabs.lastActiveSessionByRepo == ["/repos/beta": beta.id])
 	}
 }

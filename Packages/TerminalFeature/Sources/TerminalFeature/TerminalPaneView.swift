@@ -33,9 +33,15 @@ public final class TerminalPaneView: LocalProcessTerminalView {
 				return
 			}
 
+			hasReportedStatus = true
 			events.onStatusChange(sessionId, status, report)
 		}
 	)
+
+	/// Whether the pane's program has reported a status yet. The store reports a new pane as
+	/// `.active` a turn of the main queue after creating it, and must not do so over a report
+	/// that got there first.
+	private(set) var hasReportedStatus = false
 
 	/// - Parameter readsImageFiles: Whether Kitty graphics images may be loaded from a file the
 	///   program names (`t=f`), not only from bytes it sends. Fixed for the pane's life: SwiftTerm
@@ -173,6 +179,16 @@ public final class TerminalPaneView: LocalProcessTerminalView {
 	}
 
 	// MARK: - Focus
+
+	/// Called when the pane is clicked, before the click is handled. A split panel shows several
+	/// panes, and the one clicked becomes the active one. A click is the hook because SwiftTerm's
+	/// `becomeFirstResponder` is `public`, not `open`.
+	public var onMouseDown: (() -> Void)?
+
+	override public func mouseDown(with event: NSEvent) {
+		onMouseDown?()
+		super.mouseDown(with: event)
+	}
 
 	/// Set when the pane was asked to take keyboard focus before it had a window to take it in.
 	private var wantsFocusOnceInWindow = false

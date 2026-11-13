@@ -3,6 +3,7 @@ import Foundation
 import GitCore
 import GitActionsMenu
 import GitHosting
+import TerminalFeature
 import Testing
 import ToolsIntegration
 @testable import RepositoryFeature
@@ -282,25 +283,29 @@ struct RepositoryChangedOnDiskTests {
 		await store.finish()
 	}
 
-	@Test("a stash change in the terminal's repository reaches the toolbar's git menu too")
-	func stashChangeRefreshesTerminalGitMenu() async {
+	@Test("a stash change in the terminal's repository reaches its row's git menu, the one the toolbar shows")
+	func stashChangeRefreshesOpenedRowGitMenu() async {
 		let store = makeListStore(
 			terminalOpen(on: "/repos/alpha-one"),
 			changes: AsyncStream { $0.finish() },
 			watched: LockIsolated([])
 		)
-
 		await scanAlpha(store)
+
+		// Exhaustive from here: the toolbar has no menu of its own to refresh, so the row's stash
+		// check is all the change may cause.
+		store.exhaustivity = .on
 		await store.send(.repositoriesChangedOnDisk([
 			GitRepositoryChange(repositoryPath: "/repos/alpha-one", kinds: .stash),
 		]))
-
-		await store.receive(\.terminalLayout.gitActionsMenu.refresh)
-		await store.finish()
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].changedOnDisk)
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].gitActionsMenu.refresh)
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].gitActionsMenu.stashButton.checkStashStatus)
+		await store.receive(\.repositoryGroups[id: "/repos/alpha"].worktrees[id: "/repos/alpha-one"].gitActionsMenu.stashButton.didFindStash)
 	}
 
-	@Test("a stash change in another repository leaves the toolbar's git menu alone")
-	func stashChangeElsewhereLeavesTerminalGitMenu() async {
+	@Test("a stash change in another repository reaches only that repository's row")
+	func stashChangeElsewhereStaysOnItsRow() async {
 		let store = makeListStore(
 			terminalOpen(on: "/repos/alpha-one"),
 			changes: AsyncStream { $0.finish() },
@@ -347,12 +352,16 @@ struct RepositoryChangedOnDiskTests {
 
 	// MARK: - Helpers
 
-	/// The terminal panel open on `path`, its toolbar showing that repository's git menu.
+	/// The terminal panel on screen with one terminal, in the repository at `path`.
 	private func terminalOpen(on path: String) -> RepositoryListReducer.State {
 		var state = RepositoryListReducer.State()
-		var layout = TerminalLayoutReducer.State(activeRepositoryPath: path)
-		layout.gitActionsMenu = GitActionsMenuReducer.State(repositoryPath: path, currentBranch: "feature-one")
-		state.terminalLayout = layout
+		let session = TerminalSession(repositoryPath: path)
+		state.terminals = TerminalTabs(
+			sessions: [session],
+			panes: [TerminalPane(shown: session.id, tabs: [session.id])],
+			isPanelVisible: true
+		)
+		state.terminalLayout = TerminalLayoutReducer.State()
 		return state
 	}
 
@@ -391,6 +400,10 @@ struct RepositoryChangedOnDiskTests {
 				GitPorcelainStatus(parsing: "", didSucceed: false)
 			}
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
+			// The window closing (`onDisappear`) saves the tabs and hangs every shell up.
+			$0[TerminalPanesClient.self].snapshots = { [:] }
+			$0[TerminalTabArchiveClient.self].save = { _ in }
+			$0[TerminalPanesClient.self].killAll = {}
 		}
 		store.exhaustivity = .off
 		return store

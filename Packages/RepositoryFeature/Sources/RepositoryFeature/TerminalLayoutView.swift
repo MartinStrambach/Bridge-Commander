@@ -6,6 +6,9 @@ import TerminalFeature
 
 struct TerminalLayoutView: View {
 	@Bindable var store: StoreOf<TerminalLayoutReducer>
+	/// The tabs and panes. The sidebar and the tab bars send it what the user asks of them; the
+	/// toolbar and the sheets are `store`'s.
+	let workspace: StoreOf<TerminalWorkspaceReducer>
 
 	/// Group stores rather than group values so every sidebar row observes its own state. Handing
 	/// the rows down as values froze their counts: TCA's `IdentifiedArray` observation compares
@@ -14,8 +17,6 @@ struct TerminalLayoutView: View {
 	let repositoryGroups: [StoreOf<RepoGroupReducer>]
 	/// The row opened in the panel, resolved by the parent — see `RepositoryListView.activeRowStore`.
 	let activeRowStore: StoreOf<RepositoryRowReducer>?
-	let sessions: IdentifiedArrayOf<TerminalSession>
-	let terminalViewStore: TerminalViewStore
 	let paneEvents: TerminalPaneEvents
 
 	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
@@ -23,22 +24,33 @@ struct TerminalLayoutView: View {
 	/// written, since it comes back from user defaults.
 	@AppStorage("terminalSidebar.width") private var sidebarWidth = Self.defaultSidebarWidth
 	/// The width when the current drag began: the drag's translation is measured from its start,
-	/// so it applies to that width rather than accumulating onto every intermediate one.
-	@State private var sidebarDragStartWidth: Double?
+	/// so it applies to that width rather than accumulating onto every intermediate one. Gesture
+	/// state, so a drag that is cancelled rather than ended forgets it too.
+	@GestureState private var sidebarDragStartWidth: Double?
 
 	private static let defaultSidebarWidth: Double = 200
 	/// The upper bound leaves the terminal 320 pt in the narrowest window the panel allows (800 pt,
 	/// `RepositoryListView`'s `windowMinSize`).
 	private static let sidebarWidthRange: ClosedRange<Double> = 160 ... 480
 
+	/// Read off the group stores, so the caller observes the row it names.
+	private func xcodeProjectPath(for repositoryPath: String) -> String? {
+		for group in repositoryGroups {
+			if group.header.path == repositoryPath {
+				return group.header.xcodeButton.projectPath
+			}
+			if let row = group.worktrees[id: repositoryPath] {
+				return row.xcodeButton.projectPath
+			}
+		}
+		return nil
+	}
+
 	var body: some View {
 		// Build a path → status map once so each sidebar row, the home row and the terminal
 		// filter all do an O(1) lookup instead of scanning the whole sessions array.
 		// Same reasoning as RepositoryListView.repositoryListView.
-		let statusByPath = Dictionary(
-			sessions.map { ($0.repositoryPath, $0.status) },
-			uniquingKeysWith: { first, _ in first }
-		)
+		let statusByPath = workspace.sessions.statusByRepository
 		return HStack(spacing: 0) {
 			sidebar(statusByPath: statusByPath)
 				.frame(width: Self.clampedSidebarWidth(sidebarWidth))
@@ -47,25 +59,10 @@ struct TerminalLayoutView: View {
 
 			TerminalPanelView(
 				store: store,
+				workspace: workspace,
 				activeRowStore: activeRowStore,
-				terminalViewStore: terminalViewStore,
-				sessions: sessions,
-				activeSessionId: store.activeSessionId,
-				paneEvents: paneEvents,
-				onRetry: { sessionId in
-					terminalViewStore.killSession(sessionId: sessionId)
-					store.send(.retryTab(sessionId: sessionId))
-				},
-				onNewTab: {
-					store.send(.newTabRequested)
-				},
-				onSelectTab: { sessionId in
-					store.send(.selectTab(sessionId: sessionId))
-				},
-				onKillTab: { sessionId in
-					terminalViewStore.killSession(sessionId: sessionId)
-					store.send(.killTab(sessionId: sessionId))
-				}
+				xcodeProjectPath: xcodeProjectPath(for:),
+				paneEvents: paneEvents
 			)
 		}
 		// Over the whole row rather than on the divider, so the panel beside it cannot cover the
@@ -94,13 +91,12 @@ struct TerminalLayoutView: View {
 				// Global space: the handle moves with the width, so a translation measured in its
 				// own space would shift under the pointer as it is dragged.
 				DragGesture(minimumDistance: 1, coordinateSpace: .global)
+					.updating($sidebarDragStartWidth) { _, start, _ in
+						start = start ?? Self.clampedSidebarWidth(sidebarWidth)
+					}
 					.onChanged { value in
 						let start = sidebarDragStartWidth ?? Self.clampedSidebarWidth(sidebarWidth)
-						sidebarDragStartWidth = start
 						sidebarWidth = Self.clampedSidebarWidth(start + value.translation.width)
-					}
-					.onEnded { _ in
-						sidebarDragStartWidth = nil
 					}
 			)
 	}
@@ -153,7 +149,7 @@ struct TerminalLayoutView: View {
 			Divider()
 
 			Button("← Show full list") {
-				store.send(.hideTerminalMode)
+				workspace.send(.hidePanelRequested)
 			}
 			.buttonStyle(.plain)
 			.scaledFont(.caption)
@@ -163,7 +159,7 @@ struct TerminalLayoutView: View {
 		}
 		.background(Color(NSColor.controlBackgroundColor))
 		.background {
-			Button("") { store.send(.hideTerminalMode) }
+			Button("") { workspace.send(.hidePanelRequested) }
 				.keyboardShortcut("§", modifiers: .command)
 				.hidden()
 		}
@@ -206,9 +202,10 @@ struct TerminalLayoutView: View {
 	}
 
 	private func homeSessionRow(status: TerminalSessionStatus) -> some View {
-		let isActive = store.activeRepositoryPath == NSHomeDirectory()
+		let isActive = workspace.activeRepositoryPath == NSHomeDirectory()
+		let isInSplit = !isActive && workspace.state.showsRepository(NSHomeDirectory())
 		return Button {
-			store.send(.selectRepo(repositoryPath: NSHomeDirectory()))
+			workspace.send(.selectRepo(repositoryPath: NSHomeDirectory()))
 		} label: {
 			HStack(spacing: 8) {
 				TerminalStatusDotView(status: status, size: 12, showsActive: !showOnlyWithTerminals)
@@ -216,7 +213,7 @@ struct TerminalLayoutView: View {
 					Text("Home Directory")
 						.scaledFont(.caption)
 						.fontWeight(isActive ? .semibold : .regular)
-						.foregroundColor(isActive ? .primary : .secondary)
+						.foregroundColor(isActive || isInSplit ? .primary : .secondary)
 						.lineLimit(1)
 					Text("~")
 						.scaledFont(.caption2)
@@ -227,18 +224,29 @@ struct TerminalLayoutView: View {
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 6)
-			.background(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
+			.background(Color.accentColor.opacity(isActive ? 0.15 : isInSplit ? 0.07 : 0))
 			.cornerRadius(6)
 			.contentShape(Rectangle())
 		}
 		.buttonStyle(.plain)
 		.padding(.horizontal, 4)
 		.contextMenu {
+			Button("Open in Split", systemImage: "rectangle.split.2x1") {
+				workspace.send(.openRepoInSplit(repositoryPath: NSHomeDirectory()))
+			}
+			.disabled(!canOpenInSplit(NSHomeDirectory()))
+			.labelStyle(.titleAndIcon)
 			Button("Kill Terminal", role: .destructive) {
-				terminalViewStore.killAllSessions(for: NSHomeDirectory())
-				store.send(.killRepo(repositoryPath: NSHomeDirectory()))
+				workspace.send(.killRepo(repositoryPath: NSHomeDirectory()))
 			}
 		}
+	}
+
+	/// Whether a repository can go in a pane beside the ones on screen: there is one to go
+	/// beside, room for another pane, and the repository is not on screen already — its tabs
+	/// belong to the pane that shows it.
+	private func canOpenInSplit(_ path: String) -> Bool {
+		workspace.canSplit && !workspace.state.showsRepository(path)
 	}
 
 	private func sidebarRow(
@@ -248,18 +256,18 @@ struct TerminalLayoutView: View {
 		let path = rowStore.path
 		return SidebarRepositoryRowView(
 			store: rowStore,
-			isActive: store.activeRepositoryPath == path,
+			isActive: workspace.activeRepositoryPath == path,
+			isInSplit: workspace.activeRepositoryPath != path && workspace.state.showsRepository(path),
 			sessionStatus: statusByPath[path],
 			showsActiveDot: !showOnlyWithTerminals,
 			onTap: {
-				store.send(.selectRepo(repositoryPath: path))
+				workspace.send(.selectRepo(repositoryPath: path))
 			},
 			onKill: {
-				terminalViewStore.killAllSessions(for: path)
-				store.send(.killRepo(repositoryPath: path))
-			}
+				workspace.send(.killRepo(repositoryPath: path))
+			},
+			onOpenInSplit: canOpenInSplit(path) ? { workspace.send(.openRepoInSplit(repositoryPath: path)) } : nil
 		)
 		.padding(.horizontal, 4)
 	}
-
 }

@@ -20,17 +20,17 @@ struct TerminalStartupCommandTests {
 		await scanGroups(store)
 
 		await openPanel(store, on: "/repos/alpha")
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude"])
 
-		await store.send(.terminalLayout(.newTabRequested))
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil])
+		await newTab(store)
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", nil])
 
-		let first = store.state.terminalSessions[0].id
-		await store.send(.terminalLayout(.retryTab(sessionId: first)))
-		#expect(store.state.terminalSessions[id: first] == nil)
-		let second = store.state.terminalSessions[0].id
-		await store.send(.terminalLayout(.retryTab(sessionId: second)))
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil])
+		let first = store.state.terminals.sessions[0].id
+		await retry(store, first)
+		#expect(store.state.terminals.sessions[id: first] == nil)
+		let second = store.state.terminals.sessions[0].id
+		await retry(store, second)
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", nil])
 	}
 
 	@Test("with the new-tabs option on, new tabs carry the command too")
@@ -39,8 +39,8 @@ struct TerminalStartupCommandTests {
 		await scanGroups(store)
 
 		await openPanel(store, on: "/repos/alpha")
-		await store.send(.terminalLayout(.newTabRequested))
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "claude"])
+		await newTab(store)
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", "claude"])
 	}
 
 	@Test("a worktree's first tab carries the command, its new tabs do not")
@@ -49,12 +49,12 @@ struct TerminalStartupCommandTests {
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
 
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha-fix")))
-		await store.send(.terminalLayout(.newTabRequested))
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == [
+		await selectRepo(store, "/repos/alpha-fix")
+		await newTab(store)
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == [
 			"/repos/alpha", "/repos/alpha-fix", "/repos/alpha-fix",
 		])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "claude", nil])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", "claude", nil])
 	}
 
 	@Test("a global command also stays out of new tabs by default")
@@ -62,9 +62,9 @@ struct TerminalStartupCommandTests {
 		let store = makeStore(commands: [:], global: "mise install")
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/gamma")
-		await store.send(.terminalLayout(.newTabRequested))
+		await newTab(store)
 
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["mise install", nil])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["mise install", nil])
 	}
 
 	@Test("turning the new-tabs option on applies to the next tab, not to tabs already open")
@@ -72,13 +72,13 @@ struct TerminalStartupCommandTests {
 		let store = makeStore(commands: ["/repos/alpha": "claude"])
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
-		await store.send(.terminalLayout(.newTabRequested))
+		await newTab(store)
 
 		@Shared(.terminalStartupCommandInNewTabs) var inNewTabs = false
 		$inNewTabs.withLock { $0 = true }
-		await store.send(.terminalLayout(.newTabRequested))
+		await newTab(store)
 
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil, "claude"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", nil, "claude"])
 	}
 
 	@Test("a group that opts out of the global command keeps new tabs idle with the option on")
@@ -90,9 +90,9 @@ struct TerminalStartupCommandTests {
 		}
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
-		await store.send(.terminalLayout(.newTabRequested))
+		await newTab(store)
 
-		#expect(store.state.terminalSessions.map(\.startupCommand) == [nil, nil])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == [nil, nil])
 	}
 
 	@Test("retrying the first tab picks up an edited command")
@@ -103,10 +103,10 @@ struct TerminalStartupCommandTests {
 
 		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
 		$groupSettings.withLock { $0["/repos/alpha"]?.terminalStartupCommand = "lazygit" }
-		let first = store.state.terminalSessions[0].id
-		await store.send(.terminalLayout(.retryTab(sessionId: first)))
+		let first = store.state.terminals.sessions[0].id
+		await retry(store, first)
 
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["lazygit"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["lazygit"])
 	}
 
 	@Test("retrying a plain tab keeps it plain even once the new-tabs option is on")
@@ -114,14 +114,14 @@ struct TerminalStartupCommandTests {
 		let store = makeStore(commands: ["/repos/alpha": "claude"])
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
-		await store.send(.terminalLayout(.newTabRequested))
+		await newTab(store)
 
 		@Shared(.terminalStartupCommandInNewTabs) var inNewTabs = false
 		$inNewTabs.withLock { $0 = true }
-		let plain = store.state.terminalSessions[1].id
-		await store.send(.terminalLayout(.retryTab(sessionId: plain)))
+		let plain = store.state.terminals.sessions[1].id
+		await retry(store, plain)
 
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", nil])
 	}
 
 	@Test("after closing a repository's terminals, reopening it runs the command again")
@@ -129,13 +129,13 @@ struct TerminalStartupCommandTests {
 		let store = makeStore(commands: ["/repos/alpha": "claude"])
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
-		await store.send(.terminalLayout(.newTabRequested))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
-		await store.send(.terminalLayout(.killRepo(repositoryPath: "/repos/alpha")))
+		await newTab(store)
+		await selectRepo(store, "/repos/beta")
+		await store.send(.terminals(.killRepo(repositoryPath: "/repos/alpha")))
 
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha")))
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == ["/repos/beta", "/repos/alpha"])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == [nil, "claude"])
+		await selectRepo(store, "/repos/alpha")
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == ["/repos/beta", "/repos/alpha"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == [nil, "claude"])
 	}
 
 	@Test("a worktree's terminal carries its group's command")
@@ -144,9 +144,9 @@ struct TerminalStartupCommandTests {
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
 
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha-fix")))
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == ["/repos/alpha", "/repos/alpha-fix"])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "claude"])
+		await selectRepo(store, "/repos/alpha-fix")
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == ["/repos/alpha", "/repos/alpha-fix"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", "claude"])
 	}
 
 	@Test("a group's command does not leak into another group's terminals")
@@ -154,14 +154,14 @@ struct TerminalStartupCommandTests {
 		let store = makeStore(commands: ["/repos/alpha": "claude", "/repos/beta": "npm start"], inNewTabs: true)
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/beta")
-		await store.send(.terminalLayout(.newTabRequested))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/gamma")))
-		await store.send(.terminalLayout(.newTabRequested))
+		await newTab(store)
+		await selectRepo(store, "/repos/gamma")
+		await newTab(store)
 
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == [
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == [
 			"/repos/beta", "/repos/beta", "/repos/gamma", "/repos/gamma",
 		])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["npm start", "npm start", nil, nil])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["npm start", "npm start", nil, nil])
 	}
 
 	@Test("a repository no group knows starts its terminal idle")
@@ -170,9 +170,9 @@ struct TerminalStartupCommandTests {
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
 
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/elsewhere")))
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == ["/repos/alpha", "/repos/elsewhere"])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", nil])
+		await selectRepo(store, "/repos/elsewhere")
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == ["/repos/alpha", "/repos/elsewhere"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", nil])
 	}
 
 	@Test("an edited command applies to the next tab, not to tabs already open")
@@ -183,9 +183,9 @@ struct TerminalStartupCommandTests {
 		await openPanel(store, on: "/repos/alpha")
 		@Shared(.groupSettings) var groupSettings: [String: RepoGroupSettings] = [:]
 		$groupSettings.withLock { $0["/repos/alpha"]?.terminalStartupCommand = "lazygit" }
-		await store.send(.terminalLayout(.newTabRequested))
+		await newTab(store)
 
-		#expect(store.state.terminalSessions.map(\.startupCommand) == ["claude", "lazygit"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == ["claude", "lazygit"])
 	}
 
 	@Test("groups without their own command use the global one; a group's own command overrides it")
@@ -193,15 +193,15 @@ struct TerminalStartupCommandTests {
 		let store = makeStore(commands: ["/repos/alpha": "claude", "/repos/beta": "  "], global: "mise install", inNewTabs: true)
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/gamma")))
-		await store.send(.terminalLayout(.newTabRequested))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/elsewhere")))
+		await selectRepo(store, "/repos/beta")
+		await selectRepo(store, "/repos/gamma")
+		await newTab(store)
+		await selectRepo(store, "/repos/elsewhere")
 
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == [
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == [
 			"/repos/alpha", "/repos/beta", "/repos/gamma", "/repos/gamma", "/repos/elsewhere",
 		])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == [
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == [
 			"claude", "mise install", "mise install", "mise install", "mise install",
 		])
 	}
@@ -216,14 +216,14 @@ struct TerminalStartupCommandTests {
 		}
 		await scanGroups(store)
 		await openPanel(store, on: "/repos/alpha")
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/alpha-fix")))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/beta")))
-		await store.send(.terminalLayout(.selectRepo(repositoryPath: "/repos/gamma")))
+		await selectRepo(store, "/repos/alpha-fix")
+		await selectRepo(store, "/repos/beta")
+		await selectRepo(store, "/repos/gamma")
 
-		#expect(store.state.terminalSessions.map(\.repositoryPath) == [
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == [
 			"/repos/alpha", "/repos/alpha-fix", "/repos/beta", "/repos/gamma",
 		])
-		#expect(store.state.terminalSessions.map(\.startupCommand) == [nil, nil, "npm start", "mise install"])
+		#expect(store.state.terminals.sessions.map(\.startupCommand) == [nil, nil, "npm start", "mise install"])
 	}
 
 	// MARK: - Helpers
@@ -245,11 +245,15 @@ struct TerminalStartupCommandTests {
 		let store = TestStore(initialState: RepositoryListReducer.State()) {
 			RepositoryListReducer()
 		} withDependencies: {
+			$0.uuid = .incrementing
 			$0[GitClient.self].getCurrentBranch = { _ in
 				GitPorcelainStatus(parsing: "", didSucceed: false)
 			}
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
 			$0[LastOpenedDirectoryClient.self].load = { nil }
+			// A retried tab and a repository's closed tabs leave the state, which hangs their
+			// shells up.
+			$0[TerminalPanesClient.self].kill = { _ in }
 		}
 		store.exhaustivity = .off
 		return store
@@ -266,9 +270,30 @@ struct TerminalStartupCommandTests {
 	}
 
 	/// Opens the terminal panel on a group's root, the way the row's terminal button does.
-	/// `.selectRepo` and `.newTabRequested` only act inside an open panel.
 	private func openPanel(_ store: TestStoreOf<RepositoryListReducer>, on groupId: String) async {
 		await store.send(.repositoryGroups(.element(id: groupId, action: .header(.openTerminalForRepo))))
+	}
+
+	/// A session the workspace has to ask the list for comes back as `sessionBuilt`: the state
+	/// has it only once that is received.
+	private func newTab(_ store: TestStoreOf<RepositoryListReducer>) async {
+		await store.send(.terminals(.newTabRequested))
+		await store.receive(\.terminals.sessionBuilt)
+	}
+
+	/// Shows a repository, as a click in the panel's sidebar does. One with no tab yet gets its
+	/// first one built.
+	private func selectRepo(_ store: TestStoreOf<RepositoryListReducer>, _ repositoryPath: String) async {
+		let needsSession = store.state.terminals.tabs(of: repositoryPath).isEmpty
+		await store.send(.terminals(.selectRepo(repositoryPath: repositoryPath)))
+		if needsSession {
+			await store.receive(\.terminals.sessionBuilt)
+		}
+	}
+
+	private func retry(_ store: TestStoreOf<RepositoryListReducer>, _ sessionId: UUID) async {
+		await store.send(.terminals(.retryTab(sessionId: sessionId)))
+		await store.receive(\.terminals.sessionBuilt)
 	}
 
 	private func scanned(_ path: String, isWorktree: Bool) -> ScannedRepository {

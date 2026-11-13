@@ -163,32 +163,16 @@ struct TerminalViewStoreTests {
 		store.killSession(sessionId: survivor.session.id)
 	}
 
-	@Test func killSessionsNotInHangsUpOnlyTheSessionsThatVanished() async throws {
+	@Test func killAllSessionsHangsUpEveryShell() async throws {
 		let store = makeStore()
-		let kept = startSession(in: store)
-		let vanished = startSession(in: store)
-		try #require(kept.pid > 0 && vanished.pid > 0)
+		let first = startSession(in: store)
+		let second = startSession(in: store)
+		try #require(first.pid > 0 && second.pid > 0)
 
-		store.killSessions(notIn: [kept.session.id])
+		store.killAllSessions()
 
-		#expect(await eventually { !isRunning(vanished.pid) })
-		#expect(isRunning(kept.pid))
-		store.killSession(sessionId: kept.session.id)
-	}
-
-	@Test func killAllSessionsForARepositoryLeavesOtherRepositoriesAlone() async throws {
-		let store = makeStore()
-		let first = startSession(in: store, repositoryPath: "/tmp/one")
-		let second = startSession(in: store, repositoryPath: "/tmp/one")
-		let other = startSession(in: store, repositoryPath: "/tmp/two")
-		try #require(first.pid > 0 && second.pid > 0 && other.pid > 0)
-
-		store.killAllSessions(for: "/tmp/one")
-
-		#expect(await eventually { !isRunning(first.pid) && !isRunning(second.pid) })
-		#expect(isRunning(other.pid))
-		#expect(store.paneSnapshots().keys.sorted() == [other.session.id])
-		store.killSession(sessionId: other.session.id)
+		#expect(await eventually { !isRunning(first.pid) })
+		#expect(await eventually { !isRunning(second.pid) })
 	}
 
 	/// Ctrl-C reaches the foreground program as the user's keystroke would: the terminal turns it
@@ -245,6 +229,52 @@ struct TerminalViewStoreTests {
 		try await Task.sleep(for: .seconds(2)) // past the detector's foreground check
 
 		#expect(reported.statuses == reportedBeforeOutput, "a killed pane has nothing more to say")
+	}
+
+	/// Panes are created from `updateNSView`, and a status reported from inside it changes the
+	/// state that update is drawing, so the first `.active` waits for the next turn of the main
+	/// queue. It is said once: asking the store for the pane again makes no second report.
+	@Test func aNewPaneReportsItselfActiveOnceAfterTheTurnThatMadeIt() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let events = TerminalPaneEvents(
+			onStatusChange: { _, status, _ in
+				MainActor.assumeIsolated { reported.statuses.append(status) }
+			}
+		)
+		let colors = TerminalColors(foreground: .white, background: .black)
+		let view = store.view(for: session, colors: colors, events: events)
+		defer { store.killSession(sessionId: session.id) }
+
+		#expect(reported.statuses.isEmpty, "nothing is reported from inside the call that made the pane")
+		#expect(await eventually { reported.statuses == [.active] })
+
+		#expect(store.view(for: session, colors: colors, events: events) === view)
+		try await Task.sleep(for: .milliseconds(200))
+		#expect(reported.statuses == [.active])
+	}
+
+	/// A tab can be closed in the turn it was opened in. Its pane then has no session left to
+	/// report a status for.
+	@Test func aPaneKilledBeforeItsFirstReportSaysNothing() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		_ = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				}
+			)
+		)
+
+		store.killSession(sessionId: session.id)
+		try await Task.sleep(for: .milliseconds(300))
+
+		#expect(reported.statuses.isEmpty)
 	}
 
 	/// An OSC 7501 report as a program writes it.
@@ -363,6 +393,28 @@ struct TerminalViewStoreTests {
 		#expect(await eventually { store.paneSnapshots()[session.id]?.directory == "/usr" })
 		store.killSession(sessionId: session.id)
 		#expect(store.paneSnapshots().isEmpty)
+	}
+
+	/// What ⌘D opens the new pane in: where the one session's shell is, asked of the kernel.
+	@Test func currentDirectoryIsTheNamedSessionsShells() async throws {
+		let store = makeStore(shell: "/bin/zsh", arguments: ["-f"])
+		let inTmp = TerminalSession(repositoryPath: "/", startingDirectory: "/tmp")
+		let inUsr = TerminalSession(repositoryPath: "/", startingDirectory: "/usr")
+		for session in [inTmp, inUsr] {
+			_ = store.view(
+				for: session,
+				colors: TerminalColors(foreground: .white, background: .black),
+				events: TerminalPaneEvents()
+			)
+		}
+		defer { store.killAllSessions() }
+
+		#expect(await eventually { store.currentDirectory(sessionId: inTmp.id) == "/private/tmp" })
+		#expect(await eventually { store.currentDirectory(sessionId: inUsr.id) == "/usr" })
+		#expect(store.currentDirectory(sessionId: UUID()) == nil, "a session with no pane has no directory")
+
+		store.killSession(sessionId: inTmp.id)
+		#expect(store.currentDirectory(sessionId: inTmp.id) == nil)
 	}
 
 	/// The store goes with the window. Whatever it still holds must hang up rather than outlive it.

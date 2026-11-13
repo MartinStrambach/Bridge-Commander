@@ -1,8 +1,8 @@
 import SwiftUI
 
 public extension EnvironmentValues {
-	/// Whether the Xcode, Tuist and YouTrack buttons under this view present their alerts and
-	/// sheets.
+	/// Whether the row's buttons that the terminal toolbar also shows (Xcode, Tuist, YouTrack,
+	/// Android Studio and the git menu) present their alerts, sheets and dialogs under this view.
 	///
 	/// The terminal toolbar shows the opened row's own button stores, and the repository list
 	/// stays mounted (at opacity 0) underneath it — so while the terminal is open the same
