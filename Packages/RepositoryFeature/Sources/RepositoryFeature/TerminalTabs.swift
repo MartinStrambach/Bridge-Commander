@@ -244,8 +244,8 @@ struct TerminalTabs: Equatable {
 
 	/// The panel as the previous launch left it: `split` when it still makes one — several
 	/// panes, the terminal that had the keyboard among them — and otherwise the one pane of that
-	/// terminal's repository.
-	mutating func restorePanel(split: [TerminalPane], showing session: TerminalSession) {
+	/// terminal's repository; on screen, or hidden with its panes kept, as `hidePanel()` leaves it.
+	mutating func restorePanel(split: [TerminalPane], showing session: TerminalSession, isVisible: Bool = true) {
 		var owned: Set<UUID> = []
 		var restored: [TerminalPane] = []
 		for pane in split.prefix(Self.maxPanes) {
@@ -268,7 +268,9 @@ struct TerminalTabs: Equatable {
 			panes = []
 			show(session)
 		}
-		showPanel()
+		if isVisible {
+			showPanel()
+		}
 	}
 
 	/// Sets the tab each repository was showing when the tabs were saved.

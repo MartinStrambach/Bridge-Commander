@@ -320,6 +320,7 @@ struct RepositoryListRefreshTests {
 		store.exhaustivity = .on
 
 		await store.send(.terminalLayout(.pushCompleted(
+			repositoryPath: "/repos/alpha",
 			result: GitPushHelper.PushResult(isUpToDate: false, message: "pushed 2 commits"),
 			error: nil
 		)))
@@ -327,6 +328,35 @@ struct RepositoryListRefreshTests {
 		// The toolbar's own Push button has no other route back to the row, so without this
 		// refresh the unpushed count it renders keeps the pre-push value. Exhaustive: any
 		// other action — or none at all — fails here.
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") } assert: {
+			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.header.isRefreshingStatus = true
+		}
+
+		store.exhaustivity = .off
+		await store.finish()
+	}
+
+	// With the panel split, ⌘] or a click moves the keyboard, and the toolbar with it, to another
+	// repository while the push runs. The count that changed is still the pushed repository's.
+	@Test("a push that finishes after the keyboard moved on refreshes the row that was pushed")
+	func toolbarPushRefreshesThePushedRowNotTheActiveOne() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/beta")
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		await store.send(.didScanGroup(rootPath: "/repos/beta", rows: [
+			mainRepo("/repos/beta", name: "beta"),
+		]))
+		store.exhaustivity = .on
+
+		await store.send(.terminalLayout(.pushCompleted(
+			repositoryPath: "/repos/alpha",
+			result: GitPushHelper.PushResult(isUpToDate: false, message: "pushed 2 commits"),
+			error: nil
+		)))
+
 		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") } assert: {
 			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.header.isRefreshingStatus = true
 		}
@@ -349,7 +379,7 @@ struct RepositoryListRefreshTests {
 		// A rejected push leaves the local commits — and the count rendering them — exactly
 		// as they were, so it reports the failure rather than re-running the status fetch.
 		// Exhaustive: a row refresh reaching the queue fails here.
-		await store.send(.terminalLayout(.pushCompleted(result: nil, error: error))) {
+		await store.send(.terminalLayout(.pushCompleted(repositoryPath: "/repos/alpha", result: nil, error: error))) {
 			$0.alert = AlertState {
 				TextState("Push Failed")
 			} message: {

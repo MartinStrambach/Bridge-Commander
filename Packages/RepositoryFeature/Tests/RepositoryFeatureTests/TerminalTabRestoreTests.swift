@@ -69,11 +69,10 @@ struct TerminalTabRestoreTests {
 		#expect(saved.tabs.map(\.tabIndex) == [2])
 	}
 
-	// The memory of each repository's tab lives in `TerminalTabs`, not in the panel, so it is
-	// there to save whether the panel is on screen or not. What is on screen is saved only
-	// while something is.
-	@Test("with the panel hidden the repositories' current tabs are saved, the tab on screen and the split are not")
-	func hiddenPanelSavesCurrentTabsOnly() {
+	// Hiding the panel keeps its panes and the keyboard, so they are there to save whether the
+	// panel is on screen or not; the file says which it was.
+	@Test("a hidden panel is saved with its split and the keyboard, marked as hidden")
+	func hiddenPanelSavesItsSplit() {
 		let alphaOne = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
 		let alphaTwo = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
 		let beta = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
@@ -88,13 +87,68 @@ struct TerminalTabRestoreTests {
 		#expect(visible.tabs.map(\.isOnScreen) == [false, false, true])
 		#expect(visible.tabs.map(\.paneIndex) == [0, 0, 1])
 		#expect(visible.tabs.map(\.isPaneCurrentTab) == [false, true, true])
+		#expect(visible.isPanelVisible == true)
 
 		terminals.hidePanel()
 		let hidden = SavedTerminalTabs(terminals, panes: [:])
 		#expect(hidden.tabs.map(\.isRepositoryCurrentTab) == [false, true, true])
-		#expect(hidden.tabs.map(\.isOnScreen) == [false, false, false])
-		#expect(hidden.tabs.map(\.paneIndex) == [nil, nil, nil])
-		#expect(hidden.tabs.map(\.isPaneCurrentTab) == [nil, nil, nil])
+		#expect(hidden.tabs == visible.tabs)
+		#expect(hidden.isPanelVisible == false)
+	}
+
+	// Run tabs and failed ones are not saved. The pane showing one comes back on a tab it has
+	// that is, and the keyboard stays with it.
+	@Test("a pane showing a tab that is not saved comes back on its first saved tab")
+	func paneOnUnsavedTabFallsBackToItsSavedTab() {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let betaOne = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
+		let betaRun = TerminalSession(repositoryPath: "/repos/beta", runTitle: "App", tabIndex: 2)
+		var terminals = TerminalTabs(sessions: [alpha, betaOne, betaRun])
+		terminals.show(alpha)
+		terminals.split(showing: betaRun)
+		terminals.showPanel()
+		#expect(terminals.activeSessionId == betaRun.id)
+
+		let saved = SavedTerminalTabs(terminals, panes: [:])
+
+		#expect(saved.tabs.map(\.repositoryPath) == ["/repos/alpha", "/repos/beta"])
+		#expect(saved.tabs.map(\.isOnScreen) == [false, true])
+		#expect(saved.tabs.map(\.paneIndex) == [0, 1])
+		#expect(saved.tabs.map(\.isPaneCurrentTab) == [true, true])
+	}
+
+	@Test("the keyboard goes to another pane when its own has no tab that is saved")
+	func keyboardLeavesPaneWithNoSavedTab() {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		var betaFailed = TerminalSession(repositoryPath: "/repos/beta")
+		betaFailed.status = .failed("Terminal process exited (code 1)")
+		var terminals = TerminalTabs(sessions: [alpha, betaFailed])
+		terminals.show(alpha)
+		terminals.split(showing: betaFailed)
+		terminals.showPanel()
+		#expect(terminals.activeSessionId == betaFailed.id)
+
+		let saved = SavedTerminalTabs(terminals, panes: [:])
+
+		// One pane is left, which is no split: it comes back as the one terminal on screen.
+		#expect(saved.tabs.map(\.repositoryPath) == ["/repos/alpha"])
+		#expect(saved.tabs.map(\.isOnScreen) == [true])
+		#expect(saved.tabs.map(\.paneIndex) == [nil])
+		#expect(saved.isPanelVisible == true)
+	}
+
+	@Test("a lone pane on a run tab is saved on the repository's other tab, and nothing when it has none")
+	func lonePaneOnRunTab() {
+		let shell = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
+		let run = TerminalSession(repositoryPath: "/repos/alpha", runTitle: "App", tabIndex: 2)
+		var terminals = TerminalTabs(sessions: [shell, run])
+		terminals.show(run)
+		terminals.showPanel()
+
+		#expect(SavedTerminalTabs(terminals, panes: [:]).tabs.map(\.isOnScreen) == [true])
+
+		terminals.close([shell.id])
+		#expect(SavedTerminalTabs(terminals, panes: [:]).tabs.isEmpty)
 	}
 
 	@Test("a single pane is saved as the tab on screen, with no split")
@@ -176,7 +230,7 @@ struct TerminalTabRestoreTests {
 		#expect(written.value == SavedTerminalTabs(tabs: [
 			tab("/repos/alpha", directory: "/repos/alpha", command: "claude", isRepositoryCurrentTab: true),
 			tab("/repos/beta", directory: "/repos/beta/Sources", isRepositoryCurrentTab: true, isOnScreen: true),
-		]))
+		], isPanelVisible: true))
 		#expect(store.state.terminals == TerminalTabs())
 		#expect(store.state.terminalLayout == nil)
 		await store.finish()
@@ -193,7 +247,7 @@ struct TerminalTabRestoreTests {
 		#expect(store.state.terminalLayout != nil)
 	}
 
-	@Test("a window closed with the panel hidden reopens with it hidden, on the same tabs")
+	@Test("a window closed with the panel hidden reopens with it hidden, its split behind it")
 	func windowClosingWithHiddenSplit() async {
 		let alphaOne = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 1)
 		let alphaTwo = TerminalSession(repositoryPath: "/repos/alpha", tabIndex: 2)
@@ -219,16 +273,36 @@ struct TerminalTabRestoreTests {
 
 		await store.send(.view(.onDisappear))
 		#expect(written.value == SavedTerminalTabs(tabs: [
-			tab("/repos/alpha", directory: "/repos/alpha", tabIndex: 1),
-			tab("/repos/alpha", directory: "/repos/alpha", tabIndex: 2, isRepositoryCurrentTab: true),
-			tab("/repos/beta", directory: "/repos/beta", isRepositoryCurrentTab: true),
-		]))
+			tab("/repos/alpha", directory: "/repos/alpha", tabIndex: 1, paneIndex: 0, isPaneCurrentTab: false),
+			tab(
+				"/repos/alpha",
+				directory: "/repos/alpha",
+				tabIndex: 2,
+				isRepositoryCurrentTab: true,
+				paneIndex: 0,
+				isPaneCurrentTab: true
+			),
+			tab(
+				"/repos/beta",
+				directory: "/repos/beta",
+				isRepositoryCurrentTab: true,
+				isOnScreen: true,
+				paneIndex: 1,
+				isPaneCurrentTab: true
+			),
+		], isPanelVisible: false))
 		await store.finish()
 
 		await store.send(.restoreTerminalTabs)
 		let restored = store.state.terminals
 		#expect(restored.sessions.count == 3)
-		#expect(restored.panes.isEmpty)
+		// The split is where hiding left it, for the panel to show when it is next opened.
+		let ids = restored.sessions.map(\.id)
+		#expect(restored.panes == [
+			TerminalPane(shown: ids[1], tabs: [ids[0], ids[1]]),
+			TerminalPane(shown: ids[2], tabs: [ids[2]]),
+		])
+		#expect(restored.activePaneIndex == 1)
 		#expect(!restored.isPanelVisible)
 		#expect(store.state.terminalLayout == nil)
 		#expect(restored.lastActiveSessionByRepo == [
@@ -326,13 +400,16 @@ struct TerminalTabRestoreTests {
 			tab("/repos/deleted-worktree", directory: "/repos/deleted-worktree"),
 			tab("/repos/alpha", directory: "/repos/alpha/removed-folder"),
 			tab("/repos/beta", directory: "/repos/beta/Sources"),
-		])
+		], isPanelVisible: false)
 		let existing: Set = ["/repos/alpha", "/repos/beta", "/repos/beta/Sources"]
 
 		let pruned = saved.pruned { existing.contains($0) }
 
 		#expect(pruned.tabs.map(\.repositoryPath) == ["/repos/alpha", "/repos/beta"])
 		#expect(pruned.tabs.map(\.directory) == ["/repos/alpha", "/repos/beta/Sources"])
+		// What the file says of the panel is not the tabs' to lose: dropped here, a panel hidden
+		// at quit came back on screen.
+		#expect(pruned.isPanelVisible == false)
 	}
 
 	// MARK: - Restoring
@@ -403,6 +480,72 @@ struct TerminalTabRestoreTests {
 		let ids = store.state.terminals.sessions.map(\.id)
 		#expect(store.state.terminals.panes == [TerminalPane(shown: ids[1], tabs: [ids[0], ids[1]])])
 		#expect(store.state.terminals.activePaneIndex == 0)
+		#expect(store.state.terminals.isPanelVisible)
+	}
+
+	// The whole way round, as a quit with a run tab at the keyboard goes: the panel used to come
+	// back closed, its split gone, because the tab that had the keyboard was not in the file.
+	@Test("a split quit with the keyboard on a run tab comes back, on that pane's shell tab")
+	func splitWithKeyboardOnRunTabComesBack() async {
+		let alpha = TerminalSession(repositoryPath: "/repos/alpha")
+		let betaShell = TerminalSession(repositoryPath: "/repos/beta", tabIndex: 1)
+		let betaRun = TerminalSession(repositoryPath: "/repos/beta", runTitle: "App", tabIndex: 2)
+		var terminals = TerminalTabs(sessions: [alpha, betaShell, betaRun])
+		terminals.show(alpha)
+		terminals.split(showing: betaRun)
+		terminals.showPanel()
+		let store = makeStore(loading: SavedTerminalTabs(terminals, panes: [:]))
+
+		await store.send(.restoreTerminalTabs)
+
+		let ids = store.state.terminals.sessions.map(\.id)
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == ["/repos/alpha", "/repos/beta"])
+		#expect(store.state.terminals.panes == [
+			TerminalPane(shown: ids[0], tabs: [ids[0]]),
+			TerminalPane(shown: ids[1], tabs: [ids[1]]),
+		])
+		#expect(store.state.terminals.activePaneIndex == 1)
+		#expect(store.state.terminals.isPanelVisible)
+	}
+
+	@Test("a split whose tab with the keyboard is gone comes back with the keyboard in its first pane")
+	func splitWithoutItsKeyboardTabComesBack() async {
+		// Three panes were saved; the first, which had the keyboard, was a worktree deleted since.
+		// Pruned as the live load prunes it, which leaves panes 1 and 2 and no pane 0.
+		let saved = SavedTerminalTabs(tabs: [
+			tab(
+				"/repos/gone",
+				directory: "/repos/gone",
+				isRepositoryCurrentTab: true,
+				isOnScreen: true,
+				paneIndex: 0,
+				isPaneCurrentTab: true
+			),
+			tab("/repos/alpha", directory: "/repos/alpha", isRepositoryCurrentTab: true, paneIndex: 1, isPaneCurrentTab: true),
+			tab("/repos/beta", directory: "/repos/beta", isRepositoryCurrentTab: true, paneIndex: 2, isPaneCurrentTab: true),
+		], isPanelVisible: true)
+		let store = makeStore(loading: saved.pruned { $0 != "/repos/gone" })
+
+		await store.send(.restoreTerminalTabs)
+
+		let ids = store.state.terminals.sessions.map(\.id)
+		#expect(store.state.terminals.sessions.map(\.repositoryPath) == ["/repos/alpha", "/repos/beta"])
+		#expect(store.state.terminals.panes == [
+			TerminalPane(shown: ids[0], tabs: [ids[0]]),
+			TerminalPane(shown: ids[1], tabs: [ids[1]]),
+		])
+		#expect(store.state.terminals.activePaneIndex == 0)
+		#expect(store.state.terminals.isPanelVisible)
+	}
+
+	@Test("a file from before hidden panels kept their panes opens the panel on the tab on screen")
+	func fileWithoutPanelVisibilityShowsThePanel() async {
+		let store = makeStore(loading: SavedTerminalTabs(tabs: [
+			tab("/repos/alpha", directory: "/repos/alpha", isRepositoryCurrentTab: true, isOnScreen: true),
+		]))
+
+		await store.send(.restoreTerminalTabs)
+
 		#expect(store.state.terminals.isPanelVisible)
 	}
 

@@ -45,6 +45,36 @@ struct TerminalLayoutReducerTests {
 
 	// MARK: - In-flight flags
 
+	@Test("a push reports the repository it pushed, whether it succeeded or failed", arguments: [true, false])
+	func pushReportsItsRepository(failed: Bool) async {
+		let store = TestStore(initialState: TerminalLayoutReducer.State()) {
+			TerminalLayoutReducer()
+		} withDependencies: {
+			$0[GitClient.self].push = { path in
+				#expect(path == "/repos/alpha")
+				if failed {
+					throw GitError.pushFailed("rejected")
+				}
+				return GitPushHelper.PushResult(isUpToDate: false, message: "pushed")
+			}
+		}
+
+		await store.send(.pushButtonTapped(repositoryPath: "/repos/alpha")) {
+			$0.isPushing = true
+		}
+		// The list refreshes the row named here, so it has to be the one pushed and not whichever
+		// has the keyboard when the push ends.
+		await store.receive { action in
+			guard case let .pushCompleted(repositoryPath, result, error) = action else {
+				return false
+			}
+
+			return repositoryPath == "/repos/alpha" && (result == nil) == failed && (error != nil) == failed
+		} assert: {
+			$0.isPushing = false
+		}
+	}
+
 	@Test("a push completion stops the spinner whether it succeeded or failed", arguments: [true, false])
 	func pushCompletionClearsFlag(failed: Bool) async {
 		var layout = TerminalLayoutReducer.State()
@@ -53,7 +83,7 @@ struct TerminalLayoutReducerTests {
 			TerminalLayoutReducer()
 		}
 
-		await store.send(.pushCompleted(result: nil, error: failed ? .pushFailed("rejected") : nil)) {
+		await store.send(.pushCompleted(repositoryPath: "/repos/alpha", result: nil, error: failed ? .pushFailed("rejected") : nil)) {
 			$0.isPushing = false
 		}
 	}

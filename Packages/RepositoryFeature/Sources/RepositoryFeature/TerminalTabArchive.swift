@@ -22,7 +22,8 @@ struct SavedTerminalTab: Codable, Equatable, Sendable {
 	var tabIndex: Int
 	/// The tab the repository was showing (`lastActiveSessionByRepo`).
 	var isRepositoryCurrentTab: Bool
-	/// The tab with the keyboard; no tab has it when the panel was closed.
+	/// The tab with the keyboard. No tab has it when the panel had shown nothing yet, and, in a
+	/// file written before a hidden panel's panes were saved, when the panel was hidden.
 	var isOnScreen: Bool
 	/// The pane of the split the tab belonged to, from the left, when the panel showed several
 	/// side by side. Nil for a tab that was in none, and in a file written before the panel
@@ -36,6 +37,9 @@ struct SavedTerminalTab: Codable, Equatable, Sendable {
 /// Every open tab, in tab-bar order.
 struct SavedTerminalTabs: Codable, Equatable, Sendable {
 	var tabs: [SavedTerminalTab] = []
+	/// Whether the panel was on screen. Nil in a file written before a hidden panel's panes were
+	/// saved, where a tab with the keyboard means it was.
+	var isPanelVisible: Bool?
 
 	/// Takes the session list as it stands. Failed tabs are left out — their shell is gone, and the
 	/// user had not asked for it to be retried — and so are run tabs, whose command reopened would
@@ -46,12 +50,21 @@ struct SavedTerminalTabs: Codable, Equatable, Sendable {
 	///   the directory it starts in and the conversation it was going to resume — nothing has
 	///   happened in it since.
 	init(_ terminals: TerminalTabs, panes: [UUID: TerminalPaneSnapshot]) {
-		// What is on screen is saved only while the panel is: a panel closed at quit stays closed
-		// at the next launch, and its tabs' shells start the first time it opens.
-		let isVisible = terminals.isPanelVisible
-		let isSplit = isVisible && terminals.panes.count > 1
-		tabs = terminals.sessions
-			.filter { $0.status.isLive && !$0.isRunTab }
+		let saved = terminals.sessions.filter { $0.status.isLive && !$0.isRunTab }
+		// The tab each pane comes back showing: its own, or its first that is saved when its own
+		// is not (a run tab, a failed one). A pane with no saved tab does not come back.
+		let shownByPane = terminals.panes.map { pane in
+			saved[id: pane.shown]?.id ?? pane.tabs.first { saved[id: $0] != nil }
+		}
+		// The keyboard stays in its pane when that comes back, and otherwise goes to the first
+		// that does, so the panel is not lost with the one tab that is not saved.
+		let keyboard = (shownByPane.indices.contains(terminals.activePaneIndex) ? shownByPane[terminals.activePaneIndex] : nil)
+			?? shownByPane.lazy.compactMap(\.self).first
+		let isSplit = shownByPane.count { $0 != nil } > 1
+		// Saved whether or not the panel is on screen: hiding keeps the panes, and a panel hidden
+		// at quit comes back hidden with them, its tabs' shells starting the first time it opens.
+		isPanelVisible = terminals.isPanelVisible
+		tabs = saved
 			.map { session in
 				let paneIndex = isSplit ? terminals.paneIndex(owning: session.id) : nil
 				return SavedTerminalTab(
@@ -62,34 +75,36 @@ struct SavedTerminalTabs: Codable, Equatable, Sendable {
 					title: session.title,
 					tabIndex: session.tabIndex,
 					isRepositoryCurrentTab: terminals.lastActiveSessionByRepo[session.repositoryPath] == session.id,
-					isOnScreen: isVisible && terminals.activeSessionId == session.id,
+					isOnScreen: keyboard == session.id,
 					paneIndex: paneIndex,
-					isPaneCurrentTab: paneIndex.map { terminals.panes[$0].shown == session.id }
+					isPaneCurrentTab: paneIndex.map { shownByPane[$0] == session.id }
 				)
 			}
 	}
 
-	init(tabs: [SavedTerminalTab]) {
+	init(tabs: [SavedTerminalTab], isPanelVisible: Bool? = nil) {
 		self.tabs = tabs
+		self.isPanelVisible = isPanelVisible
 	}
 
 	/// Drops what can no longer be reopened: a tab whose repository is gone (a worktree deleted
 	/// while the app was closed) is dropped, and one whose directory alone is gone reopens at the
 	/// repository's root — a shell asked to start in a missing directory never starts.
 	func pruned(directoryExists: (String) -> Bool) -> Self {
-		Self(
-			tabs: tabs.compactMap { tab in
-				guard directoryExists(tab.repositoryPath) else {
-					return nil
-				}
-
-				var tab = tab
-				if !directoryExists(tab.directory) {
-					tab.directory = tab.repositoryPath
-				}
-				return tab
+		// A copy with its tabs replaced, so whatever else the file says comes through.
+		var pruned = self
+		pruned.tabs = tabs.compactMap { tab in
+			guard directoryExists(tab.repositoryPath) else {
+				return nil
 			}
-		)
+
+			var tab = tab
+			if !directoryExists(tab.directory) {
+				tab.directory = tab.repositoryPath
+			}
+			return tab
+		}
+		return pruned
 	}
 }
 

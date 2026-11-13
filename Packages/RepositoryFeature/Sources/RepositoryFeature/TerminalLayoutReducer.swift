@@ -42,7 +42,7 @@ struct TerminalLayoutReducer {
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case gitGraphButtonTapped(repositoryPath: String, repositoryName: String)
 		case pushButtonTapped(repositoryPath: String)
-		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
+		case pushCompleted(repositoryPath: String, result: GitPushHelper.PushResult?, error: GitError?)
 		case finishMergeButtonTapped(repositoryPath: String)
 		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
@@ -77,13 +77,13 @@ struct TerminalLayoutReducer {
 				return .run { [gitClient] send in
 					do {
 						let result = try await gitClient.push(repositoryPath)
-						await send(.pushCompleted(result: result, error: nil))
+						await send(.pushCompleted(repositoryPath: repositoryPath, result: result, error: nil))
 					}
 					catch let error as GitError {
-						await send(.pushCompleted(result: nil, error: error))
+						await send(.pushCompleted(repositoryPath: repositoryPath, result: nil, error: error))
 					}
 					catch {
-						await send(.pushCompleted(result: nil, error: nil))
+						await send(.pushCompleted(repositoryPath: repositoryPath, result: nil, error: nil))
 					}
 				}
 

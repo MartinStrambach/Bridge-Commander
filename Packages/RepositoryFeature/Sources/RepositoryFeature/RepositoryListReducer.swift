@@ -935,10 +935,11 @@ struct RepositoryListReducer {
 				}
 				return refreshRow(for: repositoryPath, in: state)
 
-			case let .terminalLayout(.pushCompleted(_, error)):
+			case let .terminalLayout(.pushCompleted(repositoryPath, _, error)):
 				// The toolbar's Push button is the one git operation in the panel that doesn't go
 				// through the header's actions menu, so it needs the same completion routing: the
-				// unpushed count it renders comes from the row, and nothing else re-reads it.
+				// unpushed count it renders comes from the row, and nothing else re-reads it. The
+				// row is the one that was pushed, which the keyboard may have left meanwhile.
 				if let error {
 					state.alert = AlertState {
 						TextState("Push Failed")
@@ -947,10 +948,7 @@ struct RepositoryListReducer {
 					}
 					return .none
 				}
-				guard let path = state.terminals.activeRepositoryPath else {
-					return .none
-				}
-				return refreshRow(for: path, in: state)
+				return refreshRow(for: repositoryPath, in: state)
 
 			case .terminalLayout(.stagingDetail(.dismiss)):
 				// Parity with RepositoryRowReducer.repositoryDetail(.dismiss), which covers the
@@ -1297,9 +1295,10 @@ private func replacementTerminalSession(
 }
 
 /// Reopens the tabs saved by the previous launch, each in the directory its shell was in and
-/// resuming the Claude conversation it had, and the panel on the tab that was on screen. When the
-/// panel was closed it stays closed, and the tabs' shells start the first time it opens — panes
-/// are created by the panel.
+/// resuming the Claude conversation it had, and the panel as it was: its panes, and the keyboard
+/// on the tab that had it. A panel that was hidden stays hidden, with its panes behind it as
+/// hiding leaves them, and the tabs' shells start the first time it opens — panes are created by
+/// the panel.
 private func restoreTerminalTabs(
 	_ saved: SavedTerminalTabs,
 	in state: inout RepositoryListReducer.State
@@ -1339,17 +1338,20 @@ private func restoreTerminalTabs(
 	}
 
 	state.terminals.restoreCurrentTabs(currentTabByRepo)
-	guard let onScreen else {
+	// The tab that had the keyboard may be gone with its repository (a worktree deleted while
+	// the app was closed); the first pane left then has it, as when its pane had no tab to save.
+	let firstShown = paneShown.keys.min().flatMap { paneShown[$0] }.flatMap { state.terminals.sessions[id: $0] }
+	guard let onScreen = onScreen ?? firstShown else {
 		return
 	}
 
-	// The split comes back only whole enough to be one: a pane whose tab on screen was not saved
-	// (a run tab, a failed one) is closed up, and what is left must still be several, the
-	// terminal with the keyboard among them.
+	// The split comes back only whole enough to be one: a pane none of whose tabs was saved (run
+	// tabs, failed ones) is closed up, and what is left must still be several, the terminal with
+	// the keyboard among them.
 	let split = paneShown.keys.sorted().prefix(TerminalTabs.maxPanes).compactMap { index in
 		paneShown[index].map { TerminalPane(shown: $0, tabs: paneTabs[index] ?? [$0]) }
 	}
-	state.terminals.restorePanel(split: split, showing: onScreen)
+	state.terminals.restorePanel(split: split, showing: onScreen, isVisible: saved.isPanelVisible ?? true)
 }
 
 /// Opens the built-in terminal on every worktree of the group that was created with a terminal
