@@ -29,14 +29,12 @@ private struct SplitHarness: View {
 					shownSessionIds: model.shown,
 					slot: slot,
 					activeSessionId: model.shown.first,
-					foregroundColor: .white,
-					backgroundColor: .black,
+					colors: TerminalColors(foreground: .white, background: .black),
+					readsImageFiles: false,
 					copyOnSelect: false,
 					mouseReporting: true,
 					font: .monospacedSystemFont(ofSize: 12, weight: .regular),
-					onStatusChange: { _, _ in },
-					onNotification: { _, _ in },
-					onOpenFile: { _, _ in }
+					events: TerminalPaneEvents()
 				)
 				.frame(width: 900 / CGFloat(count))
 				.frame(maxHeight: .infinity)
@@ -73,13 +71,11 @@ struct TerminalSplitContainerTests {
 		}
 	}
 
-	private func pane(_ session: TerminalSession) -> ClaudeAwareTerminalView {
+	private func pane(_ session: TerminalSession) -> TerminalPaneView {
 		store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
-			onStatusChange: { _, _ in },
-			onNotification: { _, _ in }
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
 		)
 	}
 

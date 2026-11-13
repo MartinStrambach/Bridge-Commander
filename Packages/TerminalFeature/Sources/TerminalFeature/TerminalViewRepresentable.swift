@@ -28,26 +28,17 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 	public let slot: Int
 	/// The pane with keyboard focus.
 	public let activeSessionId: UUID?
-	public let foregroundColor: NSColor
-	public let backgroundColor: NSColor
-	/// The 16 ANSI colors of an imported profile, or `nil` for SwiftTerm's default palette.
-	public let ansiPalette: [NSColor]?
-	/// An imported profile's caret color, or `nil` for SwiftTerm's default.
-	public let cursorColor: NSColor?
-	/// An imported profile's selection background, or `nil` for SwiftTerm's default.
-	public let selectionColor: NSColor?
+	/// The colors a new pane is created with.
+	public let colors: TerminalColors
+	/// Whether a new pane loads Kitty graphics images from files a program names.
+	public let readsImageFiles: Bool
 	public let copyOnSelect: Bool
 	public let mouseReporting: Bool
-	/// What new panes base their waiting/active status on. Unlike the flags beside it, a pane
-	/// keeps the source it was created with — see `ClaudeStatusSource`.
-	public let statusSource: ClaudeStatusSource
 	/// The font every pane renders with. Resolved by the caller — the family and its point size are
 	/// both settings, and this package stays free of a Settings dependency.
 	public let font: NSFont
-	public let onStatusChange: @MainActor (UUID, TerminalSessionStatus) -> Void
-	public let onNotification: @MainActor (UUID, TerminalNotification) -> Void
-	/// A ⌘-clicked link that names a file.
-	public let onOpenFile: @MainActor (UUID, TerminalFileLink) -> Void
+	/// What a new pane reports.
+	public let events: TerminalPaneEvents
 	/// A pane was clicked, and so took keyboard focus.
 	public let onPaneClicked: @MainActor (UUID) -> Void
 
@@ -57,18 +48,12 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		shownSessionIds: [UUID],
 		slot: Int = 0,
 		activeSessionId: UUID?,
-		foregroundColor: NSColor,
-		backgroundColor: NSColor,
-		ansiPalette: [NSColor]? = nil,
-		cursorColor: NSColor? = nil,
-		selectionColor: NSColor? = nil,
+		colors: TerminalColors,
+		readsImageFiles: Bool,
 		copyOnSelect: Bool,
 		mouseReporting: Bool,
-		statusSource: ClaudeStatusSource = .progressAndScreen,
 		font: NSFont,
-		onStatusChange: @escaping @MainActor (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @MainActor (UUID, TerminalNotification) -> Void,
-		onOpenFile: @escaping @MainActor (UUID, TerminalFileLink) -> Void,
+		events: TerminalPaneEvents,
 		onPaneClicked: @escaping @MainActor (UUID) -> Void = { _ in }
 	) {
 		self.terminalViewStore = terminalViewStore
@@ -76,18 +61,12 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		self.shownSessionIds = shownSessionIds
 		self.slot = slot
 		self.activeSessionId = activeSessionId
-		self.foregroundColor = foregroundColor
-		self.backgroundColor = backgroundColor
-		self.ansiPalette = ansiPalette
-		self.cursorColor = cursorColor
-		self.selectionColor = selectionColor
+		self.colors = colors
+		self.readsImageFiles = readsImageFiles
 		self.copyOnSelect = copyOnSelect
 		self.mouseReporting = mouseReporting
-		self.statusSource = statusSource
 		self.font = font
-		self.onStatusChange = onStatusChange
-		self.onNotification = onNotification
-		self.onOpenFile = onOpenFile
+		self.events = events
 		self.onPaneClicked = onPaneClicked
 	}
 
@@ -148,19 +127,13 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 		let sessionId = session.id
 		let termView = terminalViewStore.view(
 			for: session,
-			foregroundColor: foregroundColor,
-			backgroundColor: backgroundColor,
-			ansiPalette: ansiPalette,
-			cursorColor: cursorColor,
-			selectionColor: selectionColor,
-			statusSource: statusSource,
-			onStatusChange: onStatusChange,
-			onNotification: onNotification,
-			onOpenFile: onOpenFile
+			colors: colors,
+			readsImageFiles: readsImageFiles,
+			events: events
 		)
 		// Assigned on every update, not at creation: panes outlive a change to the
-		// setting, and the colors only look like they don't because a new theme is
-		// documented as applying to newly opened terminals.
+		// setting, and the colors and image file permission only look like they don't
+		// because both are documented as applying to newly opened terminals.
 		termView.copiesSelectionAutomatically = copyOnSelect
 		termView.allowMouseReporting = mouseReporting
 		termView.onMouseDown = { [onPaneClicked] in onPaneClicked(sessionId) }
@@ -211,11 +184,11 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 ///
 /// Every pane used to be pinned to the container's edges, so any change of the container's width
 /// resized all of them — and the container's width depends on the repository on screen, whose
-/// simulator pane may be open while another's is not. Each resize is a reflow and a SIGWINCH; a
-/// narrow→wide reflow of a Claude Code screen joins unrelated lines (SwiftTerm keeps stale soft-wrap
-/// flags, see the README), so switching between two repositories' tabs garbled every terminal
-/// in the app a little more each time. A hidden pane now keeps its size until it is shown, which
-/// for a repository's own tabs is the size they will be shown at.
+/// simulator pane may be open while another's is not. Each resize is a reflow and a SIGWINCH; until
+/// SwiftTerm 1.99.1 a narrow→wide reflow of a Claude Code screen joined unrelated lines (see the
+/// README), so switching between two repositories' tabs garbled every terminal in the app a little
+/// more each time. A hidden pane keeps its size until it is shown, which for a repository's own
+/// tabs is the size they will be shown at, and saves a reflow and a SIGWINCH per hidden pane.
 final class TerminalPaneContainerView: NSView {
 	override init(frame frameRect: NSRect) {
 		super.init(frame: frameRect)

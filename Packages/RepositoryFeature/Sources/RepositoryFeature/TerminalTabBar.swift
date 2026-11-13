@@ -134,9 +134,15 @@ struct TerminalTabBar: View {
 					.fontWeight(isShown ? .semibold : .regular)
 			}
 			else {
-				Text("Terminal \(session.tabIndex)")
+				// A program's title can be a sentence (Claude's summary of the conversation), so it
+				// is cut to keep the bar from growing a tab per screen; the tooltip has all of it.
+				Text(session.tabTitle)
 					.scaledFont(.caption)
 					.fontWeight(isShown ? .semibold : .regular)
+					.lineLimit(1)
+					.truncationMode(.tail)
+					.frame(maxWidth: 200)
+					.help(session.tabTitle)
 			}
 
 			if paneTitle != nil {

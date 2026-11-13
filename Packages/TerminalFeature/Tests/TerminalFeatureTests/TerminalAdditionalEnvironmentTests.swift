@@ -9,8 +9,6 @@ import Testing
 @MainActor
 @Suite("Terminal additional environment", .serialized)
 struct TerminalAdditionalEnvironmentTests {
-	private let processDelegate = TerminalProcessDelegate(onFailed: { _ in })
-
 	@Test("the shell starts with the variables given for its session")
 	func shellSeesSessionVariables() async {
 		let store = TerminalViewStore(
@@ -23,11 +21,8 @@ struct TerminalAdditionalEnvironmentTests {
 		let session = TerminalSession(repositoryPath: "/")
 		let view = store.view(
 			for: session,
-			foregroundColor: .white,
-			backgroundColor: .black,
-			processDelegate: processDelegate,
-			onStatusChange: { _, _ in },
-			onNotification: { _, _ in }
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents()
 		)
 		defer { store.killSession(sessionId: session.id) }
 
@@ -36,7 +31,7 @@ struct TerminalAdditionalEnvironmentTests {
 		let deadline = clock.now + .seconds(5)
 		var screen = ""
 		while clock.now < deadline {
-			screen = String(decoding: view.getTerminal().getBufferAsData(), as: UTF8.self)
+			screen = String(decoding: view.getBufferAsData(), as: UTF8.self)
 			if screen.contains(expected) {
 				break
 			}

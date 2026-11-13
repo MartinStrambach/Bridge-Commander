@@ -62,9 +62,7 @@ struct TerminalSplitWidths: Equatable {
 struct TerminalSplitView: View {
 	let store: StoreOf<TerminalLayoutReducer>
 	let workspace: StoreOf<TerminalWorkspaceReducer>
-	let onStatusChange: @MainActor (UUID, TerminalSessionStatus) -> Void
-	let onNotification: @MainActor (UUID, TerminalNotification) -> Void
-	let onOpenFile: @MainActor (UUID, TerminalFileLink) -> Void
+	let paneEvents: TerminalPaneEvents
 
 	@Shared(.terminalColorTheme)
 	private var terminalColorTheme = TerminalThemeSelection.builtIn(.basicDark)
@@ -78,21 +76,8 @@ struct TerminalSplitView: View {
 	@Shared(.terminalMouseReporting)
 	private var terminalMouseReporting = true
 
-	@Shared(.terminalClaudeStatusDetection)
-	private var terminalClaudeStatusDetection = ClaudeStatusDetection.default
-
-	/// The setting in TerminalFeature's terms, mapped here so that package needs no Settings
-	/// dependency.
-	private var claudeStatusSource: ClaudeStatusSource {
-		switch terminalClaudeStatusDetection {
-		case .progressAndScreen:
-			.progressAndScreen
-		case .progressOnly:
-			.progressOnly
-		case .screenOnly:
-			.screenOnly
-		}
-	}
+	@Shared(.terminalReadsImageFiles)
+	private var terminalReadsImageFiles = false
 
 	/// Read here like its sibling settings; the ⌘+/⌘−/⌘0 shortcuts write it through
 	/// `TerminalLayoutReducer` so the zoom actions stay testable.
@@ -191,18 +176,18 @@ struct TerminalSplitView: View {
 					shownSessionIds: panes.map(\.id),
 					slot: slot,
 					activeSessionId: workspace.activeSessionId,
-					foregroundColor: resolvedTheme.foreground,
-					backgroundColor: resolvedTheme.background,
-					ansiPalette: resolvedTheme.ansiPalette,
-					cursorColor: resolvedTheme.cursor,
-					selectionColor: resolvedTheme.selection,
+					colors: TerminalColors(
+						foreground: resolvedTheme.foreground,
+						background: resolvedTheme.background,
+						ansiPalette: resolvedTheme.ansiPalette,
+						cursor: resolvedTheme.cursor,
+						selection: resolvedTheme.selection
+					),
+					readsImageFiles: terminalReadsImageFiles,
 					copyOnSelect: terminalCopyOnSelect,
 					mouseReporting: terminalMouseReporting,
-					statusSource: claudeStatusSource,
 					font: terminalFont,
-					onStatusChange: onStatusChange,
-					onNotification: onNotification,
-					onOpenFile: onOpenFile,
+					events: paneEvents,
 					onPaneClicked: { sessionId in
 						workspace.send(.paneFocused(sessionId: sessionId))
 					}

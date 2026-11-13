@@ -33,7 +33,7 @@ public enum TerminalFindCommand: Sendable {
 	}
 }
 
-extension ClaudeAwareTerminalView {
+extension TerminalPaneView {
 	func performFind(_ command: TerminalFindCommand) {
 		let item = NSMenuItem()
 		item.tag = Int(command.panelAction.rawValue)

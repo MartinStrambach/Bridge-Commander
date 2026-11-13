@@ -24,9 +24,7 @@ struct TerminalPanelView: View {
 	/// The Xcode project of a repository's row, for the simulator pane, which in a split can be
 	/// beside a repository other than the active one.
 	let xcodeProjectPath: (String) -> String?
-	let onStatusChange: @MainActor (UUID, TerminalSessionStatus) -> Void
-	let onNotification: @MainActor (UUID, TerminalNotification) -> Void
-	let onOpenFile: @MainActor (UUID, TerminalFileLink) -> Void
+	let paneEvents: TerminalPaneEvents
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -313,9 +311,7 @@ struct TerminalPanelView: View {
 				TerminalSplitView(
 					store: store,
 					workspace: workspace,
-					onStatusChange: onStatusChange,
-					onNotification: onNotification,
-					onOpenFile: onOpenFile
+					paneEvents: paneEvents
 				)
 
 				if let path = simulatorRepositoryPath {

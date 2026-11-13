@@ -1,8 +1,9 @@
 import AppKit
 import Foundation
+import SwiftTerm
 
-/// Dropping files onto a pane types their paths at the prompt.
-extension ClaudeAwareTerminalView {
+/// Dropping files onto a pane pastes their paths at the prompt.
+extension TerminalPaneView {
 	override public func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
 		sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
 			? .copy
@@ -18,17 +19,14 @@ extension ClaudeAwareTerminalView {
 			return false
 		}
 
-		let paths = urls.map(\.path.shellEscaped).joined(separator: " ")
-		guard let bytes = paths.data(using: .utf8) else {
-			return false
-		}
-
-		send(source: self, data: ArraySlice(bytes))
+		// A paste, not typed input: bracketed when the program asked for bracketed paste, so Claude
+		// Code takes the paths as one dropped item.
+		pasteText(urls.map(\.path.shellEscaped).joined(separator: " "))
 		return true
 	}
 }
 
-private extension String {
+extension String {
 	/// Backslash-escapes shell-special characters so the path can be used as-is
 	/// at the command line without surrounding quotes.
 	/// e.g. `/foo bar` → `/foo\ bar`, `/it's` → `/it\'s`

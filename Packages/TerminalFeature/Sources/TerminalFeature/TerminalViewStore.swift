@@ -6,11 +6,12 @@ import SwiftTerm
 /// where an observed write makes SwiftUI update the same views again.
 @MainActor
 public final class TerminalViewStore {
-	private var views: [UUID: ClaudeAwareTerminalView] = [:]
-
-	/// Each pane's process delegate, which `LocalProcessTerminalView` holds only weakly. Kept here,
-	/// for as long as the pane, rather than by the view that shows it: a pane moves between the
-	/// containers of a split panel, and those come and go with the split.
+	private var views: [UUID: TerminalPaneView] = [:]
+	/// Each pane's process delegate, which SwiftTerm holds only weakly. Kept here, for as long as
+	/// the pane, rather than by the terminal panel: the panel can close while its panes run on, and
+	/// a pane whose delegate went with the panel reported neither its title nor its shell's exit
+	/// again, even once the panel reopened. A pane also moves between the containers of a split
+	/// panel, which come and go with the split.
 	private var processDelegates: [UUID: TerminalProcessDelegate] = [:]
 
 	/// The terminals on screen, left to right, as the first slot's container last heard it. The
@@ -59,71 +60,32 @@ public final class TerminalViewStore {
 		self.additionalEnvironment = additionalEnvironment
 	}
 
-	/// Returns the existing terminal view for a session, or creates and starts a new one.
-	/// - Parameter processDelegate: Told when the shell exits. Kept by the store for as long as the
-	///   pane; `nil` for one that reports the exit as a `.failed` status through `onStatusChange`.
-	/// - Parameter ansiPalette: The 16 ANSI colors to install, or `nil` to keep SwiftTerm's
-	///   default palette — which is Terminal.app's own, so an imported profile that defines no
-	///   ANSI colors renders the same way Terminal renders it.
-	/// - Parameter cursorColor: The caret color, or `nil` to keep SwiftTerm's default. Most
-	///   Terminal profiles set no cursor color, so `nil` is the usual case.
-	/// - Parameter selectionColor: The selection background, or `nil` to keep SwiftTerm's default.
-	/// - Parameter statusSource: What the pane's waiting/active status is based on. Only read when
-	///   the pane is created.
+	/// Returns the existing terminal view for a session, or creates and starts a new one. A new
+	/// pane keeps the colors, image file permission and events it is created with for its whole
+	/// life; later calls' are ignored.
 	public func view(
 		for session: TerminalSession,
-		foregroundColor: NSColor,
-		backgroundColor: NSColor,
-		ansiPalette: [NSColor]? = nil,
-		cursorColor: NSColor? = nil,
-		selectionColor: NSColor? = nil,
-		statusSource: ClaudeStatusSource = .progressAndScreen,
-		processDelegate: TerminalProcessDelegate? = nil,
-		onStatusChange: @escaping @MainActor (UUID, TerminalSessionStatus) -> Void,
-		onNotification: @escaping @MainActor (UUID, TerminalNotification) -> Void,
-		onOpenFile: @escaping @MainActor (UUID, TerminalFileLink) -> Void = { _, _ in }
-	) -> ClaudeAwareTerminalView {
+		colors: TerminalColors,
+		readsImageFiles: Bool = false,
+		events: TerminalPaneEvents
+	) -> TerminalPaneView {
 		if let existing = views[session.id] {
 			return existing
 		}
 
-		let terminalView = ClaudeAwareTerminalView(
+		let terminalView = TerminalPaneView(
 			repositoryPath: session.repositoryPath,
 			sessionId: session.id,
-			statusSource: statusSource,
-			onStatusChange: onStatusChange,
-			onNotification: onNotification,
-			onOpenFile: onOpenFile
+			readsImageFiles: readsImageFiles,
+			events: events
 		)
 
-		// Default to AltGr mode so European keyboards (e.g. Czech Option+4 = $) work correctly.
-		// Users can toggle back to Meta mode with Option+Command+O if needed.
-		terminalView.optionAsMetaKey = false
-
-		terminalView.nativeForegroundColor = foregroundColor
-		terminalView.nativeBackgroundColor = backgroundColor
-		// Installed after the fg/bg assignment: SwiftTerm derives the extended 256-color
-		// palette from the 16 ANSI colors plus the terminal's own background and foreground.
-		if let ansiPalette, let colors = TerminalPaletteMapping.swiftTermColors(from: ansiPalette) {
-			terminalView.installColors(colors)
-		}
-		if let cursorColor {
-			terminalView.caretColor = cursorColor
-		}
-		if let selectionColor {
-			terminalView.selectedTextBackgroundColor = selectionColor
-			// Not optional to set alongside it: SwiftTerm *replaces* the foreground of every
-			// selected cell with `selectedTextForegroundColor`, which defaults to black — fine
-			// against its own teal default, unreadable against the dark selection colors most
-			// Terminal profiles ship. The theme's own text color is the right stand-in: the
-			// profile's author picked a selection color that works behind exactly that text.
-			terminalView.selectedTextForegroundColor = foregroundColor
-		}
-		terminalView.terminal.changeHistorySize(3000)
+		terminalView.apply(colors)
 
 		let sessionId = session.id
-		let processDelegate = processDelegate ?? TerminalProcessDelegate(
-			onFailed: { message in onStatusChange(sessionId, .failed(message)) }
+		let processDelegate = TerminalProcessDelegate(
+			onFailed: { message in events.onStatusChange(sessionId, .failed(message), nil) },
+			onTitleChange: { title in events.onTitleChange(sessionId, title) }
 		)
 		processDelegates[sessionId] = processDelegate
 		terminalView.processDelegate = processDelegate
@@ -132,7 +94,7 @@ public final class TerminalViewStore {
 		terminalView.startProcess(
 			executable: shellExecutable,
 			args: shellArguments,
-			environment: TerminalEnvironment.variables(requestingProgress: statusSource.requestsProgress)
+			environment: TerminalEnvironment.variables
 				+ additionalEnvironment(session),
 			execName: nil,
 			currentDirectory: session.startingDirectory
@@ -142,10 +104,11 @@ public final class TerminalViewStore {
 
 		// Reported on the next turn of the main queue, not here: panes are created from
 		// `updateNSView`, and the report changes the state that update is drawing. A pane killed
-		// in between has nothing to report.
+		// in between has nothing to report, and one whose program reported its own status first
+		// keeps that.
 		DispatchQueue.main.async { [weak self] in
-			if self?.views[sessionId] === terminalView {
-				onStatusChange(sessionId, .active)
+			if self?.views[sessionId] === terminalView, !terminalView.hasReportedStatus {
+				events.onStatusChange(sessionId, .active, nil)
 			}
 		}
 

@@ -232,15 +232,28 @@ struct RepositoryListView: View {
 				// store collection must not be indexed from a lazy view's own render pass.
 				repositoryGroups: Array(store.scope(\.repositoryGroups, action: \.repositoryGroups)),
 				activeRowStore: activeRowStore,
-				onStatusChange: { sessionId, status in
-					send(.terminalSessionStatusChanged(sessionId: sessionId, status: status))
-				},
-				onNotification: { sessionId, notification in
-					send(.terminalNotificationReceived(sessionId: sessionId, notification: notification))
-				},
-				onOpenFile: { sessionId, link in
-					send(.terminalFileLinkClicked(sessionId: sessionId, link: link))
-				}
+				paneEvents: TerminalPaneEvents(
+					onStatusChange: { sessionId, status, report in
+						MainActor.assumeIsolated {
+							_ = send(.terminalSessionStatusChanged(sessionId: sessionId, status: status, report: report))
+						}
+					},
+					onNotification: { sessionId, notification in
+						MainActor.assumeIsolated {
+							_ = send(.terminalNotificationReceived(sessionId: sessionId, notification: notification))
+						}
+					},
+					onTitleChange: { sessionId, title in
+						MainActor.assumeIsolated {
+							_ = send(.terminalSessionTitleChanged(sessionId: sessionId, title: title))
+						}
+					},
+					onOpenFile: { sessionId, link in
+						MainActor.assumeIsolated {
+							_ = send(.terminalFileLinkClicked(sessionId: sessionId, link: link))
+						}
+					}
+				)
 			)
 			.transition(.opacity)
 		}

@@ -17,9 +17,7 @@ struct TerminalLayoutView: View {
 	let repositoryGroups: [StoreOf<RepoGroupReducer>]
 	/// The row opened in the panel, resolved by the parent — see `RepositoryListView.activeRowStore`.
 	let activeRowStore: StoreOf<RepositoryRowReducer>?
-	let onStatusChange: @MainActor (UUID, TerminalSessionStatus) -> Void
-	let onNotification: @MainActor (UUID, TerminalNotification) -> Void
-	let onOpenFile: @MainActor (UUID, TerminalFileLink) -> Void
+	let paneEvents: TerminalPaneEvents
 
 	@AppStorage("terminalSidebar.showOnlyWithTerminals") private var showOnlyWithTerminals = false
 	/// Set by dragging the sidebar's trailing edge. Clamped where it is read as well as where it is
@@ -64,9 +62,7 @@ struct TerminalLayoutView: View {
 				workspace: workspace,
 				activeRowStore: activeRowStore,
 				xcodeProjectPath: xcodeProjectPath(for:),
-				onStatusChange: onStatusChange,
-				onNotification: onNotification,
-				onOpenFile: onOpenFile
+				paneEvents: paneEvents
 			)
 		}
 		// Over the whole row rather than on the divider, so the panel beside it cannot cover the
