@@ -85,6 +85,64 @@ struct TerminalWorkspaceReducerTests {
 		}
 	}
 
+	@Test("cycling panes moves the keyboard to the next pane and wraps around")
+	func cyclePaneMovesKeyboard() async {
+		let alpha = session(Self.alpha)
+		let beta = session(Self.beta)
+		let store = makeStore(TerminalTabs(
+			sessions: [alpha, beta],
+			panes: [pane(alpha), pane(beta)],
+			isPanelVisible: true,
+			lastActiveSessionByRepo: [Self.alpha: alpha.id],
+			recentSessionIds: [alpha.id]
+		))
+
+		await store.send(.cyclePaneRequested(forward: true)) {
+			$0 = TerminalTabs(
+				sessions: [alpha, beta],
+				panes: [self.pane(alpha), self.pane(beta)],
+				activePaneIndex: 1,
+				isPanelVisible: true,
+				lastActiveSessionByRepo: [Self.alpha: alpha.id, Self.beta: beta.id],
+				recentSessionIds: [alpha.id, beta.id]
+			)
+		}
+		// Past the last pane is the first again; backward from there is the last.
+		await store.send(.cyclePaneRequested(forward: true)) {
+			$0 = TerminalTabs(
+				sessions: [alpha, beta],
+				panes: [self.pane(alpha), self.pane(beta)],
+				isPanelVisible: true,
+				lastActiveSessionByRepo: [Self.alpha: alpha.id, Self.beta: beta.id],
+				recentSessionIds: [beta.id, alpha.id]
+			)
+		}
+		await store.send(.cyclePaneRequested(forward: false)) {
+			$0 = TerminalTabs(
+				sessions: [alpha, beta],
+				panes: [self.pane(alpha), self.pane(beta)],
+				activePaneIndex: 1,
+				isPanelVisible: true,
+				lastActiveSessionByRepo: [Self.alpha: alpha.id, Self.beta: beta.id],
+				recentSessionIds: [alpha.id, beta.id]
+			)
+		}
+	}
+
+	@Test("cycling panes does nothing with one pane on screen")
+	func cyclePaneNeedsSplit() async {
+		let one = session(Self.alpha, 1)
+		let two = session(Self.alpha, 2)
+		let store = makeStore(TerminalTabs(
+			sessions: [one, two],
+			panes: [pane(one, [one, two])],
+			isPanelVisible: true
+		))
+
+		await store.send(.cyclePaneRequested(forward: true))
+		await store.send(.cyclePaneRequested(forward: false))
+	}
+
 	@Test("closing a pane takes it out of the split and keeps its tab open")
 	func closePaneKeepsTab() async {
 		let alpha = session(Self.alpha)
@@ -275,6 +333,20 @@ struct TerminalWorkspaceReducerTests {
 		}
 
 		await store.send(.splitRequested)
+	}
+
+	// The directory is read in an effect, so a third pane can open before the session ⌘D asked
+	// for is built. It is then left out, sessions included: nothing would show it or hang it up.
+	@Test("a session built for a split is dropped when the panel has filled up meanwhile")
+	func splitSessionBuiltWithNoRoomIsDropped() async {
+		let sessions = (1 ... 3).map { session(Self.alpha, $0) }
+		let store = makeStore(TerminalTabs(
+			sessions: IdentifiedArray(uniqueElements: sessions),
+			panes: sessions.map { pane($0) },
+			isPanelVisible: true
+		))
+
+		await store.send(.sessionBuilt(session(Self.alpha, 4), .split))
 	}
 
 	@Test("a repository with a tab opens in a pane beside the active one")

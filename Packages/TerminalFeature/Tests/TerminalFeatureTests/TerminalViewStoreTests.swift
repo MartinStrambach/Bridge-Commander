@@ -231,6 +231,52 @@ struct TerminalViewStoreTests {
 		#expect(reported.statuses == reportedBeforeOutput, "a killed pane has nothing more to say")
 	}
 
+	/// Panes are created from `updateNSView`, and a status reported from inside it changes the
+	/// state that update is drawing, so the first `.active` waits for the next turn of the main
+	/// queue. It is said once: asking the store for the pane again makes no second report.
+	@Test func aNewPaneReportsItselfActiveOnceAfterTheTurnThatMadeIt() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		let events = TerminalPaneEvents(
+			onStatusChange: { _, status, _ in
+				MainActor.assumeIsolated { reported.statuses.append(status) }
+			}
+		)
+		let colors = TerminalColors(foreground: .white, background: .black)
+		let view = store.view(for: session, colors: colors, events: events)
+		defer { store.killSession(sessionId: session.id) }
+
+		#expect(reported.statuses.isEmpty, "nothing is reported from inside the call that made the pane")
+		#expect(await eventually { reported.statuses == [.active] })
+
+		#expect(store.view(for: session, colors: colors, events: events) === view)
+		try await Task.sleep(for: .milliseconds(200))
+		#expect(reported.statuses == [.active])
+	}
+
+	/// A tab can be closed in the turn it was opened in. Its pane then has no session left to
+	/// report a status for.
+	@Test func aPaneKilledBeforeItsFirstReportSaysNothing() async throws {
+		let store = makeStore()
+		let session = TerminalSession(repositoryPath: "/")
+		let reported = Reported()
+		_ = store.view(
+			for: session,
+			colors: TerminalColors(foreground: .white, background: .black),
+			events: TerminalPaneEvents(
+				onStatusChange: { _, status, _ in
+					MainActor.assumeIsolated { reported.statuses.append(status) }
+				}
+			)
+		)
+
+		store.killSession(sessionId: session.id)
+		try await Task.sleep(for: .milliseconds(300))
+
+		#expect(reported.statuses.isEmpty)
+	}
+
 	/// An OSC 7501 report as a program writes it.
 	private static func statusReport(_ body: String) -> String {
 		"\u{1B}]7501;\(body)\u{1B}\\"
@@ -347,6 +393,28 @@ struct TerminalViewStoreTests {
 		#expect(await eventually { store.paneSnapshots()[session.id]?.directory == "/usr" })
 		store.killSession(sessionId: session.id)
 		#expect(store.paneSnapshots().isEmpty)
+	}
+
+	/// What ⌘D opens the new pane in: where the one session's shell is, asked of the kernel.
+	@Test func currentDirectoryIsTheNamedSessionsShells() async throws {
+		let store = makeStore(shell: "/bin/zsh", arguments: ["-f"])
+		let inTmp = TerminalSession(repositoryPath: "/", startingDirectory: "/tmp")
+		let inUsr = TerminalSession(repositoryPath: "/", startingDirectory: "/usr")
+		for session in [inTmp, inUsr] {
+			_ = store.view(
+				for: session,
+				colors: TerminalColors(foreground: .white, background: .black),
+				events: TerminalPaneEvents()
+			)
+		}
+		defer { store.killAllSessions() }
+
+		#expect(await eventually { store.currentDirectory(sessionId: inTmp.id) == "/private/tmp" })
+		#expect(await eventually { store.currentDirectory(sessionId: inUsr.id) == "/usr" })
+		#expect(store.currentDirectory(sessionId: UUID()) == nil, "a session with no pane has no directory")
+
+		store.killSession(sessionId: inTmp.id)
+		#expect(store.currentDirectory(sessionId: inTmp.id) == nil)
 	}
 
 	/// The store goes with the window. Whatever it still holds must hang up rather than outlive it.

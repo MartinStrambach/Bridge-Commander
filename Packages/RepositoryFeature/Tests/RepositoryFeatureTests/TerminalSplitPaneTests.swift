@@ -312,6 +312,27 @@ struct TerminalSplitPaneTests {
 		#expect(store.state.terminals.activeSessionId == ids[1])
 	}
 
+	// ⌘F is the repository list's shortcut, registered whether or not the panel is up, so the
+	// list's reducer is what hands it to the pane with the keyboard.
+	@Test("⌘F opens the find bar of the pane with the keyboard")
+	func findShortcutReachesTheActivePane() async {
+		let alpha = TerminalSession(repositoryPath: Self.alpha)
+		let beta = TerminalSession(repositoryPath: Self.beta)
+		let found = LockIsolated<[UUID]>([])
+		let store = makeStore(sessions: [alpha, beta], panes: [alpha, beta])
+		store.dependencies[TerminalPanesClient.self].find = { command, sessionId in
+			#expect(command == .show)
+			found.withValue { $0.append(sessionId) }
+		}
+
+		await store.send(.terminals(.paneFocused(sessionId: beta.id)))
+		await store.send(.view(.terminalFindRequested))
+		await store.receive(\.terminals.findRequested)
+		await store.finish()
+
+		#expect(found.value == [beta.id])
+	}
+
 	@Test("a file from before the panel could split restores one terminal on screen")
 	func legacyArchiveRestoresSinglePane() throws {
 		let legacy = Data("""
