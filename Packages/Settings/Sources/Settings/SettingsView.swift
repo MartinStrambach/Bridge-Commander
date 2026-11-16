@@ -58,6 +58,9 @@ public struct SettingsView<Updates: View>: View {
 	@State
 	private var isChoosingFileOpenApplication = false
 
+	@State
+	private var isImportingSettingsFile = false
+
 	/// The file type whose application "Change…" is choosing. Kept apart from the presentation
 	/// flag, which is cleared before the importer's completion runs.
 	@State
@@ -122,6 +125,7 @@ public struct SettingsView<Updates: View>: View {
 		case .general:
 			appearanceSection
 			repositoryRefreshSection
+			backupSection
 
 		case .repositoryRows:
 			rowItemsSection(
@@ -206,6 +210,57 @@ public struct SettingsView<Updates: View>: View {
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
+		}
+	}
+
+	private var backupSection: some View {
+		SettingsSection("Backup") {
+			Text(
+				"Save these settings to a file, to restore them later or carry them to another Mac. The file holds every setting in this window, your repositories and imported terminal profiles; access tokens only if you choose to include them."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			HStack(spacing: 8) {
+				Button {
+					store.send(.exportSettingsButtonTapped)
+				} label: {
+					Label("Export Settings…", systemImage: "square.and.arrow.up")
+				}
+				.buttonStyle(.scaledBordered)
+
+				Button {
+					isImportingSettingsFile = true
+				} label: {
+					Label("Import Settings…", systemImage: "square.and.arrow.down")
+				}
+				.buttonStyle(.scaledBordered)
+			}
+		}
+		.fileExporter(
+			isPresented: Binding(
+				get: { store.exportedSettings != nil },
+				set: { if !$0 { store.send(.settingsExportDismissed) } }
+			),
+			document: store.exportedSettings,
+			contentType: .json,
+			defaultFilename: store.exportedSettings?.filename
+		) { result in
+			if case let .failure(error) = result {
+				store.send(.settingsExportFailed(message: error.localizedDescription))
+			}
+		}
+		.fileImporter(
+			isPresented: $isImportingSettingsFile,
+			allowedContentTypes: [.json]
+		) { result in
+			switch result {
+			case let .success(url):
+				store.send(.settingsFileSelected(url))
+
+			case let .failure(error):
+				store.send(.settingsImportFailed(message: error.localizedDescription))
+			}
 		}
 	}
 
