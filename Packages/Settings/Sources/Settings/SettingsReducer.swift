@@ -126,6 +126,9 @@ public struct SettingsReducer {
 		/// The kind whose folders are being deleted, while that runs.
 		public var deletingDerivedDataKind: DerivedDataUsage.Kind?
 
+		/// The settings file being exported; non-nil while the save panel is up.
+		public var exportedSettings: SettingsBackupDocument?
+
 		@Presents
 		public var alert: AlertState<Action.Alert>?
 
@@ -200,6 +203,12 @@ public struct SettingsReducer {
 		case profilesImported([TerminalProfile])
 		case profileImportFailed(message: String)
 		case deleteProfileButtonTapped(name: String)
+		case exportSettingsButtonTapped
+		case settingsExportDismissed
+		case settingsExportFailed(message: String)
+		case settingsFileSelected(URL)
+		case settingsFileLoaded(SettingsBackup, skippedRepositoryPaths: [String])
+		case settingsImportFailed(message: String)
 		case clearTokenButtonTapped
 		case alert(PresentationAction<Alert>)
 
@@ -207,6 +216,8 @@ public struct SettingsReducer {
 		public enum Alert: Equatable {
 			case confirmClearToken
 			case confirmDeleteDerivedData(DerivedDataUsage.Kind)
+			case exportSettings(includingTokens: Bool)
+			case confirmImportSettings(SettingsBackup)
 		}
 	}
 
@@ -221,6 +232,12 @@ public struct SettingsReducer {
 
 	@Dependency(DerivedDataUsageClient.self)
 	private var derivedDataUsageClient
+
+	@Dependency(SettingsBackupClient.self)
+	private var settingsBackup
+
+	@Dependency(\.date.now)
+	private var now
 
 	/// One per provider. Every action that resets a verdict to `.idle` also cancels its test:
 	/// `.idle` re-enables the Test button, and a run still in flight would otherwise land its
@@ -272,6 +289,78 @@ public struct SettingsReducer {
 		state.$terminalFontSize.withLock { $0 = TerminalFontSize.clamped(font.size) }
 		guard font.isAvailable else { return }
 		state.$terminalFontName.withLock { $0 = font.name }
+	}
+
+	/// Encodes the current settings for the save panel, or reports why it could not.
+	private func exportSettings(includingTokens: Bool, state: inout State) -> Effect<Action> {
+		let exportedAt = now
+		do {
+			let backup = SettingsBackup(state: state, includesTokens: includingTokens, exportedAt: exportedAt)
+			state.exportedSettings = try SettingsBackupDocument(
+				data: backup.encoded(),
+				filename: SettingsBackup.defaultFilename(exportedAt: exportedAt)
+			)
+			return .none
+		}
+		catch {
+			return .send(.settingsExportFailed(message: error.localizedDescription))
+		}
+	}
+
+	static var exportTokensAlert: AlertState<Action.Alert> {
+		AlertState {
+			TextState("Include Access Tokens?")
+		} actions: {
+			ButtonState(action: .exportSettings(includingTokens: false)) {
+				TextState("Export Without Tokens")
+			}
+			ButtonState(action: .exportSettings(includingTokens: true)) {
+				TextState("Include Tokens")
+			}
+			ButtonState(role: .cancel) {
+				TextState("Cancel")
+			}
+		} message: {
+			TextState(
+				"The settings file is plain text. With tokens included, anyone who can read it can use your YouTrack, GitHub and GitLab accounts."
+			)
+		}
+	}
+
+	static func importSettingsAlert(
+		_ backup: SettingsBackup,
+		skippedRepositoryPaths: [String],
+		current state: State
+	) -> AlertState<Action.Alert> {
+		var message = "Settings in the file replace your current ones. Its repositories, repository groups and terminal profiles are added to yours."
+		if backup.includesTokens {
+			message += " Its access tokens replace yours."
+		}
+		message += " Terminal settings apply to tabs opened afterwards."
+		let commands = backup.commandsChanged(from: state)
+		if !commands.isEmpty {
+			message += "\n\nCommands it sets, which new terminal tabs or Tuist will run:\n"
+				+ commands.map { "• \($0)" }.joined(separator: "\n")
+		}
+		if !skippedRepositoryPaths.isEmpty {
+			message += "\n\nNot on this Mac, so not added to your repositories:\n"
+				+ skippedRepositoryPaths.map { "• \($0)" }.joined(separator: "\n")
+		}
+		if let exportedAt = backup.exportedAt {
+			message += "\n\nExported \(exportedAt.formatted(date: .long, time: .shortened))."
+		}
+		return AlertState {
+			TextState("Import Settings?")
+		} actions: {
+			ButtonState(action: .confirmImportSettings(backup)) {
+				TextState("Import")
+			}
+			ButtonState(role: .cancel) {
+				TextState("Cancel")
+			}
+		} message: {
+			TextState(message)
+		}
 	}
 
 	private func measureDerivedData(_ state: inout State) -> Effect<Action> {
@@ -866,6 +955,92 @@ public struct SettingsReducer {
 				// falls back), but the picker would show nothing selected.
 				if state.terminalColorTheme == .imported(name: name) {
 					state.$terminalColorTheme.withLock { $0 = .builtIn(.basicDark) }
+				}
+				return .none
+
+			case .exportSettingsButtonTapped:
+				// Asked only when there is a token to leave out.
+				let hasTokens = ![state.youtrackAuthToken, state.githubToken, state.gitlabToken]
+					.allSatisfy(\.isEmpty)
+				guard hasTokens else {
+					return exportSettings(includingTokens: false, state: &state)
+				}
+				state.alert = Self.exportTokensAlert
+				return .none
+
+			case let .alert(.presented(.exportSettings(includingTokens))):
+				return exportSettings(includingTokens: includingTokens, state: &state)
+
+			case .settingsExportDismissed:
+				state.exportedSettings = nil
+				return .none
+
+			case let .settingsExportFailed(message):
+				state.exportedSettings = nil
+				state.alert = AlertState {
+					TextState("Export Failed")
+				} actions: {
+					ButtonState(role: .cancel) { TextState("OK") }
+				} message: {
+					TextState(message)
+				}
+				return .none
+
+			case let .settingsFileSelected(url):
+				return .run { [settingsBackup] send in
+					do {
+						var backup = try await SettingsBackup.decoded(from: settingsBackup.readFile(url))
+						// Tracking a path that is not here would show a repository that cannot
+						// load. Its group settings still import, for when it is added later.
+						let missing = await settingsBackup.missingDirectories(backup.trackedRepoPaths ?? [])
+						backup.trackedRepoPaths?.removeAll { missing.contains($0) }
+						await send(.settingsFileLoaded(backup, skippedRepositoryPaths: missing))
+					}
+					catch {
+						await send(.settingsImportFailed(message: error.localizedDescription))
+					}
+				}
+
+			case let .settingsFileLoaded(backup, skippedRepositoryPaths):
+				state.alert = Self.importSettingsAlert(
+					backup,
+					skippedRepositoryPaths: skippedRepositoryPaths,
+					current: state
+				)
+				return .none
+
+			case let .alert(.presented(.confirmImportSettings(backup))):
+				let trackedBefore = state.trackedRepoPaths.count
+				backup.apply(to: &state)
+				let addsRepositories = state.trackedRepoPaths.count > trackedBefore
+				// Verdicts describe the tokens and URLs they ran against, which may have changed.
+				state.youtrackTokenTest = .idle
+				state.githubTokenTest = .idle
+				state.gitlabTokenTest = .idle
+				state.alert = AlertState {
+					TextState("Settings Imported")
+				} actions: {
+					ButtonState(role: .cancel) { TextState("OK") }
+				} message: {
+					TextState(
+						addsRepositories
+							? "Repositories added by the import appear after the next refresh (⌘R)."
+							: "Your settings now match the file."
+					)
+				}
+				return .merge(
+					.cancel(id: CancelID.youTrackTest),
+					.cancel(id: CancelID.gitHubTest),
+					.cancel(id: CancelID.gitLabTest)
+				)
+
+			case let .settingsImportFailed(message):
+				state.alert = AlertState {
+					TextState("Import Failed")
+				} actions: {
+					ButtonState(role: .cancel) { TextState("OK") }
+				} message: {
+					TextState(message)
 				}
 				return .none
 

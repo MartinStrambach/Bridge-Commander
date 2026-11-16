@@ -115,7 +115,9 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.iosSubfolderPath = try c.decodeIfPresent(String.self, forKey: .iosSubfolderPath) ?? ""
 		self.supportsTuist = try c.decodeIfPresent(Bool.self, forKey: .supportsTuist) ?? false
 		self.ticketIdRegex = try c.decodeIfPresent(String.self, forKey: .ticketIdRegex) ?? ""
-		self.xcodeFilePreference = try c.decodeIfPresent(XcodeFilePreference.self, forKey: .xcodeFilePreference) ?? .auto
+		// `try?`, like `defaultWorktreeSource`: a preference this build does not know (from a newer
+		// version's settings backup) reads as the default rather than failing the whole decode.
+		self.xcodeFilePreference = (try? c.decodeIfPresent(XcodeFilePreference.self, forKey: .xcodeFilePreference)) ?? .auto
 		self.worktreeCopyPaths = try c.decodeIfPresent([String].self, forKey: .worktreeCopyPaths) ?? []
 		self.supportsWeb = try c.decodeIfPresent(Bool.self, forKey: .supportsWeb) ?? false
 		self.webIndexPath = try c.decodeIfPresent(String.self, forKey: .webIndexPath) ?? ""
