@@ -275,6 +275,21 @@ struct CreateWorktreeSourceTests {
 		}
 	}
 
+	@Test("an inaccessible repository is reported with the host's reason, when it gave one")
+	func pullRequestErrorCarriesReason() {
+		func message(_ error: GitHostingError) -> String {
+			CreateWorktreeButtonReducer.pullRequestErrorMessage(for: error, host: "github.com")
+		}
+		#expect(
+			message(.unauthenticated(reason: "The 'acme' organization forbids access.")) ==
+				"The GitHub token can't access this repository: The 'acme' organization forbids access."
+		)
+		#expect(
+			message(.unauthenticated(reason: nil)) ==
+				"The GitHub token can't access this repository — check it in Settings."
+		)
+	}
+
 	@Test("a remote on another host is reported without asking any provider")
 	func pullRequestUnsupportedHost() async {
 		let state = makeState(youtrack: false)

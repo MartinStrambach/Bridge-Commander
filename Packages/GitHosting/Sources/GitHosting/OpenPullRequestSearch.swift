@@ -121,7 +121,7 @@ public nonisolated extension GitHubService {
 		)
 		let decoded = try JSONDecoder().decode(GitHubPullRequestSearchResponse.self, from: data)
 		guard let pullRequests = decoded.pullRequests(in: "\(owner)/\(repo)") else {
-			throw GitHostingError.unauthenticated
+			throw try await inaccessibleRepository(owner: owner, token: token, response: data)
 		}
 		return pullRequests
 	}
@@ -264,7 +264,7 @@ public nonisolated extension GitLabService {
 		)
 		let decoded = try JSONDecoder().decode(GitLabMergeRequestSearchResponse.self, from: data)
 		guard let mergeRequests = decoded.mergeRequests else {
-			throw GitHostingError.unauthenticated
+			throw GitHostingError.unauthenticated(reason: GraphQLErrorList.explanation(in: data))
 		}
 		return mergeRequests
 	}

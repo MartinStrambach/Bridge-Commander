@@ -226,7 +226,7 @@ struct RepositoryRowPullRequestTests {
 	@Test("a token without project access surfaces a settings hint")
 	@MainActor
 	func inaccessibleProjectSetsErrorMessage() async {
-		let store = makeFailingFetchStore(state: makeRow(), error: .unauthenticated)
+		let store = makeFailingFetchStore(state: makeRow(), error: .unauthenticated(reason: nil))
 
 		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
 		await store.receive(\.didFetchPullRequestFailed)
@@ -234,6 +234,20 @@ struct RepositoryRowPullRequestTests {
 		#expect(
 			store.state.prFetchError ==
 				"GitLab MR fetch failed: the token can't access this project — check its type and scope in Settings"
+		)
+	}
+
+	@Test("a token the host refuses shows the host's reason instead of the generic hint")
+	@MainActor
+	func inaccessibleProjectShowsReason() async {
+		let reason = "The 'acme' organization forbids access via a fine-grained personal access token."
+		let store = makeFailingFetchStore(state: makeRow(), error: .unauthenticated(reason: reason))
+
+		await store.send(.didFetchStatus(GitPorcelainStatus(parsing: "# branch.head LS-1234_feature"), false))
+		await store.receive(\.didFetchPullRequestFailed)
+
+		#expect(
+			store.state.prFetchError == "GitLab MR fetch failed: the token can't access this project — \(reason)"
 		)
 	}
 

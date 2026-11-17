@@ -327,7 +327,7 @@ struct SettingsReducerTests {
 			SettingsReducer()
 		} withDependencies: {
 			$0[TokenVerificationClient.self].verifyGitLabToken = { _ in
-				throw GitHostingError.unauthenticated
+				throw GitHostingError.unauthenticated(reason: nil)
 			}
 		}
 		await store.send(.testGitLabTokenButtonTapped) {
@@ -336,6 +336,25 @@ struct SettingsReducerTests {
 		await store.receive(\.gitLabTokenTestFinished) {
 			$0.gitlabTokenTest = .failure(
 				message: "GitLab accepted the request but returned no user. Fine-grained tokens cannot use the GraphQL API this app relies on — use a personal, project, or group token with the read_api scope."
+			)
+		}
+	}
+
+	@Test("an identity-less response shows the host's reason when it gave one")
+	func tokenTestUnauthenticatedWithReason() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		} withDependencies: {
+			$0[TokenVerificationClient.self].verifyGitHubToken = { _ in
+				throw GitHostingError.unauthenticated(reason: "Resource not accessible by personal access token")
+			}
+		}
+		await store.send(.testGitHubTokenButtonTapped) {
+			$0.githubTokenTest = .testing
+		}
+		await store.receive(\.gitHubTokenTestFinished) {
+			$0.githubTokenTest = .failure(
+				message: "GitHub accepted the request but returned no user: Resource not accessible by personal access token"
 			)
 		}
 	}
