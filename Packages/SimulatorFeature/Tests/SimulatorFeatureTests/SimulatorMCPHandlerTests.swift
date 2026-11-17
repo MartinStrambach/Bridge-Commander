@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import CoreGraphics
 import Foundation
 import os
@@ -521,7 +522,12 @@ struct SimulatorMCPHandlerTests {
 			return try decode(response)["result"]
 		}
 
-		let list = try await call("list_crashes", ["udid": .string(CrashFixtures.udid), "since_minutes": 100_000])
+		// The fixtures crashed on 2026-10-07; the tool's window is at most 30 days back from now.
+		let list = try await withDependencies {
+			$0.date.now = SimulatorCrashReportsTests.now
+		} operation: {
+			try await call("list_crashes", ["udid": .string(CrashFixtures.udid), "since_minutes": 100_000])
+		}
 		guard case let .array(listContent)? = list?["content"] else {
 			Issue.record("expected content")
 			return

@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import CoreGraphics
 import Foundation
 
@@ -424,7 +425,8 @@ enum SimulatorMCPTools {
 
 			case "list_crashes":
 				let request = await SimulatorCrashReports.listRequest(arguments: arguments, actions: actions)
-				return text(try await SimulatorCrashReports.list(request, source: actions.crashReports))
+				@Dependency(\.date.now) var now
+				return text(try await SimulatorCrashReports.list(request, source: actions.crashReports, now: now))
 
 			case "crash_report":
 				return text(try await SimulatorCrashReports.report(named: string(arguments, "name"), source: actions.crashReports))
