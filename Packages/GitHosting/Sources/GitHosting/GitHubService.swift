@@ -1,5 +1,6 @@
 import ActivityLog
 import Foundation
+import Sharing
 
 public nonisolated enum GitHubService {
 	private static let graphQLURL = "https://api.github.com/graphql"
@@ -147,7 +148,12 @@ public nonisolated enum GitHubService {
 		let refusal = await organizationRefusal(owner: owner, token: token)
 		// A superseded fetch must end as a cancellation, not as an error without its reason.
 		try Task.checkCancellation()
-		return .unauthenticated(reason: refusal ?? fineGrainedTokenHint(token: token, owner: owner))
+		@Shared(.githubOwnerTokens)
+		var ownerTokens = GitHubOwnerTokens()
+		let isOwnersOwnToken = !(ownerTokens.token(forOwner: owner) ?? "").isEmpty
+		return .unauthenticated(
+			reason: refusal ?? fineGrainedTokenHint(token: token, owner: owner, isOwnersOwnToken: isOwnersOwnToken)
+		)
 	}
 
 	/// Why the organization refuses the token, in GitHub's words. Nil when it does not, when the
@@ -167,14 +173,20 @@ public nonisolated enum GitHubService {
 
 	/// What a fine-grained token (`github_pat_…`) is most likely missing when GitHub gives no
 	/// reason: unlike a classic one it belongs to a single owner and to the repositories picked
-	/// for it. Nil for any other token.
-	static func fineGrainedTokenHint(token: String, owner: String) -> String? {
+	/// for it. `isOwnersOwnToken`: the token is the one Settings has for this owner, so it already
+	/// belongs to the right owner and only the repository selection can be missing. Nil for any
+	/// other token.
+	static func fineGrainedTokenHint(token: String, owner: String, isOwnersOwnToken: Bool) -> String? {
 		guard token.hasPrefix("github_pat_") else {
 			return nil
 		}
+		if isOwnersOwnToken {
+			return "Fine-grained tokens only reach the repositories selected for them: check that this repository "
+				+ "is selected for the token \(owner) has in Settings ▸ Accounts, with read access to pull requests."
+		}
 		return "Fine-grained tokens only reach the repositories selected for them, under the one owner they were "
-			+ "created for: create one for \(owner) with read access to pull requests, or use a classic token "
-			+ "with the repo scope."
+			+ "created for: add a token created for \(owner) in Settings ▸ Accounts, or use a classic token with "
+			+ "the repo scope."
 	}
 }
 

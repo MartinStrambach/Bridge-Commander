@@ -25,6 +25,9 @@ public struct SettingsReducer {
 		@Shared(.gitlabToken)
 		public var gitlabToken = ""
 
+		@Shared(.githubOwnerTokens)
+		public var githubOwnerTokens = GitHubOwnerTokens()
+
 		@Shared(.periodicRefreshInterval)
 		public var periodicRefreshInterval = PeriodicRefreshInterval.fiveMinutes
 
@@ -119,6 +122,8 @@ public struct SettingsReducer {
 		public var youtrackTokenTest = TokenTestState.idle
 		public var githubTokenTest = TokenTestState.idle
 		public var gitlabTokenTest = TokenTestState.idle
+		/// The verdicts of the GitHub owner tokens that were tested, by owner as listed.
+		public var githubOwnerTokenTests: [String: TokenTestState] = [:]
 
 		/// Xcode's DerivedData, measured on request: a large folder takes a while to size.
 		public var derivedDataUsage: DerivedDataUsage?
@@ -147,6 +152,11 @@ public struct SettingsReducer {
 		case youTrackTokenTestFinished(TokenTestState)
 		case gitHubTokenTestFinished(TokenTestState)
 		case gitLabTokenTestFinished(TokenTestState)
+		case addGitHubOwner(String)
+		case setGitHubOwnerToken(owner: String, token: String)
+		case removeGitHubOwner(String)
+		case testGitHubOwnerTokenButtonTapped(owner: String)
+		case gitHubOwnerTokenTestFinished(owner: String, TokenTestState)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setGroupSupportsIOS(groupId: String, value: Bool)
 		case setGroupSupportsAndroid(groupId: String, value: Bool)
@@ -242,10 +252,11 @@ public struct SettingsReducer {
 	/// One per provider. Every action that resets a verdict to `.idle` also cancels its test:
 	/// `.idle` re-enables the Test button, and a run still in flight would otherwise land its
 	/// verdict on a token or URL it was never run against.
-	private enum CancelID {
+	private enum CancelID: Hashable {
 		case youTrackTest
 		case gitHubTest
 		case gitLabTest
+		case gitHubOwnerTest(owner: String)
 		case derivedDataMeasurement
 	}
 
@@ -334,7 +345,9 @@ public struct SettingsReducer {
 	) -> AlertState<Action.Alert> {
 		var message = "Settings in the file replace your current ones. Its repositories, repository groups and terminal profiles are added to yours."
 		if backup.includesTokens {
-			message += " Its access tokens replace yours."
+			message += backup.githubOwnerTokens == nil
+				? " Its access tokens replace yours."
+				: " Its access tokens replace yours; GitHub tokens for other owners replace only those owners' tokens."
 		}
 		message += " Terminal settings apply to tabs opened afterwards."
 		let commands = backup.commandsChanged(from: state)
@@ -646,6 +659,47 @@ public struct SettingsReducer {
 
 			case let .gitLabTokenTestFinished(outcome):
 				state.gitlabTokenTest = outcome
+				return .none
+
+			case let .addGitHubOwner(owner):
+				state.$githubOwnerTokens.withLock { $0.add(owner) }
+				return .none
+
+			// Owner actions act on the owner as listed: the verdict and its cancel id are keyed by
+			// that spelling, while the tokens match owners regardless of case.
+			case let .setGitHubOwnerToken(owner, token):
+				// An owner that is not listed is not added back: a field torn down with its row
+				// can still write after the owner was removed.
+				guard let owner = state.githubOwnerTokens.listedOwner(owner) else {
+					return .none
+				}
+				state.$githubOwnerTokens.withLock { $0.setToken(token, forOwner: owner) }
+				state.githubOwnerTokenTests[owner] = nil
+				return .cancel(id: CancelID.gitHubOwnerTest(owner: owner))
+
+			case let .removeGitHubOwner(owner):
+				guard let owner = state.githubOwnerTokens.listedOwner(owner) else {
+					return .none
+				}
+				state.$githubOwnerTokens.withLock { $0.remove(owner) }
+				state.githubOwnerTokenTests[owner] = nil
+				return .cancel(id: CancelID.gitHubOwnerTest(owner: owner))
+
+			case let .testGitHubOwnerTokenButtonTapped(owner):
+				guard let owner = state.githubOwnerTokens.listedOwner(owner) else {
+					return .none
+				}
+				state.githubOwnerTokenTests[owner] = .testing
+				let token = state.githubOwnerTokens.token(forOwner: owner) ?? ""
+				return .run { [tokenVerification] send in
+					await send(.gitHubOwnerTokenTestFinished(owner: owner, Self.tokenTestOutcome(provider: .github) {
+						try await tokenVerification.verifyGitHubToken(token)
+					}))
+				}
+				.cancellable(id: CancelID.gitHubOwnerTest(owner: owner), cancelInFlight: true)
+
+			case let .gitHubOwnerTokenTestFinished(owner, outcome):
+				state.githubOwnerTokenTests[owner] = outcome
 				return .none
 
 			case let .setPeriodicRefreshInterval(interval):
@@ -964,7 +1018,7 @@ public struct SettingsReducer {
 			case .exportSettingsButtonTapped:
 				// Asked only when there is a token to leave out.
 				let hasTokens = ![state.youtrackAuthToken, state.githubToken, state.gitlabToken]
-					.allSatisfy(\.isEmpty)
+					.allSatisfy(\.isEmpty) || state.githubOwnerTokens.hasTokens
 				guard hasTokens else {
 					return exportSettings(includingTokens: false, state: &state)
 				}
@@ -1014,12 +1068,15 @@ public struct SettingsReducer {
 
 			case let .alert(.presented(.confirmImportSettings(backup))):
 				let trackedBefore = state.trackedRepoPaths.count
+				// Listed before the import, which can add owners: only these can have a test running.
+				let ownerTests = state.githubOwnerTokens.owners.map { Effect<Action>.cancel(id: CancelID.gitHubOwnerTest(owner: $0)) }
 				backup.apply(to: &state)
 				let addsRepositories = state.trackedRepoPaths.count > trackedBefore
 				// Verdicts describe the tokens and URLs they ran against, which may have changed.
 				state.youtrackTokenTest = .idle
 				state.githubTokenTest = .idle
 				state.gitlabTokenTest = .idle
+				state.githubOwnerTokenTests = [:]
 				state.alert = AlertState {
 					TextState("Settings Imported")
 				} actions: {
@@ -1032,9 +1089,11 @@ public struct SettingsReducer {
 					)
 				}
 				return .merge(
-					.cancel(id: CancelID.youTrackTest),
-					.cancel(id: CancelID.gitHubTest),
-					.cancel(id: CancelID.gitLabTest)
+					[
+						.cancel(id: CancelID.youTrackTest),
+						.cancel(id: CancelID.gitHubTest),
+						.cancel(id: CancelID.gitLabTest),
+					] + ownerTests
 				)
 
 			case let .settingsImportFailed(message):
