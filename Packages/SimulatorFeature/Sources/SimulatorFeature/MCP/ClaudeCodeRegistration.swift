@@ -54,13 +54,14 @@ public nonisolated enum ClaudeCodeRegistration {
 		return config["mcpServers"]?[serverName] != nil
 	}
 
-	/// Runs `claude mcp add-json --scope user` in a login shell, where `claude` is on the PATH the
-	/// user's own terminals have.
+	/// Runs `claude mcp add-json --scope user` in an interactive login shell, where `claude` is on
+	/// the PATH the user's own terminals have. It must be interactive (`-i`): Claude Code's
+	/// installer adds `~/.local/bin` to PATH in `~/.zshrc`, which a non-interactive `zsh -l` skips.
 	public static func register() async throws {
 		let result = await ProcessRunner.run(
 			executableURL: URL(fileURLWithPath: "/bin/zsh"),
 			arguments: [
-				"-lc",
+				"-ilc",
 				#"claude mcp add-json --scope user "$1" "$2""#,
 				"zsh",
 				serverName,
