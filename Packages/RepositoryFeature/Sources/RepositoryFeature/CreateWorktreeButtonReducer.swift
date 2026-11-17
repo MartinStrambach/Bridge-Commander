@@ -949,6 +949,8 @@ struct CreateWorktreeButtonReducer {
 		switch error {
 		case GitHostingError.missingToken:
 			return "Add a \(provider) token in Settings to \(searching ? "search" : "list") open \(provider == "GitLab" ? "MRs" : "PRs")."
+		case let GitHostingError.unauthenticated(reason?):
+			return "The \(provider) token can't access this repository: \(reason)"
 		case GitHostingError.httpFailure(statusCode: 401),
 		     GitHostingError.unauthenticated:
 			return "The \(provider) token can't access this repository — check it in Settings."

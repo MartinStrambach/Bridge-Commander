@@ -537,6 +537,9 @@ public struct SettingsReducer {
 		case let GitHostingError.httpFailure(statusCode):
 			"HTTP \(statusCode)."
 
+		case let GitHostingError.unauthenticated(reason?):
+			"\(provider == .gitlab ? "GitLab" : "GitHub") accepted the request but returned no user: \(reason)"
+
 		case GitHostingError.unauthenticated where provider == .gitlab:
 			"GitLab accepted the request but returned no user. Fine-grained tokens cannot use the GraphQL API this app relies on — use a personal, project, or group token with the read_api scope."
 

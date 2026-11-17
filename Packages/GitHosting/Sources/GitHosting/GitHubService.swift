@@ -84,7 +84,7 @@ public nonisolated enum GitHubService {
 		// means that.
 		guard decoded.data?.repository != nil else {
 			print("GitHubService: Token cannot access \(owner)/\(repo)")
-			throw GitHostingError.unauthenticated
+			throw try await inaccessibleRepository(owner: owner, token: token, response: data)
 		}
 		guard let pullRequest = decoded.pullRequest else {
 			print("GitHubService: No PR found for \(owner)/\(repo) on branch \(branch)")
@@ -126,9 +126,55 @@ public nonisolated enum GitHubService {
 
 		let decoded = try JSONDecoder().decode(GitHubViewerResponse.self, from: data)
 		guard let login = decoded.login else {
-			throw GitHostingError.unauthenticated
+			throw GitHostingError.unauthenticated(reason: GraphQLErrorList.explanation(in: data))
 		}
 		return login
+	}
+
+	/// The error for a 200 that answered null for the repository, with the reason when one can
+	/// be found. Throws only when cancelled.
+	///
+	/// GitHub answers `NOT_FOUND` for every repository a token cannot see, so `response` rarely
+	/// explains anything. An organization that refuses the token says why only when asked for
+	/// itself, as a `FORBIDDEN` error, which costs a second request on this failing path only.
+	/// Seen for a fine-grained token living longer than the organization allows (api.github.com,
+	/// 2026-11-17); its other refusals (a forbidden token type, SAML single sign-on) are expected
+	/// to arrive the same way but were not checked.
+	static func inaccessibleRepository(owner: String, token: String, response: Data) async throws -> GitHostingError {
+		if let reason = GraphQLErrorList.explanation(in: response) {
+			return .unauthenticated(reason: reason)
+		}
+		let refusal = await organizationRefusal(owner: owner, token: token)
+		// A superseded fetch must end as a cancellation, not as an error without its reason.
+		try Task.checkCancellation()
+		return .unauthenticated(reason: refusal ?? fineGrainedTokenHint(token: token, owner: owner))
+	}
+
+	/// Why the organization refuses the token, in GitHub's words. Nil when it does not, when the
+	/// owner is a user (`NOT_FOUND`), when a classic token lacks `read:org`
+	/// (`INSUFFICIENT_SCOPES`, which says nothing about the repository) and when the question
+	/// could not be asked.
+	private static func organizationRefusal(owner: String, token: String) async -> String? {
+		let body = OpenPullRequestsRequest(
+			query: "query($login: String!) { organization(login: $login) { login } }",
+			variables: ["login": .string(owner)]
+		)
+		guard let data = try? await postGraphQL(url: graphQLURL, token: token, body: body) else {
+			return nil
+		}
+		return GraphQLErrorList.refusal(in: data)
+	}
+
+	/// What a fine-grained token (`github_pat_…`) is most likely missing when GitHub gives no
+	/// reason: unlike a classic one it belongs to a single owner and to the repositories picked
+	/// for it. Nil for any other token.
+	static func fineGrainedTokenHint(token: String, owner: String) -> String? {
+		guard token.hasPrefix("github_pat_") else {
+			return nil
+		}
+		return "Fine-grained tokens only reach the repositories selected for them, under the one owner they were "
+			+ "created for: create one for \(owner) with read access to pull requests, or use a classic token "
+			+ "with the repo scope."
 	}
 }
 

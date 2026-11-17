@@ -81,7 +81,7 @@ public nonisolated enum GitLabService {
 		// the branch has no MR. Only a visible project with no nodes means that.
 		guard decoded.data?.project != nil else {
 			print("GitLabService: Token cannot access \(projectPath)")
-			throw GitHostingError.unauthenticated
+			throw GitHostingError.unauthenticated(reason: GraphQLErrorList.explanation(in: data))
 		}
 		guard let mergeRequest = decoded.mergeRequest else {
 			print("GitLabService: No MR found for \(projectPath) on branch \(branch)")
@@ -185,7 +185,7 @@ public nonisolated enum GitLabService {
 
 		let decoded = try JSONDecoder().decode(GitLabCurrentUserResponse.self, from: data)
 		guard let username = decoded.username else {
-			throw GitHostingError.unauthenticated
+			throw GitHostingError.unauthenticated(reason: GraphQLErrorList.explanation(in: data))
 		}
 		return username
 	}

@@ -8,8 +8,9 @@ nonisolated struct BareGraphQLRequest: Encodable {
 }
 
 /// Checks a hosting token by asking the provider who it authenticates as, over the
-/// same GraphQL API the PR/MR fetches use — so a passing test means those fetches
-/// will actually work, scopes included.
+/// same GraphQL API the PR/MR fetches use — so a passing test means the token can
+/// call that API. It does not mean every repository is reachable: an organization
+/// can still refuse the token, and a fine-grained one covers a single owner.
 @DependencyClient
 public struct TokenVerificationClient: Sendable {
 	/// Returns the GitHub login the token resolves to.
