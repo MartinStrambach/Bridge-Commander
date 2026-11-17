@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import Foundation
 import GitCore
 import Settings
 import TerminalFeature
@@ -99,6 +100,16 @@ struct RepositoryListTerminalFilterTests {
 		#expect(
 			group().rowVisibility(query: "master", livePaths: ["/repos/alpha-fix"]) == .hidden
 		)
+	}
+
+	@Test("a worktree showing its delete's warning stays although its terminals were closed")
+	func deletedWorktreeStaysForItsWarning() {
+		var group = group()
+		group.worktrees[id: "/repos/alpha-fix"]?.deleteWorktreeButton.removalWarningAlert = AlertState {
+			TextState("Worktree Removed")
+		}
+
+		#expect(group.rowVisibility(query: "", livePaths: []) == .worktrees(["/repos/alpha-fix"]))
 	}
 
 	// MARK: - Session liveness

@@ -21,6 +21,15 @@ struct DeleteWorktreeButtonReducer {
 		var errorAlert: AlertState<Action.ErrorAlert>?
 		@Presents
 		var removalWarningAlert: AlertState<Action.RemovalWarningAlert>?
+
+		/// Whether the worktree's row has to stay although a scan no longer finds the worktree.
+		/// Git drops it from its list before the delete has cleared the branch and DerivedData,
+		/// and the watcher rescans within the second: a row taken then leaves the delete's result
+		/// with nowhere to go, and takes the warning alert, which hangs off the row, with it. Not
+		/// for an error: git refused, so the worktree is still there and still scanned.
+		var holdsRowAfterRemoval: Bool {
+			isRemoving || removalWarningAlert != nil
+		}
 	}
 
 	enum Action {
@@ -72,14 +81,20 @@ struct DeleteWorktreeButtonReducer {
 							defaultBranch: defaultBranch
 						)
 						: nil
+					let outcome: GitWorktreeRemover.Outcome
 					do {
-						try await GitWorktreeRemover.removeWorktree(name: name, path: path, force: force)
+						outcome = try await GitWorktreeRemover.removeWorktree(name: name, path: path, force: force)
 					}
 					catch {
 						await send(.didFailWithError(error.localizedDescription))
 						return
 					}
 					var warnings: [String] = []
+					// Git reports this as a failure, yet the worktree is gone from the repository:
+					// the rest of the cleanup still applies, and the folder is the user's to clear.
+					if case let .removedLeavingFiles(message) = outcome {
+						warnings.append("Git could not delete every file. What is left is still in \(path):\n\(message)")
+					}
 					if let branchToDelete {
 						do {
 							try await GitLocalBranchDeleter.deleteBranch(branchToDelete)

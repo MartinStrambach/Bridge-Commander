@@ -57,7 +57,9 @@ extension RepoGroupReducer.State {
 			if !query.isEmpty, row.branchName?.localizedCaseInsensitiveContains(query) != true {
 				return false
 			}
-			if let livePaths, !livePaths.contains(row.path) {
+			// A worktree being deleted has just had its terminals closed; its row still has the
+			// delete's alert to show.
+			if let livePaths, !livePaths.contains(row.path), !row.deleteWorktreeButton.holdsRowAfterRemoval {
 				return false
 			}
 			return true

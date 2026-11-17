@@ -47,6 +47,13 @@ struct RepositoryListReducer {
 		/// `didScanGroup` — whichever scan gets there first — rather than from the creation.
 		fileprivate(set) var pendingWorktreeLaunches: [String: WorktreeTerminalLaunch] = [:]
 
+		/// The number of the scan most recently started for each group, by root path. Scans of a
+		/// group overlap (the full scan, a rescan from the watcher, one from a created worktree)
+		/// and their answers can land out of order; only the answer to the latest one is applied.
+		/// An older listing lacks whatever was added since, and a scan that drops a worktree's
+		/// row hangs up its terminals.
+		fileprivate(set) var latestScanRequests: [String: Int] = [:]
+
 		/// The rows the file system watch covers, sorted. A rescan that finds the same rows leaves
 		/// the running watch alone instead of restarting it.
 		fileprivate(set) var watchedRepositoryPaths: [String] = []
@@ -129,7 +136,9 @@ struct RepositoryListReducer {
 		/// A simulator MCP tool call touched a device.
 		case simulatorActivityReported(SimulatorActivity)
 		case didReceiveSystemEventsPermission(Bool)
-		case didScanGroup(rootPath: String, rows: [ScannedRepository])
+		/// `request` is the number `beginScan` gave the scan this answers; an answer to any but the
+		/// group's latest scan is dropped. Nil for rows that answer no numbered scan.
+		case didScanGroup(rootPath: String, rows: [ScannedRepository], request: Int? = nil)
 		case refreshRepositories(RefreshTrigger)
 		/// Rows' repositories changed on disk; see `GitRepositoryWatcherClient`.
 		case repositoriesChangedOnDisk([GitRepositoryChange])
@@ -635,19 +644,20 @@ struct RepositoryListReducer {
 
 				state.isScanning = true
 				let paths = Array(state.trackedRepoPaths)
+				let scans = paths.map { (path: $0, request: beginScan(of: $0, in: &state)) }
 				// Permission checks deliberately don't hang off the scan: refreshRepositories
 				// routes through here, so every ⌘R used to re-run them (see .checkPermissions).
 				return .merge(
 					.run { send in
-						await withTaskGroup(of: (String, [ScannedRepository]).self) { group in
-							for path in paths {
+						await withTaskGroup(of: (String, Int, [ScannedRepository]).self) { group in
+							for scan in scans {
 								group.addTask {
-									let rows = await GitWorktreeScanner.listWorktrees(forRepo: path)
-									return (path, rows)
+									let rows = await GitWorktreeScanner.listWorktrees(forRepo: scan.path)
+									return (scan.path, scan.request, rows)
 								}
 							}
-							for await (rootPath, rows) in group {
-								await send(.didScanGroup(rootPath: rootPath, rows: rows))
+							for await (rootPath, request, rows) in group {
+								await send(.didScanGroup(rootPath: rootPath, rows: rows, request: request))
 							}
 						}
 						await send(.scanCompleted)
@@ -665,30 +675,37 @@ struct RepositoryListReducer {
 				return rescanGroup(groupId, in: &state)
 
 			case let .repositoryGroups(.element(id: groupId, action: .worktrees(.element(id: worktreePath, .worktreeDeleted)))):
-				let toRemove = state.terminalSessions
-					.filter { $0.repositoryPath == worktreePath }
-					.map(\.id)
-				for sessionId in toRemove {
-					state.terminalSessions.remove(id: sessionId)
-					state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: worktreePath)
-				}
-				state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
-				if state.terminalLayout?.activeRepositoryPath == worktreePath {
-					if let next = mostRecentRemainingSession(in: state) {
-						activateOtherRepository(next, in: &state)
-					}
-					else {
-						state.terminalLayout = nil
-					}
-				}
+				closeTerminalSessions(ofRemovedWorktree: worktreePath, in: &state)
 				return rescanGroup(groupId, in: &state)
+
+			// The worktree is gone, but its row reports `worktreeDeleted` only once the warning
+			// is dismissed. Its shells do not wait for that.
+			case let .repositoryGroups(.element(
+				id: _,
+				action: .worktrees(.element(id: worktreePath, .deleteWorktreeButton(.didRemoveSuccessfullyWithWarning)))
+			)):
+				closeTerminalSessions(ofRemovedWorktree: worktreePath, in: &state)
+				return .none
 
 			// MARK: - Scan Results
 
-			case let .didScanGroup(rootPath, scanned):
+			case let .didScanGroup(rootPath, scanned, request):
+				// A newer scan of this group is on its way; this listing may predate a worktree
+				// that has a row by now.
+				if let request, request != state.latestScanRequests[rootPath] {
+					return .none
+				}
+
 				if state.repositoryGroups[id: rootPath] != nil {
 					// Existing group: merge rows, preserving cached PR/ticket data
-					mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
+					let removedWorktrees = mergeGroupRows(into: &state, rootPath: rootPath, scanned: scanned)
+					// A row's own `worktreeDeleted` is not the only way out, and not a sure one: a
+					// worktree removed in a terminal never sends it, and one deleted from the app
+					// loses its row to the watcher's rescan while the delete is still clearing the
+					// branch and DerivedData — the report then has no row left to come from.
+					for worktreePath in removedWorktrees {
+						closeTerminalSessions(ofRemovedWorktree: worktreePath, in: &state)
+					}
 					openPendingWorktreeTerminals(inGroup: rootPath, state: &state)
 				}
 				else if !scanned.isEmpty {
@@ -1345,12 +1362,22 @@ struct RepositoryListReducer {
 	/// their loaded state survives.
 	private func rescanGroup(_ groupId: String, in state: inout State) -> EffectOf<RepositoryListReducer> {
 		state.isScanning = true
+		let request = beginScan(of: groupId, in: &state)
 		return .run { send in
 			let rows = await GitWorktreeScanner.listWorktrees(forRepo: groupId)
-			await send(.didScanGroup(rootPath: groupId, rows: rows))
+			await send(.didScanGroup(rootPath: groupId, rows: rows, request: request))
 			await send(.scanCompleted)
 		}
 		.cancellable(id: CancellableId.scan)
+	}
+
+	/// Numbers a scan of a group that is about to start, making it the one whose answer counts.
+	/// Not `cancelInFlight`: the full scan covers every group in one effect and must not be cut
+	/// short by a rescan of one of them.
+	private func beginScan(of rootPath: String, in state: inout State) -> Int {
+		let request = (state.latestScanRequests[rootPath] ?? 0) + 1
+		state.latestScanRequests[rootPath] = request
+		return request
 	}
 
 	/// Posts a notification when the program in a session starts waiting for the user, and withdraws
@@ -1633,13 +1660,15 @@ private func buildGroup(
 	)
 }
 
+/// Brings a group's rows in line with a scan, and returns the worktrees that lost their row to it.
+/// A scan with no main repository in it (git failed) changes nothing.
 private func mergeGroupRows(
 	into state: inout RepositoryListReducer.State,
 	rootPath: String,
 	scanned: [ScannedRepository]
-) {
+) -> [String] {
 	guard let group = state.repositoryGroups[id: rootPath] else {
-		return
+		return []
 	}
 
 	var currentByPath: [String: RepositoryRowReducer.State] = [group.header.path: group.header]
@@ -1683,12 +1712,21 @@ private func mergeGroupRows(
 	}
 
 	guard let newHeader = updated.first(where: { !$0.isWorktree }) else {
-		return
+		return []
+	}
+
+	// A worktree the app is deleting stays until its delete is done with it.
+	let foundPaths = Set(updated.map(\.path))
+	updated += group.worktrees.filter {
+		!foundPaths.contains($0.path) && $0.deleteWorktreeButton.holdsRowAfterRemoval
 	}
 
 	let worktrees = sortRepositories(updated.filter(\.isWorktree), sortMode: state.sortMode)
 	state.repositoryGroups[id: rootPath]?.header = newHeader
 	state.repositoryGroups[id: rootPath]?.worktrees = IdentifiedArrayOf(uniqueElements: worktrees)
+
+	let scannedPaths = Set(updated.map(\.path))
+	return group.worktrees.map(\.path).filter { !scannedPaths.contains($0) }
 }
 
 // MARK: - Sorting
@@ -1776,6 +1814,31 @@ private func reopenedTerminalLayout(in state: inout RepositoryListReducer.State)
 		state.hiddenTerminalTabMemory = nil
 	}
 	return layout
+}
+
+/// Closes every tab of a worktree that is gone, and takes the panel to another repository's tab,
+/// or shuts it when none is left. Dropping the sessions from state is what hangs their shells up
+/// (`killSessions(notIn:)` in `RepositoryListView`).
+private func closeTerminalSessions(
+	ofRemovedWorktree worktreePath: String,
+	in state: inout RepositoryListReducer.State
+) {
+	let toRemove = state.terminalSessions
+		.filter { $0.repositoryPath == worktreePath }
+		.map(\.id)
+	for sessionId in toRemove {
+		state.terminalSessions.remove(id: sessionId)
+		state.terminalLayout?.forget(sessionId: sessionId, repositoryPath: worktreePath)
+	}
+	state.terminalLayout?.lastActiveSessionByRepo[worktreePath] = nil
+	if state.terminalLayout?.activeRepositoryPath == worktreePath {
+		if let next = mostRecentRemainingSession(in: state) {
+			activateOtherRepository(next, in: &state)
+		}
+		else {
+			state.terminalLayout = nil
+		}
+	}
 }
 
 /// The tab to show once the repository on screen has none left: the one the user was in most
