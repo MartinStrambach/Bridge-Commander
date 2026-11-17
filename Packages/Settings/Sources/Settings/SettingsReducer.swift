@@ -9,6 +9,9 @@ public enum TokenTestState: Equatable, Sendable {
 	case idle
 	case testing
 	case success(username: String)
+	/// A passed check that says more than whose token it is (an owner's token: which owner it
+	/// found), as a full sentence.
+	case verified(message: String)
 	case failure(message: String)
 }
 
@@ -536,6 +539,29 @@ public struct SettingsReducer {
 			+ "so selecting it keeps your current typeface."
 	}
 
+	/// Leads with the owner the check found, since that is what the row is about; whose token it is
+	/// comes second, as for an organization's fine-grained token it is still a person.
+	static func ownerTokenVerifiedMessage(_ verification: GitHubOwnerTokenVerification) -> String {
+		let found = verification.isOrganization
+			? "Found the \(verification.owner) organization, and it accepts the token."
+			: "Found the GitHub user \(verification.owner)."
+		return "\(found) The token belongs to \(verification.login). A repository not selected for it still fails on its row."
+	}
+
+	static func ownerTokenTestFailureMessage(for error: Error, owner: String) -> String {
+		switch error {
+		case GitHostingError.ownerNotFound:
+			"GitHub has no user or organization named \(owner). Use the first part of the repository's address, github.com/owner/repo."
+
+		// The organization's own words: they name the policy and link the token's page.
+		case let GitHostingError.unauthenticated(reason?):
+			reason
+
+		default:
+			tokenTestFailureMessage(for: error, provider: .github)
+		}
+	}
+
 	private static func tokenTestFailureMessage(for error: Error, provider: PullRequestProvider) -> String {
 		switch error {
 		case GitHostingError.missingToken:
@@ -692,9 +718,15 @@ public struct SettingsReducer {
 				state.githubOwnerTokenTests[owner] = .testing
 				let token = state.githubOwnerTokens.token(forOwner: owner) ?? ""
 				return .run { [tokenVerification] send in
-					await send(.gitHubOwnerTokenTestFinished(owner: owner, Self.tokenTestOutcome(provider: .github) {
-						try await tokenVerification.verifyGitHubToken(token)
-					}))
+					let outcome: TokenTestState
+					do {
+						let verification = try await tokenVerification.verifyGitHubOwnerToken(token, owner)
+						outcome = .verified(message: Self.ownerTokenVerifiedMessage(verification))
+					}
+					catch {
+						outcome = .failure(message: Self.ownerTokenTestFailureMessage(for: error, owner: owner))
+					}
+					await send(.gitHubOwnerTokenTestFinished(owner: owner, outcome))
 				}
 				.cancellable(id: CancelID.gitHubOwnerTest(owner: owner), cancelInFlight: true)
 

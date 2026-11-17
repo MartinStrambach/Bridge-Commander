@@ -111,3 +111,18 @@ extension GitHubOwnerTokens: RawRepresentable {
 		lhs.tokens == rhs.tokens
 	}
 }
+
+/// What testing an owner's token found: whose token it is, and the owner as GitHub knows it.
+public nonisolated struct GitHubOwnerTokenVerification: Equatable, Sendable {
+	/// The user the token belongs to: for an organization's fine-grained token still a person.
+	public let login: String
+	/// The owner in GitHub's spelling.
+	public let owner: String
+	public let isOrganization: Bool
+
+	public init(login: String, owner: String, isOrganization: Bool) {
+		self.login = login
+		self.owner = owner
+		self.isOrganization = isOrganization
+	}
+}

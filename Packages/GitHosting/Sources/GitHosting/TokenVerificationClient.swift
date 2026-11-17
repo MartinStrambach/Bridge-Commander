@@ -15,6 +15,10 @@ nonisolated struct BareGraphQLRequest: Encodable {
 public struct TokenVerificationClient: Sendable {
 	/// Returns the GitHub login the token resolves to.
 	public var verifyGitHubToken: @Sendable (_ token: String) async throws -> String
+	/// Checks a token listed for a GitHub owner: whose it is, that the owner exists, and that it
+	/// does not refuse the token.
+	public var verifyGitHubOwnerToken: @Sendable (_ token: String, _ owner: String) async throws
+		-> GitHubOwnerTokenVerification
 	/// Returns the GitLab username the token resolves to.
 	public var verifyGitLabToken: @Sendable (_ token: String) async throws -> String
 }
@@ -25,6 +29,9 @@ extension TokenVerificationClient: DependencyKey {
 		// Settings started trimming may still carry pasted whitespace.
 		verifyGitHubToken: { token in
 			try await GitHubService.verifyToken(token.trimmingCharacters(in: .whitespacesAndNewlines))
+		},
+		verifyGitHubOwnerToken: { token, owner in
+			try await GitHubService.verifyOwnerToken(token.trimmingCharacters(in: .whitespacesAndNewlines), owner: owner)
 		},
 		verifyGitLabToken: { token in
 			try await GitLabService.verifyToken(token.trimmingCharacters(in: .whitespacesAndNewlines))

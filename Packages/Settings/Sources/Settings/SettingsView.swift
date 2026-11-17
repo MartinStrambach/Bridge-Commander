@@ -465,7 +465,7 @@ public struct SettingsView<Updates: View>: View {
 				.scaledFont(.subheadline)
 				.fontWeight(.semibold)
 			Text(
-				"A fine-grained token only reaches the repositories of the one owner it was created for. Add an organization or user the token above cannot reach, with a token created for it; that owner's repositories then use it instead."
+				"A fine-grained token only reaches the repositories of the one owner it was created for. Add an organization or user the token above cannot reach, with a token created for it; that owner's repositories then use it instead. The owner is the first part of the repository's address, github.com/owner/repo: paste a repository link to fill it in. Test checks that GitHub knows the name and the owner accepts the token."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
@@ -475,7 +475,7 @@ public struct SettingsView<Updates: View>: View {
 			}
 
 			HStack(spacing: 8) {
-				TextField("Owner, e.g. my-organization", text: $newGitHubOwner)
+				TextField("Owner or repository link", text: $newGitHubOwner)
 					.textFieldStyle(.roundedBorder)
 					.scaledFont(.body)
 					.frame(maxWidth: 260)
@@ -591,6 +591,16 @@ public struct SettingsView<Updates: View>: View {
 				Text("Authenticated as \(username)")
 					.scaledFont(.caption)
 					.foregroundColor(.secondary)
+			}
+
+		case let .verified(message):
+			HStack(alignment: .firstTextBaseline, spacing: 6) {
+				Image(systemName: "checkmark.circle.fill")
+					.foregroundColor(.green)
+				Text(message)
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+					.fixedSize(horizontal: false, vertical: true)
 			}
 
 		case let .failure(message):

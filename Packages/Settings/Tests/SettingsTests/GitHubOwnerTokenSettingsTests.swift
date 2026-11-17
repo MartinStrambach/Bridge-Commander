@@ -35,11 +35,11 @@ struct GitHubOwnerTokenSettingsTests {
 		let store = TestStore(initialState: state) {
 			SettingsReducer()
 		} withDependencies: {
-			$0[TokenVerificationClient.self].verifyGitHubToken = { token in
+			$0[TokenVerificationClient.self].verifyGitHubOwnerToken = { token, owner in
 				guard !token.isEmpty else {
 					throw GitHostingError.missingToken
 				}
-				return "user-of-\(token)"
+				return GitHubOwnerTokenVerification(login: "user-of-\(token)", owner: "Acme", isOrganization: true)
 			}
 		}
 
@@ -47,7 +47,9 @@ struct GitHubOwnerTokenSettingsTests {
 			$0.githubOwnerTokenTests = ["acme": .testing]
 		}
 		await store.receive(\.gitHubOwnerTokenTestFinished) {
-			$0.githubOwnerTokenTests = ["acme": .success(username: "user-of-github_pat_org")]
+			$0.githubOwnerTokenTests = ["acme": .verified(
+				message: "Found the Acme organization, and it accepts the token. The token belongs to user-of-github_pat_org. A repository not selected for it still fails on its row."
+			)]
 		}
 		// A listed owner without a token is not tested with the main one.
 		await store.send(.testGitHubOwnerTokenButtonTapped(owner: "other")) {
@@ -56,6 +58,29 @@ struct GitHubOwnerTokenSettingsTests {
 		await store.receive(\.gitHubOwnerTokenTestFinished) {
 			$0.githubOwnerTokenTests["other"] = .failure(message: "Enter a token first.")
 		}
+	}
+
+	@Test("a misspelled owner, an organization's refusal and a user owner each say so")
+	func ownerTestMessages() {
+		#expect(
+			SettingsReducer.ownerTokenTestFailureMessage(for: GitHostingError.ownerNotFound(owner: "acme-typo"), owner: "acme-typo")
+				== "GitHub has no user or organization named acme-typo. Use the first part of the repository's address, github.com/owner/repo."
+		)
+		#expect(
+			SettingsReducer.ownerTokenTestFailureMessage(
+				for: GitHostingError.unauthenticated(reason: "The 'acme' organization forbids access."),
+				owner: "acme"
+			) == "The 'acme' organization forbids access."
+		)
+		#expect(
+			SettingsReducer.ownerTokenTestFailureMessage(for: GitHostingError.httpFailure(statusCode: 401), owner: "acme")
+				== "HTTP 401 — the token is invalid, revoked, or expired."
+		)
+		#expect(
+			SettingsReducer.ownerTokenVerifiedMessage(
+				GitHubOwnerTokenVerification(login: "someone", owner: "someone", isOrganization: false)
+			) == "Found the GitHub user someone. The token belongs to someone. A repository not selected for it still fails on its row."
+		)
 	}
 
 	@Test("editing or removing an owner's token drops its verdict and leaves the others")
@@ -113,7 +138,7 @@ struct GitHubOwnerTokenSettingsTests {
 		let store = TestStore(initialState: state) {
 			SettingsReducer()
 		} withDependencies: {
-			$0[TokenVerificationClient.self].verifyGitHubToken = { _ in
+			$0[TokenVerificationClient.self].verifyGitHubOwnerToken = { _, _ in
 				try await Task.never()
 			}
 		}

@@ -132,6 +132,25 @@ public nonisolated enum GitHubService {
 		return login
 	}
 
+	/// Checks a token listed for an owner in Settings: who it belongs to, that the owner exists
+	/// under that name, and that the owner, when an organization, does not refuse the token. One
+	/// request: GitHub answers `viewer` beside an organization's `FORBIDDEN`, as it did for a
+	/// fine-grained token living longer than the organization allows (api.github.com, 2026-11-17).
+	public static func verifyOwnerToken(_ token: String, owner: String) async throws -> GitHubOwnerTokenVerification {
+		let body = OpenPullRequestsRequest(
+			query: """
+			query($owner: String!) {
+				viewer { login }
+				owner: repositoryOwner(login: $owner) { login __typename }
+				organization(login: $owner) { login }
+			}
+			""",
+			variables: ["owner": .string(owner)]
+		)
+		let data = try await postGraphQL(url: graphQLURL, token: token, body: body)
+		return try GitHubOwnerTokenResponse.verification(from: data, owner: owner)
+	}
+
 	/// The error for a 200 that answered null for the repository, with the reason when one can
 	/// be found. Throws only when cancelled.
 	///
@@ -187,6 +206,41 @@ public nonisolated enum GitHubService {
 		return "Fine-grained tokens only reach the repositories selected for them, under the one owner they were "
 			+ "created for: add a token created for \(owner) in Settings ▸ Accounts, or use a classic token with "
 			+ "the repo scope."
+	}
+}
+
+/// Internal (not private) so the response mapping is unit-testable from fixture JSON.
+nonisolated struct GitHubOwnerTokenResponse: Decodable {
+	struct DataContainer: Decodable {
+		let viewer: GitHubViewerResponse.Viewer?
+		let owner: Owner?
+	}
+
+	struct Owner: Decodable {
+		let login: String
+		let __typename: String?
+	}
+
+	let data: DataContainer?
+
+	/// The verdict on the answer: an organization's refusal first, since GitHub then also leaves the
+	/// owner null; then a token that resolves to no user; then an owner GitHub does not know.
+	static func verification(from data: Data, owner: String) throws -> GitHubOwnerTokenVerification {
+		if let refusal = GraphQLErrorList.refusal(in: data) {
+			throw GitHostingError.unauthenticated(reason: refusal)
+		}
+		let decoded = try JSONDecoder().decode(Self.self, from: data)
+		guard let login = decoded.data?.viewer?.login else {
+			throw GitHostingError.unauthenticated(reason: GraphQLErrorList.explanation(in: data))
+		}
+		guard let found = decoded.data?.owner else {
+			throw GitHostingError.ownerNotFound(owner: owner)
+		}
+		return GitHubOwnerTokenVerification(
+			login: login,
+			owner: found.login,
+			isOrganization: found.__typename == "Organization"
+		)
 	}
 }
 
