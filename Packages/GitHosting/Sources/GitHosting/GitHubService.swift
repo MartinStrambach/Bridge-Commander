@@ -133,22 +133,33 @@ public nonisolated enum GitHubService {
 	}
 
 	/// Checks a token listed for an owner in Settings: who it belongs to, that the owner exists
-	/// under that name, and that the owner, when an organization, does not refuse the token. One
-	/// request: GitHub answers `viewer` beside an organization's `FORBIDDEN`, as it did for a
-	/// fine-grained token living longer than the organization allows (api.github.com, 2026-11-17).
+	/// under that name, and that the owner, when an organization, does not refuse the token.
+	///
+	/// The organization is asked about in a second request, as on the fetch path, and only its
+	/// `FORBIDDEN` is taken: a classic token without `read:org` gets `INSUFFICIENT_SCOPES` there,
+	/// which in the same query could cost the whole answer for a scope the app never needs.
 	public static func verifyOwnerToken(_ token: String, owner: String) async throws -> GitHubOwnerTokenVerification {
 		let body = OpenPullRequestsRequest(
 			query: """
 			query($owner: String!) {
 				viewer { login }
 				owner: repositoryOwner(login: $owner) { login __typename }
-				organization(login: $owner) { login }
 			}
 			""",
 			variables: ["owner": .string(owner)]
 		)
 		let data = try await postGraphQL(url: graphQLURL, token: token, body: body)
-		return try GitHubOwnerTokenResponse.verification(from: data, owner: owner)
+		let found = try GitHubOwnerTokenResponse.found(in: data)
+		// A null owner may be an organization hiding behind its refusal rather than a typo.
+		guard found.owner?.isOrganization != false else {
+			return try GitHubOwnerTokenVerification(found: found, owner: owner)
+		}
+		let refusal = await organizationRefusal(owner: owner, token: token)
+		try Task.checkCancellation()
+		if let refusal {
+			throw GitHostingError.unauthenticated(reason: refusal)
+		}
+		return try GitHubOwnerTokenVerification(found: found, owner: owner)
 	}
 
 	/// The error for a 200 that answered null for the repository, with the reason when one can
@@ -223,9 +234,19 @@ nonisolated struct GitHubOwnerTokenResponse: Decodable {
 
 	let data: DataContainer?
 
-	/// The verdict on the answer: an organization's refusal first, since GitHub then also leaves the
-	/// owner null; then a token that resolves to no user; then an owner GitHub does not know.
-	static func verification(from data: Data, owner: String) throws -> GitHubOwnerTokenVerification {
+	/// What the first request found: whose token it is, and the owner when GitHub knows it.
+	struct Found: Equatable {
+		let login: String
+		let owner: (login: String, isOrganization: Bool)?
+
+		static func == (lhs: Self, rhs: Self) -> Bool {
+			lhs.login == rhs.login && lhs.owner?.login == rhs.owner?.login
+				&& lhs.owner?.isOrganization == rhs.owner?.isOrganization
+		}
+	}
+
+	/// Throws for a refusal anywhere in the answer, and for a token that resolves to no user.
+	static func found(in data: Data) throws -> Found {
 		if let refusal = GraphQLErrorList.refusal(in: data) {
 			throw GitHostingError.unauthenticated(reason: refusal)
 		}
@@ -233,14 +254,20 @@ nonisolated struct GitHubOwnerTokenResponse: Decodable {
 		guard let login = decoded.data?.viewer?.login else {
 			throw GitHostingError.unauthenticated(reason: GraphQLErrorList.explanation(in: data))
 		}
-		guard let found = decoded.data?.owner else {
+		return Found(
+			login: login,
+			owner: decoded.data?.owner.map { ($0.login, $0.__typename == "Organization") }
+		)
+	}
+}
+
+extension GitHubOwnerTokenVerification {
+	/// Throws `ownerNotFound` when GitHub found no owner by the name.
+	init(found: GitHubOwnerTokenResponse.Found, owner: String) throws {
+		guard let match = found.owner else {
 			throw GitHostingError.ownerNotFound(owner: owner)
 		}
-		return GitHubOwnerTokenVerification(
-			login: login,
-			owner: found.login,
-			isOrganization: found.__typename == "Organization"
-		)
+		self.init(login: found.login, owner: match.login, isOrganization: match.isOrganization)
 	}
 }
 

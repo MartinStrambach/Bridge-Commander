@@ -78,8 +78,9 @@ struct GitHubOwnerTokenSettingsTests {
 		)
 		#expect(
 			SettingsReducer.ownerTokenVerifiedMessage(
-				GitHubOwnerTokenVerification(login: "someone", owner: "someone", isOrganization: false)
-			) == "Found the GitHub user someone. The token belongs to someone. A repository not selected for it still fails on its row."
+				GitHubOwnerTokenVerification(login: "someone", owner: "someone", isOrganization: false),
+				isFineGrained: false
+			) == "Found the GitHub user someone. The token belongs to someone."
 		)
 	}
 
@@ -180,6 +181,38 @@ struct GitHubOwnerTokenSettingsTests {
 		await store.send(.exportSettingsButtonTapped) {
 			$0.alert = SettingsReducer.exportTokensAlert
 		}
+	}
+
+	@Test("owner tokens survive the file: written as JSON, read back, applied on another Mac")
+	func fileRoundTrip() throws {
+		let source = SettingsReducer.State()
+		source.$githubOwnerTokens.withLock { $0 = GitHubOwnerTokens(tokens: ["Acme": "github_pat_org", "listed-only": ""]) }
+		let data = try SettingsBackup(state: source, includesTokens: true, exportedAt: Date(timeIntervalSince1970: 0)).encoded()
+		#expect(String(decoding: data, as: UTF8.self).contains(#""githubOwnerTokens" : {"#))
+
+		let read = try SettingsBackup.decoded(from: data)
+		#expect(read.githubOwnerTokens == ["Acme": "github_pat_org"])
+
+		var target = SettingsReducer.State()
+		target.$githubOwnerTokens.withLock { $0 = GitHubOwnerTokens() }
+		read.apply(to: &target)
+		#expect(target.githubOwnerTokens.token(forRepositoryOf: "acme", main: "ghp_main") == "github_pat_org")
+	}
+
+	@Test("a file from before owner tokens, or one with a name that is no owner, leaves them alone")
+	func olderAndOddFiles() throws {
+		var state = SettingsReducer.State()
+		state.$githubOwnerTokens.withLock { $0 = GitHubOwnerTokens(tokens: ["acme": "kept"]) }
+
+		let older = try SettingsBackup.decoded(from: Data(#"{"formatVersion": 1, "githubToken": "ghp_x"}"#.utf8))
+		#expect(older.githubOwnerTokens == nil)
+		older.apply(to: &state)
+
+		let odd = try SettingsBackup.decoded(
+			from: Data(#"{"formatVersion": 1, "githubOwnerTokens": {"two words": "x", "@Other": " t\n"}}"#.utf8)
+		)
+		odd.apply(to: &state)
+		#expect(state.githubOwnerTokens.tokens == ["acme": "kept", "Other": "t"])
 	}
 
 	@Test("importing replaces the tokens of the owners in the file and keeps the others")

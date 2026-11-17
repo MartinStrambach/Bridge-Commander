@@ -72,10 +72,12 @@ public nonisolated struct GitHubOwnerTokens: Equatable, Sendable {
 	}
 
 	/// The owner as GitHub names it, from what a user types or pastes: `acme`, `@acme`,
-	/// `acme/app` or a link to either. Nil for text that names no owner.
+	/// `acme/app`, a link to either, or the SSH address `origin` shows
+	/// (`git@github.com:acme/app.git`). Nil for text that names no owner.
 	public static func normalizedOwner(_ text: String) -> String? {
 		var owner = text.trimmingCharacters(in: .whitespacesAndNewlines)
-		for prefix in ["https://", "http://", "www.", "github.com/", "@"] where owner.lowercased().hasPrefix(prefix) {
+		let prefixes = ["ssh://", "git@github.com:", "git@github.com/", "https://", "http://", "www.", "github.com/", "@"]
+		for prefix in prefixes where owner.lowercased().hasPrefix(prefix) {
 			owner.removeFirst(prefix.count)
 		}
 		owner = String(owner.prefix { $0 != "/" })

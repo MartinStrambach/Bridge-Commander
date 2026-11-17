@@ -4,53 +4,54 @@ import Testing
 
 @Suite("GitHub owner token check")
 struct GitHubOwnerTokenResponseTests {
-	private func verify(_ json: String, owner: String = "acme") throws -> GitHubOwnerTokenVerification {
-		try GitHubOwnerTokenResponse.verification(from: Data(json.utf8), owner: owner)
+	private typealias Found = GitHubOwnerTokenResponse.Found
+
+	private func found(_ json: String) throws -> Found {
+		try GitHubOwnerTokenResponse.found(in: Data(json.utf8))
 	}
 
-	@Test("an organization that accepts the token is found under GitHub's spelling")
+	@Test("an organization is found under GitHub's spelling")
 	func organizationFound() throws {
 		let json = #"""
-		{"data": {"viewer": {"login": "someone"}, "owner": {"login": "Acme", "__typename": "Organization"},
-		 "organization": {"login": "Acme"}}}
+		{"data": {"viewer": {"login": "someone"}, "owner": {"login": "Acme", "__typename": "Organization"}}}
 		"""#
-		#expect(try verify(json) == GitHubOwnerTokenVerification(login: "someone", owner: "Acme", isOrganization: true))
+		let result = try found(json)
+		#expect(result == Found(login: "someone", owner: ("Acme", true)))
+		#expect(try GitHubOwnerTokenVerification(found: result, owner: "acme")
+			== GitHubOwnerTokenVerification(login: "someone", owner: "Acme", isOrganization: true))
 	}
 
 	@Test("a user owner is found and is no organization")
 	func userFound() throws {
-		let json = #"""
-		{"data": {"viewer": {"login": "someone"}, "owner": {"login": "someone", "__typename": "User"},
-		 "organization": null},
-		 "errors": [{"type": "NOT_FOUND", "path": ["organization"], "message": "Could not resolve to an Organization."}]}
-		"""#
-		#expect(try verify(json, owner: "someone").isOrganization == false)
+		let json = #"{"data": {"viewer": {"login": "someone"}, "owner": {"login": "someone", "__typename": "User"}}}"#
+		#expect(try found(json).owner?.isOrganization == false)
 	}
 
-	@Test("an organization's refusal fails the check with its reason")
-	func organizationRefuses() {
-		// The shape api.github.com answered on 2026-11-17, names changed.
+	@Test("a refusal anywhere in the answer fails the check with its reason")
+	func refusal() {
+		// Not seen for this query; the organization lookup's refusal (2026-11-17) is the model.
 		let json = #"""
-		{"data": {"viewer": {"login": "someone"}, "owner": null, "organization": null},
-		 "errors": [{"type": "FORBIDDEN", "path": ["organization"],
-		  "message": "The 'acme' organization forbids access via a fine-grained personal access tokens if the token's lifetime is greater than 366 days."}]}
+		{"data": {"viewer": {"login": "someone"}, "owner": null},
+		 "errors": [{"type": "FORBIDDEN", "path": ["owner"], "message": "The 'acme' organization forbids access."}]}
 		"""#
 		#expect {
-			try verify(json)
+			try found(json)
 		} throws: { error in
 			guard case let GitHostingError.unauthenticated(reason?) = error else { return false }
-			return reason.hasPrefix("The 'acme' organization forbids access")
+			return reason == "The 'acme' organization forbids access."
 		}
 	}
 
 	@Test("a name GitHub does not know fails as such")
-	func ownerNotFound() {
+	func ownerNotFound() throws {
 		let json = #"""
-		{"data": {"viewer": {"login": "someone"}, "owner": null, "organization": null},
+		{"data": {"viewer": {"login": "someone"}, "owner": null},
 		 "errors": [{"type": "NOT_FOUND", "path": ["owner"], "message": "Could not resolve to a RepositoryOwner."}]}
 		"""#
+		let result = try found(json)
+		#expect(result.owner == nil)
 		#expect {
-			try verify(json, owner: "acme-typo")
+			try GitHubOwnerTokenVerification(found: result, owner: "acme-typo")
 		} throws: { error in
 			guard case let GitHostingError.ownerNotFound(owner) = error else { return false }
 			return owner == "acme-typo"
@@ -60,7 +61,7 @@ struct GitHubOwnerTokenResponseTests {
 	@Test("a token that resolves to no user fails as unauthenticated")
 	func noViewer() {
 		#expect {
-			try verify(#"{"data": {"viewer": null, "owner": null}}"#)
+			try found(#"{"data": {"viewer": null, "owner": null}}"#)
 		} throws: { error in
 			guard case GitHostingError.unauthenticated = error else { return false }
 			return true

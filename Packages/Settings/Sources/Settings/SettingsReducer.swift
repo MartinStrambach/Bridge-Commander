@@ -541,11 +541,14 @@ public struct SettingsReducer {
 
 	/// Leads with the owner the check found, since that is what the row is about; whose token it is
 	/// comes second, as for an organization's fine-grained token it is still a person.
-	static func ownerTokenVerifiedMessage(_ verification: GitHubOwnerTokenVerification) -> String {
+	/// `isFineGrained`: only such a token has repositories selected for it, the usual reason one
+	/// that passes still fails on a row.
+	static func ownerTokenVerifiedMessage(_ verification: GitHubOwnerTokenVerification, isFineGrained: Bool) -> String {
 		let found = verification.isOrganization
 			? "Found the \(verification.owner) organization, and it accepts the token."
 			: "Found the GitHub user \(verification.owner)."
-		return "\(found) The token belongs to \(verification.login). A repository not selected for it still fails on its row."
+		let selection = isFineGrained ? " A repository not selected for it still fails on its row." : ""
+		return "\(found) The token belongs to \(verification.login).\(selection)"
 	}
 
 	static func ownerTokenTestFailureMessage(for error: Error, owner: String) -> String {
@@ -721,7 +724,10 @@ public struct SettingsReducer {
 					let outcome: TokenTestState
 					do {
 						let verification = try await tokenVerification.verifyGitHubOwnerToken(token, owner)
-						outcome = .verified(message: Self.ownerTokenVerifiedMessage(verification))
+						outcome = .verified(message: Self.ownerTokenVerifiedMessage(
+							verification,
+							isFineGrained: token.hasPrefix("github_pat_")
+						))
 					}
 					catch {
 						outcome = .failure(message: Self.ownerTokenTestFailureMessage(for: error, owner: owner))
