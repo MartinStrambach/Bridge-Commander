@@ -86,9 +86,20 @@ struct GraphQLErrorsTests {
 
 	@Test("only a fine-grained GitHub token gets the hint about its single owner")
 	func fineGrainedTokenHint() throws {
-		let hint = try #require(GitHubService.fineGrainedTokenHint(token: "github_pat_11ABC", owner: "acme"))
+		let hint = try #require(
+			GitHubService.fineGrainedTokenHint(token: "github_pat_11ABC", owner: "acme", isOwnersOwnToken: false)
+		)
 		#expect(hint.contains("add a token created for acme in Settings"))
-		#expect(GitHubService.fineGrainedTokenHint(token: "ghp_abc", owner: "acme") == nil)
-		#expect(GitHubService.fineGrainedTokenHint(token: "gho_abc", owner: "acme") == nil)
+		#expect(GitHubService.fineGrainedTokenHint(token: "ghp_abc", owner: "acme", isOwnersOwnToken: false) == nil)
+		#expect(GitHubService.fineGrainedTokenHint(token: "gho_abc", owner: "acme", isOwnersOwnToken: true) == nil)
+	}
+
+	@Test("an owner's own fine-grained token is pointed at its repository selection, not told to add a token")
+	func ownersOwnTokenHint() throws {
+		let hint = try #require(
+			GitHubService.fineGrainedTokenHint(token: "github_pat_11ABC", owner: "acme", isOwnersOwnToken: true)
+		)
+		#expect(hint.contains("check that this repository is selected for the token acme has"))
+		#expect(!hint.contains("add a token"))
 	}
 }

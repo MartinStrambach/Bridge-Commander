@@ -77,6 +77,35 @@ struct GitHubOwnerTokenSettingsTests {
 		}
 	}
 
+	@Test("an owner is acted on as listed: another case reaches its verdict, an unlisted owner is not added back")
+	func ownerActionsUseListedOwner() async {
+		var state = SettingsReducer.State()
+		state.$githubOwnerTokens.withLock { $0 = GitHubOwnerTokens(tokens: ["Acme": "old"]) }
+		state.githubOwnerTokenTests = ["Acme": .success(username: "someone")]
+		let store = TestStore(initialState: state) {
+			SettingsReducer()
+		}
+
+		await store.send(.setGitHubOwnerToken(owner: "ACME", token: "new")) {
+			$0.$githubOwnerTokens.withLock { $0 = GitHubOwnerTokens(tokens: ["Acme": "new"]) }
+			$0.githubOwnerTokenTests = [:]
+		}
+		await store.send(.removeGitHubOwner("acme")) {
+			$0.$githubOwnerTokens.withLock { $0 = GitHubOwnerTokens() }
+		}
+		// A late write from the removed row's field changes nothing.
+		await store.send(.setGitHubOwnerToken(owner: "Acme", token: "new"))
+		await store.send(.testGitHubOwnerTokenButtonTapped(owner: "Acme"))
+	}
+
+	@Test("the import confirmation says owner tokens replace only those owners'")
+	func importAlertWording() {
+		var backup = SettingsBackup()
+		backup.githubOwnerTokens = ["acme": "github_pat_org"]
+		let alert = SettingsReducer.importSettingsAlert(backup, skippedRepositoryPaths: [], current: SettingsReducer.State())
+		#expect(String(state: alert.message ?? TextState("")).contains("replace only those owners' tokens"))
+	}
+
 	@Test("a verdict still in flight does not land under an edited token")
 	func editCancelsRunningTest() async {
 		let state = SettingsReducer.State()

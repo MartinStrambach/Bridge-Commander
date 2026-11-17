@@ -345,7 +345,9 @@ public struct SettingsReducer {
 	) -> AlertState<Action.Alert> {
 		var message = "Settings in the file replace your current ones. Its repositories, repository groups and terminal profiles are added to yours."
 		if backup.includesTokens {
-			message += " Its access tokens replace yours."
+			message += backup.githubOwnerTokens == nil
+				? " Its access tokens replace yours."
+				: " Its access tokens replace yours; GitHub tokens for other owners replace only those owners' tokens."
 		}
 		message += " Terminal settings apply to tabs opened afterwards."
 		let commands = backup.commandsChanged(from: state)
@@ -663,17 +665,30 @@ public struct SettingsReducer {
 				state.$githubOwnerTokens.withLock { $0.add(owner) }
 				return .none
 
+			// Owner actions act on the owner as listed: the verdict and its cancel id are keyed by
+			// that spelling, while the tokens match owners regardless of case.
 			case let .setGitHubOwnerToken(owner, token):
+				// An owner that is not listed is not added back: a field torn down with its row
+				// can still write after the owner was removed.
+				guard let owner = state.githubOwnerTokens.listedOwner(owner) else {
+					return .none
+				}
 				state.$githubOwnerTokens.withLock { $0.setToken(token, forOwner: owner) }
 				state.githubOwnerTokenTests[owner] = nil
 				return .cancel(id: CancelID.gitHubOwnerTest(owner: owner))
 
 			case let .removeGitHubOwner(owner):
+				guard let owner = state.githubOwnerTokens.listedOwner(owner) else {
+					return .none
+				}
 				state.$githubOwnerTokens.withLock { $0.remove(owner) }
 				state.githubOwnerTokenTests[owner] = nil
 				return .cancel(id: CancelID.gitHubOwnerTest(owner: owner))
 
 			case let .testGitHubOwnerTokenButtonTapped(owner):
+				guard let owner = state.githubOwnerTokens.listedOwner(owner) else {
+					return .none
+				}
 				state.githubOwnerTokenTests[owner] = .testing
 				let token = state.githubOwnerTokens.token(forOwner: owner) ?? ""
 				return .run { [tokenVerification] send in

@@ -30,7 +30,12 @@ public nonisolated struct GitHubOwnerTokens: Equatable, Sendable {
 	/// The owner's token as stored, `""` for a listed owner without one yet, nil for an owner
 	/// that is not listed.
 	public func token(forOwner owner: String) -> String? {
-		storedOwner(owner).flatMap { tokens[$0] }
+		listedOwner(owner).flatMap { tokens[$0] }
+	}
+
+	/// The owner as it is listed, whatever case it is asked for in; nil when it is not listed.
+	public func listedOwner(_ owner: String) -> String? {
+		tokens.keys.first { $0.caseInsensitiveCompare(owner) == .orderedSame }
 	}
 
 	/// The token for a repository of `owner`: the owner's own when it has one, else `main`.
@@ -44,23 +49,24 @@ public nonisolated struct GitHubOwnerTokens: Equatable, Sendable {
 	/// Lists the owner without a token. Does nothing for an owner already listed, or for text
 	/// that names none.
 	public mutating func add(_ owner: String) {
-		guard let owner = Self.normalizedOwner(owner), storedOwner(owner) == nil else {
+		guard let owner = Self.normalizedOwner(owner), listedOwner(owner) == nil else {
 			return
 		}
 		tokens[owner] = ""
 	}
 
-	/// Sets the owner's token, listing the owner first if needed.
+	/// Sets the owner's token, listing the owner first if needed (an import adds owners this way;
+	/// Settings edits only listed ones).
 	public mutating func setToken(_ token: String, forOwner owner: String) {
 		guard let owner = Self.normalizedOwner(owner) else {
 			return
 		}
 		// Trimmed like the main token: a pasted newline corrupts the Bearer header.
-		tokens[storedOwner(owner) ?? owner] = token.trimmingCharacters(in: .whitespacesAndNewlines)
+		tokens[listedOwner(owner) ?? owner] = token.trimmingCharacters(in: .whitespacesAndNewlines)
 	}
 
 	public mutating func remove(_ owner: String) {
-		if let stored = storedOwner(owner) {
+		if let stored = listedOwner(owner) {
 			tokens[stored] = nil
 		}
 	}
@@ -76,11 +82,6 @@ public nonisolated struct GitHubOwnerTokens: Equatable, Sendable {
 		// A login is letters, digits and hyphens; anything else was not an owner.
 		let isLogin = !owner.isEmpty && owner.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
 		return isLogin ? owner : nil
-	}
-
-	/// The key the owner is stored under, whatever case it is asked for in.
-	private func storedOwner(_ owner: String) -> String? {
-		tokens.keys.first { $0.caseInsensitiveCompare(owner) == .orderedSame }
 	}
 }
 
