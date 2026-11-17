@@ -111,7 +111,7 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 
 }
 
-/// Hosts the terminal panes and sizes only the visible one to its bounds.
+/// Hosts the terminal panes and sizes only the visible one to its bounds, less a horizontal margin.
 ///
 /// Every pane used to be pinned to the container's edges, so any change of the container's width
 /// resized all of them — and the container's width depends on the repository on screen, whose
@@ -120,10 +120,19 @@ public struct TerminalContainerRepresentable: NSViewRepresentable {
 /// README), so switching between two repositories' tabs garbled every terminal in the app a little
 /// more each time. A hidden pane keeps its size until it is shown, which for a repository's own
 /// tabs is the size they will be shown at, and saves a reflow and a SIGWINCH per hidden pane.
+///
+/// The margin keeps text off the panel's edges. SwiftTerm used to leave a scroller's width free at
+/// the right; since 1.99 it reserves none while its own `scrollerStyle` is `.overlay`, its default,
+/// so the columns would run to the edge. The margin is painted in the visible pane's background
+/// color, so it reads as part of it.
 final class TerminalPaneContainerView: NSView {
+	/// Space left free on each side of the visible pane, in points.
+	static let horizontalInset: CGFloat = 8
+
 	override init(frame frameRect: NSRect) {
 		super.init(frame: frameRect)
 		autoresizesSubviews = false
+		wantsLayer = true
 	}
 
 	@available(*, unavailable)
@@ -131,14 +140,36 @@ final class TerminalPaneContainerView: NSView {
 		fatalError("init(coder:) has not been implemented")
 	}
 
+	/// The frame the visible pane takes: the bounds less the horizontal margin.
+	var paneFrame: NSRect {
+		bounds.insetBy(dx: min(Self.horizontalInset, bounds.width / 2), dy: 0)
+	}
+
 	override func layout() {
 		super.layout()
-		for pane in subviews where pane.frame != bounds {
+		let paneFrame = paneFrame
+		for pane in subviews where pane.frame != paneFrame {
 			// A pane never laid out yet is sized even while hidden, so its shell does not start
 			// at SwiftTerm's default size and reflow when first shown.
 			if !pane.isHidden || pane.frame.isEmpty {
-				pane.frame = bounds
+				pane.frame = paneFrame
 			}
+		}
+		paintMargin()
+	}
+
+	override func viewDidChangeEffectiveAppearance() {
+		super.viewDidChangeEffectiveAppearance()
+		paintMargin()
+	}
+
+	/// Fills the container, and with it the margin, with the visible pane's background. Each pane
+	/// keeps the colors it was created with, so the color follows whichever pane is shown; showing
+	/// another pane lays the container out again.
+	private func paintMargin() {
+		let visiblePane = subviews.first { !$0.isHidden } as? TerminalView
+		effectiveAppearance.performAsCurrentDrawingAppearance {
+			layer?.backgroundColor = visiblePane?.nativeBackgroundColor.cgColor
 		}
 	}
 }
