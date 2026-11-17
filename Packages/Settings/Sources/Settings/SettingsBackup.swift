@@ -1,4 +1,5 @@
 import Foundation
+import GitHosting
 import Sharing
 import ToolsIntegration
 
@@ -24,6 +25,8 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 	public var youtrackAuthToken: String?
 	public var githubToken: String?
 	public var gitlabToken: String?
+	/// `GitHubOwnerTokens.tokens`: GitHub owner to the token used for its repositories.
+	public var githubOwnerTokens: [String: String]?
 
 	// General
 	public var uiFontSize: Double?
@@ -86,6 +89,10 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 			youtrackAuthToken = state.youtrackAuthToken
 			githubToken = state.githubToken
 			gitlabToken = state.gitlabToken
+			// Only with tokens: an owner listed without one says nothing worth restoring.
+			if state.githubOwnerTokens.hasTokens {
+				githubOwnerTokens = state.githubOwnerTokens.tokens.filter { !$0.value.isEmpty }
+			}
 		}
 
 		uiFontSize = state.uiFontSize
@@ -126,7 +133,7 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 
 	/// Whether the file carries any access token, so importing it replaces the user's.
 	public var includesTokens: Bool {
-		youtrackAuthToken != nil || githubToken != nil || gitlabToken != nil
+		youtrackAuthToken != nil || githubToken != nil || gitlabToken != nil || githubOwnerTokens != nil
 	}
 
 	/// Writes every setting the file names into `state`.
@@ -144,6 +151,15 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 		if let youtrackAuthToken { state.$youtrackAuthToken.withLock { $0 = token(youtrackAuthToken) } }
 		if let githubToken { state.$githubToken.withLock { $0 = token(githubToken) } }
 		if let gitlabToken { state.$gitlabToken.withLock { $0 = token(gitlabToken) } }
+		// Merged like the other collections: an owner in the file replaces the same owner's token
+		// and leaves the others alone.
+		if let githubOwnerTokens {
+			state.$githubOwnerTokens.withLock { tokens in
+				for (owner, value) in githubOwnerTokens.sorted(by: { $0.key < $1.key }) {
+					tokens.setToken(value, forOwner: owner)
+				}
+			}
+		}
 
 		if let uiFontSize { state.$uiFontSize.withLock { $0 = UIFontSize.clamped(uiFontSize) } }
 		set(\.$periodicRefreshInterval, periodicRefreshInterval.flatMap(PeriodicRefreshInterval.init(rawValue:)), in: &state)

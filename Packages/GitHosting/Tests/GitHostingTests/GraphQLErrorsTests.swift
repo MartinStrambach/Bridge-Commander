@@ -87,7 +87,7 @@ struct GraphQLErrorsTests {
 	@Test("only a fine-grained GitHub token gets the hint about its single owner")
 	func fineGrainedTokenHint() throws {
 		let hint = try #require(GitHubService.fineGrainedTokenHint(token: "github_pat_11ABC", owner: "acme"))
-		#expect(hint.contains("create one for acme"))
+		#expect(hint.contains("add a token created for acme in Settings"))
 		#expect(GitHubService.fineGrainedTokenHint(token: "ghp_abc", owner: "acme") == nil)
 		#expect(GitHubService.fineGrainedTokenHint(token: "gho_abc", owner: "acme") == nil)
 	}

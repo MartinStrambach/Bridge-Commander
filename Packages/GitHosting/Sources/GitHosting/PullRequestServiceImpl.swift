@@ -55,18 +55,27 @@ extension PullRequestClient: DependencyKey {
 		return false
 	}
 
+	/// The token for a GitHub repository of `owner`: the owner's own when Settings has one, else
+	/// the main token.
+	private static func gitHubToken(forOwner owner: String) -> String {
+		@Shared(.githubToken)
+		var token = ""
+		@Shared(.githubOwnerTokens)
+		var ownerTokens = GitHubOwnerTokens()
+		return ownerTokens.token(forRepositoryOf: owner, main: token)
+			.trimmingCharacters(in: .whitespacesAndNewlines)
+	}
+
 	private static func fetchDetails(remote: GitRemote, branch: String) async throws -> PullRequestDetails? {
 		// Tokens saved before Settings started trimming may still carry pasted
 		// whitespace; a dirty Bearer header fails every request with a silent 401.
 		switch remote.host.lowercased() {
 		case "github.com":
-			@Shared(.githubToken)
-			var token = ""
 			return try await GitHubService.fetchPullRequest(
 				owner: remote.owner,
 				repo: remote.repo,
 				branch: branch,
-				token: token.trimmingCharacters(in: .whitespacesAndNewlines)
+				token: gitHubToken(forOwner: remote.owner)
 			)
 
 		case "gitlab.com":
@@ -86,12 +95,10 @@ extension PullRequestClient: DependencyKey {
 	private static func listOpen(remote: GitRemote) async throws -> [OpenPullRequest] {
 		switch remote.host.lowercased() {
 		case "github.com":
-			@Shared(.githubToken)
-			var token = ""
 			return try await GitHubService.fetchOpenPullRequests(
 				owner: remote.owner,
 				repo: remote.repo,
-				token: token.trimmingCharacters(in: .whitespacesAndNewlines)
+				token: gitHubToken(forOwner: remote.owner)
 			)
 
 		case "gitlab.com":
@@ -110,13 +117,11 @@ extension PullRequestClient: DependencyKey {
 	private static func searchOpen(remote: GitRemote, query: OpenPullRequestQuery) async throws -> [OpenPullRequest] {
 		switch remote.host.lowercased() {
 		case "github.com":
-			@Shared(.githubToken)
-			var token = ""
 			return try await GitHubService.searchOpenPullRequests(
 				owner: remote.owner,
 				repo: remote.repo,
 				query: query,
-				token: token.trimmingCharacters(in: .whitespacesAndNewlines)
+				token: gitHubToken(forOwner: remote.owner)
 			)
 
 		case "gitlab.com":

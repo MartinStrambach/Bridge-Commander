@@ -9,3 +9,10 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 		appStorage("gitlabToken")
 	}
 }
+
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<GitHubOwnerTokens> {
+	/// GitHub tokens for owners `githubToken` does not reach; see `GitHubOwnerTokens`.
+	static var githubOwnerTokens: Self {
+		appStorage("githubOwnerTokens")
+	}
+}

@@ -173,8 +173,8 @@ public nonisolated enum GitHubService {
 			return nil
 		}
 		return "Fine-grained tokens only reach the repositories selected for them, under the one owner they were "
-			+ "created for: create one for \(owner) with read access to pull requests, or use a classic token "
-			+ "with the repo scope."
+			+ "created for: add a token created for \(owner) in Settings ▸ Accounts, or use a classic token with "
+			+ "the repo scope."
 	}
 }
 

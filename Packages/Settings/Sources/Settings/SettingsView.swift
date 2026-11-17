@@ -66,6 +66,10 @@ public struct SettingsView<Updates: View>: View {
 	@State
 	private var fileTypeChangingApplication: String?
 
+	/// The owner being typed into the GitHub card, before "Add Owner" lists it.
+	@State
+	private var newGitHubOwner = ""
+
 	/// Groups start collapsed each time Settings opens, so a long list of groups stays scannable.
 	@State
 	private var expandedGroupIds: Set<String> = []
@@ -429,7 +433,7 @@ public struct SettingsView<Updates: View>: View {
 	private var gitHubAuthenticationSection: some View {
 		SettingsSection("GitHub") {
 			Text(
-				"Enter a GitHub personal access token. Fine-grained: grant the repository permission \"Pull requests: Read-only\" (Metadata is added automatically). Classic: `repo` scope. Used to detect open PRs for the current branch."
+				"Enter a GitHub personal access token. Fine-grained: grant the repository permission \"Pull requests: Read-only\" (Metadata is added automatically). Classic: `repo` scope. Used to detect open PRs for the current branch, for every owner without a token of its own below."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
@@ -453,6 +457,83 @@ public struct SettingsView<Updates: View>: View {
 			}
 
 			tokenTestResult(store.githubTokenTest)
+
+			Divider()
+				.padding(.vertical, 4)
+
+			Text("Tokens for Other Owners")
+				.scaledFont(.subheadline)
+				.fontWeight(.semibold)
+			Text(
+				"A fine-grained token only reaches the repositories of the one owner it was created for. Add an organization or user the token above cannot reach, with a token created for it; that owner's repositories then use it instead."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+
+			ForEach(store.githubOwnerTokens.owners, id: \.self) { owner in
+				gitHubOwnerTokenRow(owner)
+			}
+
+			HStack(spacing: 8) {
+				TextField("Owner, e.g. my-organization", text: $newGitHubOwner)
+					.textFieldStyle(.roundedBorder)
+					.scaledFont(.body)
+					.frame(maxWidth: 260)
+					.onSubmit(addGitHubOwner)
+
+				Button(action: addGitHubOwner) {
+					Label("Add Owner", systemImage: "plus")
+				}
+				.buttonStyle(.scaledBordered)
+				.disabled(GitHubOwnerTokens.normalizedOwner(newGitHubOwner) == nil)
+			}
+		}
+	}
+
+	private func addGitHubOwner() {
+		guard GitHubOwnerTokens.normalizedOwner(newGitHubOwner) != nil else {
+			return
+		}
+		store.send(.addGitHubOwner(newGitHubOwner))
+		newGitHubOwner = ""
+	}
+
+	private func gitHubOwnerTokenRow(_ owner: String) -> some View {
+		VStack(alignment: .leading, spacing: 6) {
+			HStack(spacing: 8) {
+				Text(owner)
+					.scaledFont(.caption, design: .monospaced)
+					.lineLimit(1)
+					.truncationMode(.middle)
+					.frame(width: 140, alignment: .leading)
+					.help(owner)
+
+				SecureField(
+					"Token for \(owner)",
+					text: Binding(
+						get: { store.githubOwnerTokens.token(forOwner: owner) ?? "" },
+						set: { store.send(.setGitHubOwnerToken(owner: owner, token: $0)) }
+					)
+				)
+				.textFieldStyle(.roundedBorder)
+				.scaledFont(.body, design: .monospaced)
+
+				Button(action: { store.send(.testGitHubOwnerTokenButtonTapped(owner: owner)) }) {
+					Label("Test", systemImage: "checkmark.shield")
+				}
+				.buttonStyle(.scaledBordered)
+				.disabled(store.githubOwnerTokenTests[owner] == .testing)
+
+				Button {
+					store.send(.removeGitHubOwner(owner))
+				} label: {
+					Image(systemName: "minus.circle")
+				}
+				.buttonStyle(.borderless)
+				.help("Remove \(owner) and its token; its repositories use the token above again")
+			}
+
+			tokenTestResult(store.githubOwnerTokenTests[owner] ?? .idle)
 		}
 	}
 
