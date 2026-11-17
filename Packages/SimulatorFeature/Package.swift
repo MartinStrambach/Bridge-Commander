@@ -23,7 +23,13 @@ let package = Package(
 			]
 		),
 		.target(name: "ObjCExceptionCatching"),
-		.testTarget(name: "SimulatorFeatureTests", dependencies: ["SimulatorFeature"]),
+		.testTarget(
+			name: "SimulatorFeatureTests",
+			dependencies: [
+				"SimulatorFeature",
+				.product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+			]
+		),
 	]
 )
 
