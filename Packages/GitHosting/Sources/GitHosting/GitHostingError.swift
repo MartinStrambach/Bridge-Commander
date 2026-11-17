@@ -14,4 +14,7 @@ public nonisolated enum GitHostingError: Error {
 	/// does: the host's own message, or what the token's type says. It is shown to
 	/// the user and written to the activity log.
 	case unauthenticated(reason: String?)
+	/// GitHub has no user or organization by this name: an owner typed into Settings that is
+	/// misspelled or is not the first part of the repository's address.
+	case ownerNotFound(owner: String)
 }

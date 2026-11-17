@@ -45,7 +45,10 @@ struct GitHubOwnerTokensTests {
 
 	@Test("an owner is read from a login, a mention, a repository or a link")
 	func normalizedOwner() {
-		for text in ["acme", " acme ", "@acme", "acme/app", "github.com/acme", "https://github.com/acme/app/pulls"] {
+		for text in [
+			"acme", " acme ", "@acme", "acme/app", "github.com/acme", "https://github.com/acme/app/pulls",
+			"git@github.com:acme/app.git", "ssh://git@github.com/acme/app.git",
+		] {
 			#expect(GitHubOwnerTokens.normalizedOwner(text) == "acme")
 		}
 		#expect(GitHubOwnerTokens.normalizedOwner("Acme-Org1") == "Acme-Org1")
