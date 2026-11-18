@@ -196,6 +196,33 @@ struct RepositoryListReducer {
 			case dismiss
 			case closeLastTabConfirmed(sessionId: UUID)
 			case quitAppConfirmed
+			case forcePushConfirmed(repositoryPath: String, rejected: GitRejectedPush)
+		}
+	}
+
+	/// The terminal toolbar's "Push Failed". A push git refused as non-fast-forward (the branch
+	/// was rebased or amended) offers a force push with lease, as the Git Actions menu's does
+	/// (`GitActionsMenuReducer.pushFailedAlert`).
+	static func pushFailedAlert(error: GitError, repositoryPath: String) -> AlertState<Action.Alert> {
+		guard let rejected = error.nonFastForwardRejection else {
+			return AlertState {
+				TextState("Push Failed")
+			} message: {
+				TextState(error.localizedDescription)
+			}
+		}
+
+		return AlertState {
+			TextState("Push Failed")
+		} actions: {
+			ButtonState(role: .destructive, action: .forcePushConfirmed(repositoryPath: repositoryPath, rejected: rejected)) {
+				TextState("Force Push")
+			}
+			ButtonState(role: .cancel, action: .dismiss) {
+				TextState("Cancel")
+			}
+		} message: {
+			TextState(error.localizedDescription + "\n\n" + PushButtonReducer.forcePushExplanation(for: rejected))
 		}
 	}
 
@@ -1172,19 +1199,12 @@ struct RepositoryListReducer {
 				}
 				return refreshRow(for: repositoryPath, in: state)
 
-			case let .terminalLayout(.pushCompleted(_, error)):
+			case let .terminalLayout(.pushCompleted(path, _, error)):
 				// The toolbar's Push button is the one git operation in the panel that doesn't go
 				// through the header's actions menu, so it needs the same completion routing: the
 				// unpushed count it renders comes from the row, and nothing else re-reads it.
 				if let error {
-					state.alert = AlertState {
-						TextState("Push Failed")
-					} message: {
-						TextState(error.localizedDescription)
-					}
-					return .none
-				}
-				guard let path = state.terminalLayout?.activeRepositoryPath else {
+					state.alert = Self.pushFailedAlert(error: error, repositoryPath: path)
 					return .none
 				}
 				return refreshRow(for: path, in: state)
@@ -1305,6 +1325,9 @@ struct RepositoryListReducer {
 
 			case let .alert(.presented(.closeLastTabConfirmed(sessionId))):
 				return .send(.terminalLayout(.killTab(sessionId: sessionId)))
+
+			case let .alert(.presented(.forcePushConfirmed(repositoryPath, rejected))):
+				return .send(.terminalLayout(.forcePushRequested(repositoryPath: repositoryPath, rejected: rejected)))
 
 			case .alert(.presented(.quitAppConfirmed)):
 				// The sessions are hung up by `killSessions(notIn:)` on the way out; terminate
