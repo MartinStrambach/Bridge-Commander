@@ -333,6 +333,7 @@ struct RepositoryListRefreshTests {
 		store.exhaustivity = .on
 
 		await store.send(.terminalLayout(.pushCompleted(
+			repositoryPath: "/repos/alpha",
 			result: GitPushHelper.PushResult(isUpToDate: false, message: "pushed 2 commits"),
 			error: nil
 		)))
@@ -362,13 +363,53 @@ struct RepositoryListRefreshTests {
 		// A rejected push leaves the local commits — and the count rendering them — exactly
 		// as they were, so it reports the failure rather than re-running the status fetch.
 		// Exhaustive: a row refresh reaching the queue fails here.
-		await store.send(.terminalLayout(.pushCompleted(result: nil, error: error))) {
+		await store.send(.terminalLayout(.pushCompleted(repositoryPath: "/repos/alpha", result: nil, error: error))) {
 			$0.alert = AlertState {
 				TextState("Push Failed")
 			} message: {
 				TextState(error.localizedDescription)
 			}
 		}
+		await store.finish()
+	}
+
+	@Test("a toolbar push rejected as non-fast-forward offers Force Push, which pushes that repo with lease")
+	func toolbarRejectedPushOffersForcePush() async {
+		let store = makeStore(terminalActiveRepositoryPath: "/repos/alpha")
+		store.dependencies[GitClient.self].push = { path, mode in
+			#expect(path == "/repos/alpha")
+			#expect(mode == .forceWithLease(GitRejectedPush(localBranch: "feature", remoteBranch: "feature")))
+			return GitPushHelper.PushResult(isUpToDate: false, message: "forced update")
+		}
+
+		store.exhaustivity = .off
+		await store.send(.didScanGroup(rootPath: "/repos/alpha", rows: [
+			mainRepo("/repos/alpha", name: "alpha"),
+		]))
+		store.exhaustivity = .on
+
+		let error = GitError.pushFailed(" ! [rejected]        feature -> feature (non-fast-forward)")
+		await store.send(.terminalLayout(.pushCompleted(repositoryPath: "/repos/alpha", result: nil, error: error))) {
+			$0.alert = RepositoryListReducer.pushFailedAlert(error: error, repositoryPath: "/repos/alpha")
+		}
+
+		await store.send(.alert(.presented(.forcePushConfirmed(
+			repositoryPath: "/repos/alpha",
+			rejected: GitRejectedPush(localBranch: "feature", remoteBranch: "feature")
+		)))) {
+			$0.alert = nil
+		}
+		await store.receive(\.terminalLayout.forcePushRequested) {
+			$0.terminalLayout?.isPushing = true
+		}
+		await store.receive(\.terminalLayout.pushCompleted) {
+			$0.terminalLayout?.isPushing = false
+		}
+		await store.receive { isHeaderRefresh($0, groupId: "/repos/alpha") } assert: {
+			$0.repositoryGroupsForTesting[id: "/repos/alpha"]?.header.isRefreshingStatus = true
+		}
+
+		store.exhaustivity = .off
 		await store.finish()
 	}
 

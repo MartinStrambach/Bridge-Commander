@@ -97,7 +97,7 @@ struct TerminalLayoutReducerTests {
 			TerminalLayoutReducer()
 		}
 
-		await store.send(.pushCompleted(result: nil, error: failed ? .pushFailed("rejected") : nil)) {
+		await store.send(.pushCompleted(repositoryPath: "/repos/alpha", result: nil, error: failed ? .pushFailed("rejected") : nil)) {
 			$0.isPushing = false
 		}
 	}

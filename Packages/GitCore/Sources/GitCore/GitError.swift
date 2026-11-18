@@ -73,4 +73,52 @@ public enum GitError: LocalizedError, Equatable {
 			"Failed to create branch: \(message)"
 		}
 	}
+
+	/// The branch git refused to push because the remote branch has commits the local one
+	/// doesn't — after a rebase or amend, its pre-rewrite commits. Git marks the refused ref
+	/// `! [rejected]        <local> -> <remote> (non-fast-forward)`.
+	///
+	/// Nil unless that is the push's only refused ref: a force push is offered for exactly the
+	/// branch named, and with `push.default=matching` a push can refuse several. Also nil for
+	/// `(fetch first)`, where the remote has commits we have never fetched: a force push with
+	/// lease would refuse those anyway.
+	public var nonFastForwardRejection: GitRejectedPush? {
+		guard case let .pushFailed(message) = self else {
+			return nil
+		}
+
+		let rejected = message
+			.split(whereSeparator: \.isNewline)
+			.map { $0.trimmingCharacters(in: .whitespaces) }
+			.filter { $0.hasPrefix("! [rejected]") }
+		guard rejected.count == 1, let line = rejected.first, line.hasSuffix(" (non-fast-forward)") else {
+			return nil
+		}
+
+		let refs = line
+			.dropFirst("! [rejected]".count)
+			.dropLast(" (non-fast-forward)".count)
+			.trimmingCharacters(in: .whitespaces)
+			.components(separatedBy: " -> ")
+		guard refs.count == 2 else {
+			return nil
+		}
+
+		return GitRejectedPush(localBranch: Self.shortBranchName(refs[0]), remoteBranch: Self.shortBranchName(refs[1]))
+	}
+
+	private static func shortBranchName(_ ref: String) -> String {
+		ref.hasPrefix("refs/heads/") ? String(ref.dropFirst("refs/heads/".count)) : ref
+	}
+}
+
+/// A local branch git refused to push onto its remote branch (`GitError.nonFastForwardRejection`).
+public struct GitRejectedPush: Equatable, Sendable {
+	public let localBranch: String
+	public let remoteBranch: String
+
+	public init(localBranch: String, remoteBranch: String) {
+		self.localBranch = localBranch
+		self.remoteBranch = remoteBranch
+	}
 }

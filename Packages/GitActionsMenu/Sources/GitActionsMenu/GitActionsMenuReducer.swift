@@ -29,6 +29,8 @@ public struct GitActionsMenuReducer {
 		var abortMergeButton: AbortMergeButtonReducer.State
 		@Presents
 		var alert: ScrollableAlertReducer.State?
+		/// The branch a "Push Failed" alert offers to force-push; its Force Push button pushes this.
+		var forcePushOffer: GitRejectedPush?
 
 		fileprivate var isLoaded = false
 
@@ -180,11 +182,8 @@ public struct GitActionsMenuReducer {
 
 			case let .pushButton(.pushCompleted(result, error)):
 				if let error {
-					state.alert = ScrollableAlertReducer.State(
-						title: "Push Failed",
-						message: error.localizedDescription,
-						isError: true
-					)
+					state.alert = Self.pushFailedAlert(for: error)
+					state.forcePushOffer = error.nonFastForwardRejection
 				}
 				else if let result {
 					let message = result.isUpToDate
@@ -364,6 +363,17 @@ public struct GitActionsMenuReducer {
 				// the status fetch and recomputes the discard-button visibility flags.
 				return .none
 
+			case .alert(.presented(.actionTapped)):
+				// The only alert here with an action is "Push Failed" offering a force push
+				// (`pushFailedAlert`). Another alert that gets one has to be told apart here.
+				state.alert = nil
+				guard let rejected = state.forcePushOffer else {
+					return .none
+				}
+
+				state.forcePushOffer = nil
+				return .send(.pushButton(.forcePushTapped(rejected)))
+
 			case .onAppear:
 				guard !state.isLoaded else {
 					return .none
@@ -404,6 +414,21 @@ public struct GitActionsMenuReducer {
 	}
 
 	public init() {}
+
+	/// A push git refused as non-fast-forward (the branch was rebased or amended) offers a force
+	/// push with lease; any other failure only reports git's output.
+	static func pushFailedAlert(for error: GitError) -> ScrollableAlertReducer.State {
+		guard let rejected = error.nonFastForwardRejection else {
+			return ScrollableAlertReducer.State(title: "Push Failed", message: error.localizedDescription, isError: true)
+		}
+
+		return ScrollableAlertReducer.State(
+			title: "Push Failed",
+			message: error.localizedDescription + "\n\n" + PushButtonReducer.forcePushExplanation(for: rejected),
+			isError: true,
+			actionTitle: "Force Push"
+		)
+	}
 
 	/// Merge status deliberately isn't probed here — see `didCheckGitStatus`. Every action that
 	/// returns this effect also routes up to `RepositoryRowReducer.refresh`, whose status fetch

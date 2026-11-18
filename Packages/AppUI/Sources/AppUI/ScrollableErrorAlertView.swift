@@ -10,16 +10,22 @@ public struct ScrollableAlertReducer: Sendable {
 		public let title: String
 		public let message: String
 		public let isError: Bool
+		/// Title of an extra button beside OK, offering a way out of what the alert reports.
+		/// Tapping it sends `actionTapped`, which the presenting reducer handles (and dismisses
+		/// the alert); with no title there is only OK.
+		public let actionTitle: String?
 
-		public init(title: String, message: String, isError: Bool) {
+		public init(title: String, message: String, isError: Bool, actionTitle: String? = nil) {
 			self.title = title
 			self.message = message
 			self.isError = isError
+			self.actionTitle = actionTitle
 		}
 	}
 
 	public enum Action: Equatable {
 		case dismissTapped
+		case actionTapped
 	}
 
 	@Dependency(\.dismiss) var dismiss
@@ -31,6 +37,8 @@ public struct ScrollableAlertReducer: Sendable {
 			switch action {
 			case .dismissTapped:
 				.run { _ in await dismiss() }
+			case .actionTapped:
+				.none
 			}
 		}
 	}
@@ -73,6 +81,12 @@ public struct ScrollableAlertView: View {
 
 			HStack {
 				Spacer()
+				if let actionTitle = store.actionTitle {
+					Button(actionTitle) {
+						store.send(.actionTapped)
+					}
+					.buttonStyle(.scaledAutomatic)
+				}
 				Button("OK") {
 					store.send(.dismissTapped)
 				}
@@ -98,6 +112,25 @@ public struct ScrollableAlertView: View {
 				Aborting
 				""",
 				isError: true
+			)
+		) {
+			ScrollableAlertReducer()
+		}
+	)
+}
+
+#Preview("Error with action") {
+	ScrollableAlertView(
+		store: Store(
+			initialState: ScrollableAlertReducer.State(
+				title: "Push Failed",
+				message: """
+				Failed to push: To github.com:owner/repo.git
+				 ! [rejected]        feature -> feature (non-fast-forward)
+				error: failed to push some refs to 'github.com:owner/repo.git'
+				""",
+				isError: true,
+				actionTitle: "Force Push"
 			)
 		) {
 			ScrollableAlertReducer()

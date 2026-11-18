@@ -102,7 +102,10 @@ struct TerminalLayoutReducer {
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case gitGraphButtonTapped(repositoryPath: String, repositoryName: String)
 		case pushButtonTapped(repositoryPath: String)
-		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
+		/// From the "Push Failed" alert, when git refused the toolbar's push as non-fast-forward.
+		case forcePushRequested(repositoryPath: String, rejected: GitRejectedPush)
+		/// Names the repository pushed, which the panel may have switched away from meanwhile.
+		case pushCompleted(repositoryPath: String, result: GitPushHelper.PushResult?, error: GitError?)
 		case finishMergeButtonTapped(repositoryPath: String)
 		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
@@ -127,6 +130,9 @@ struct TerminalLayoutReducer {
 		case gitActionsMenu(GitActionsMenuReducer.Action)
 		case simulatorPane(SimulatorPaneReducer.Action)
 	}
+
+	@Dependency(GitClient.self)
+	private var gitClient
 
 	var body: some Reducer<State, Action> {
 		Scope(\.simulatorPane, action: \.simulatorPane) {
@@ -179,19 +185,10 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case let .pushButtonTapped(repositoryPath):
-				state.isPushing = true
-				return .run { send in
-					do {
-						let result = try await GitPushHelper.push(at: repositoryPath)
-						await send(.pushCompleted(result: result, error: nil))
-					}
-					catch let error as GitError {
-						await send(.pushCompleted(result: nil, error: error))
-					}
-					catch {
-						await send(.pushCompleted(result: nil, error: nil))
-					}
-				}
+				return push(&state, at: repositoryPath, mode: .normal)
+
+			case let .forcePushRequested(repositoryPath, rejected):
+				return push(&state, at: repositoryPath, mode: .forceWithLease(rejected))
 
 			case .pushCompleted:
 				state.isPushing = false
@@ -291,6 +288,20 @@ struct TerminalLayoutReducer {
 
 			case .simulatorPane:
 				return .none
+			}
+		}
+	}
+
+	private func push(_ state: inout State, at repositoryPath: String, mode: GitPushHelper.Mode) -> Effect<Action> {
+		state.isPushing = true
+		return .run { [gitClient] send in
+			do {
+				let result = try await gitClient.push(at: repositoryPath, mode: mode)
+				await send(.pushCompleted(repositoryPath: repositoryPath, result: result, error: nil))
+			}
+			catch {
+				let gitError = error as? GitError ?? .pushFailed(error.localizedDescription)
+				await send(.pushCompleted(repositoryPath: repositoryPath, result: nil, error: gitError))
 			}
 		}
 	}
