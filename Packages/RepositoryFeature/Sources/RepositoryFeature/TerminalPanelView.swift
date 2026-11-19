@@ -155,7 +155,7 @@ struct TerminalPanelView: View {
 
 			// The row's own stores, not copies, so a generate shows the same progress here and in
 			// the list and survives the panel being hidden. Gated the same way as in the row.
-			if let rowStore = activeRowStore, rowStore.supportsIOS, rowStore.supportsTuist {
+			if let rowStore = activeRowStore, rowStore.usesXcode, rowStore.supportsTuist {
 				TuistButtonView(store: rowStore.scope(\.tuistButton, action: \.tuistButton))
 			}
 
@@ -246,7 +246,7 @@ struct TerminalPanelView: View {
 				TicketButtonView(store: ticketStore)
 			}
 
-			if let rowStore = activeRowStore, rowStore.supportsIOS {
+			if let rowStore = activeRowStore, rowStore.usesXcode {
 				XcodeProjectButtonView(
 					store: rowStore.scope(\.xcodeButton, action: \.xcodeButton),
 					style: .compact

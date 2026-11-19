@@ -80,11 +80,12 @@ struct RepositoryRowReducer {
 		var isStashCheckPending = false
 
 		var supportsIOS: Bool
+		var supportsMacOS: Bool
 		var supportsAndroid: Bool
 		var supportsTuist: Bool
 		/// Empty when not (supportsIOS && supportsAndroid). Passed to Terminal, Claude Code, Android Studio.
 		var mobileSubfolderPath: String
-		/// Passed to Tuist and Xcode. Empty unless supportsIOS.
+		/// Passed to Tuist and Xcode: the Xcode project path shared by the iOS and macOS apps.
 		var iosSubfolderPath: String
 		/// Regex for extracting ticket IDs from branch names. Empty = no ticket parsing.
 		var ticketIdRegex: String
@@ -109,6 +110,12 @@ struct RepositoryRowReducer {
 			}
 
 			return BranchNameFormatter.format(branchName, ticketId: ticketId, branchNameRegex: regex)
+		}
+
+		/// The group builds an iOS or macOS app: the Xcode button and Tuist apply. Only iOS also
+		/// brings the simulator pane.
+		var usesXcode: Bool {
+			supportsIOS || supportsMacOS
 		}
 
 		/// A ticket was extracted but the group has no YouTrack URL, so the integration this row
@@ -157,6 +164,7 @@ struct RepositoryRowReducer {
 			branchName: String?,
 			isWorktree: Bool = false,
 			supportsIOS: Bool = false,
+			supportsMacOS: Bool = false,
 			supportsAndroid: Bool = false,
 			mobileSubfolderPath: String = "",
 			iosSubfolderPath: String = "",
@@ -194,6 +202,7 @@ struct RepositoryRowReducer {
 			self.hasRemoteBranch = true
 
 			self.supportsIOS = supportsIOS
+			self.supportsMacOS = supportsMacOS
 			self.supportsAndroid = supportsAndroid
 			self.supportsTuist = supportsTuist
 			self.mobileSubfolderPath = mobileSubfolderPath

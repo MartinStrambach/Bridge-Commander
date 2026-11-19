@@ -500,7 +500,7 @@ struct RepositoryRowView: View {
 			))
 
 		case .tuist:
-			if store.supportsIOS, store.supportsTuist {
+			if store.usesXcode, store.supportsTuist {
 				TuistButtonView(store: store.scope(
 					\.tuistButton,
 					action: \.tuistButton
@@ -631,7 +631,7 @@ struct RepositoryRowView: View {
 			}
 
 		case .xcode:
-			if store.supportsIOS {
+			if store.usesXcode {
 				XcodeProjectButtonView(store: store.scope(
 					\.xcodeButton,
 					action: \.xcodeButton

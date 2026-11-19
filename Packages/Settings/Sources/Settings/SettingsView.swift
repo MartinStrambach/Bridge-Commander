@@ -1289,8 +1289,9 @@ public struct SettingsView<Updates: View>: View {
 	private func repoGroupHeader(groupId: String, settings: RepoGroupSettings, isExpanded: Bool) -> some View {
 		let platforms = [
 			settings.supportsIOS ? "iOS" : nil,
+			settings.supportsMacOS ? "macOS" : nil,
 			settings.supportsAndroid ? "Android" : nil,
-			settings.supportsIOS && settings.supportsTuist ? "Tuist" : nil,
+			settings.usesXcode && settings.supportsTuist ? "Tuist" : nil,
 			settings.supportsWeb ? "Web" : nil,
 		].compactMap(\.self)
 
@@ -1337,12 +1338,17 @@ public struct SettingsView<Updates: View>: View {
 					set: { store.send(.setGroupSupportsIOS(groupId: groupId, value: $0)) }
 				))
 
+				Toggle("macOS", isOn: Binding(
+					get: { settings.supportsMacOS },
+					set: { store.send(.setGroupSupportsMacOS(groupId: groupId, value: $0)) }
+				))
+
 				Toggle("Android", isOn: Binding(
 					get: { settings.supportsAndroid },
 					set: { store.send(.setGroupSupportsAndroid(groupId: groupId, value: $0)) }
 				))
 
-				if settings.supportsIOS {
+				if settings.usesXcode {
 					Toggle("Tuist", isOn: Binding(
 						get: { settings.supportsTuist },
 						set: { store.send(.setGroupSupportsTuist(groupId: groupId, value: $0)) }
@@ -1355,9 +1361,9 @@ public struct SettingsView<Updates: View>: View {
 				))
 			}
 
-			if settings.supportsIOS {
+			if settings.usesXcode {
 				HStack {
-					Text("iOS Subfolder Path")
+					Text("Xcode Project Path")
 						.scaledFont(.caption)
 						.foregroundColor(.secondary)
 						.frame(width: 140, alignment: .leading)

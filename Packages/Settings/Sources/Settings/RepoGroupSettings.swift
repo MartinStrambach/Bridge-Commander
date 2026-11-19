@@ -2,15 +2,20 @@ import Foundation
 import ToolsIntegration
 
 public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
+	/// iOS app: Xcode and Tuist (with `usesXcode`), the simulator pane, and the mobile subfolder.
 	public var supportsIOS: Bool = false
+	/// macOS app: Xcode and Tuist only (with `usesXcode`) — no simulator, not counted as mobile.
+	public var supportsMacOS: Bool = false
 	public var supportsAndroid: Bool = false
 	/// Configurable only when both supportsIOS && supportsAndroid.
 	/// Used by built-in Terminal, Claude Code, and Android Studio.
 	/// When only one or neither platform is enabled this is treated as empty (repo root).
 	public var mobileSubfolderPath: String = ""
-	/// Used by Tuist and Xcode. Shown whenever supportsIOS is true.
+	/// Where the Xcode project / Tuist manifest lives, shared by the iOS and macOS apps. Used by
+	/// Tuist, Xcode and Staging; shown in Settings as "Xcode Project Path" whenever `usesXcode`.
+	/// Keeps its pre-macOS name because it is the key in saved settings and backup files.
 	public var iosSubfolderPath: String = ""
-	/// When false, the Tuist button is hidden even if supportsIOS is true.
+	/// When false, the Tuist button is hidden even if `usesXcode` is true.
 	public var supportsTuist: Bool = false
 	/// Regex pattern to extract ticket IDs from branch names (e.g. "MOB-[0-9]+").
 	/// When empty, ticket parsing is disabled — ticket button, YouTrack fetch, and branch formatting are all
@@ -52,6 +57,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	/// Memberwise initializer with default values
 	public init(
 		supportsIOS: Bool = false,
+		supportsMacOS: Bool = false,
 		supportsAndroid: Bool = false,
 		mobileSubfolderPath: String = "",
 		iosSubfolderPath: String = "",
@@ -69,6 +75,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		newTicketProjectId: String = ""
 	) {
 		self.supportsIOS = supportsIOS
+		self.supportsMacOS = supportsMacOS
 		self.supportsAndroid = supportsAndroid
 		self.mobileSubfolderPath = mobileSubfolderPath
 		self.iosSubfolderPath = iosSubfolderPath
@@ -84,6 +91,12 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.skipGlobalTerminalStartupCommand = skipGlobalTerminalStartupCommand
 		self.defaultWorktreeSource = defaultWorktreeSource
 		self.newTicketProjectId = newTicketProjectId
+	}
+
+	/// The group builds an Apple app (iOS, macOS or both), so the Xcode button, Tuist and the
+	/// shared Xcode project path apply.
+	public var usesXcode: Bool {
+		supportsIOS || supportsMacOS
 	}
 
 	/// The create-worktree dialog's tabs in this group. Without a YouTrack instance there is
@@ -110,6 +123,9 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	public init(from decoder: any Decoder) throws {
 		let c = try decoder.container(keyedBy: CodingKeys.self)
 		self.supportsIOS = try c.decodeIfPresent(Bool.self, forKey: .supportsIOS) ?? false
+		// Missing from settings saved before the macOS toggle existed: those groups keep `supportsIOS`
+		// and so the Xcode, Tuist and simulator buttons they had.
+		self.supportsMacOS = try c.decodeIfPresent(Bool.self, forKey: .supportsMacOS) ?? false
 		self.supportsAndroid = try c.decodeIfPresent(Bool.self, forKey: .supportsAndroid) ?? false
 		self.mobileSubfolderPath = try c.decodeIfPresent(String.self, forKey: .mobileSubfolderPath) ?? ""
 		self.iosSubfolderPath = try c.decodeIfPresent(String.self, forKey: .iosSubfolderPath) ?? ""

@@ -108,7 +108,7 @@ public enum ProjectGenerationError: LocalizedError {
 		case .failedToOpenProject:
 			"Failed to open Xcode project"
 		case let .iosSubfolderNotFound(path):
-			"iOS subfolder '\(path)' not found in repository"
+			"Xcode project path '\(path)' not found in repository"
 		}
 	}
 }
