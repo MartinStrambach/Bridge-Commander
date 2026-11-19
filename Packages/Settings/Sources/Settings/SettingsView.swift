@@ -179,6 +179,10 @@ public struct SettingsView<Updates: View>: View {
 			tuistCacheOptionsSection
 			tuistGenerateOptionsSection
 
+		case .xcodeGen:
+			xcodeGenExecutionSection
+			xcodeGenGenerateOptionsSection
+
 		case .activityLog:
 			activityLogSection
 
@@ -273,7 +277,7 @@ public struct SettingsView<Updates: View>: View {
 	private var rowStacksMenusToggle: some View {
 		VStack(alignment: .leading, spacing: 4) {
 			Toggle(
-				"Stack Git Actions, Tuist and YouTrack menus vertically",
+				"Stack Git Actions, Tuist, XcodeGen and YouTrack menus vertically",
 				isOn: Binding(
 					get: { store.repositoryRowLayout.stacksMenus },
 					set: { store.send(.setRowStacksMenus($0)) }
@@ -1153,7 +1157,7 @@ public struct SettingsView<Updates: View>: View {
 				"Run via",
 				selection: $store.tuistRunMode.sending(\.setTuistRunMode)
 			) {
-				ForEach(TuistRunMode.allCases, id: \.self) { mode in
+				ForEach(GeneratorRunMode.allCases, id: \.self) { mode in
 					Text(mode.displayName).tag(mode)
 				}
 			}
@@ -1209,6 +1213,55 @@ public struct SettingsView<Updates: View>: View {
 
 			Text(
 				"Automatically open the generated Xcode project after running 'tuist generate'."
+			)
+			.scaledFont(.caption)
+			.foregroundColor(.secondary)
+		}
+	}
+
+	// MARK: - XcodeGen
+
+	private var xcodeGenExecutionSection: some View {
+		SettingsSection("Execution") {
+			Picker(
+				"Run via",
+				selection: $store.xcodeGenRunMode.sending(\.setXcodeGenRunMode)
+			) {
+				ForEach(GeneratorRunMode.allCases, id: \.self) { mode in
+					Text(mode.displayName).tag(mode)
+				}
+			}
+			.pickerStyle(.segmented)
+			.fixedSize()
+
+			if store.xcodeGenRunMode == .mise {
+				TextField(
+					"mise Path",
+					text: $store.misePath.sending(\.setMisePath)
+				)
+				.textFieldStyle(.roundedBorder)
+				.scaledFont(.body, design: .monospaced)
+
+				Text("Full path to the mise binary, shared with Tuist. The repository's mise config must list xcodegen.")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			} else {
+				Text("XcodeGen will be invoked directly from PATH without mise (e.g. installed with Homebrew).")
+					.scaledFont(.caption)
+					.foregroundColor(.secondary)
+			}
+		}
+	}
+
+	private var xcodeGenGenerateOptionsSection: some View {
+		SettingsSection("Generate") {
+			Toggle(
+				"Open Xcode after generating project",
+				isOn: $store.openXcodeAfterGenerate.sending(\.setOpenXcodeAfterGenerate)
+			)
+
+			Text(
+				"Open the Xcode project after the XcodeGen menu's Generate. Shared with Tuist's setting of the same name."
 			)
 			.scaledFont(.caption)
 			.foregroundColor(.secondary)
@@ -1292,6 +1345,7 @@ public struct SettingsView<Updates: View>: View {
 			settings.supportsMacOS ? "macOS" : nil,
 			settings.supportsAndroid ? "Android" : nil,
 			settings.usesXcode && settings.supportsTuist ? "Tuist" : nil,
+			settings.usesXcode && settings.supportsXcodeGen ? "XcodeGen" : nil,
 			settings.supportsWeb ? "Web" : nil,
 		].compactMap(\.self)
 
@@ -1352,6 +1406,11 @@ public struct SettingsView<Updates: View>: View {
 					Toggle("Tuist", isOn: Binding(
 						get: { settings.supportsTuist },
 						set: { store.send(.setGroupSupportsTuist(groupId: groupId, value: $0)) }
+					))
+
+					Toggle("XcodeGen", isOn: Binding(
+						get: { settings.supportsXcodeGen },
+						set: { store.send(.setGroupSupportsXcodeGen(groupId: groupId, value: $0)) }
 					))
 				}
 

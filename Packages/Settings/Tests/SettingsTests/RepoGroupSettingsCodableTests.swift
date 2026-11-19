@@ -40,6 +40,7 @@ struct RepoGroupSettingsCodableTests {
 			mobileSubfolderPath: "apps/mobile",
 			iosSubfolderPath: "apps/ios",
 			supportsTuist: true,
+			supportsXcodeGen: true,
 			ticketIdRegex: "MOB-[0-9]+",
 			xcodeFilePreference: .workspace,
 			worktreeCopyPaths: ["secrets.xcconfig", "Tuist/.env"],
@@ -68,6 +69,7 @@ struct RepoGroupSettingsCodableTests {
 		#expect(decoded.mobileSubfolderPath == "")
 		#expect(decoded.iosSubfolderPath == "")
 		#expect(decoded.supportsTuist == false)
+		#expect(decoded.supportsXcodeGen == false)
 		#expect(decoded.xcodeFilePreference == .auto)
 		#expect(decoded.worktreeCopyPaths == [])
 		#expect(decoded.supportsWeb == false)

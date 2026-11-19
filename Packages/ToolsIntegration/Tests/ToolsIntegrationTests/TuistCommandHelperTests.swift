@@ -9,7 +9,7 @@ struct TuistCommandHelperTests {
 	private func command(
 		_ action: TuistAction,
 		shouldOpenXcode: Bool = true,
-		runMode: TuistRunMode = .mise
+		runMode: GeneratorRunMode = .mise
 	) -> String {
 		TuistCommandHelper.shellCommand(
 			for: action,

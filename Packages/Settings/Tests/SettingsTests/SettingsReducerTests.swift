@@ -660,6 +660,9 @@ struct SettingsReducerTests {
 		await store.send(.setGroupSupportsTuist(groupId: "g", value: true)) {
 			$0.$groupSettings.withLock { $0["g"]?.supportsTuist = true }
 		}
+		await store.send(.setGroupSupportsXcodeGen(groupId: "g", value: true)) {
+			$0.$groupSettings.withLock { $0["g"]?.supportsXcodeGen = true }
+		}
 	}
 
 	// MARK: - Clear-token alert flow

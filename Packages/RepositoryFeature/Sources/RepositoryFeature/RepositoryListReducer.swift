@@ -1639,6 +1639,7 @@ private func buildGroup(
 			mobileSubfolderPath: effectiveMobileSubfolder,
 			iosSubfolderPath: settings.iosSubfolderPath,
 			supportsTuist: settings.supportsTuist,
+			supportsXcodeGen: settings.supportsXcodeGen,
 			ticketIdRegex: settings.ticketIdRegex,
 			xcodeFilePreference: settings.xcodeFilePreference,
 			supportsWeb: settings.supportsWeb,
@@ -1703,6 +1704,7 @@ private func mergeGroupRows(
 				mobileSubfolderPath: effectiveMobileSubfolder,
 				iosSubfolderPath: rowSettings.iosSubfolderPath,
 				supportsTuist: rowSettings.supportsTuist,
+				supportsXcodeGen: rowSettings.supportsXcodeGen,
 				ticketIdRegex: rowSettings.ticketIdRegex,
 				xcodeFilePreference: rowSettings.xcodeFilePreference,
 				supportsWeb: rowSettings.supportsWeb,
@@ -1779,6 +1781,7 @@ private func applySettings(
 	row.mobileSubfolderPath = effectiveMobileSubfolder
 	row.iosSubfolderPath = settings.iosSubfolderPath
 	row.supportsTuist = settings.supportsTuist
+	row.supportsXcodeGen = settings.supportsXcodeGen
 	row.ticketIdRegex = settings.ticketIdRegex
 	row.youtrackBaseURL = settings.youtrackBaseURL
 	let newTicketId = settings.ticketIdRegex.isEmpty
@@ -1791,6 +1794,8 @@ private func applySettings(
 	}
 	row.shareButton.updateTicketURL(row.ticketButton?.ticketURL ?? "")
 	row.tuistButton.iosSubfolderPath = settings.iosSubfolderPath
+	row.xcodeGenButton.iosSubfolderPath = settings.iosSubfolderPath
+	row.xcodeGenButton.xcodeFilePreference = settings.xcodeFilePreference
 	row.xcodeButton.iosSubfolderPath = settings.iosSubfolderPath
 	row.xcodeButton.xcodeFilePreference = settings.xcodeFilePreference
 	row.androidStudioButton.mobileSubfolderPath = effectiveMobileSubfolder

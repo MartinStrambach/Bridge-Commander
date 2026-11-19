@@ -13,7 +13,9 @@ struct XcodeProjectButtonReducer {
 		let repositoryPath: String
 		var projectState: XcodeProjectState = .idle
 		var projectPath: String?
-		var usesTuist: Bool = false
+		/// The tool whose manifest the iOS subfolder holds, which the button runs when the project
+		/// is missing. Nil when there is none, and then a missing project cannot be made here.
+		var generator: ProjectGenerator?
 		var iosSubfolderPath: String
 		var xcodeFilePreference: XcodeFilePreference
 		@Shared(.openXcodeAfterGenerate)
@@ -21,7 +23,9 @@ struct XcodeProjectButtonReducer {
 		@Shared(.misePath)
 		var misePath = NSHomeDirectory() + "/.local/bin/mise"
 		@Shared(.tuistRunMode)
-		var tuistRunMode = TuistRunMode.mise
+		var tuistRunMode = GeneratorRunMode.mise
+		@Shared(.xcodeGenRunMode)
+		var xcodeGenRunMode = GeneratorRunMode.mise
 		@Presents
 		var alert: AlertState<Action.Alert>?
 		@Presents
@@ -39,7 +43,7 @@ struct XcodeProjectButtonReducer {
 	enum Action {
 		case onAppear
 		case refresh
-		case foundProjectPath(String?, usesTuist: Bool)
+		case foundProjectPath(String?, generator: ProjectGenerator?)
 		case openProject
 		case didOpenProject
 		case openFailed(String)
@@ -70,15 +74,18 @@ struct XcodeProjectButtonReducer {
 			case .refresh:
 				return findProjectEffect(state: &state)
 
-			case let .foundProjectPath(path, usesTuist: usesTuist):
+			case let .foundProjectPath(path, generator: generator):
 				state.projectState = .idle
 				state.projectPath = path
-				state.usesTuist = usesTuist
+				state.generator = generator
 				state.isLoaded = true
 				return .none
 
 			case .openProject:
 				guard let projectPath = state.projectPath else {
+					guard let generator = state.generator else {
+						return .none
+					}
 					// Show warning alert asking to generate
 					state.alert = AlertState {
 						TextState("No Xcode Project Found")
@@ -90,7 +97,7 @@ struct XcodeProjectButtonReducer {
 							TextState("Generate")
 						}
 					} message: {
-						TextState("No Xcode project or workspace was found.\n\nWould you like to generate one?")
+						TextState("No Xcode project or workspace was found.\n\nWould you like to generate one with \(generator.displayName)?")
 					}
 					return .none
 				}
@@ -121,12 +128,16 @@ struct XcodeProjectButtonReducer {
 				return .none
 
 			case .alert(.presented(.confirmGenerate)):
+				guard let generator = state.generator else {
+					return .none
+				}
+
 				return .run { [
 					path = state.repositoryPath,
 					iosSubfolderPath = state.iosSubfolderPath,
 					shouldOpen = state.openXcodeAfterGenerate,
 					misePath = state.misePath,
-					runMode = state.tuistRunMode
+					runMode = generator == .tuist ? state.tuistRunMode : state.xcodeGenRunMode
 				] send in
 					do {
 						// Progress is awaited, not sent from a detached `Task`: unordered, the last
@@ -134,6 +145,7 @@ struct XcodeProjectButtonReducer {
 						let projectPath = try await xcodeClient.generateProject(
 							at: path,
 							iosSubfolderPath: iosSubfolderPath,
+							generator: generator,
 							shouldOpenXcode: shouldOpen,
 							misePath: misePath,
 							runMode: runMode
@@ -189,8 +201,8 @@ struct XcodeProjectButtonReducer {
 
 		return .run { [path = state.repositoryPath, iosSubfolderPath = state.iosSubfolderPath, preference = state.xcodeFilePreference] send in
 			let projectPath = xcodeClient.findXcodeProject(in: path, iosSubfolderPath: iosSubfolderPath, preference: preference)
-			let usesTuist = XcodeProjectDetector.hasTuistManifest(in: path, iosSubfolderPath: iosSubfolderPath)
-			await send(.foundProjectPath(projectPath, usesTuist: usesTuist))
+			let generator = xcodeClient.projectGenerator(in: path, iosSubfolderPath: iosSubfolderPath)
+			await send(.foundProjectPath(projectPath, generator: generator))
 		}
 	}
 }

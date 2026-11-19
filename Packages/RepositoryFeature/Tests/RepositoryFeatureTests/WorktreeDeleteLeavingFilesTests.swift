@@ -43,6 +43,7 @@ struct WorktreeDeleteLeavingFilesTests {
 			}
 			$0[GitClient.self].getOriginRemote = { _ in nil }
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
+			$0[XcodeClient.self].projectGenerator = { _, _ in nil }
 			$0[LastOpenedDirectoryClient.self].load = { nil }
 		}
 		store.exhaustivity = .off

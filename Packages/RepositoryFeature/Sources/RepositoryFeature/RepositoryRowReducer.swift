@@ -57,6 +57,7 @@ struct RepositoryRowReducer {
 
 		var xcodeButton: XcodeProjectButtonReducer.State
 		var tuistButton: TuistButtonReducer.State
+		var xcodeGenButton: XcodeGenButtonReducer.State
 		var terminalButton: TerminalButtonReducer.State
 		var claudeCodeButton: ClaudeCodeButtonReducer.State
 		var androidStudioButton: AndroidStudioButtonReducer.State
@@ -83,9 +84,10 @@ struct RepositoryRowReducer {
 		var supportsMacOS: Bool
 		var supportsAndroid: Bool
 		var supportsTuist: Bool
+		var supportsXcodeGen: Bool
 		/// Empty when not (supportsIOS && supportsAndroid). Passed to Terminal, Claude Code, Android Studio.
 		var mobileSubfolderPath: String
-		/// Passed to Tuist and Xcode: the Xcode project path shared by the iOS and macOS apps.
+		/// Passed to Tuist, XcodeGen and Xcode: the Xcode project path shared by the iOS and macOS apps.
 		var iosSubfolderPath: String
 		/// Regex for extracting ticket IDs from branch names. Empty = no ticket parsing.
 		var ticketIdRegex: String
@@ -169,6 +171,7 @@ struct RepositoryRowReducer {
 			mobileSubfolderPath: String = "",
 			iosSubfolderPath: String = "",
 			supportsTuist: Bool = false,
+			supportsXcodeGen: Bool = false,
 			ticketIdRegex: String = "",
 			xcodeFilePreference: XcodeFilePreference = .auto,
 			supportsWeb: Bool = false,
@@ -205,6 +208,7 @@ struct RepositoryRowReducer {
 			self.supportsMacOS = supportsMacOS
 			self.supportsAndroid = supportsAndroid
 			self.supportsTuist = supportsTuist
+			self.supportsXcodeGen = supportsXcodeGen
 			self.mobileSubfolderPath = mobileSubfolderPath
 			self.iosSubfolderPath = iosSubfolderPath
 
@@ -214,6 +218,11 @@ struct RepositoryRowReducer {
 				xcodeFilePreference: xcodeFilePreference
 			)
 			self.tuistButton = .init(repositoryPath: path, iosSubfolderPath: iosSubfolderPath)
+			self.xcodeGenButton = .init(
+				repositoryPath: path,
+				iosSubfolderPath: iosSubfolderPath,
+				xcodeFilePreference: xcodeFilePreference
+			)
 			self.terminalButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
 			self.claudeCodeButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
 			self.androidStudioButton = .init(repositoryPath: path, mobileSubfolderPath: mobileSubfolderPath)
@@ -263,6 +272,7 @@ struct RepositoryRowReducer {
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
+		case xcodeGenButton(XcodeGenButtonReducer.Action)
 		case terminalButton(TerminalButtonReducer.Action)
 		case claudeCodeButton(ClaudeCodeButtonReducer.Action)
 		case androidStudioButton(AndroidStudioButtonReducer.Action)
@@ -304,6 +314,10 @@ struct RepositoryRowReducer {
 
 		Scope(\.tuistButton, action: \.tuistButton) {
 			TuistButtonReducer()
+		}
+
+		Scope(\.xcodeGenButton, action: \.xcodeGenButton) {
+			XcodeGenButtonReducer()
 		}
 
 		Scope(\.terminalButton, action: \.terminalButton) {
@@ -484,6 +498,11 @@ struct RepositoryRowReducer {
 				default:
 					return .none
 				}
+
+			case let .xcodeGenButton(.actionCompleted(xcodeGenAction, _)) where xcodeGenAction.generatesProject:
+				// A first generate creates the project the Xcode button reported missing. Checked
+				// after a failure too: XcodeGen may have written the project before opening it failed.
+				return .send(.xcodeButton(.refresh))
 
 			case .youtrackButton(.delegate(.stateChanged)):
 				// Re-read the issue: the state chip and the set of reachable transitions both

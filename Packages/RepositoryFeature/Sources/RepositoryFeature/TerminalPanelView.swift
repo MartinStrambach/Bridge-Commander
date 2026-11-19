@@ -159,6 +159,10 @@ struct TerminalPanelView: View {
 				TuistButtonView(store: rowStore.scope(\.tuistButton, action: \.tuistButton))
 			}
 
+			if let rowStore = activeRowStore, rowStore.usesXcode, rowStore.supportsXcodeGen {
+				XcodeGenButtonView(store: rowStore.scope(\.xcodeGenButton, action: \.xcodeGenButton))
+			}
+
 			// The row's own store too: after a transition the row refetches the ticket, and only
 			// that fetch knows the transitions now reachable — a copy here would keep offering
 			// the old ones.

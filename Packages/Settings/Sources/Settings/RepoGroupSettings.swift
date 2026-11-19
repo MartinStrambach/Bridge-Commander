@@ -17,6 +17,8 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 	public var iosSubfolderPath: String = ""
 	/// When false, the Tuist button is hidden even if `usesXcode` is true.
 	public var supportsTuist: Bool = false
+	/// When false, the XcodeGen menu is hidden even if `usesXcode` is true.
+	public var supportsXcodeGen: Bool = false
 	/// Regex pattern to extract ticket IDs from branch names (e.g. "MOB-[0-9]+").
 	/// When empty, ticket parsing is disabled — ticket button, YouTrack fetch, and branch formatting are all
 	/// suppressed.
@@ -62,6 +64,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		mobileSubfolderPath: String = "",
 		iosSubfolderPath: String = "",
 		supportsTuist: Bool = false,
+		supportsXcodeGen: Bool = false,
 		ticketIdRegex: String = "",
 		xcodeFilePreference: XcodeFilePreference = .auto,
 		worktreeCopyPaths: [String] = [],
@@ -80,6 +83,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.mobileSubfolderPath = mobileSubfolderPath
 		self.iosSubfolderPath = iosSubfolderPath
 		self.supportsTuist = supportsTuist
+		self.supportsXcodeGen = supportsXcodeGen
 		self.ticketIdRegex = ticketIdRegex
 		self.xcodeFilePreference = xcodeFilePreference
 		self.worktreeCopyPaths = worktreeCopyPaths
@@ -130,6 +134,7 @@ public nonisolated struct RepoGroupSettings: Codable, Equatable, Sendable {
 		self.mobileSubfolderPath = try c.decodeIfPresent(String.self, forKey: .mobileSubfolderPath) ?? ""
 		self.iosSubfolderPath = try c.decodeIfPresent(String.self, forKey: .iosSubfolderPath) ?? ""
 		self.supportsTuist = try c.decodeIfPresent(Bool.self, forKey: .supportsTuist) ?? false
+		self.supportsXcodeGen = try c.decodeIfPresent(Bool.self, forKey: .supportsXcodeGen) ?? false
 		self.ticketIdRegex = try c.decodeIfPresent(String.self, forKey: .ticketIdRegex) ?? ""
 		// `try?`, like `defaultWorktreeSource`: a preference this build does not know (from a newer
 		// version's settings backup) reads as the default rather than failing the whole decode.
