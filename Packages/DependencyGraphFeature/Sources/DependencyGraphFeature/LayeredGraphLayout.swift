@@ -5,8 +5,17 @@ import Foundation
 public struct GraphLayout: Equatable, Sendable {
 	public var frames: [String: CGRect]
 	public var size: CGSize
+	/// The horizontal bands the nodes sit in, top to bottom: one per layer, then the other
+	/// platforms' modules, then modules with no edge in view. The canvas stripes them.
+	public var bands: [Band]
 
-	public static let empty = GraphLayout(frames: [:], size: .zero)
+	public struct Band: Equatable, Sendable {
+		public var title: String
+		public var minY: CGFloat
+		public var maxY: CGFloat
+	}
+
+	public static let empty = GraphLayout(frames: [:], size: .zero, bands: [])
 }
 
 /// A layered (Sugiyama-style) layout: dependents above their dependencies.
@@ -14,18 +23,25 @@ public struct GraphLayout: Equatable, Sendable {
 /// 1. Layers by longest path: a module with no dependencies sits in the bottom layer, any other
 ///    one layer above its highest dependency, so every edge points down. A cycle (possible
 ///    through test dependencies) is broken where the walk meets it.
-/// 2. A layer wider than `targetRowWidth` is spread over several rows, its nodes dealt to the
-///    rows in turn so that x still grows with the order. Rows of one layer hold no edges between
+/// 2. Shorter edges: each module moves, within the room its edges leave, toward the side it has
+///    more essential edges on (`minimizingSpans`). A module used by more than it uses rises
+///    toward its users instead of sinking to the bottom with every other leaf.
+/// 3. The other platforms' modules and the modules with no edge in view get bands of their own
+///    below the layers, so they do not crowd the bottom layer.
+/// 4. A band wider than `targetRowWidth` is spread over several rows, its nodes dealt to the
+///    rows in turn so that x still grows with the order. Rows of one band hold no edges between
 ///    them, so edges still point down.
-/// 3. Order within a layer by repeated barycentre sweeps (the mean x of a node's neighbours),
-///    which pulls connected modules together and uncrosses edges.
+/// 5. Order within a band by repeated barycentre sweeps (the mean x of a node's neighbours over
+///    the essential edges), which pulls connected modules together and uncrosses edges.
 enum LayeredGraphLayout {
 	struct Metrics: Equatable {
 		var nodeHeight: CGFloat = 44
 		var horizontalGap: CGFloat = 20
-		var rowGap: CGFloat = 36
-		var layerGap: CGFloat = 84
+		var rowGap: CGFloat = 28
+		var layerGap: CGFloat = 76
 		var padding: CGFloat = 40
+		/// Room at the left of each band for its label.
+		var bandLabelWidth: CGFloat = 90
 		var sweeps = 8
 	}
 
@@ -36,11 +52,15 @@ enum LayeredGraphLayout {
 		return min(max(textWidth + 28, 110), 380)
 	}
 
-	/// `ids` in a stable order (it seeds the ordering), `dependencies` by id.
+	/// `ids` in a stable order (it seeds the ordering), `dependencies` by id. Layer constraints
+	/// come from all `dependencies`; edge lengths and ordering from `essentialDependencies`
+	/// (the edges no longer path implies; all of them when nil).
 	static func layout(
 		ids: [String],
 		widths: [String: CGFloat],
 		dependencies: [String: [String]],
+		essentialDependencies: [String: [String]]? = nil,
+		boundaryIDs: Set<String> = [],
 		metrics: Metrics = Metrics()
 	) -> GraphLayout {
 		guard !ids.isEmpty else {
@@ -49,19 +69,36 @@ enum LayeredGraphLayout {
 
 		let idSet = Set(ids)
 		let dependencies = dependencies.mapValues { $0.filter(idSet.contains) }
-		var dependents: [String: [String]] = [:]
-		for (from, targets) in dependencies where idSet.contains(from) {
-			for target in targets {
-				dependents[target, default: []].append(from)
-			}
-		}
+		let essential = (essentialDependencies ?? dependencies).mapValues { $0.filter(idSet.contains) }
+		let dependents = inverted(dependencies, keys: idSet)
+		let essentialDependents = inverted(essential, keys: idSet)
 
-		let layerOf = layers(ids: ids, dependencies: dependencies)
-		let layerCount = (layerOf.values.max() ?? 0) + 1
-		// Index 0 is the top layer.
-		var layers: [[String]] = Array(repeating: [], count: layerCount)
-		for id in ids {
-			layers[layerCount - 1 - layerOf[id, default: 0]].append(id)
+		let boundary = ids.filter(boundaryIDs.contains)
+		let unconnected = ids.filter { id in
+			!boundaryIDs.contains(id) && (dependencies[id] ?? []).isEmpty && (dependents[id] ?? []).isEmpty
+		}
+		let excluded = Set(boundary).union(unconnected)
+		let layered = ids.filter { !excluded.contains($0) }
+		let layeredSet = Set(layered)
+		let layeredDependencies = dependencies.mapValues { $0.filter(layeredSet.contains) }
+
+		var layerOf = layers(ids: layered, dependencies: layeredDependencies)
+		layerOf = minimizingSpans(
+			layerOf,
+			dependencies: layeredDependencies,
+			essentialDependencies: essential.mapValues { $0.filter(layeredSet.contains) }
+		)
+
+		// Top to bottom; empty layers (left by the moves) dropped.
+		let used = Set(layerOf.values).sorted(by: >)
+		var bands: [(title: String, ids: [String])] = used.enumerated().map { index, layer in
+			("Layer \(used.count - index)", layered.filter { layerOf[$0] == layer })
+		}
+		if !boundary.isEmpty {
+			bands.append(("Other platforms", boundary))
+		}
+		if !unconnected.isEmpty {
+			bands.append(("Unconnected", unconnected))
 		}
 
 		func width(_ id: String) -> CGFloat {
@@ -71,19 +108,19 @@ enum LayeredGraphLayout {
 		let totalWidth = ids.reduce(0) { $0 + width($1) + metrics.horizontalGap }
 		let targetRowWidth = max(1400, (totalWidth * (metrics.nodeHeight + metrics.rowGap)).squareRoot() * 1.5)
 
-		// Centre x of every node given each layer's order; rows centred on x = 0.
+		// Centre x of every node given each band's order; rows centred on x = 0.
 		var centerX: [String: CGFloat] = [:]
-		func rows(of layer: [String]) -> [[String]] {
-			let layerWidth = layer.reduce(0) { $0 + width($1) + metrics.horizontalGap }
-			let rowCount = max(1, Int((layerWidth / targetRowWidth).rounded(.up)))
+		func rows(of band: [String]) -> [[String]] {
+			let bandWidth = band.reduce(0) { $0 + width($1) + metrics.horizontalGap }
+			let rowCount = max(1, Int((bandWidth / targetRowWidth).rounded(.up)))
 			var rows: [[String]] = Array(repeating: [], count: rowCount)
-			for (index, id) in layer.enumerated() {
+			for (index, id) in band.enumerated() {
 				rows[index % rowCount].append(id)
 			}
 			return rows
 		}
-		func place(_ layer: [String]) {
-			for row in rows(of: layer) {
+		func place(_ band: [String]) {
+			for row in rows(of: band) {
 				let rowWidth = row.reduce(0) { $0 + width($1) } + metrics.horizontalGap * CGFloat(max(0, row.count - 1))
 				var x = -rowWidth / 2
 				for id in row {
@@ -92,52 +129,59 @@ enum LayeredGraphLayout {
 				}
 			}
 		}
-		layers.forEach(place)
+		bands.map(\.ids).forEach(place)
 
 		for sweep in 0 ..< metrics.sweeps {
-			// Alternate downward and upward passes, each settling a layer against its neighbours'
+			// Alternate downward and upward passes, each settling a band against its neighbours'
 			// current positions.
-			let order = sweep.isMultiple(of: 2) ? Array(layers.indices) : layers.indices.reversed()
-			for layerIndex in order {
-				let keyed = layers[layerIndex].enumerated().map { offset, id -> (id: String, key: CGFloat, offset: Int) in
-					let neighbours = (dependencies[id] ?? []) + (dependents[id] ?? [])
+			let order = sweep.isMultiple(of: 2) ? Array(bands.indices) : bands.indices.reversed()
+			for bandIndex in order {
+				let keyed = bands[bandIndex].ids.enumerated().map { offset, id -> (id: String, key: CGFloat, offset: Int) in
+					let neighbours = (essential[id] ?? []) + (essentialDependents[id] ?? [])
 					let positions = neighbours.compactMap { centerX[$0] }
 					let key = positions.isEmpty
 						? centerX[id, default: 0]
 						: positions.reduce(0, +) / CGFloat(positions.count)
 					return (id, key, offset)
 				}
-				layers[layerIndex] = keyed
+				bands[bandIndex].ids = keyed
 					.sorted { ($0.key, $0.offset) < ($1.key, $1.offset) }
 					.map(\.id)
-				place(layers[layerIndex])
+				place(bands[bandIndex].ids)
 			}
 		}
 
-		// Final frames: rows top to bottom, shifted so the leftmost node starts at the padding.
+		// Final frames: rows top to bottom, shifted so the leftmost node starts after the
+		// padding and the band labels.
 		let minX = ids.compactMap { id in centerX[id].map { $0 - width(id) / 2 } }.min() ?? 0
 		let maxX = ids.compactMap { id in centerX[id].map { $0 + width(id) / 2 } }.max() ?? 0
+		let left = metrics.padding + metrics.bandLabelWidth
 		var frames: [String: CGRect] = [:]
+		var bandFrames: [GraphLayout.Band] = []
 		var y = metrics.padding
-		for (layerIndex, layer) in layers.enumerated() {
-			if layerIndex > 0 {
-				y += metrics.layerGap - metrics.rowGap
-			}
-			for row in rows(of: layer) {
+		for (bandIndex, band) in bands.enumerated() {
+			// Half of the gap above and below each band belongs to it, so stripes meet.
+			let top = bandIndex == 0 ? 0 : y - metrics.layerGap / 2
+			for row in rows(of: band.ids) {
 				for id in row {
-					let x = centerX[id, default: 0] - width(id) / 2 - minX + metrics.padding
+					let x = centerX[id, default: 0] - width(id) / 2 - minX + left
 					frames[id] = CGRect(x: x, y: y, width: width(id), height: metrics.nodeHeight)
 				}
 				y += metrics.nodeHeight + metrics.rowGap
 			}
+			y += metrics.layerGap - metrics.rowGap
+			let isLast = bandIndex == bands.count - 1
+			let bottom = isLast ? y - metrics.layerGap + metrics.padding : y - metrics.layerGap / 2
+			bandFrames.append(GraphLayout.Band(title: band.title, minY: top, maxY: bottom))
 		}
 
 		return GraphLayout(
 			frames: frames,
 			size: CGSize(
-				width: maxX - minX + metrics.padding * 2,
-				height: y - metrics.rowGap + metrics.padding
-			)
+				width: maxX - minX + left + metrics.padding,
+				height: bandFrames.last?.maxY ?? 0
+			),
+			bands: bandFrames
 		)
 	}
 
@@ -171,5 +215,64 @@ enum LayeredGraphLayout {
 			}
 		}
 		return layer
+	}
+
+	/// Moves each module, within the room its downward edges leave (above its highest
+	/// dependency, below its lowest dependent), toward the side with more essential edges: the
+	/// total length of its essential edges falls with every move, so the loop settles. Only edges
+	/// pointing down in `initial` constrain or count, so a cycle's upward edge is ignored.
+	static func minimizingSpans(
+		_ initial: [String: Int],
+		dependencies: [String: [String]],
+		essentialDependencies: [String: [String]]
+	) -> [String: Int] {
+		var layer = initial
+		let top = initial.values.max() ?? 0
+		func downward(_ adjacency: [String: [String]]) -> [String: [String]] {
+			adjacency.reduce(into: [:]) { result, entry in
+				let targets = entry.value.filter { (initial[entry.key] ?? 0) > (initial[$0] ?? 0) }
+				if !targets.isEmpty {
+					result[entry.key] = targets
+				}
+			}
+		}
+		let below = downward(dependencies)
+		let above = inverted(below, keys: Set(initial.keys))
+		let essentialBelow = downward(essentialDependencies)
+		let essentialAbove = inverted(essentialBelow, keys: Set(initial.keys))
+
+		let ids = initial.keys.sorted()
+		for _ in 0 ..< 100 {
+			var moved = false
+			for id in ids {
+				let down = essentialBelow[id]?.count ?? 0
+				let up = essentialAbove[id]?.count ?? 0
+				guard down != up else {
+					continue
+				}
+
+				let lowest = ((below[id] ?? []).compactMap { layer[$0] }.max() ?? -1) + 1
+				let highest = ((above[id] ?? []).compactMap { layer[$0] }.min() ?? (top + 1)) - 1
+				let target = up > down ? highest : lowest
+				if target != layer[id] {
+					layer[id] = target
+					moved = true
+				}
+			}
+			if !moved {
+				break
+			}
+		}
+		return layer
+	}
+
+	private static func inverted(_ adjacency: [String: [String]], keys: Set<String>) -> [String: [String]] {
+		var result: [String: [String]] = [:]
+		for (from, targets) in adjacency where keys.contains(from) {
+			for target in targets {
+				result[target, default: []].append(from)
+			}
+		}
+		return result
 	}
 }

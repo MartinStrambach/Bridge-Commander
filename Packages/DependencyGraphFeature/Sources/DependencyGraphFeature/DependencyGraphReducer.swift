@@ -19,6 +19,10 @@ public struct DependencyGraphReducer {
 		var showsOtherPlatforms = true
 		@Shared(.dependencyGraphIncludesTestDependencies)
 		var includesTestDependencies = false
+		/// Draws the edges a longer path already implies (`PlatformGraph.indirectEdges`).
+		/// Drawing only, so it needs no rebuild.
+		@Shared(.dependencyGraphShowsIndirectEdges)
+		var showsIndirectEdges = false
 
 		var graph: DependencyGraph?
 		var isLoading = false
@@ -91,6 +95,7 @@ public struct DependencyGraphReducer {
 		case highlightsChangesToggled(Bool)
 		case showsOtherPlatformsToggled(Bool)
 		case includesTestDependenciesToggled(Bool)
+		case showsIndirectEdgesToggled(Bool)
 		/// A module picked on the canvas or in a list; nil clears the selection.
 		case moduleSelected(String?)
 		case closeButtonTapped
@@ -174,6 +179,10 @@ public struct DependencyGraphReducer {
 				rebuild(&state)
 				return .none
 
+			case let .showsIndirectEdgesToggled(isOn):
+				state.$showsIndirectEdges.withLock { $0 = isOn }
+				return .none
+
 			case let .moduleSelected(id):
 				state.selectedModuleID = id
 				return .none
@@ -237,10 +246,15 @@ public struct DependencyGraphReducer {
 			state.platformGraph.modules.map { ($0.id, LayeredGraphLayout.nodeWidth(title: $0.title, subtitle: $0.subtitle)) },
 			uniquingKeysWith: { first, _ in first }
 		)
+		let essential = state.platformGraph.edges
+			.filter { !state.platformGraph.indirectEdges.contains($0) }
+			.reduce(into: [String: [String]]()) { $0[$1.from, default: []].append($1.to) }
 		state.layout = LayeredGraphLayout.layout(
 			ids: state.platformGraph.modules.map(\.id),
 			widths: widths,
-			dependencies: state.platformGraph.dependencies
+			dependencies: state.platformGraph.dependencies,
+			essentialDependencies: essential,
+			boundaryIDs: state.platformGraph.boundaryModuleIDs
 		)
 		state.layoutRevision += 1
 		if let selected = state.selectedModuleID, state.platformGraph.module(withID: selected) == nil {

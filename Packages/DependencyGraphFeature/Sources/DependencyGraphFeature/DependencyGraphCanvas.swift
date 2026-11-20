@@ -12,6 +12,7 @@ struct DependencyGraphCanvas: View {
 	let layoutRevision: Int
 	let changes: ModuleChanges?
 	let selectedID: String?
+	let showsIndirectEdges: Bool
 	let onSelect: (String?) -> Void
 
 	@State private var zoom: CGFloat = 1
@@ -34,6 +35,7 @@ struct DependencyGraphCanvas: View {
 				selectedID: selectedID,
 				hoveredID: hoveredID,
 				focus: focus,
+				showsIndirectEdges: showsIndirectEdges,
 				zoom: zoom,
 				offset: offset
 			)
@@ -232,6 +234,7 @@ struct GraphDrawing: View {
 	let selectedID: String?
 	let hoveredID: String?
 	let focus: DependencyGraphCanvas.Focus?
+	let showsIndirectEdges: Bool
 	let zoom: CGFloat
 	let offset: CGSize
 
@@ -242,6 +245,8 @@ struct GraphDrawing: View {
 	}
 
 	private func draw(in context: inout GraphicsContext, size: CGSize) {
+		// Band labels are drawn in view points afterwards, pinned to the left edge.
+		let labelContext = context
 		context.translateBy(x: offset.width, y: offset.height)
 		context.scaleBy(x: zoom, y: zoom)
 		// What is on screen, in graph points, with a margin for the edges' curves.
@@ -255,12 +260,25 @@ struct GraphDrawing: View {
 		// At least about a pixel wide however far out the graph is zoomed.
 		let lineWidth = max(1, 0.8 / zoom)
 
+		// Every other band striped, across the whole visible width.
+		for (index, band) in layout.bands.enumerated() where index.isMultiple(of: 2) {
+			context.fill(
+				Path(CGRect(x: visible.minX, y: band.minY, width: visible.width, height: band.maxY - band.minY)),
+				with: .color(Color.primary.opacity(0.035))
+			)
+		}
+
 		var plain = Path()
 		var test = Path()
 		var towardDependencies = Path()
 		var towardDependents = Path()
 		var faded = Path()
 		for edge in graph.edges {
+			// An implied edge is drawn on request, or when it is the selected module's own.
+			if !showsIndirectEdges, graph.indirectEdges.contains(edge),
+			   edge.from != focus?.selectedID, edge.to != focus?.selectedID {
+				continue
+			}
 			guard let from = layout.frames[edge.from], let to = layout.frames[edge.to],
 			      from.union(to).intersects(visible)
 			else {
@@ -320,6 +338,25 @@ struct GraphDrawing: View {
 				continue
 			}
 			drawNode(module, frame: frame, in: &context, focus: focus, drawsText: drawsText, lineWidth: lineWidth)
+		}
+
+		drawBandLabels(in: labelContext)
+	}
+
+	private func drawBandLabels(in context: GraphicsContext) {
+		for band in layout.bands {
+			let top = band.minY * zoom + offset.height
+			let height = (band.maxY - band.minY) * zoom
+			guard height >= 16 else {
+				continue
+			}
+			context.draw(
+				Text(band.title)
+					.font(.system(size: 10, weight: .medium))
+					.foregroundStyle(Color.secondary),
+				at: CGPoint(x: 8, y: top + 6),
+				anchor: .topLeading
+			)
 		}
 	}
 

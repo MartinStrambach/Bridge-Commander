@@ -21,4 +21,8 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<Bool> {
 	static var dependencyGraphIncludesTestDependencies: Self {
 		appStorage("dependencyGraphIncludesTestDependencies")
 	}
+
+	static var dependencyGraphShowsIndirectEdges: Self {
+		appStorage("dependencyGraphShowsIndirectEdges")
+	}
 }

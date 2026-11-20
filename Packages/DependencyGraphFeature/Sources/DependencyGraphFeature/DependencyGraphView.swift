@@ -72,6 +72,12 @@ public struct DependencyGraphView: View {
 			)
 			.help("Include dependencies declared only for tests")
 
+			Toggle(
+				"Indirect edges",
+				isOn: Binding(get: { store.showsIndirectEdges }, set: { store.send(.showsIndirectEdgesToggled($0)) })
+			)
+			.help("Also draw the edges a longer path already implies (a → c when a → b → c). A selected module always shows all of its own")
+
 			Button {
 				store.send(.refreshButtonTapped)
 			} label: {
@@ -123,6 +129,7 @@ public struct DependencyGraphView: View {
 						layoutRevision: store.layoutRevision,
 						changes: store.visibleChanges,
 						selectedID: store.selectedModuleID,
+						showsIndirectEdges: store.showsIndirectEdges,
 						onSelect: { store.send(.moduleSelected($0)) }
 					)
 					.frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)

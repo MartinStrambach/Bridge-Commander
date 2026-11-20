@@ -151,6 +151,66 @@ struct GraphStructureTests {
 	}
 
 	@Test
+	func edgesImpliedByALongerPathAreIndirect() {
+		let graph = DependencyGraph(
+			modules: ["app", "feature", "core", "util"].map { DependencyModule(id: $0, kind: .kmp, directories: []) },
+			edges: [
+				DependencyEdge(from: "app", to: "feature", isTest: false),
+				DependencyEdge(from: "app", to: "core", isTest: false),
+				DependencyEdge(from: "app", to: "util", isTest: false),
+				DependencyEdge(from: "feature", to: "core", isTest: false),
+				DependencyEdge(from: "core", to: "util", isTest: false),
+			]
+		)
+		let platform = PlatformGraph.make(from: graph, platform: .kmp, includesOtherPlatforms: false, includesTestDependencies: false)
+		#expect(platform.indirectEdges == [
+			DependencyEdge(from: "app", to: "core", isTest: false),
+			DependencyEdge(from: "app", to: "util", isTest: false),
+		])
+	}
+
+	@Test
+	func aCycleKeepsBothItsEdges() {
+		let graph = DependencyGraph(
+			modules: ["a", "b"].map { DependencyModule(id: $0, kind: .kmp, directories: []) },
+			edges: [DependencyEdge(from: "a", to: "b", isTest: false), DependencyEdge(from: "b", to: "a", isTest: true)]
+		)
+		let platform = PlatformGraph.make(from: graph, platform: .kmp, includesOtherPlatforms: false, includesTestDependencies: true)
+		#expect(platform.indirectEdges.isEmpty)
+	}
+
+	@Test
+	func aLeafUsedOnlyHighUpRisesToItsUser() {
+		// `top` sits four layers up; `helper` has no dependencies but only `top` uses it, so it
+		// moves up beside `top`'s other dependency instead of waiting in the bottom layer.
+		let dependencies = ["top": ["a", "helper"], "a": ["b"], "b": ["c"], "c": []]
+		let layers = LayeredGraphLayout.minimizingSpans(
+			LayeredGraphLayout.layers(ids: ["top", "a", "b", "c", "helper"], dependencies: dependencies),
+			dependencies: dependencies,
+			essentialDependencies: dependencies
+		)
+		#expect(layers["c"] == 0)
+		#expect(layers["helper"] == 2)
+		#expect(layers["top"] == 3)
+	}
+
+	@Test
+	func otherPlatformsAndUnconnectedModulesGetBandsOfTheirOwn() {
+		let layout = LayeredGraphLayout.layout(
+			ids: ["app", "core", "other", "alone"],
+			widths: [:],
+			dependencies: ["app": ["core", "other"]],
+			boundaryIDs: ["other"]
+		)
+		#expect(layout.bands.map(\.title) == ["Layer 2", "Layer 1", "Other platforms", "Unconnected"])
+		#expect(layout.frames["other"]!.minY > layout.frames["core"]!.maxY)
+		#expect(layout.frames["alone"]!.minY > layout.frames["other"]!.maxY)
+		for (band, id) in zip(layout.bands, ["app", "core", "other", "alone"]) {
+			#expect(band.minY <= layout.frames[id]!.minY && layout.frames[id]!.maxY <= band.maxY)
+		}
+	}
+
+	@Test
 	func wideLayersWrapIntoRows() {
 		let ids = (0 ..< 60).map { "leaf\($0)" }
 		let layout = LayeredGraphLayout.layout(
