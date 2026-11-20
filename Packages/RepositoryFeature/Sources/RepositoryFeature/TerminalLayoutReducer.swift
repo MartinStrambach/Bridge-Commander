@@ -77,7 +77,7 @@ struct TerminalLayoutReducer {
 			return nil
 		}
 
-		// The Xcode and Tuist buttons are deliberately not copied here: the toolbar scopes the
+		// The Xcode, Tuist and XcodeGen buttons are deliberately not copied here: the toolbar scopes the
 		// opened row's own stores, so a generate started from either view shows its progress in
 		// both, and hiding the panel (which nils this state and cancels its effects) cannot kill it.
 		var androidStudioButton: AndroidStudioButtonReducer.State?

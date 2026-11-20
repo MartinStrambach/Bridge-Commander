@@ -16,7 +16,7 @@ struct TerminalSharedXcodeButtonTests {
 		let (gate, release) = AsyncStream.makeStream(of: Void.self)
 		let opened = LockIsolated<[String]>([])
 		let store = await makeStoreShowingAlpha {
-			$0[XcodeClient.self].generateProject = { _, _, _, _, _, onStateChange in
+			$0[XcodeClient.self].generateProject = { _, _, _, _, _, _, onStateChange in
 				await onStateChange(.runningTi)
 				// Held here until the terminal has been hidden.
 				for await _ in gate { break }
@@ -28,6 +28,8 @@ struct TerminalSharedXcodeButtonTests {
 			}
 		}
 
+		// The repository has no Tuist manifest on disk; the button offers Tuist as if it had.
+		await store.send(xcodeAction(.foundProjectPath(nil, generator: .tuist)))
 		await store.send(xcodeAction(.openProject))
 		await store.send(xcodeAction(.alert(.presented(.confirmGenerate))))
 		await store.receive(\.repositoryGroups[id: "/repos/alpha"].header.xcodeButton.projectGenerationProgress)
@@ -88,6 +90,7 @@ struct TerminalSharedXcodeButtonTests {
 			}
 			$0[GitClient.self].getOriginRemote = { _ in nil }
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
+			$0[XcodeClient.self].projectGenerator = { _, _ in nil }
 			$0[LastOpenedDirectoryClient.self].load = { nil }
 			dependencies(&$0)
 		}

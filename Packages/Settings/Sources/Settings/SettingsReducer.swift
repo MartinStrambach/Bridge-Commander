@@ -74,7 +74,10 @@ public struct SettingsReducer {
 		public var misePath = NSHomeDirectory() + "/.local/bin/mise"
 
 		@Shared(.tuistRunMode)
-		public var tuistRunMode = TuistRunMode.mise
+		public var tuistRunMode = GeneratorRunMode.mise
+
+		@Shared(.xcodeGenRunMode)
+		public var xcodeGenRunMode = GeneratorRunMode.mise
 
 		@Shared(.worktreeBasePath)
 		public var worktreeBasePath = "../worktrees"
@@ -167,6 +170,7 @@ public struct SettingsReducer {
 		case setGroupMobileSubfolderPath(groupId: String, path: String)
 		case setGroupIOSSubfolderPath(groupId: String, path: String)
 		case setGroupSupportsTuist(groupId: String, value: Bool)
+		case setGroupSupportsXcodeGen(groupId: String, value: Bool)
 		case setGroupTicketIdRegex(groupId: String, regex: String)
 		case setGroupXcodeFilePreference(groupId: String, preference: XcodeFilePreference)
 		case setGroupWorktreeCopyPaths(groupId: String, value: [String])
@@ -195,7 +199,8 @@ public struct SettingsReducer {
 		case removeFileOpenApplicationButtonTapped(fileType: String)
 		case setWorktreeBasePath(String)
 		case setMisePath(String)
-		case setTuistRunMode(TuistRunMode)
+		case setTuistRunMode(GeneratorRunMode)
+		case setXcodeGenRunMode(GeneratorRunMode)
 		case setTerminalColorTheme(TerminalThemeSelection)
 		case setTerminalCopyOnSelect(Bool)
 		case setTerminalMouseReporting(Bool)
@@ -356,7 +361,7 @@ public struct SettingsReducer {
 		message += " Terminal settings apply to tabs opened afterwards."
 		let commands = backup.commandsChanged(from: state)
 		if !commands.isEmpty {
-			message += "\n\nCommands it sets, which new terminal tabs or Tuist will run:\n"
+			message += "\n\nCommands it sets, which new terminal tabs, Tuist or XcodeGen will run:\n"
 				+ commands.map { "• \($0)" }.joined(separator: "\n")
 		}
 		if !skippedRepositoryPaths.isEmpty {
@@ -769,6 +774,10 @@ public struct SettingsReducer {
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsTuist = value }
 				return .none
 
+			case let .setGroupSupportsXcodeGen(groupId, value):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsXcodeGen = value }
+				return .none
+
 			case let .setGroupTicketIdRegex(groupId, regex):
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].ticketIdRegex = regex }
 				return .none
@@ -923,6 +932,10 @@ public struct SettingsReducer {
 
 			case let .setTuistRunMode(mode):
 				state.$tuistRunMode.withLock { $0 = mode }
+				return .none
+
+			case let .setXcodeGenRunMode(mode):
+				state.$xcodeGenRunMode.withLock { $0 = mode }
 				return .none
 
 			case let .setTerminalColorTheme(theme):

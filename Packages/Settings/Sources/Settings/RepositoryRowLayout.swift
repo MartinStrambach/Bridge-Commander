@@ -10,6 +10,7 @@ import SwiftUI
 public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 	case gitActions
 	case tuist
+	case xcodeGen
 	case youTrackMenu
 	case copyPath
 	case showInFinder
@@ -37,7 +38,7 @@ public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 	/// The text-labelled dropdowns, which `RepositoryRowLayout.stacksMenus` can stack vertically.
 	public var isMenu: Bool {
 		switch self {
-		case .gitActions, .tuist, .youTrackMenu: true
+		case .gitActions, .tuist, .xcodeGen, .youTrackMenu: true
 		default: false
 		}
 	}
@@ -53,6 +54,7 @@ public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 		switch self {
 		case .gitActions: "Git Actions menu"
 		case .tuist: "Tuist menu"
+		case .xcodeGen: "XcodeGen menu"
 		case .youTrackMenu: "YouTrack menu"
 		case .copyPath: "Copy path"
 		case .showInFinder: "Show in Finder"
@@ -73,6 +75,7 @@ public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 		switch self {
 		case .gitActions: "arrow.triangle.branch"
 		case .tuist: "hammer"
+		case .xcodeGen: "gearshape.2"
 		case .youTrackMenu: "list.bullet.rectangle"
 		case .copyPath: "doc.on.doc"
 		case .showInFinder: "folder"

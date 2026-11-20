@@ -131,7 +131,7 @@ struct RepositoryListView: View {
 			// when the terminal panel is hidden. Fades out while the terminal is visible.
 			repositoryContentView
 				.opacity(store.terminalLayout != nil ? 0 : 1)
-				// The terminal toolbar binds the same Xcode/Tuist button stores as these rows.
+				// The terminal toolbar binds the same Xcode/Tuist/XcodeGen button stores as these rows.
 				.environment(\.presentsButtonAlerts, store.terminalLayout == nil)
 
 			// Terminal overlay — fades in/out on top with opacity only.

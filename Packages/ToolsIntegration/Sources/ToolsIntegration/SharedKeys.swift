@@ -12,9 +12,13 @@ public nonisolated extension SharedReaderKey where Self == AppStorageKey<String>
 	}
 }
 
-public nonisolated extension SharedReaderKey where Self == AppStorageKey<TuistRunMode> {
+public nonisolated extension SharedReaderKey where Self == AppStorageKey<GeneratorRunMode> {
 	static var tuistRunMode: Self {
 		appStorage("tuistRunMode")
+	}
+
+	static var xcodeGenRunMode: Self {
+		appStorage("xcodeGenRunMode")
 	}
 }
 

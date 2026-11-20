@@ -246,6 +246,7 @@ struct RepositoryRowActionRoutingTests {
 				GitPorcelainStatus(parsing: "", didSucceed: false)
 			}
 			$0[XcodeClient.self].findXcodeProject = { _, _, _ in nil }
+			$0[XcodeClient.self].projectGenerator = { _, _ in nil }
 		}
 		store.exhaustivity = .off
 		return store

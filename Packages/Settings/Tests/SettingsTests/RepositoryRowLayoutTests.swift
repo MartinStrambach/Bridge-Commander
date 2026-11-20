@@ -60,8 +60,8 @@ struct RepositoryRowLayoutTests {
 		#expect(layout.rowSlots == layout.items(in: .actions).map(RepositoryRowSlot.item))
 
 		layout.stacksMenus = true
-		#expect(layout.rowSlots.first == .menuStack([.gitActions, .tuist, .youTrackMenu]))
-		#expect(layout.rowSlots.count == layout.items(in: .actions).count - 2)
+		#expect(layout.rowSlots.first == .menuStack([.gitActions, .tuist, .xcodeGen, .youTrackMenu]))
+		#expect(layout.rowSlots.count == layout.items(in: .actions).count - 3)
 	}
 
 	@Test
@@ -69,6 +69,7 @@ struct RepositoryRowLayoutTests {
 		var layout = RepositoryRowLayout.default
 		layout.stacksMenus = true
 		layout.setPlacement(.moreMenu, for: .tuist)
+		layout.setPlacement(.moreMenu, for: .xcodeGen)
 		// Git Actions to the end: the stack takes YouTrack's slot, now the first menu, and keeps
 		// the configured order inside.
 		let items = layout.items(in: .actions)
@@ -77,6 +78,7 @@ struct RepositoryRowLayoutTests {
 		#expect(slots.first == .menuStack([.youTrackMenu, .gitActions]))
 		#expect(!slots.contains(.item(.gitActions)))
 		#expect(!slots.contains(.item(.tuist)))
+		#expect(!slots.contains(.item(.xcodeGen)))
 	}
 
 	@Test
@@ -84,6 +86,7 @@ struct RepositoryRowLayoutTests {
 		var layout = RepositoryRowLayout.default
 		layout.stacksMenus = true
 		layout.setPlacement(.hidden, for: .tuist)
+		layout.setPlacement(.hidden, for: .xcodeGen)
 		layout.setPlacement(.hidden, for: .youTrackMenu)
 		#expect(layout.rowSlots.first == .item(.gitActions))
 	}

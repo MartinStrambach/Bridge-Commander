@@ -17,14 +17,18 @@ struct XcodeProjectButtonView: View {
 	var style: Style = .tool
 
 	private var isNotFound: Bool {
-		store.projectState == .idle && store.projectPath == nil && !store.usesTuist
+		store.projectState == .idle && store.projectPath == nil && store.generator == nil
 	}
 
 	private var buttonLabel: String {
 		switch store.projectState {
 		case .idle:
 			if store.projectPath == nil {
-				store.usesTuist ? "Install & Generate" : "Not Found"
+				switch store.generator {
+				case .tuist: "Install & Generate"
+				case .xcodeGen: "Generate"
+				case nil: "Not Found"
+				}
 			}
 			else {
 				"Xcode"
@@ -60,9 +64,12 @@ struct XcodeProjectButtonView: View {
 		switch store.projectState {
 		case .idle:
 			if store.projectPath == nil {
-				store.usesTuist
-					? "Xcode project not found - click to run tuist install & generate"
-					: "Project not found - check the group's Xcode Project Path or if the project exists on disk"
+				if let generator = store.generator {
+					"Xcode project not found - click to run \(generator.generateDescription)"
+				}
+				else {
+					"Project not found - check the group's Xcode Project Path or if the project exists on disk"
+				}
 			}
 			else {
 				"Open Xcode project or workspace"
@@ -121,7 +128,7 @@ extension Store where State == XcodeProjectButtonReducer.State, Action == XcodeP
 			systemImage: self.projectPath == nil ? "exclamationmark.triangle" : "hammer.fill",
 			isEnabled: !(
 				self.projectState.isProcessing
-					|| (self.projectState == .idle && self.projectPath == nil && !self.usesTuist)
+					|| (self.projectState == .idle && self.projectPath == nil && self.generator == nil)
 			)
 		) {
 			self.send(.openProject)
@@ -134,8 +141,8 @@ extension Store where State == XcodeProjectButtonReducer.State, Action == XcodeP
 			if self.projectPath != nil {
 				"Open in Xcode"
 			}
-			else if self.usesTuist {
-				"Install & Generate Xcode Project"
+			else if let generator = self.generator {
+				generator == .tuist ? "Install & Generate Xcode Project" : "Generate Xcode Project"
 			}
 			else {
 				"Xcode Project Not Found"

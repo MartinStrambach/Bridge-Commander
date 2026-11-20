@@ -72,6 +72,9 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 	public var tuistCacheType: String?
 	public var openXcodeAfterGenerate: Bool?
 
+	// XcodeGen
+	public var xcodeGenRunMode: String?
+
 	// Activity log
 	public var activityLogIncludesReadOnlyGitCommands: Bool?
 
@@ -127,6 +130,8 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 		misePath = state.misePath
 		tuistCacheType = state.tuistCacheType.rawValue
 		openXcodeAfterGenerate = state.openXcodeAfterGenerate
+
+		xcodeGenRunMode = state.xcodeGenRunMode.rawValue
 
 		activityLogIncludesReadOnlyGitCommands = state.activityLogIncludesReadOnlyGitCommands
 	}
@@ -207,10 +212,12 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 		set(\.$claudeCodeOpeningBehavior, claudeCodeOpeningBehavior.flatMap(TerminalOpeningBehavior.init(rawValue:)), in: &state)
 		set(\.$fileOpenApplications, fileOpenApplications.map(FileOpenApplications.init(bundleIdentifiers:)), in: &state)
 
-		set(\.$tuistRunMode, tuistRunMode.flatMap(TuistRunMode.init(rawValue:)), in: &state)
+		set(\.$tuistRunMode, tuistRunMode.flatMap(GeneratorRunMode.init(rawValue:)), in: &state)
 		set(\.$misePath, misePath, in: &state)
 		set(\.$tuistCacheType, tuistCacheType.flatMap(TuistCacheType.init(rawValue:)), in: &state)
 		set(\.$openXcodeAfterGenerate, openXcodeAfterGenerate, in: &state)
+
+		set(\.$xcodeGenRunMode, xcodeGenRunMode.flatMap(GeneratorRunMode.init(rawValue:)), in: &state)
 
 		set(\.$activityLogIncludesReadOnlyGitCommands, activityLogIncludesReadOnlyGitCommands, in: &state)
 	}
@@ -288,7 +295,7 @@ public struct SettingsBackup: Codable, Equatable, Sendable {
 	}
 
 	/// Shell commands the file would put in place of the current ones: the global and per-group
-	/// terminal startup commands, typed into new terminal tabs, and the mise executable Tuist runs.
+	/// terminal startup commands, typed into new terminal tabs, and the mise executable Tuist and XcodeGen run.
 	/// Listed in the import confirmation, since a backup from someone else could carry any command.
 	public func commandsChanged(from state: SettingsReducer.State) -> [String] {
 		var commands: [String] = []

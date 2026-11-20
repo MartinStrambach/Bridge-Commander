@@ -1,7 +1,7 @@
 import SwiftUI
 
 public extension EnvironmentValues {
-	/// Whether the Xcode, Tuist and YouTrack buttons under this view present their alerts and
+	/// Whether the Xcode, Tuist, XcodeGen and YouTrack buttons under this view present their alerts and
 	/// sheets.
 	///
 	/// The terminal toolbar shows the opened row's own button stores, and the repository list

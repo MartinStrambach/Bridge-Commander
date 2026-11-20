@@ -18,7 +18,7 @@ struct XcodeProjectButtonGenerationTests {
 		// land after `didOpenProject` and leave the button spinning with nothing running.
 		let opened = LockIsolated<[String]>([])
 		let store = makeStore {
-			$0[XcodeClient.self].generateProject = { _, _, _, _, _, onStateChange in
+			$0[XcodeClient.self].generateProject = { _, _, _, _, _, _, onStateChange in
 				await onStateChange(.runningTi)
 				await onStateChange(.runningTg)
 				await onStateChange(.checking)
@@ -66,7 +66,7 @@ struct XcodeProjectButtonGenerationTests {
 		// neither of which hops actors, so the order it records is the order things happened.
 		let log = LockIsolated<[String]>([])
 		var state = XcodeProjectButtonReducer.State(repositoryPath: "/repos/app", iosSubfolderPath: "ios/App")
-		state.usesTuist = true
+		state.generator = .tuist
 		let store = Store(initialState: state) {
 			Reduce<XcodeProjectButtonReducer.State, XcodeProjectButtonReducer.Action> { _, action in
 				if case let .projectGenerationProgress(progress) = action {
@@ -76,7 +76,7 @@ struct XcodeProjectButtonGenerationTests {
 			}
 			XcodeProjectButtonReducer()
 		} withDependencies: {
-			$0[XcodeClient.self].generateProject = { _, _, _, _, _, onStateChange in
+			$0[XcodeClient.self].generateProject = { _, _, _, _, _, _, onStateChange in
 				for progress in [XcodeProjectState.runningTi, .runningTg, .checking] {
 					await onStateChange(progress)
 					log.withValue { $0.append("resumed after \(progress)") }
@@ -100,10 +100,10 @@ struct XcodeProjectButtonGenerationTests {
 
 	@Test("generation passes the button's repository, subfolder and tuist settings through")
 	func generationReceivesButtonSettings() async {
-		let received = LockIsolated<(String, String, Bool, String, TuistRunMode)?>(nil)
+		let received = LockIsolated<(String, String, ProjectGenerator, Bool, String, GeneratorRunMode)?>(nil)
 		let store = makeStore {
-			$0[XcodeClient.self].generateProject = { path, subfolder, shouldOpen, misePath, runMode, _ in
-				received.setValue((path, subfolder, shouldOpen, misePath, runMode))
+			$0[XcodeClient.self].generateProject = { path, subfolder, generator, shouldOpen, misePath, runMode, _ in
+				received.setValue((path, subfolder, generator, shouldOpen, misePath, runMode))
 				throw GenerationError()
 			}
 		}
@@ -119,15 +119,45 @@ struct XcodeProjectButtonGenerationTests {
 		let request = received.value
 		#expect(request?.0 == "/repos/app")
 		#expect(request?.1 == "ios/App")
-		#expect(request?.2 == false)
-		#expect(request?.3 == "/opt/mise")
-		#expect(request?.4 == .native)
+		#expect(request?.2 == .tuist)
+		#expect(request?.3 == false)
+		#expect(request?.4 == "/opt/mise")
+		#expect(request?.5 == .native)
+	}
+
+	@Test("an XcodeGen project generates with XcodeGen's run mode, not Tuist's")
+	func xcodeGenGenerationUsesItsRunMode() async {
+		let received = LockIsolated<(ProjectGenerator, GeneratorRunMode)?>(nil)
+		let store = makeStore(generator: .xcodeGen) {
+			$0[XcodeClient.self].generateProject = { _, _, generator, _, _, runMode, _ in
+				received.setValue((generator, runMode))
+				throw GenerationError()
+			}
+		}
+		store.state.$tuistRunMode.withLock { $0 = .mise }
+		store.state.$xcodeGenRunMode.withLock { $0 = .native }
+		store.exhaustivity = .off
+
+		await store.send(.openProject) {
+			$0.alert = Self.generateAlert(offering: "XcodeGen")
+		}
+		await store.send(.alert(.presented(.confirmGenerate)))
+		await store.receive(\.generationFailed)
+
+		#expect(received.value?.0 == .xcodeGen)
+		#expect(received.value?.1 == .native)
+	}
+
+	@Test("without a generator a missing project offers nothing to generate")
+	func noGeneratorOffersNothing() async {
+		let store = makeStore(generator: nil) { _ in }
+		await store.send(.openProject)
 	}
 
 	@Test("a failed generation stops the spinner and reports the error")
 	func failedGenerationReportsError() async {
 		let store = makeStore {
-			$0[XcodeClient.self].generateProject = { _, _, _, _, _, onStateChange in
+			$0[XcodeClient.self].generateProject = { _, _, _, _, _, _, onStateChange in
 				await onStateChange(.runningTi)
 				throw GenerationError()
 			}
@@ -156,24 +186,29 @@ struct XcodeProjectButtonGenerationTests {
 
 	// MARK: - Helpers
 
-	private static let generateAlert = AlertState<XcodeProjectButtonReducer.Action.Alert> {
-		TextState("No Xcode Project Found")
-	} actions: {
-		ButtonState(role: .cancel) {
-			TextState("Cancel")
+	private static let generateAlert = generateAlert(offering: "Tuist")
+
+	private static func generateAlert(offering generatorName: String) -> AlertState<XcodeProjectButtonReducer.Action.Alert> {
+		AlertState {
+			TextState("No Xcode Project Found")
+		} actions: {
+			ButtonState(role: .cancel) {
+				TextState("Cancel")
+			}
+			ButtonState(action: .confirmGenerate) {
+				TextState("Generate")
+			}
+		} message: {
+			TextState("No Xcode project or workspace was found.\n\nWould you like to generate one with \(generatorName)?")
 		}
-		ButtonState(action: .confirmGenerate) {
-			TextState("Generate")
-		}
-	} message: {
-		TextState("No Xcode project or workspace was found.\n\nWould you like to generate one?")
 	}
 
 	private func makeStore(
+		generator: ProjectGenerator? = .tuist,
 		_ dependencies: (inout DependencyValues) -> Void
 	) -> TestStoreOf<XcodeProjectButtonReducer> {
 		var state = XcodeProjectButtonReducer.State(repositoryPath: "/repos/app", iosSubfolderPath: "ios/App")
-		state.usesTuist = true
+		state.generator = generator
 		return TestStore(initialState: state) {
 			XcodeProjectButtonReducer()
 		} withDependencies: {

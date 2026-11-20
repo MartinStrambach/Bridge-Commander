@@ -39,6 +39,11 @@ extension RepositoryRowView {
 				store.scope(\.tuistButton, action: \.tuistButton).submenuEntry
 			}
 
+		case .xcodeGen:
+			if store.usesXcode, store.supportsXcodeGen {
+				store.scope(\.xcodeGenButton, action: \.xcodeGenButton).submenuEntry
+			}
+
 		case .youTrackMenu:
 			if let youtrackButtonStore = store.scope(\.youtrackButton, action: \.youtrackButton) {
 				youtrackButtonStore.submenuEntry
@@ -166,6 +171,12 @@ extension RepositoryRowView {
 			if store.usesXcode, store.supportsTuist {
 				Color.clear
 					.tuistPresentations(store: store.scope(\.tuistButton, action: \.tuistButton))
+			}
+
+		case .xcodeGen:
+			if store.usesXcode, store.supportsXcodeGen {
+				Color.clear
+					.xcodeGenPresentations(store: store.scope(\.xcodeGenButton, action: \.xcodeGenButton))
 			}
 
 		case .youTrackMenu:

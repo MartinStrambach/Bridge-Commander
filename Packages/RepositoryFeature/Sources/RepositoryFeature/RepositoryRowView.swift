@@ -507,6 +507,14 @@ struct RepositoryRowView: View {
 				))
 			}
 
+		case .xcodeGen:
+			if store.usesXcode, store.supportsXcodeGen {
+				XcodeGenButtonView(store: store.scope(
+					\.xcodeGenButton,
+					action: \.xcodeGenButton
+				))
+			}
+
 		case .youTrackMenu:
 			if let youtrackButtonStore = store.scope(\.youtrackButton, action: \.youtrackButton) {
 				YouTrackButtonView(store: youtrackButtonStore)

@@ -8,6 +8,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 	case terminal
 	case externalApps
 	case tuist
+	case xcodeGen
 	case activityLog
 	case updates
 
@@ -23,6 +24,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 		case .terminal: "Terminal"
 		case .externalApps: "External Apps"
 		case .tuist: "Tuist"
+		case .xcodeGen: "XcodeGen"
 		case .activityLog: "Activity Log"
 		case .updates: "Updates"
 		}
@@ -38,6 +40,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
 		case .terminal: "terminal"
 		case .externalApps: "app.badge"
 		case .tuist: "hammer"
+		case .xcodeGen: "gearshape.2"
 		case .activityLog: "list.bullet.rectangle"
 		case .updates: "arrow.down.circle"
 		}

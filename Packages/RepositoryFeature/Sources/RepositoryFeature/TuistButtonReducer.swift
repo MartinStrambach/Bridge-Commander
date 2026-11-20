@@ -20,7 +20,7 @@ struct TuistButtonReducer {
 		@Shared(.misePath)
 		var misePath = NSHomeDirectory() + "/.local/bin/mise"
 		@Shared(.tuistRunMode)
-		var tuistRunMode = TuistRunMode.mise
+		var tuistRunMode = GeneratorRunMode.mise
 		@Presents
 		var alert: ScrollableAlertReducer.State?
 

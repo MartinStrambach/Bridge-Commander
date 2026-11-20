@@ -1,5 +1,4 @@
 import Foundation
-import ProcessExecution
 
 // MARK: - Tuist Action
 
@@ -62,39 +61,16 @@ public nonisolated enum TuistCommandHelper {
 		at path: String,
 		shouldOpenXcode: Bool,
 		misePath: String,
-		runMode: TuistRunMode
+		runMode: GeneratorRunMode
 	) async -> Result<String, Error> {
 		let fullCommand = shellCommand(
 			for: action,
 			shouldOpenXcode: shouldOpenXcode,
-			misePath: misePath,
+			misePath: GeneratorRunMode.resolvedMisePath(misePath),
 			runMode: runMode
 		)
 
-		let result = await ProcessRunner.run(
-			executableURL: URL(fileURLWithPath: "/bin/zsh"),
-			arguments: ["-i", "-c", fullCommand],
-			currentDirectory: URL(fileURLWithPath: path),
-			environment: EnvironmentHelper.setupEnvironment()
-		)
-
-		if result.success {
-			let combined = [result.outputString, result.errorString]
-				.filter { !$0.isEmpty }
-				.joined(separator: "\n")
-			return .success(combined.trimmingCharacters(in: .whitespacesAndNewlines))
-		}
-		else {
-			let errorMessage = result.errorString.isEmpty
-				? "Command failed with exit code \(result.exitCode)"
-				: result.errorString
-			let error = NSError(
-				domain: "TuistError",
-				code: Int(result.exitCode),
-				userInfo: [NSLocalizedDescriptionKey: errorMessage]
-			)
-			return .failure(error)
-		}
+		return await GeneratorShell.run(fullCommand, at: path, errorDomain: "TuistError")
 	}
 
 	/// Builds the shell command that `runCommand` executes for the given action.
@@ -102,17 +78,12 @@ public nonisolated enum TuistCommandHelper {
 		for action: TuistAction,
 		shouldOpenXcode: Bool,
 		misePath: String,
-		runMode: TuistRunMode
+		runMode: GeneratorRunMode
 	) -> String {
 		let commandString = action.commandString
 
 		// Add --no-open flag for generate action when Xcode should not open
 		let flags = ((action == .generate || action == .generateWithoutCache) && !shouldOpenXcode) ? " --no-open" : ""
-		switch runMode {
-		case .mise:
-			return "\(misePath) exec -- tuist \(commandString)\(flags)"
-		case .native:
-			return "tuist \(commandString)\(flags)"
-		}
+		return runMode.command("tuist", arguments: commandString + flags, misePath: misePath)
 	}
 }
