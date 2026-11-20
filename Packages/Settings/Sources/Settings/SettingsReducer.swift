@@ -162,6 +162,7 @@ public struct SettingsReducer {
 		case gitHubOwnerTokenTestFinished(owner: String, TokenTestState)
 		case setPeriodicRefreshInterval(PeriodicRefreshInterval)
 		case setGroupSupportsIOS(groupId: String, value: Bool)
+		case setGroupSupportsMacOS(groupId: String, value: Bool)
 		case setGroupSupportsAndroid(groupId: String, value: Bool)
 		case setGroupMobileSubfolderPath(groupId: String, path: String)
 		case setGroupIOSSubfolderPath(groupId: String, path: String)
@@ -746,6 +747,10 @@ public struct SettingsReducer {
 
 			case let .setGroupSupportsIOS(groupId, value):
 				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsIOS = value }
+				return .none
+
+			case let .setGroupSupportsMacOS(groupId, value):
+				state.$groupSettings.withLock { $0[groupId, default: RepoGroupSettings()].supportsMacOS = value }
 				return .none
 
 			case let .setGroupSupportsAndroid(groupId, value):

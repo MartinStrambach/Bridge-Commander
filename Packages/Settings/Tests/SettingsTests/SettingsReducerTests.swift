@@ -633,6 +633,19 @@ struct SettingsReducerTests {
 		}
 	}
 
+	@Test("the macOS toggle sets only supportsMacOS")
+	func setGroupSupportsMacOS() async {
+		let store = TestStore(initialState: SettingsReducer.State()) {
+			SettingsReducer()
+		}
+		await store.send(.setGroupSupportsMacOS(groupId: "g", value: true)) {
+			$0.$groupSettings.withLock { $0["g"] = RepoGroupSettings(supportsMacOS: true) }
+		}
+		await store.send(.setGroupSupportsMacOS(groupId: "g", value: false)) {
+			$0.$groupSettings.withLock { $0["g"]?.supportsMacOS = false }
+		}
+	}
+
 	@Test("multiple group mutations accumulate on the same RepoGroupSettings")
 	func multipleGroupMutationsAccumulate() async {
 		let store = TestStore(initialState: SettingsReducer.State()) {

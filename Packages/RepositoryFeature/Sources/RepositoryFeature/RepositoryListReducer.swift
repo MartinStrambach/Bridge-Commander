@@ -1634,6 +1634,7 @@ private func buildGroup(
 			branchName: repo.branchName,
 			isWorktree: repo.isWorktree,
 			supportsIOS: settings.supportsIOS,
+			supportsMacOS: settings.supportsMacOS,
 			supportsAndroid: settings.supportsAndroid,
 			mobileSubfolderPath: effectiveMobileSubfolder,
 			iosSubfolderPath: settings.iosSubfolderPath,
@@ -1697,6 +1698,7 @@ private func mergeGroupRows(
 				branchName: repo.branchName,
 				isWorktree: repo.isWorktree,
 				supportsIOS: rowSettings.supportsIOS,
+				supportsMacOS: rowSettings.supportsMacOS,
 				supportsAndroid: rowSettings.supportsAndroid,
 				mobileSubfolderPath: effectiveMobileSubfolder,
 				iosSubfolderPath: rowSettings.iosSubfolderPath,
@@ -1772,6 +1774,7 @@ private func applySettings(
 		? settings.mobileSubfolderPath
 		: ""
 	row.supportsIOS = settings.supportsIOS
+	row.supportsMacOS = settings.supportsMacOS
 	row.supportsAndroid = settings.supportsAndroid
 	row.mobileSubfolderPath = effectiveMobileSubfolder
 	row.iosSubfolderPath = settings.iosSubfolderPath

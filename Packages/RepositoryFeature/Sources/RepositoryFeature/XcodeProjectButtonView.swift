@@ -62,7 +62,7 @@ struct XcodeProjectButtonView: View {
 			if store.projectPath == nil {
 				store.usesTuist
 					? "Xcode project not found - click to run tuist install & generate"
-					: "Project not found - check iOS project path or if project exists on disk"
+					: "Project not found - check the group's Xcode Project Path or if the project exists on disk"
 			}
 			else {
 				"Open Xcode project or workspace"

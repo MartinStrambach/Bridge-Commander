@@ -63,6 +63,29 @@ struct SettingsBackupFormatTests {
 		#expect(backup.groupSettings?["/repos/app"] == RepoGroupSettings(defaultBranch: "develop"))
 	}
 
+	@Test("a backup written before the macOS toggle imports its iOS groups unchanged")
+	func importsBackupFromBeforeMacOSToggle() throws {
+		let json = #"""
+		{"formatVersion": 1,
+		 "groupSettings": {"/repos/app": {"supportsIOS": true, "supportsTuist": true, "iosSubfolderPath": "ios"}}}
+		"""#
+		let backup = try SettingsBackup.decoded(from: Data(json.utf8))
+		#expect(backup.groupSettings?["/repos/app"] == RepoGroupSettings(
+			supportsIOS: true,
+			iosSubfolderPath: "ios",
+			supportsTuist: true
+		))
+	}
+
+	@Test("a macOS group survives export and import")
+	func macOSGroupRoundTrip() throws {
+		var backup = SettingsBackup()
+		backup.groupSettings = [
+			"/repos/mac": RepoGroupSettings(supportsMacOS: true, iosSubfolderPath: "App", supportsTuist: true),
+		]
+		#expect(try SettingsBackup.decoded(from: backup.encoded()).groupSettings == backup.groupSettings)
+	}
+
 	@Test("a startup command with line breaks or control characters refuses the whole file")
 	func rejectsMultilineCommands() throws {
 		for json in [

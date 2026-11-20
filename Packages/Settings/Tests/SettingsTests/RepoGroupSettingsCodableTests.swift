@@ -9,6 +9,7 @@ struct RepoGroupSettingsCodableTests {
 	func allDefaults() {
 		let settings = RepoGroupSettings()
 		#expect(settings.supportsIOS == false)
+		#expect(settings.supportsMacOS == false)
 		#expect(settings.supportsAndroid == false)
 		#expect(settings.mobileSubfolderPath == "")
 		#expect(settings.iosSubfolderPath == "")
@@ -34,6 +35,7 @@ struct RepoGroupSettingsCodableTests {
 	func fullRoundTrip() throws {
 		let original = RepoGroupSettings(
 			supportsIOS: true,
+			supportsMacOS: true,
 			supportsAndroid: true,
 			mobileSubfolderPath: "apps/mobile",
 			iosSubfolderPath: "apps/ios",
@@ -61,6 +63,7 @@ struct RepoGroupSettingsCodableTests {
 		#expect(decoded.supportsIOS == true)
 		#expect(decoded.ticketIdRegex == "MOB-[0-9]+")
 		// Everything absent from the JSON must use its default.
+		#expect(decoded.supportsMacOS == false)
 		#expect(decoded.supportsAndroid == false)
 		#expect(decoded.mobileSubfolderPath == "")
 		#expect(decoded.iosSubfolderPath == "")
@@ -74,6 +77,41 @@ struct RepoGroupSettingsCodableTests {
 		#expect(decoded.terminalStartupCommand == "")
 		#expect(decoded.skipGlobalTerminalStartupCommand == false)
 		#expect(decoded.defaultWorktreeSource == nil)
+	}
+
+	@Test("an iOS group saved before the macOS toggle keeps its Xcode setup")
+	func iosGroupFromBeforeMacOSToggle() throws {
+		let json = Data(#"""
+		{"supportsIOS":true,"supportsAndroid":true,"supportsTuist":true,
+		 "iosSubfolderPath":"ios/App","mobileSubfolderPath":"mobile","xcodeFilePreference":"workspace"}
+		"""#.utf8)
+		let decoded = try JSONDecoder().decode(RepoGroupSettings.self, from: json)
+		#expect(decoded == RepoGroupSettings(
+			supportsIOS: true,
+			supportsAndroid: true,
+			mobileSubfolderPath: "mobile",
+			iosSubfolderPath: "ios/App",
+			supportsTuist: true,
+			xcodeFilePreference: .workspace
+		))
+		#expect(decoded.usesXcode)
+	}
+
+	@Test("the shared Xcode project path is still written under the key older versions read")
+	func xcodePathKeepsItsKey() throws {
+		let data = try JSONEncoder().encode(RepoGroupSettings(supportsMacOS: true, iosSubfolderPath: "mac/App"))
+		let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+		#expect(object["iosSubfolderPath"] as? String == "mac/App")
+		#expect(object["supportsMacOS"] as? Bool == true)
+	}
+
+	@Test("Xcode and Tuist apply to iOS, macOS or both, not to neither")
+	func usesXcode() {
+		#expect(!RepoGroupSettings().usesXcode)
+		#expect(!RepoGroupSettings(supportsAndroid: true, supportsWeb: true).usesXcode)
+		#expect(RepoGroupSettings(supportsIOS: true).usesXcode)
+		#expect(RepoGroupSettings(supportsMacOS: true).usesXcode)
+		#expect(RepoGroupSettings(supportsIOS: true, supportsMacOS: true).usesXcode)
 	}
 
 	@Test("an unknown xcodeFilePreference value does not wipe the rest of the settings")

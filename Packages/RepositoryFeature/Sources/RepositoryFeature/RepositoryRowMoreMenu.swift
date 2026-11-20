@@ -35,7 +35,7 @@ extension RepositoryRowView {
 			store.scope(\.gitActionsMenu, action: \.gitActionsMenu).submenuEntry
 
 		case .tuist:
-			if store.supportsIOS, store.supportsTuist {
+			if store.usesXcode, store.supportsTuist {
 				store.scope(\.tuistButton, action: \.tuistButton).submenuEntry
 			}
 
@@ -144,7 +144,7 @@ extension RepositoryRowView {
 			}
 
 		case .xcode:
-			if store.supportsIOS {
+			if store.usesXcode {
 				store.scope(\.xcodeButton, action: \.xcodeButton).menuEntry
 			}
 
@@ -163,7 +163,7 @@ extension RepositoryRowView {
 				.gitActionsMenuPresentations(store: store.scope(\.gitActionsMenu, action: \.gitActionsMenu))
 
 		case .tuist:
-			if store.supportsIOS, store.supportsTuist {
+			if store.usesXcode, store.supportsTuist {
 				Color.clear
 					.tuistPresentations(store: store.scope(\.tuistButton, action: \.tuistButton))
 			}
@@ -181,7 +181,7 @@ extension RepositoryRowView {
 			}
 
 		case .xcode:
-			if store.supportsIOS {
+			if store.usesXcode {
 				Color.clear
 					.xcodeProjectPresentations(store: store.scope(\.xcodeButton, action: \.xcodeButton))
 			}
