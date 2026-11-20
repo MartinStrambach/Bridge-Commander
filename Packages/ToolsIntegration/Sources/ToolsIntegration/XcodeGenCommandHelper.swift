@@ -45,7 +45,7 @@ public nonisolated enum XcodeGenCommandHelper {
 		runMode: GeneratorRunMode
 	) async -> Result<String, Error> {
 		await GeneratorShell.run(
-			shellCommand(for: action, misePath: misePath, runMode: runMode),
+			shellCommand(for: action, misePath: GeneratorRunMode.resolvedMisePath(misePath), runMode: runMode),
 			at: path,
 			errorDomain: "XcodeGenError"
 		)

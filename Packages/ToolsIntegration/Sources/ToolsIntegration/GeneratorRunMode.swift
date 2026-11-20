@@ -27,6 +27,16 @@ public nonisolated enum GeneratorRunMode: String, Equatable, CaseIterable, Codab
 			"\(tool) \(arguments)"
 		}
 	}
+
+	/// The mise to run: the configured path when a file is there, else plain `mise`, which the
+	/// interactive shell finds on `PATH`. The default path is the native installer's
+	/// (`~/.local/bin`); a Homebrew install lives elsewhere, and a path nobody set should not fail.
+	static func resolvedMisePath(
+		_ configured: String,
+		fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+	) -> String {
+		fileExists(configured) ? configured : "mise"
+	}
 }
 
 // MARK: - Generator Shell

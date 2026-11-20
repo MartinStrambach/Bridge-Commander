@@ -34,6 +34,16 @@ struct XcodeGenCommandHelperTests {
 		)
 	}
 
+	@Test("a configured mise path that exists is used as is")
+	func existingMisePath() {
+		#expect(GeneratorRunMode.resolvedMisePath(misePath, fileExists: { _ in true }) == misePath)
+	}
+
+	@Test("a configured mise path with nothing there falls back to mise on PATH")
+	func missingMisePath() {
+		#expect(GeneratorRunMode.resolvedMisePath(misePath, fileExists: { _ in false }) == "mise")
+	}
+
 	@Test("only the generate commands write the project")
 	func generatesProject() {
 		#expect(XcodeGenAction.generate.generatesProject)

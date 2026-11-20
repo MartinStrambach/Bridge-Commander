@@ -1172,7 +1172,7 @@ public struct SettingsView<Updates: View>: View {
 				.textFieldStyle(.roundedBorder)
 				.scaledFont(.body, design: .monospaced)
 
-				Text("Full path to the mise binary. Native install: ~/.local/bin/mise. Homebrew (Apple Silicon): /opt/homebrew/bin/mise.")
+				Text("Full path to the mise binary. Native install: ~/.local/bin/mise. Homebrew (Apple Silicon): /opt/homebrew/bin/mise. When nothing is there, mise is looked up on PATH.")
 					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			} else {
@@ -1242,7 +1242,7 @@ public struct SettingsView<Updates: View>: View {
 				.textFieldStyle(.roundedBorder)
 				.scaledFont(.body, design: .monospaced)
 
-				Text("Full path to the mise binary, shared with Tuist. The repository's mise config must list xcodegen.")
+				Text("Full path to the mise binary, shared with Tuist; when nothing is there, mise is looked up on PATH. mise runs the xcodegen version the repository pins, else the one on PATH.")
 					.scaledFont(.caption)
 					.foregroundColor(.secondary)
 			} else {

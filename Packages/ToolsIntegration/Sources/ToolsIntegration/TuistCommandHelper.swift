@@ -66,7 +66,7 @@ public nonisolated enum TuistCommandHelper {
 		let fullCommand = shellCommand(
 			for: action,
 			shouldOpenXcode: shouldOpenXcode,
-			misePath: misePath,
+			misePath: GeneratorRunMode.resolvedMisePath(misePath),
 			runMode: runMode
 		)
 
