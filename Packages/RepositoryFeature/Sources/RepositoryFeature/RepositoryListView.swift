@@ -441,7 +441,7 @@ struct RepositoryListView: View {
 			if let layout = store.terminalLayout {
 				// Yielded while a sheet is up, like the panel's own shortcuts: the find bar
 				// would open behind it.
-				if layout.stagingDetail == nil, layout.gitGraph == nil, let sessionId = layout.activeSessionId {
+				if !layout.isSheetPresented, let sessionId = layout.activeSessionId {
 					terminalViewStore.performFind(.show, sessionId: sessionId)
 				}
 			}

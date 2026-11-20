@@ -2,6 +2,7 @@ import ActionButtons
 import AppKit
 import AppUI
 import ComposableArchitecture
+import DependencyGraphFeature
 import GitActionsMenu
 import GitGraphFeature
 import StagingFeature
@@ -114,6 +115,12 @@ struct TerminalPanelView: View {
 					maxHeight: .infinity
 				)
 				.windowResizable()
+		}
+		.sheet(
+			item: $store.scope(\.$dependencyGraph, action: \.dependencyGraph)
+		) { graphStore in
+			DependencyGraphView(store: graphStore)
+				.dependencyGraphSheetFrame()
 		}
 	}
 
@@ -296,6 +303,20 @@ struct TerminalPanelView: View {
 			.buttonStyle(.scaledBordered)
 			.controlSize(.small)
 			.help("Show commit graph")
+
+			if let path = store.activeRepositoryPath, activeRowStore?.supportsDependencyGraph == true {
+				Button("Modules") {
+					store.send(.dependencyGraphButtonTapped(
+						repositoryPath: path,
+						repositoryName: activeRowStore?.name ?? "",
+						iosSubfolderPath: activeRowStore?.iosSubfolderPath ?? "",
+						defaultBranch: activeRowStore?.defaultBranch ?? ""
+					))
+				}
+				.buttonStyle(.scaledBordered)
+				.controlSize(.small)
+				.help("Show module dependency graph")
+			}
 
 			Button("Staging") {
 				if let path = store.activeRepositoryPath {
@@ -484,8 +505,7 @@ struct TerminalPanelView: View {
 		if repoSessions.count > 1 || hasOtherRepoSessions,
 		   let activeSessionId,
 		   repoSessions.contains(where: { $0.id == activeSessionId }),
-		   store.stagingDetail == nil,
-		   store.gitGraph == nil {
+		   !store.isSheetPresented {
 			Button("") { store.send(.closeActiveTabRequested) }
 				.keyboardShortcut("w", modifiers: .command)
 				.hidden()
@@ -497,7 +517,7 @@ struct TerminalPanelView: View {
 	/// while a sheet is up for the same reason the zoom shortcuts are.
 	@ViewBuilder
 	private var cycleTabShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
+		if !store.isSheetPresented {
 			Group {
 				Button("") { store.send(.cycleTabRequested(forward: true)) }
 					.keyboardShortcut(.tab, modifiers: .control)
@@ -518,7 +538,7 @@ struct TerminalPanelView: View {
 	/// never fires (the unconditional ⌘§ beside it still does), so ⌘R silently did nothing.
 	@ViewBuilder
 	private var refreshShortcut: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
+		if !store.isSheetPresented {
 			Button("") { store.send(.refreshActiveRepoRequested) }
 				.keyboardShortcut("r", modifiers: .command)
 				.hidden()
@@ -533,7 +553,7 @@ struct TerminalPanelView: View {
 	/// separate windows with their own idea of what a keystroke means.
 	@ViewBuilder
 	private var zoomShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
+		if !store.isSheetPresented {
 			Group {
 				Button("") { store.send(.zoomInRequested) }
 					.keyboardShortcut("+", modifiers: .command)
@@ -558,7 +578,7 @@ struct TerminalPanelView: View {
 	/// while a sheet is up for the same reason the zoom shortcuts are.
 	@ViewBuilder
 	private var findShortcuts: some View {
-		if store.stagingDetail == nil, store.gitGraph == nil {
+		if !store.isSheetPresented {
 			Group {
 				Button("") { find(.next) }
 					.keyboardShortcut("g", modifiers: .command)

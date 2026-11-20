@@ -19,6 +19,7 @@ public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 	case share
 	case ticket
 	case web
+	case dependencyGraph
 	case terminal
 	case androidStudio
 	case xcode
@@ -62,6 +63,7 @@ public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 		case .share: "Share branch, ticket and PR"
 		case .ticket: "Open YouTrack ticket"
 		case .web: "Web preview"
+		case .dependencyGraph: "Module dependency graph"
 		case .terminal: "External terminal"
 		case .androidStudio: "Android Studio"
 		case .xcode: "Xcode"
@@ -82,6 +84,7 @@ public enum RepositoryRowItem: String, CaseIterable, Identifiable, Sendable {
 		case .share: "square.and.arrow.up"
 		case .ticket: "ticket"
 		case .web: "globe"
+		case .dependencyGraph: "point.3.connected.trianglepath.dotted"
 		case .terminal: "terminal"
 		case .androidStudio: "apps.iphone"
 		case .xcode: "hammer.fill"

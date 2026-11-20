@@ -1,5 +1,6 @@
 import ActionButtons
 import ComposableArchitecture
+import DependencyGraphFeature
 import Foundation
 import TerminalFeature
 import GitActionsMenu
@@ -94,6 +95,15 @@ struct TerminalLayoutReducer {
 
 		@Presents
 		var gitGraph: GitGraphReducer.State?
+
+		@Presents
+		var dependencyGraph: DependencyGraphReducer.State?
+
+		/// A sheet is over the panel: its hidden shortcuts step aside, since the sheet is a separate
+		/// window with its own idea of what a keystroke means.
+		var isSheetPresented: Bool {
+			stagingDetail != nil || gitGraph != nil || dependencyGraph != nil
+		}
 	}
 
 	enum Action {
@@ -101,12 +111,19 @@ struct TerminalLayoutReducer {
 		case hideTerminalMode
 		case stagingButtonTapped(repositoryPath: String, iosSubfolderPath: String)
 		case gitGraphButtonTapped(repositoryPath: String, repositoryName: String)
+		case dependencyGraphButtonTapped(
+			repositoryPath: String,
+			repositoryName: String,
+			iosSubfolderPath: String,
+			defaultBranch: String
+		)
 		case pushButtonTapped(repositoryPath: String)
 		case pushCompleted(result: GitPushHelper.PushResult?, error: GitError?)
 		case finishMergeButtonTapped(repositoryPath: String)
 		case finishMergeCompleted(repositoryPath: String, error: GitError?)
 		case stagingDetail(PresentationAction<RepositoryDetail.Action>)
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
+		case dependencyGraph(PresentationAction<DependencyGraphReducer.Action>)
 		case killTab(sessionId: UUID)
 		case closeActiveTabRequested
 		case killRepo(repositoryPath: String)
@@ -140,6 +157,9 @@ struct TerminalLayoutReducer {
 			}
 			.ifLet(\.$gitGraph, action: \.gitGraph) {
 				GitGraphReducer()
+			}
+			.ifLet(\.$dependencyGraph, action: \.dependencyGraph) {
+				DependencyGraphReducer()
 			}
 			.ifLet(\.gitActionsMenu, action: \.gitActionsMenu) {
 				GitActionsMenuReducer()
@@ -176,6 +196,15 @@ struct TerminalLayoutReducer {
 
 			case let .gitGraphButtonTapped(repositoryPath, repositoryName):
 				state.gitGraph = .forRepository(path: repositoryPath, name: repositoryName)
+				return .none
+
+			case let .dependencyGraphButtonTapped(repositoryPath, repositoryName, iosSubfolderPath, defaultBranch):
+				state.dependencyGraph = DependencyGraphReducer.State(
+					repositoryPath: repositoryPath,
+					repositoryName: repositoryName,
+					iosSubfolderPath: iosSubfolderPath,
+					configuredDefaultBranch: defaultBranch
+				)
 				return .none
 
 			case let .pushButtonTapped(repositoryPath):
@@ -222,6 +251,9 @@ struct TerminalLayoutReducer {
 				return .none
 
 			case .gitGraph:
+				return .none
+
+			case .dependencyGraph:
 				return .none
 
 			case .killTab:

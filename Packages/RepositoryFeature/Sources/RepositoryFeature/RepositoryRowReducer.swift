@@ -1,5 +1,6 @@
 import ActionButtons
 import ComposableArchitecture
+import DependencyGraphFeature
 import Foundation
 import GitActionsMenu
 import GitCore
@@ -99,6 +100,14 @@ struct RepositoryRowReducer {
 
 		@Presents
 		var gitGraph: GitGraphReducer.State?
+
+		@Presents
+		var dependencyGraph: DependencyGraphReducer.State?
+
+		/// The module graph reads Gradle and Tuist manifests, so it is offered where either applies.
+		var supportsDependencyGraph: Bool {
+			supportsAndroid || supportsIOS
+		}
 
 		var formattedBranchName: String {
 			@Shared(.branchNameRegex)
@@ -252,6 +261,8 @@ struct RepositoryRowReducer {
 		case repositoryIconTapped
 		case repositoryDetail(PresentationAction<RepositoryDetail.Action>)
 		case gitGraph(PresentationAction<GitGraphReducer.Action>)
+		case dependencyGraphButtonTapped
+		case dependencyGraph(PresentationAction<DependencyGraphReducer.Action>)
 		case xcodeButton(XcodeProjectButtonReducer.Action)
 		case tuistButton(TuistButtonReducer.Action)
 		case terminalButton(TerminalButtonReducer.Action)
@@ -342,6 +353,19 @@ struct RepositoryRowReducer {
 
 			case .gitGraph(.presented(.delegate(.repositoryChanged))):
 				return .send(.refresh)
+
+			case .dependencyGraphButtonTapped:
+				// Only reads the build files and `git diff`; nothing to report back to the row.
+				state.dependencyGraph = DependencyGraphReducer.State(
+					repositoryPath: state.path,
+					repositoryName: state.name,
+					iosSubfolderPath: state.iosSubfolderPath,
+					configuredDefaultBranch: state.defaultBranch
+				)
+				return .none
+
+			case .dependencyGraph:
+				return .none
 
 			case let .gitGraph(.presented(.delegate(.worktreeCreated(path)))):
 				// The list rescans the group on this, which is what makes the new worktree's row
@@ -503,6 +527,9 @@ struct RepositoryRowReducer {
 		}
 		.ifLet(\.$gitGraph, action: \.gitGraph) {
 			GitGraphReducer()
+		}
+		.ifLet(\.$dependencyGraph, action: \.dependencyGraph) {
+			DependencyGraphReducer()
 		}
 	}
 

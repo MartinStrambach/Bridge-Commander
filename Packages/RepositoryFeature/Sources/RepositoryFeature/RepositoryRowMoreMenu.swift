@@ -133,6 +133,13 @@ extension RepositoryRowView {
 				}
 			}
 
+		case .dependencyGraph:
+			if store.supportsDependencyGraph {
+				PopUpMenuAction("Show Module Dependency Graph", systemImage: "point.3.connected.trianglepath.dotted") {
+					store.send(.dependencyGraphButtonTapped)
+				}
+			}
+
 		case .terminal:
 			PopUpMenuAction("Open in Terminal", systemImage: "terminal") {
 				store.send(.terminalButton(.openTerminalButtonTapped))
@@ -190,7 +197,7 @@ extension RepositoryRowView {
 			Color.clear
 				.claudeCodePresentations(store: store.scope(\.claudeCodeButton, action: \.claudeCodeButton))
 
-		case .copyPath, .showInFinder, .share, .pullRequest, .pipeline, .approval, .ticket, .web, .terminal:
+		case .copyPath, .showInFinder, .share, .pullRequest, .pipeline, .approval, .ticket, .web, .dependencyGraph, .terminal:
 			EmptyView()
 		}
 	}

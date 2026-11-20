@@ -1,6 +1,7 @@
 import ActionButtons
 import AppUI
 import ComposableArchitecture
+import DependencyGraphFeature
 import GitActionsMenu
 import GitGraphFeature
 import GitHosting
@@ -143,6 +144,10 @@ struct RepositoryRowView: View {
 					maxHeight: .infinity
 				)
 				.windowResizable()
+		}
+		.sheet(item: $store.scope(\.$dependencyGraph, action: \.dependencyGraph)) { graphStore in
+			DependencyGraphView(store: graphStore)
+				.dependencyGraphSheetFrame()
 		}
 	}
 
@@ -584,6 +589,15 @@ struct RepositoryRowView: View {
 		case .web:
 			if let webButtonStore = store.scope(\.webButton, action: \.webButton) {
 				WebButtonView(store: webButtonStore)
+			}
+
+		case .dependencyGraph:
+			if store.supportsDependencyGraph {
+				ActionButton(
+					icon: .systemImage("point.3.connected.trianglepath.dotted"),
+					tooltip: "Show module dependency graph",
+					action: { store.send(.dependencyGraphButtonTapped) }
+				)
 			}
 
 		case .terminal:
